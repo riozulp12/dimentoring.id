@@ -26,7 +26,7 @@ const VARIANT_STYLES: Record<ButtonVariant, string> = {
   ].join(" "),
   secondary: [
     "bg-white text-[#081EEA]",
-    "border border-solid border-transparent drop-shadow-[2px_2px_0px_#081EEA]",
+    "border border-solid border-[#081EEA] drop-shadow-[2px_2px_0px_#081EEA]",
     "hover:border-white hover:drop-shadow-[0px_0px_5px_#081EEA]",
     "active:border-white active:drop-shadow-[2px_2px_0px_#081EEA]",
     "disabled:bg-[#E3E3E3] disabled:text-[#7E7C7C] disabled:border-transparent disabled:drop-shadow-[2px_2px_0px_#FFFFFF]",
@@ -45,7 +45,7 @@ export default function Button({
     <button
       type={type}
       className={[
-        "inline-flex items-center justify-center rounded-xl px-8 py-2.5",
+        "inline-flex items-center justify-center rounded-[18px] px-8 py-2.5",
         "font-medium leading-[1.5] whitespace-nowrap",
         "transition-[filter,border-color] duration-150 ease-out",
         "disabled:cursor-not-allowed disabled:pointer-events-none",
