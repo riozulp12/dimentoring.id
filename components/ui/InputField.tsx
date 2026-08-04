@@ -83,6 +83,7 @@ function TextInput({
   type: _type,
   ...props
 }: TextInputFieldProps) {
+  void _type;
   const autoId = useId();
   return (
     <div
@@ -109,6 +110,7 @@ function PasswordInput({
   type: _type,
   ...props
 }: PasswordInputFieldProps) {
+  void _type;
   const autoId = useId();
   const [visible, setVisible] = useState(false);
 
@@ -201,6 +203,7 @@ function FileInput({
   type: _type,
   ...props
 }: FileInputFieldProps) {
+  void _type;
   const autoId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);

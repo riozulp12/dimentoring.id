@@ -13,7 +13,8 @@ export type MascotVariant =
   | "Plenger"
   | "Confuse"
   | "Happy2"
-  | "Happy Graduate";
+  | "Happy Graduate"
+  | "Teaching";
 
 interface MascotAsset {
   src: string;
@@ -42,6 +43,7 @@ const MASCOT_ASSETS: Record<MascotVariant, MascotAsset> = {
     width: 997,
     height: 1171,
   },
+  Teaching: { src: "/mascots/mascot-teaching.png", width: 1124, height: 1456 },
 };
 
 export interface MascotProps
