@@ -15,17 +15,17 @@ function CoverPortrait({
   alt: string;
 }) {
   return (
-    <div className="relative h-[230px] w-[200px] overflow-hidden rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white sm:h-[260px] sm:w-[220px]">
-      <Image src={src} alt={alt} fill className="object-contain" />
+    <div className="relative z-10 mt-8 h-[232px] w-[160px] overflow-hidden sm:h-[290px] sm:w-[200px] lg:h-[290px] lg:w-[200px]">
+      <Image src={src} alt={alt} fill className="object-contain object-bottom" />
     </div>
   );
 }
 
 function RotatedCoverPortrait({ src, alt }: { src: string; alt: string }) {
   return (
-    <div className="relative flex h-[230px] w-[200px] items-center justify-center overflow-hidden rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white sm:h-[260px] sm:w-[220px]">
-      <div className="relative h-[200px] w-[230px] rotate-90 sm:h-[220px] sm:w-[260px]">
-        <Image src={src} alt={alt} fill className="object-contain" />
+    <div className="relative z-10 mt-8 flex h-[232px] w-[160px] items-center justify-center overflow-hidden sm:h-[290px] sm:w-[200px] lg:h-[290px] lg:w-[200px]">
+      <div className="relative h-[160px] w-[232px] rotate-90 sm:h-[200px] sm:w-[290px] lg:h-[200px] lg:w-[290px]">
+        <Image src={src} alt={alt} fill className="object-contain object-bottom" />
       </div>
     </div>
   );
@@ -82,21 +82,30 @@ export default function Mentor() {
               key={`${mentor.name}-${index}`}
               className="flex w-[260px] shrink-0 flex-col items-center sm:w-[320px] lg:w-[320px]"
             >
-              <div className="relative z-10 flex w-full flex-col items-center gap-2 rounded-[20px] bg-[#081EEA] px-4 py-4 text-center drop-shadow-[4px_4px_0px_black] sm:gap-3 sm:px-5 sm:py-5">
-                <p className="w-full text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-white">
-                  {mentor.name}
-                </p>
-                <p className="w-full text-lg leading-[1.5] font-normal tracking-[-0.36px] text-white">
-                  {mentor.role}
-                </p>
+              <div className="relative z-10 flex w-[160px] flex-col items-center sm:w-[200px] lg:w-[200px]">
+                <Image
+                  src="/icons/mentor-badge-shape.svg"
+                  width={179}
+                  height={264}
+                  alt=""
+                  className="pointer-events-none absolute top-0 left-1/2 h-auto w-[125px] -translate-x-1/2 select-none sm:w-[156px] lg:w-[156px]"
+                />
+                {mentor.portrait}
               </div>
-
-              <div className="relative z-0 -mt-2">{mentor.portrait}</div>
-
-              <div className="relative z-10 -mt-2 flex w-full items-center gap-5 rounded-[20px] bg-[#081EEA] px-4 py-3 drop-shadow-[4px_4px_0px_black]">
-                <span className="h-0 flex-1 border-t border-dashed border-[#F9F9F9]" />
-                <span className="h-[18px] w-[18px] shrink-0 rounded-full bg-[#F9F9F9]" />
-                <span className="h-0 flex-1 border-t border-dashed border-[#F9F9F9]" />
+              <div className="relative z-0 -mt-2 flex w-full flex-col items-center gap-3 rounded-[20px] bg-[#081EEA] px-4 py-4 drop-shadow-[4px_4px_0px_black] sm:-mt-3 sm:gap-4 sm:px-5 lg:-mt-4 lg:gap-[19px] lg:px-6 lg:py-5">
+                <div className="flex w-full max-w-[382px] flex-col items-center gap-2 text-center text-white sm:gap-3 lg:gap-4">
+                  <p className="w-full text-lg leading-[1.5] font-semibold tracking-[-0.36px]">
+                    {mentor.name}
+                  </p>
+                  <p className="w-full text-lg leading-[1.5] font-normal tracking-[-0.36px]">
+                    {mentor.role}
+                  </p>
+                </div>
+                <div className="flex w-full items-center gap-5">
+                  <span className="h-0 flex-1 border-t border-dashed border-[#F9F9F9]" />
+                  <span className="h-[18px] w-[18px] shrink-0 rounded-full bg-[#F9F9F9]" />
+                  <span className="h-0 flex-1 border-t border-dashed border-[#F9F9F9]" />
+                </div>
               </div>
             </div>
           ))}

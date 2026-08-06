@@ -31,10 +31,10 @@ export default function Hero() {
             </p>
 
             <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row sm:gap-6 lg:gap-8">
-              <Button variant="primary" size="sm" className="w-full sm:w-auto">
+              <Button variant="primary" size="md" className="w-full sm:w-auto">
                 Cek Peluang Masuk PTN mu
               </Button>
-              <Button variant="secondary" size="sm" className="w-full sm:w-auto">
+              <Button variant="secondary" size="md" className="w-full sm:w-auto">
                 Konsultasi
               </Button>
             </div>
