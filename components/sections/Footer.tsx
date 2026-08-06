@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Logo from "../ui/Logo";
 
 interface SocialLink {
   name: string;
@@ -95,12 +96,7 @@ export default function Footer() {
     <footer className="flex w-full flex-col gap-10 bg-[#F9F9F9] px-20 pt-20 pb-10 shadow-[0px_-2px_4px_0px_rgba(0,0,0,0.1)]">
       <div className="flex w-full items-center justify-between">
         <div className="flex flex-col items-center gap-[75px]">
-          <Image
-            src="/icons/navbar-logo.svg"
-            width={282}
-            height={88}
-            alt="Dimentoring"
-          />
+          <Logo variant="primary" mark="full" className="h-[88px] w-auto" />
           <div className="flex items-center gap-12">
             {SOCIAL_LINKS.map((social) => (
               <a

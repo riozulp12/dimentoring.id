@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type { CSSProperties } from "react";
 import Button from "./Button";
+import Logo from "./Logo";
 
 export type NavItemKey = "home" | "program" | "testimonial" | "faq";
 
@@ -71,13 +72,7 @@ export default function Navbar({
 }: NavbarProps) {
   return (
     <nav className="flex w-full items-center justify-between gap-16 bg-white px-20 py-8 shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)]">
-      <Image
-        src="/icons/navbar-logo.svg"
-        width={179}
-        height={56}
-        alt="dimentoring.id"
-        priority
-      />
+      <Logo variant="primary" mark="full" priority />
 
       <div className="flex items-center gap-16">
         {NAV_ITEMS.map((item) => (
