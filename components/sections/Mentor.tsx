@@ -16,7 +16,7 @@ function CoverPortrait({
 }) {
   return (
     <div className="relative z-10 mt-8 h-[232px] w-[160px] overflow-hidden sm:h-[290px] sm:w-[200px] lg:h-[290px] lg:w-[200px]">
-      <Image src={src} alt={alt} fill className="object-contain object-bottom" />
+      <Image src={src} alt={alt} fill className="object-contain object-center" />
     </div>
   );
 }
@@ -25,7 +25,7 @@ function RotatedCoverPortrait({ src, alt }: { src: string; alt: string }) {
   return (
     <div className="relative z-10 mt-8 flex h-[232px] w-[160px] items-center justify-center overflow-hidden sm:h-[290px] sm:w-[200px] lg:h-[290px] lg:w-[200px]">
       <div className="relative h-[160px] w-[232px] rotate-90 sm:h-[200px] sm:w-[290px] lg:h-[200px] lg:w-[290px]">
-        <Image src={src} alt={alt} fill className="object-contain object-bottom" />
+        <Image src={src} alt={alt} fill className="object-contain object-center" />
       </div>
     </div>
   );
@@ -82,7 +82,7 @@ export default function Mentor() {
               key={`${mentor.name}-${index}`}
               className="flex w-[260px] shrink-0 flex-col items-center sm:w-[320px] lg:w-[320px]"
             >
-              <div className="relative z-10 flex w-[160px] flex-col items-center sm:w-[200px] lg:w-[200px]">
+              <div className="relative z-0 flex w-[160px] flex-col items-center sm:w-[200px] lg:w-[200px]">
                 <Image
                   src="/icons/mentor-badge-shape.svg"
                   width={179}
@@ -92,7 +92,7 @@ export default function Mentor() {
                 />
                 {mentor.portrait}
               </div>
-              <div className="relative z-0 -mt-2 flex w-full flex-col items-center gap-3 rounded-[20px] bg-[#081EEA] px-4 py-4 drop-shadow-[4px_4px_0px_black] sm:-mt-3 sm:gap-4 sm:px-5 lg:-mt-4 lg:gap-[19px] lg:px-6 lg:py-5">
+              <div className="relative z-10 -mt-6 flex w-full flex-col items-center gap-3 rounded-[20px] bg-[#081EEA] px-4 py-4 drop-shadow-[4px_4px_0px_black] sm:-mt-8 sm:gap-4 sm:px-5 lg:-mt-10 lg:gap-[19px] lg:px-6 lg:py-5">
                 <div className="flex w-full max-w-[382px] flex-col items-center gap-2 text-center text-white sm:gap-3 lg:gap-4">
                   <p className="w-full text-lg leading-[1.5] font-semibold tracking-[-0.36px]">
                     {mentor.name}
