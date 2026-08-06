@@ -54,10 +54,10 @@ export default function Why() {
             <div className="flex items-center rounded-[100px] bg-white p-3 shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)] sm:p-4">
               <Image
                 src={item.icon}
-                width={40}
-                height={40}
+                width={28}
+                height={28}
                 alt=""
-                className="h-10 w-10"
+                className="h-7 w-7"
               />
             </div>
             <div className="flex flex-col gap-3 sm:gap-5">

@@ -12,7 +12,7 @@ const AVATARS = [
 export default function Hero() {
   return (
     <section className="w-full bg-gradient-to-b from-[#E7EAFF] to-[#F7F8FF] px-5 py-10 sm:px-8 sm:py-14 md:px-12 lg:px-20 lg:py-[72px]">
-      <div className="flex w-full flex-col items-center gap-10 sm:gap-12 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
+      <div className="flex w-full flex-col items-center gap-10 sm:gap-12 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
         <div className="flex min-w-0 flex-col items-center gap-10 text-center sm:gap-14 lg:min-w-0 lg:flex-1 lg:items-start lg:gap-20 lg:text-left">
           <div className="flex flex-col items-center gap-4 sm:gap-5 lg:items-start">
             <span className="inline-flex w-fit items-center rounded-[20px] border-[0.8px] border-[#CAC9C9] bg-[#F9F9F9] px-6 py-2 text-sm leading-[1.5] tracking-[-0.28px] text-[#081EEA] sm:px-8 sm:py-2.5 sm:text-lg sm:tracking-[-0.36px]">
@@ -20,20 +20,21 @@ export default function Hero() {
             </span>
             <h3 className="max-w-[934px] text-2xl leading-[1.5] font-semibold tracking-[-0.48px] text-black sm:text-[32px] sm:tracking-[-0.64px] lg:text-[40px] lg:tracking-[-0.8px]">
               Setiap Siswa Punya{" "}
-              <span className="text-[#081EEA]">Perjalanan Belajar</span> yang
-              Berbeda
+              <span className="text-[#081EEA]">Perjalanan</span>
+              <br />
+              <span className="text-[#081EEA]">Belajar</span> yang Berbeda
             </h3>
-            <p className="w-full max-w-[520px] text-lg leading-[1.5] tracking-[-0.36px] text-black lg:max-w-[480px]">
+            <p className="line-clamp-3 w-full max-w-[540px] text-lg leading-[1.5] tracking-[-0.36px] text-black">
               Mulai dari awal menyusun strategi, mempersiapkan menghadapi SNBT
               dan Ujian Mandiri sampai dengan masuk ke perkuliahan,
               Dimentoring hadir sebagai mentor dalam setiap langkahmu
             </p>
 
-            <div className="flex w-full flex-col gap-4 sm:flex-row sm:gap-6 lg:gap-8">
-              <Button variant="primary" size="sm" className="flex-1">
+            <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row sm:gap-6 lg:gap-8">
+              <Button variant="primary" size="sm" className="w-full sm:w-auto">
                 Cek Peluang Masuk PTN mu
               </Button>
-              <Button variant="secondary" size="sm" className="flex-1">
+              <Button variant="secondary" size="sm" className="w-full sm:w-auto">
                 Konsultasi
               </Button>
             </div>
@@ -74,7 +75,7 @@ export default function Hero() {
           width={716}
           height={790}
           alt=""
-          className="h-auto w-full max-w-[360px] shrink-0 sm:max-w-[480px] md:max-w-[620px] lg:w-[360px] lg:max-w-[360px] min-[1440px]:w-[480px] min-[1440px]:max-w-[480px]"
+          className="h-auto w-full min-w-0 max-w-[360px] sm:max-w-[480px] md:max-w-[620px] lg:max-w-none lg:flex-1"
           priority
         />
       </div>
