@@ -20,7 +20,7 @@ const ICONS = {
 } as const;
 
 const FIELD_BASE =
-  "w-full rounded-[20px] border px-8 py-5 flex items-center gap-5 text-xl font-normal leading-[1.5] tracking-[-0.02em] transition-colors";
+  "w-full rounded-[20px] border px-5 py-3 sm:px-6 sm:py-4 lg:px-8 lg:py-5 flex items-center gap-3 sm:gap-4 lg:gap-5 text-base sm:text-lg lg:text-xl font-normal leading-[1.5] tracking-[-0.02em] transition-colors";
 
 function fieldTone(status: InputFieldStatus, disabled?: boolean) {
   if (disabled) {
@@ -257,11 +257,11 @@ function FileInput({
           height={ICONS.upload.size}
           alt=""
         />
-        <p className="text-xl font-normal leading-[1.5] tracking-[-0.02em]">
+        <p className="text-lg font-normal leading-[1.5] tracking-[-0.02em]">
           <span className="text-[#7E7C7C]">Drop here to attach or</span>{" "}
           <span className="text-[#081EEA]">upload</span>
         </p>
-        <p className="text-base font-normal leading-[1.5] tracking-[-0.02em] text-[#7E7C7C]">
+        <p className="text-lg font-normal leading-[1.5] tracking-[-0.02em] text-[#7E7C7C]">
           {helperText}
         </p>
         <input
@@ -277,7 +277,7 @@ function FileInput({
         />
       </div>
       {status === "error" ? (
-        <p className="w-full text-xs leading-5 tracking-[-0.02em] text-[#DC2626]">
+        <p className="w-full text-lg leading-5 tracking-[-0.02em] text-[#DC2626]">
           {errorText}
         </p>
       ) : null}

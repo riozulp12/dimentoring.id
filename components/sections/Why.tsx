@@ -35,30 +35,36 @@ const WHY_ITEMS: WhyItem[] = [
 
 export default function Why() {
   return (
-    <section className="flex w-full flex-col items-center gap-12 px-[120px] py-16">
-      <div className="flex w-[643px] max-w-full flex-col items-center gap-5 text-center">
-        <h2 className="text-[40px] leading-[1.5] font-semibold tracking-[-0.8px] text-black">
+    <section className="flex w-full flex-col items-center gap-8 px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:gap-12 lg:px-[120px] lg:py-16">
+      <div className="flex w-[643px] max-w-full flex-col items-center gap-3 text-center sm:gap-5">
+        <h4 className="text-2xl leading-[1.5] font-semibold tracking-[-0.48px] text-black sm:text-[32px] sm:tracking-[-0.64px] lg:text-[40px] lg:tracking-[-0.8px]">
           Kenapa Harus <span className="text-[#081EEA]">Dimentoring</span>?
-        </h2>
-        <p className="text-2xl leading-[1.5] tracking-[-0.48px] text-[#7E7C7C]">
+        </h4>
+        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
           Belajar nyaman, efektif, dan sesuai kebutuhan setiap siswa
         </p>
       </div>
 
-      <div className="flex w-full items-stretch gap-8">
+      <div className="grid w-full grid-cols-1 gap-5 sm:grid-cols-2 lg:gap-6 min-[1440px]:flex min-[1440px]:items-stretch min-[1440px]:gap-8">
         {WHY_ITEMS.map((item) => (
           <div
             key={item.title}
-            className="flex flex-1 flex-col items-start gap-8 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white p-[18px] shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)]"
+            className="flex flex-1 flex-col items-start gap-5 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white p-[18px] shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)] lg:gap-8"
           >
-            <div className="flex items-center rounded-[100px] bg-white p-4 shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)]">
-              <Image src={item.icon} width={64} height={64} alt="" />
+            <div className="flex items-center rounded-[100px] bg-white p-3 shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)] sm:p-4">
+              <Image
+                src={item.icon}
+                width={40}
+                height={40}
+                alt=""
+                className="h-10 w-10"
+              />
             </div>
-            <div className="flex flex-col gap-5">
-              <p className="text-[28px] leading-[1.5] font-semibold tracking-[-0.56px] text-black">
+            <div className="flex flex-col gap-3 sm:gap-5">
+              <p className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black">
                 {item.title}
               </p>
-              <p className="text-2xl leading-[1.5] tracking-[-0.48px] text-black">
+              <p className="text-lg leading-[1.5] tracking-[-0.36px] text-black">
                 {item.description}
               </p>
             </div>

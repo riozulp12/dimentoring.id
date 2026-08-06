@@ -42,19 +42,19 @@ export default function FAQ() {
   };
 
   return (
-    <section className="flex w-full flex-col items-center gap-12 bg-white py-20 shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)]">
-      <div className="flex flex-col items-center gap-5 text-center">
-        <h2 className="text-[40px] leading-[1.5] font-semibold tracking-[-0.8px] text-black">
+    <section className="flex w-full flex-col items-center gap-8 bg-white px-5 py-10 shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)] sm:gap-10 sm:px-8 sm:py-14 md:px-12 lg:gap-12 lg:px-0 lg:py-20">
+      <div className="flex flex-col items-center gap-3 text-center sm:gap-5">
+        <h4 className="text-2xl leading-[1.5] font-semibold tracking-[-0.48px] text-black sm:text-[32px] sm:tracking-[-0.64px] lg:text-[40px] lg:tracking-[-0.8px]">
           Pertanyaan yang Sering Ditanyakan Tentang{" "}
           <span className="text-[#081EEA]">Dimentoring?</span>
-        </h2>
-        <p className="text-2xl leading-[1.5] tracking-[-0.48px] text-[#7E7C7C]">
+        </h4>
+        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
           Temukan jawaban cepat seputar program dan layanan Dimentoring tanpa
           perlu bingung lagi
         </p>
       </div>
 
-      <div className="flex w-[1100px] max-w-full flex-col items-center gap-6">
+      <div className="flex w-[1100px] max-w-full flex-col items-center gap-4 sm:gap-6">
         {FAQS.map((item, index) => {
           const isOpen = openItems.has(index);
           return (
@@ -66,9 +66,9 @@ export default function FAQ() {
                 type="button"
                 onClick={() => toggleItem(index)}
                 aria-expanded={isOpen}
-                className="flex min-h-[70px] w-full items-center justify-between gap-5 px-8 py-5 text-left"
+                className="flex min-h-[56px] w-full items-center justify-between gap-4 px-5 py-4 text-left sm:gap-5 sm:px-6 sm:py-5 lg:min-h-[70px] lg:px-8"
               >
-                <span className="text-2xl leading-[1.5] font-semibold tracking-[-0.48px] text-black">
+                <span className="text-base leading-[1.5] font-semibold tracking-[-0.32px] text-black sm:text-xl sm:tracking-[-0.4px] lg:text-2xl lg:tracking-[-0.48px]">
                   {item.question}
                 </span>
                 <Image
@@ -76,13 +76,13 @@ export default function FAQ() {
                   width={24}
                   height={24}
                   alt=""
-                  className={`shrink-0 transition-transform ${
+                  className={`h-5 w-5 shrink-0 transition-transform sm:h-6 sm:w-6 ${
                     isOpen ? "rotate-180" : ""
                   }`}
                 />
               </button>
               {isOpen ? (
-                <p className="px-8 pb-6 text-xl leading-[1.5] tracking-[-0.4px] text-[#7E7C7C]">
+                <p className="px-5 pb-4 text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C] sm:px-6 lg:px-8 lg:pb-6">
                   {item.answer}
                 </p>
               ) : null}

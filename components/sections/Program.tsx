@@ -31,31 +31,31 @@ const PROGRAMS: ProgramItem[] = [
 
 export default function Program() {
   return (
-    <section className="flex w-full items-center justify-between gap-16 bg-[#081EEA] px-[120px] py-16">
-      <div className="flex w-[585px] max-w-full flex-col gap-5">
-        <h2 className="text-[40px] leading-[1.5] font-semibold tracking-[-0.8px] text-white">
+    <section className="flex w-full flex-col items-center gap-10 bg-[#081EEA] px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:flex-row lg:items-center lg:justify-between lg:gap-16 lg:px-[120px] lg:py-16">
+      <div className="flex w-[585px] max-w-full flex-col items-center gap-3 text-center sm:gap-5 lg:items-start lg:text-left">
+        <h4 className="text-2xl leading-[1.5] font-semibold tracking-[-0.48px] text-white sm:text-[32px] sm:tracking-[-0.64px] lg:text-[40px] lg:tracking-[-0.8px]">
           Program & Kelas Dimentoring
-        </h2>
-        <p className="text-2xl leading-[1.5] tracking-[-0.48px] text-white">
+        </h4>
+        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-white">
           Program buat mendukungmu belajar meraih tujuanmu
         </p>
       </div>
 
-      <div className="flex w-[800px] max-w-full flex-col gap-8">
+      <div className="flex w-[800px] max-w-full flex-col gap-4 sm:gap-6 lg:gap-8">
         {PROGRAMS.map((item) => (
           <div
             key={item.title}
-            className="relative flex flex-col gap-2.5 rounded-[32px] border-[0.8px] border-[#E3E3E3] bg-white px-8 py-4 shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)]"
+            className="relative flex flex-col gap-2.5 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-3 shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)] sm:rounded-[24px] sm:px-6 sm:py-4 lg:rounded-[32px] lg:px-8"
           >
-            <p className="text-[32px] leading-[1.5] font-medium tracking-[-0.64px] text-[#081EEA]">
+            <p className="max-w-[75%] text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-[#081EEA]">
               {item.title}
             </p>
-            <p className="text-2xl leading-[1.5] tracking-[-0.48px] text-black">
+            <p className="max-w-[75%] text-lg leading-[1.5] tracking-[-0.36px] text-black">
               {item.description}
             </p>
             <Mascot
               variant={item.mascot}
-              className="pointer-events-none absolute right-[-15px] bottom-0 h-[100px] w-auto select-none"
+              className="pointer-events-none absolute right-[-8px] bottom-0 h-14 w-auto select-none sm:h-20 lg:right-[-15px] lg:h-[100px]"
             />
           </div>
         ))}

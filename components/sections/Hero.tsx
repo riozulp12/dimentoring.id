@@ -11,47 +11,35 @@ const AVATARS = [
 
 export default function Hero() {
   return (
-    <section className="w-full bg-gradient-to-b from-[#E7EAFF] to-[#F7F8FF] px-20 py-[72px]">
-      <div className="flex w-full items-start justify-between gap-16">
-        <div className="flex flex-col gap-20">
-          <div className="flex flex-col gap-10">
-            <div className="flex flex-col gap-5">
-              <span className="inline-flex w-fit items-center rounded-[20px] border-[0.8px] border-[#CAC9C9] bg-[#F9F9F9] px-8 py-2.5 text-lg leading-[1.5] tracking-[-0.36px] text-[#081EEA]">
-                #BertumbuhBersama
-              </span>
-              <h1 className="max-w-[934px] text-[64px] font-semibold leading-[1.5] tracking-[-1.28px] text-black">
-                Setiap Siswa Punya{" "}
-                <span className="text-[#081EEA]">Perjalanan Belajar</span> yang
-                Berbeda
-              </h1>
-              <p className="w-full text-2xl leading-[1.5] tracking-[-0.48px] text-black">
-                Mulai dari awal menyusun strategi, mempersiapkan menghadapi SNBT
-                dan Ujian Mandiri sampai dengan masuk ke perkuliahan,
-                Dimentoring hadir sebagai mentor dalam setiap langkahmu
-              </p>
-            </div>
+    <section className="w-full bg-gradient-to-b from-[#E7EAFF] to-[#F7F8FF] px-5 py-10 sm:px-8 sm:py-14 md:px-12 lg:px-20 lg:py-[72px]">
+      <div className="flex w-full flex-col items-center gap-10 sm:gap-12 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
+        <div className="flex min-w-0 flex-col items-center gap-10 text-center sm:gap-14 lg:min-w-0 lg:flex-1 lg:items-start lg:gap-20 lg:text-left">
+          <div className="flex flex-col items-center gap-4 sm:gap-5 lg:items-start">
+            <span className="inline-flex w-fit items-center rounded-[20px] border-[0.8px] border-[#CAC9C9] bg-[#F9F9F9] px-6 py-2 text-sm leading-[1.5] tracking-[-0.28px] text-[#081EEA] sm:px-8 sm:py-2.5 sm:text-lg sm:tracking-[-0.36px]">
+              #BertumbuhBersama
+            </span>
+            <h3 className="max-w-[934px] text-2xl leading-[1.5] font-semibold tracking-[-0.48px] text-black sm:text-[32px] sm:tracking-[-0.64px] lg:text-[40px] lg:tracking-[-0.8px]">
+              Setiap Siswa Punya{" "}
+              <span className="text-[#081EEA]">Perjalanan Belajar</span> yang
+              Berbeda
+            </h3>
+            <p className="w-full max-w-[520px] text-lg leading-[1.5] tracking-[-0.36px] text-black lg:max-w-[480px]">
+              Mulai dari awal menyusun strategi, mempersiapkan menghadapi SNBT
+              dan Ujian Mandiri sampai dengan masuk ke perkuliahan,
+              Dimentoring hadir sebagai mentor dalam setiap langkahmu
+            </p>
 
-            <div className="flex w-full gap-8">
-              <Button
-                variant="primary"
-                size="lg"
-                className="flex-1"
-                style={{ padding: "20px 32px" }}
-              >
+            <div className="flex w-full flex-col gap-4 sm:flex-row sm:gap-6 lg:gap-8">
+              <Button variant="primary" size="sm" className="flex-1">
                 Cek Peluang Masuk PTN mu
               </Button>
-              <Button
-                variant="secondary"
-                size="lg"
-                className="flex-1"
-                style={{ padding: "20px 32px" }}
-              >
+              <Button variant="secondary" size="sm" className="flex-1">
                 Konsultasi
               </Button>
             </div>
           </div>
 
-          <div className="flex items-center gap-5">
+          <div className="flex flex-wrap items-center justify-center gap-5 lg:justify-start">
             <div className="flex items-center">
               {AVATARS.map((src, index) => (
                 <Image
@@ -61,19 +49,19 @@ export default function Hero() {
                   height={56}
                   alt=""
                   className={[
-                    "rounded-full object-cover",
-                    index > 0 ? "-ml-6" : "",
+                    "h-10 w-10 rounded-full object-cover sm:h-12 sm:w-12 lg:h-14 lg:w-14",
+                    index > 0 ? "-ml-4 sm:-ml-5 lg:-ml-6" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
                 />
               ))}
             </div>
-            <div className="flex flex-col gap-2">
-              <p className="text-[28px] font-medium leading-[1.5] tracking-[-0.56px] text-black">
+            <div className="flex flex-col items-center gap-2 lg:items-start">
+              <p className="text-lg font-medium leading-[1.5] tracking-[-0.36px] text-black">
                 100+ Siswa
               </p>
-              <p className="w-[382px] text-lg leading-[1.5] tracking-[-0.36px] text-black">
+              <p className="w-full max-w-[382px] text-center text-lg leading-[1.5] tracking-[-0.36px] text-black lg:text-left">
                 Lebih dari 100 siswa telah belajar dengan kami dan mendapatkan
                 PTN impiannya
               </p>
@@ -86,7 +74,7 @@ export default function Hero() {
           width={716}
           height={790}
           alt=""
-          className="h-auto w-full max-w-[716px]"
+          className="h-auto w-full max-w-[360px] shrink-0 sm:max-w-[480px] md:max-w-[620px] lg:w-[360px] lg:max-w-[360px] min-[1440px]:w-[480px] min-[1440px]:max-w-[480px]"
           priority
         />
       </div>

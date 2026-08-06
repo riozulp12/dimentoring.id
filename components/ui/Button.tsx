@@ -2,7 +2,7 @@
 
 import type { ButtonHTMLAttributes } from "react";
 
-export type ButtonSize = "sm" | "md" | "lg";
+export type ButtonSize = "sm" | "md" | "lg" | "xl";
 export type ButtonVariant = "primary" | "secondary";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -11,9 +11,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const SIZE_STYLES: Record<ButtonSize, string> = {
-  sm: "text-base tracking-[-0.32px]",
-  md: "text-xl tracking-[-0.4px]",
-  lg: "text-2xl tracking-[-0.48px]",
+  sm: "px-5 py-2 text-sm sm:text-base tracking-[-0.32px]",
+  md: "px-6 py-2 sm:px-7 sm:py-2.5 lg:px-8 text-base sm:text-lg lg:text-xl tracking-[-0.4px]",
+  lg: "px-6 py-2.5 sm:px-7 lg:px-8 text-lg sm:text-xl lg:text-2xl tracking-[-0.48px]",
+  xl: "px-6 py-3 sm:px-7 sm:py-4 lg:px-8 lg:py-5 text-lg sm:text-xl lg:text-2xl tracking-[-0.48px]",
 };
 
 const VARIANT_STYLES: Record<ButtonVariant, string> = {
@@ -45,7 +46,7 @@ export default function Button({
     <button
       type={type}
       className={[
-        "inline-flex items-center justify-center rounded-[18px] px-8 py-2.5",
+        "inline-flex items-center justify-center rounded-[18px]",
         "font-medium leading-[1.5] whitespace-nowrap",
         "transition-[filter,border-color] duration-150 ease-out",
         "disabled:cursor-not-allowed disabled:pointer-events-none",

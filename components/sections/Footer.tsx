@@ -93,11 +93,11 @@ const CONTACTS: ContactItem[] = [
 
 export default function Footer() {
   return (
-    <footer className="flex w-full flex-col gap-10 bg-[#F9F9F9] px-20 pt-20 pb-10 shadow-[0px_-2px_4px_0px_rgba(0,0,0,0.1)]">
-      <div className="flex w-full items-center justify-between">
-        <div className="flex flex-col items-center gap-[75px]">
-          <Logo variant="primary" mark="full" className="h-[88px] w-auto" />
-          <div className="flex items-center gap-12">
+    <footer className="flex w-full flex-col gap-10 bg-[#F9F9F9] px-5 pt-12 pb-8 shadow-[0px_-2px_4px_0px_rgba(0,0,0,0.1)] sm:px-8 md:px-12 lg:px-20 lg:pt-20 lg:pb-10">
+      <div className="flex w-full flex-col items-center gap-10 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col items-center gap-8 sm:gap-12 lg:gap-[75px]">
+          <Logo variant="primary" mark="full" className="h-12 w-auto sm:h-16 lg:h-[88px]" />
+          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 lg:gap-12">
             {SOCIAL_LINKS.map((social) => (
               <a
                 key={social.name}
@@ -109,23 +109,24 @@ export default function Footer() {
                   width={social.width}
                   height={social.height}
                   alt=""
+                  className="h-4 w-auto sm:h-5 lg:h-6"
                 />
               </a>
             ))}
           </div>
         </div>
 
-        <div className="flex items-start gap-[91px]">
+        <div className="flex w-full flex-col items-center gap-10 sm:flex-row sm:flex-wrap sm:items-start sm:justify-center sm:gap-12 lg:w-auto lg:items-start lg:justify-start lg:gap-[91px]">
           {FOOTER_COLUMNS.map((column) => (
-            <div key={column.title} className="flex flex-col items-start gap-6">
-              <p className="text-[32px] leading-[1.5] font-semibold tracking-[-0.64px] text-black">
+            <div key={column.title} className="flex flex-col items-center gap-4 sm:items-start sm:gap-6">
+              <p className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black">
                 {column.title}
               </p>
-              <div className="flex flex-col items-start gap-[18px]">
+              <div className="flex flex-col items-center gap-3 sm:items-start sm:gap-[18px]">
                 {column.links.map((link) => (
                   <p
                     key={link}
-                    className="text-2xl leading-[1.5] tracking-[-0.48px] whitespace-nowrap text-black"
+                    className="text-lg leading-[1.5] tracking-[-0.36px] whitespace-nowrap text-black"
                   >
                     {link}
                   </p>
@@ -134,11 +135,11 @@ export default function Footer() {
             </div>
           ))}
 
-          <div className="flex w-[419px] flex-col items-start gap-6">
-            <p className="text-[32px] leading-[1.5] font-semibold tracking-[-0.64px] text-black">
+          <div className="flex w-full flex-col items-center gap-4 sm:w-auto sm:items-start sm:gap-6 lg:w-[419px]">
+            <p className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black">
               Kontak
             </p>
-            <div className="flex w-full flex-col items-start gap-[18px]">
+            <div className="flex w-full flex-col items-center gap-3 sm:items-start sm:gap-[18px]">
               {CONTACTS.map((contact) => (
                 <div key={contact.label} className="flex items-center gap-4">
                   <Image
@@ -146,8 +147,9 @@ export default function Footer() {
                     width={contact.width}
                     height={contact.height}
                     alt=""
+                    className="h-5 w-auto sm:h-6"
                   />
-                  <p className="text-2xl leading-[1.5] tracking-[-0.48px] whitespace-nowrap text-black">
+                  <p className="text-lg leading-[1.5] tracking-[-0.36px] whitespace-nowrap text-black">
                     {contact.label}
                   </p>
                 </div>
@@ -157,7 +159,7 @@ export default function Footer() {
         </div>
       </div>
 
-      <p className="w-full text-center text-2xl leading-[1.5] tracking-[-0.48px] text-[#979696]">
+      <p className="w-full text-center text-lg leading-[1.5] tracking-[-0.36px] text-[#979696]">
         Copyright @2026 dimentoring.id
       </p>
     </footer>
