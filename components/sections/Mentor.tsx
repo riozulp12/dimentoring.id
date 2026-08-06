@@ -16,7 +16,7 @@ function CoverPortrait({
 }) {
   return (
     <div className="relative z-10 mt-8 h-[232px] w-[160px] overflow-hidden sm:h-[290px] sm:w-[200px] lg:h-[290px] lg:w-[200px]">
-      <Image src={src} alt={alt} fill className="object-contain object-center" />
+      <Image src={src} alt={alt} fill className="object-cover object-top" />
     </div>
   );
 }
@@ -24,8 +24,8 @@ function CoverPortrait({
 function RotatedCoverPortrait({ src, alt }: { src: string; alt: string }) {
   return (
     <div className="relative z-10 mt-8 flex h-[232px] w-[160px] items-center justify-center overflow-hidden sm:h-[290px] sm:w-[200px] lg:h-[290px] lg:w-[200px]">
-      <div className="relative h-[160px] w-[232px] rotate-90 sm:h-[200px] sm:w-[290px] lg:h-[200px] lg:w-[290px]">
-        <Image src={src} alt={alt} fill className="object-contain object-center" />
+      <div className="relative h-[160px] w-[232px] shrink-0 rotate-90 sm:h-[200px] sm:w-[290px] lg:h-[200px] lg:w-[290px]">
+        <Image src={src} alt={alt} fill className="object-cover object-center" />
       </div>
     </div>
   );
