@@ -12,6 +12,7 @@ import {
 } from "react";
 
 export type InputFieldStatus = "default" | "success" | "error";
+export type InputFieldSize = "md" | "lg";
 
 const ICONS = {
   eye: { src: "/icons/input-eye.svg", size: 32 },
@@ -19,8 +20,18 @@ const ICONS = {
   upload: { src: "/icons/input-upload.svg", size: 32 },
 } as const;
 
+const ICON_SIZES: Record<InputFieldSize, { eye: number; chevronDown: number }> = {
+  md: { eye: 22, chevronDown: 20 },
+  lg: { eye: 32, chevronDown: 24 },
+};
+
 const FIELD_BASE =
-  "w-full rounded-[20px] border px-5 py-3 sm:px-6 sm:py-4 lg:px-8 lg:py-5 flex items-center gap-3 sm:gap-4 lg:gap-5 text-base sm:text-lg lg:text-xl font-normal leading-[1.5] tracking-[-0.02em] transition-colors";
+  "w-full border flex items-center font-normal leading-[1.5] tracking-[-0.02em] transition-colors";
+
+const FIELD_SIZES: Record<InputFieldSize, string> = {
+  md: "rounded-[16px] px-4 py-2.5 sm:px-5 sm:py-3 gap-2.5 sm:gap-3 text-sm sm:text-base",
+  lg: "rounded-[20px] px-5 py-3 sm:px-6 sm:py-4 lg:px-8 lg:py-5 gap-3 sm:gap-4 lg:gap-5 text-base sm:text-lg lg:text-xl",
+};
 
 function fieldTone(status: InputFieldStatus, disabled?: boolean) {
   if (disabled) {
@@ -37,6 +48,7 @@ function fieldTone(status: InputFieldStatus, disabled?: boolean) {
 
 interface BaseFieldProps {
   status?: InputFieldStatus;
+  size?: InputFieldSize;
   className?: string;
 }
 
@@ -77,6 +89,7 @@ export type InputFieldProps =
 
 function TextInput({
   status = "default",
+  size = "lg",
   disabled,
   className,
   id,
@@ -87,7 +100,7 @@ function TextInput({
   const autoId = useId();
   return (
     <div
-      className={[FIELD_BASE, fieldTone(status, disabled), className]
+      className={[FIELD_BASE, FIELD_SIZES[size], fieldTone(status, disabled), className]
         .filter(Boolean)
         .join(" ")}
     >
@@ -104,6 +117,7 @@ function TextInput({
 
 function PasswordInput({
   status = "default",
+  size = "lg",
   disabled,
   className,
   id,
@@ -113,10 +127,11 @@ function PasswordInput({
   void _type;
   const autoId = useId();
   const [visible, setVisible] = useState(false);
+  const eyeSize = ICON_SIZES[size].eye;
 
   return (
     <div
-      className={[FIELD_BASE, "justify-between", fieldTone(status, disabled), className]
+      className={[FIELD_BASE, FIELD_SIZES[size], "justify-between", fieldTone(status, disabled), className]
         .filter(Boolean)
         .join(" ")}
     >
@@ -137,8 +152,8 @@ function PasswordInput({
       >
         <Image
           src={ICONS.eye.src}
-          width={ICONS.eye.size}
-          height={ICONS.eye.size}
+          width={eyeSize}
+          height={eyeSize}
           alt=""
           className={visible ? "" : "opacity-50"}
         />
@@ -149,6 +164,7 @@ function PasswordInput({
 
 function DropdownInput({
   status = "default",
+  size = "lg",
   disabled,
   className,
   id,
@@ -157,10 +173,11 @@ function DropdownInput({
   ...props
 }: DropdownInputFieldProps) {
   const autoId = useId();
+  const chevronSize = ICON_SIZES[size].chevronDown;
 
   return (
     <div
-      className={[FIELD_BASE, "justify-between", fieldTone(status, disabled), className]
+      className={[FIELD_BASE, FIELD_SIZES[size], "justify-between", fieldTone(status, disabled), className]
         .filter(Boolean)
         .join(" ")}
     >
@@ -183,8 +200,8 @@ function DropdownInput({
       </select>
       <Image
         src={ICONS.chevronDown.src}
-        width={ICONS.chevronDown.size}
-        height={ICONS.chevronDown.size}
+        width={chevronSize}
+        height={chevronSize}
         alt=""
         className="pointer-events-none shrink-0"
       />

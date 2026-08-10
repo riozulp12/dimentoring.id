@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Button from "./Button";
 import Logo from "./Logo";
@@ -92,6 +93,9 @@ export default function Navbar({
   onRegisterClick,
   onNotificationClick,
 }: NavbarProps) {
+  const router = useRouter();
+  const handleLoginClick = onLoginClick ?? (() => router.push("/login"));
+  const handleRegisterClick = onRegisterClick ?? (() => router.push("/daftar"));
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const [spacerHeight, setSpacerHeight] = useState(80);
@@ -164,10 +168,10 @@ export default function Navbar({
               </>
             ) : (
               <>
-                <Button variant="primary" size="md" onClick={onLoginClick}>
+                <Button variant="primary" size="md" onClick={handleLoginClick}>
                   Login
                 </Button>
-                <Button variant="secondary" size="md" onClick={onRegisterClick}>
+                <Button variant="secondary" size="md" onClick={handleRegisterClick}>
                   Daftar
                 </Button>
               </>
@@ -214,10 +218,10 @@ export default function Navbar({
               </div>
             ) : (
               <div className="flex w-full flex-col gap-3">
-                <Button variant="primary" size="md" onClick={onLoginClick} className="w-full">
+                <Button variant="primary" size="md" onClick={handleLoginClick} className="w-full">
                   Login
                 </Button>
-                <Button variant="secondary" size="md" onClick={onRegisterClick} className="w-full">
+                <Button variant="secondary" size="md" onClick={handleRegisterClick} className="w-full">
                   Daftar
                 </Button>
               </div>
