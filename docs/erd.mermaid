@@ -1,0 +1,296 @@
+erDiagram
+    USERS ||--o{ USER_ROLES : "memiliki"
+    USERS ||--o| MENTOR_PROFILES : "punya profil (jika role Mentor)"
+    USERS }o--|| SEKOLAH : "sekolah asal (Student)"
+    USERS }o--|| KOTA : "berlokasi di"
+    USERS ||--o{ VERIFICATION_TOKENS : "diverifikasi via"
+    USERS ||--o{ ASSESSMENTS : "mengerjakan"
+    USERS ||--o| GAMIFIKASI_PROFILES : "punya"
+    USERS ||--o{ ENROLLMENTS : "mendaftar"
+    USERS ||--o{ TRYOUT_ATTEMPTS : "mengerjakan"
+    USERS ||--o{ PAYMENTS : "melakukan"
+    USERS ||--o{ REFERRALS : "sebagai referrer"
+    USERS ||--o{ KONTEN_INFO_INTERACTIONS : "simpan/tertarik"
+    USERS ||--o{ AI_MENTOR_LOGS : "chat dengan"
+    USERS ||--o{ REWARD_REDEMPTIONS : "menukar poin"
+    USERS ||--o{ KELAS : "mengajar (sebagai mentor)"
+
+    MENTOR_PROFILES }o--o{ SUBTES : "subtes_diampu"
+    KELAS }o--|| SUBTES : "termasuk"
+    TRYOUTS }o--|| SUBTES : "termasuk"
+    TRYOUTS }o--o| PTN_JURUSAN : "terkait (jalur Mandiri)"
+    SOAL_AI }o--|| SUBTES : "termasuk"
+
+    KOTA }o--|| PROVINSI : "termasuk"
+    SEKOLAH }o--|| KOTA : "berlokasi di"
+
+    ASSESSMENTS ||--o{ ASSESSMENT_PILIHAN : "punya 1-4 pilihan"
+    ASSESSMENT_PILIHAN }o--|| PTN_JURUSAN : "mengacu ke"
+
+    REFERRALS }o--|| USERS : "referee"
+    REFERRALS ||--o{ REFERRAL_REWARDS : "menghasilkan"
+
+    GAMIFIKASI_PROFILES ||--o{ GAMIFIKASI_USER_BADGES : "meraih"
+    GAMIFIKASI_USER_BADGES }o--|| BADGES : "jenis badge"
+
+    KELAS ||--o{ ENROLLMENTS : "diikuti oleh"
+    TRYOUTS ||--o{ TRYOUT_ATTEMPTS : "dikerjakan sbg"
+
+    KONTEN_INFO ||--o{ KONTEN_INFO_INTERACTIONS : "disimpan/ditandai"
+
+    REWARD_CATALOG ||--o{ REWARD_REDEMPTIONS : "ditukar sebagai"
+
+    USERS {
+        uuid id PK
+        string nama
+        string email UK
+        string no_wa
+        string password_hash
+        enum status_verifikasi_akun
+        enum sub_status "calon_mahasiswa/mahasiswa - khusus Student"
+        uuid sekolah_id FK
+        uuid kota_id FK
+        string nama_panggilan
+        boolean consent_leaderboard_lokasi
+        boolean opt_out_leaderboard
+        timestamp created_at
+    }
+
+    USER_ROLES {
+        uuid id PK
+        uuid user_id FK
+        enum role_type "Student/Mentor/Admin"
+        enum status "Active/Pending/Rejected"
+        enum sumber_pengajuan
+        timestamp created_at
+    }
+
+    MENTOR_PROFILES {
+        uuid id PK
+        uuid user_id FK "UNIQUE"
+        string asal_ptn
+        int semester
+        string jurusan
+    }
+
+    VERIFICATION_TOKENS {
+        uuid id PK
+        uuid user_id FK
+        string token
+        enum channel "wa/email"
+        timestamp expired_at
+        timestamp used_at
+    }
+
+    PROVINSI {
+        uuid id PK
+        string nama
+    }
+
+    KOTA {
+        uuid id PK
+        string nama
+        uuid provinsi_id FK
+    }
+
+    SEKOLAH {
+        uuid id PK
+        string nama
+        uuid kota_id FK
+        string akreditasi
+        int kuota_snbp
+        json ranking_data
+    }
+
+    SUBTES {
+        uuid id PK
+        string nama
+        enum kategori "TPS/Literasi/TKA_Wajib/TKA_Elektif"
+    }
+
+    PTN_JURUSAN {
+        uuid id PK
+        string nama_universitas
+        string nama_jurusan
+        int kuota_tahun_berjalan
+        int jumlah_peminat_tahun_lalu
+        enum jalur "SNBP/SNBT/Mandiri"
+        string sumber_data
+        int tahun_data
+    }
+
+    ASSESSMENTS {
+        uuid id PK
+        uuid user_id FK
+        enum jalur
+        json input_data
+        json hasil_breakdown
+        timestamp created_at
+    }
+
+    ASSESSMENT_PILIHAN {
+        uuid id PK
+        uuid assessment_id FK
+        int urutan_pilihan "1-4"
+        uuid ptn_jurusan_id FK
+        decimal keketatan_score
+        decimal peluang_score
+        string peluang_label
+    }
+
+    REFERRALS {
+        uuid id PK
+        uuid referrer_id FK
+        uuid referee_id FK
+        string kode_referral
+        enum status
+        timestamp tanggal_daftar
+        timestamp tanggal_konversi
+    }
+
+    REFERRAL_REWARDS {
+        uuid id PK
+        uuid referral_id FK
+        string jenis_reward
+        decimal nominal_atau_poin
+        enum status_pencairan
+        timestamp tanggal
+    }
+
+    GAMIFIKASI_PROFILES {
+        uuid id PK
+        uuid user_id FK "UNIQUE"
+        int total_poin
+        string level
+        int streak_counter
+    }
+
+    BADGES {
+        uuid id PK
+        string nama
+        string kriteria
+        string ikon
+    }
+
+    GAMIFIKASI_USER_BADGES {
+        uuid id PK
+        uuid gamifikasi_profile_id FK
+        uuid badge_id FK
+        timestamp earned_at
+    }
+
+    REWARD_CATALOG {
+        uuid id PK
+        string nama_reward
+        int biaya_poin
+        int stok_atau_anggaran_tersisa
+        uuid dikelola_oleh_admin_id FK
+    }
+
+    REWARD_REDEMPTIONS {
+        uuid id PK
+        uuid user_id FK
+        uuid reward_catalog_id FK
+        int poin_terpakai
+        enum status
+        timestamp tanggal
+    }
+
+    KELAS {
+        uuid id PK
+        string nama
+        enum tingkat_kelas
+        uuid subtes_id FK
+        uuid mentor_id FK
+        int kapasitas
+        decimal harga
+        json jadwal
+    }
+
+    ENROLLMENTS {
+        uuid id PK
+        uuid user_id FK
+        uuid kelas_id FK
+        enum status_pembayaran
+        int progres_persen
+        timestamp tanggal_daftar
+    }
+
+    TRYOUTS {
+        uuid id PK
+        enum kategori "tka/snbt/mandiri"
+        uuid ptn_terkait FK
+        uuid subtes_id FK
+        int durasi_menit
+        enum tipe_akses "free/premium"
+        timestamp jadwal
+    }
+
+    TRYOUT_ATTEMPTS {
+        uuid id PK
+        uuid user_id FK
+        uuid tryout_id FK
+        json jawaban
+        json status_per_soal
+        decimal skor
+        timestamp waktu_mulai
+        int waktu_tersisa_server
+        timestamp waktu_selesai
+        boolean immutable_lock
+        string pdf_export_url
+    }
+
+    PAYMENTS {
+        uuid id PK
+        uuid user_id FK
+        enum item_type
+        uuid item_id
+        decimal jumlah
+        string metode
+        enum status
+        string kode_promo
+        timestamp dibuat_pada
+    }
+
+    KONTEN_INFO {
+        uuid id PK
+        enum tipe "beasiswa/internship/event"
+        string judul
+        text deskripsi
+        date deadline
+        json target_filter
+        enum status "aktif/ditutup"
+        uuid dibuat_oleh_admin_id FK
+    }
+
+    KONTEN_INFO_INTERACTIONS {
+        uuid id PK
+        uuid user_id FK
+        uuid konten_info_id FK
+        enum jenis "disimpan/tertarik"
+        timestamp created_at
+    }
+
+    AI_MENTOR_LOGS {
+        uuid id PK
+        uuid user_id FK
+        text pertanyaan
+        text jawaban
+        boolean eskalasi_bool
+        timestamp dibuat_pada
+    }
+
+    SOAL_AI {
+        uuid id PK
+        uuid subtes_id FK
+        string konsep_sumber
+        text redaksi
+        text jawaban
+        text pembahasan
+        enum tingkat_kesulitan "mudah/sedang/hots"
+        int estimasi_waktu_detik
+        int versi
+        enum status "draft/published/ditolak"
+        uuid direview_oleh_id FK
+        timestamp tanggal_review
+    }

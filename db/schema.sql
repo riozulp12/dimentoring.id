@@ -1,0 +1,412 @@
+-- ============================================================================
+-- DIMENTORING — DATABASE SCHEMA
+-- Diturunkan dari PRD v3.0 Bagian 13 (Data Model)
+-- Target: PostgreSQL (kompatibel Supabase / Neon / RDS Postgres)
+-- Cara pakai: jalankan file ini sebagai migration awal lewat Claude Code
+--             (atau `psql -f dimentoring_schema.sql`), lalu sesuaikan dengan
+--             ORM pilihan CTO (Prisma/Drizzle) jika perlu generate schema file.
+-- ============================================================================
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto"; -- untuk gen_random_uuid()
+
+-- ============================================================================
+-- ENUM TYPES
+-- ============================================================================
+
+CREATE TYPE status_verifikasi_akun AS ENUM ('unverified', 'verified');
+CREATE TYPE sub_status_student AS ENUM ('calon_mahasiswa', 'mahasiswa');
+CREATE TYPE role_type AS ENUM ('student', 'mentor', 'admin');
+CREATE TYPE role_status AS ENUM ('active', 'pending', 'rejected');
+CREATE TYPE sumber_pengajuan_role AS ENUM ('register_publik', 'upgrade_dari_akun_existing');
+CREATE TYPE verification_channel AS ENUM ('wa', 'email');
+CREATE TYPE subtes_kategori AS ENUM ('tps', 'literasi', 'tka_wajib', 'tka_elektif');
+CREATE TYPE jalur_seleksi AS ENUM ('snbp', 'snbt', 'mandiri');
+CREATE TYPE referral_status AS ENUM ('terdaftar', 'dalam_proses', 'terkonversi', 'tidak_valid');
+CREATE TYPE reward_pencairan_status AS ENUM ('tertunda', 'cair', 'ditahan');
+CREATE TYPE tingkat_kelas AS ENUM ('kelas_10', 'kelas_11', 'kelas_12', 'gap_year');
+CREATE TYPE status_pembayaran_enrollment AS ENUM ('menunggu', 'lunas', 'batal');
+CREATE TYPE tryout_kategori AS ENUM ('tka', 'snbt', 'mandiri');
+CREATE TYPE tryout_akses AS ENUM ('free', 'premium');
+CREATE TYPE payment_item_type AS ENUM ('kelas', 'tryout', 'lainnya');
+CREATE TYPE payment_status AS ENUM ('menunggu', 'berhasil', 'gagal', 'refunded');
+CREATE TYPE konten_info_tipe AS ENUM ('beasiswa', 'internship', 'event');
+CREATE TYPE konten_info_status AS ENUM ('aktif', 'ditutup');
+CREATE TYPE interaksi_konten_jenis AS ENUM ('disimpan', 'tertarik');
+CREATE TYPE soal_ai_kesulitan AS ENUM ('mudah', 'sedang', 'hots');
+CREATE TYPE soal_ai_status AS ENUM ('draft', 'published', 'ditolak');
+CREATE TYPE redemption_status AS ENUM ('diproses', 'selesai', 'gagal');
+
+-- ============================================================================
+-- REFERENSI LOKASI & SEKOLAH (BR-16: auto-fill data SNBP dari Sekolah)
+-- ============================================================================
+
+CREATE TABLE provinsi (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE kota (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama VARCHAR(100) NOT NULL,
+    provinsi_id UUID NOT NULL REFERENCES provinsi(id)
+);
+
+CREATE TABLE sekolah (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama VARCHAR(255) NOT NULL,
+    kota_id UUID NOT NULL REFERENCES kota(id),
+    akreditasi VARCHAR(10),              -- 'A' / 'B' / 'C' / dst.
+    kuota_snbp INT,                      -- kuota siswa yang bisa diajukan sekolah untuk SNBP
+    ranking_data JSONB,                  -- data ranking historis jika tersedia
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ============================================================================
+-- REFERENSI SUBTES (dipakai lintas MentorProfile, Kelas, TryOut, SoalAI)
+-- ============================================================================
+
+CREATE TABLE subtes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama VARCHAR(100) NOT NULL,          -- mis. 'Penalaran Matematika', 'Literasi B. Inggris'
+    kategori subtes_kategori NOT NULL
+);
+
+-- ============================================================================
+-- USERS & ROLE (BR-2, BR-26: multi-role dalam satu akun)
+-- ============================================================================
+
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    no_wa VARCHAR(20) NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    status_verifikasi_akun status_verifikasi_akun NOT NULL DEFAULT 'unverified',
+    sub_status sub_status_student,               -- NULL jika bukan Student
+    tingkat_kelas tingkat_kelas,                  -- khusus Student (onboarding Langkah 2), NULL jika bukan Student
+    sekolah_id UUID REFERENCES sekolah(id),       -- khusus Student
+    kota_id UUID REFERENCES kota(id),
+    provinsi_id UUID REFERENCES provinsi(id),
+    nama_panggilan VARCHAR(50),                   -- dipakai di leaderboard (privasi anak)
+    consent_leaderboard_lokasi BOOLEAN NOT NULL DEFAULT false,
+    opt_out_leaderboard BOOLEAN NOT NULL DEFAULT false,
+    kode_referral VARCHAR(20) UNIQUE,             -- kode referral unik milik user sendiri (FR-R1)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_users_sekolah ON users(sekolah_id);
+
+-- Field mapel_tersulit (array Student, FR onboarding Langkah 3) dinormalisasi jadi join table
+CREATE TABLE user_mapel_tersulit (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    subtes_id UUID NOT NULL REFERENCES subtes(id),
+    PRIMARY KEY (user_id, subtes_id)
+);
+
+-- FR-1.8/BR-26: satu user_id bisa punya >1 baris role aktif sekaligus
+CREATE TABLE user_roles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_type role_type NOT NULL,
+    status role_status NOT NULL DEFAULT 'pending',
+    sumber_pengajuan sumber_pengajuan_role NOT NULL DEFAULT 'register_publik',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, role_type)   -- satu user tidak boleh punya baris role_type ganda
+);
+
+CREATE INDEX idx_user_roles_user ON user_roles(user_id);
+
+-- FR-1.4, Flow 9.2: profil tambahan khusus Mentor
+CREATE TABLE mentor_profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    asal_ptn VARCHAR(255) NOT NULL,
+    semester INT NOT NULL,
+    jurusan VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE mentor_subtes_diampu (
+    mentor_profile_id UUID NOT NULL REFERENCES mentor_profiles(id) ON DELETE CASCADE,
+    subtes_id UUID NOT NULL REFERENCES subtes(id),
+    PRIMARY KEY (mentor_profile_id, subtes_id)
+);
+
+-- BR-15: verifikasi via klik link (WA utama, email fallback), bukan OTP manual
+CREATE TABLE verification_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    channel verification_channel NOT NULL,
+    expired_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_verification_tokens_user ON verification_tokens(user_id);
+
+-- ============================================================================
+-- ASSESSMENT PREDIKSI PTN (Bagian 7.4 — Keketatan vs Peluang terpisah)
+-- ============================================================================
+
+CREATE TABLE ptn_jurusan (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama_universitas VARCHAR(255) NOT NULL,
+    nama_jurusan VARCHAR(255) NOT NULL,
+    kuota_tahun_berjalan INT NOT NULL,
+    jumlah_peminat_tahun_lalu INT NOT NULL,
+    jalur jalur_seleksi NOT NULL,
+    sumber_data VARCHAR(100) NOT NULL,   -- 'snpmb.id' / 'input_manual_ptn'
+    tahun_data INT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (nama_universitas, nama_jurusan, jalur, tahun_data)
+);
+
+CREATE TABLE assessments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    jalur jalur_seleksi NOT NULL,
+    input_data JSONB NOT NULL,           -- nilai rapor, prestasi, dsb. (lihat 7.4.2)
+    hasil_breakdown JSONB,               -- catatan/insight tambahan
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_assessments_user ON assessments(user_id);
+
+-- Setiap assessment punya 1-4 pilihan (sesuai desain Hasil Assessment SNBP)
+CREATE TABLE assessment_pilihan (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    assessment_id UUID NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    urutan_pilihan SMALLINT NOT NULL CHECK (urutan_pilihan BETWEEN 1 AND 4),
+    ptn_jurusan_id UUID NOT NULL REFERENCES ptn_jurusan(id),
+    keketatan_score DECIMAL(5,2) NOT NULL,   -- formula publik: (kuota/peminat)*100
+    keketatan_label VARCHAR(30) NOT NULL,    -- 'Sangat Ketat'/'Sedang'/'Sangat Longgar'
+    peluang_score DECIMAL(5,2) NOT NULL,     -- personal, terpisah dari keketatan
+    peluang_label VARCHAR(30) NOT NULL,      -- 'Peluang Kecil'/'Sedang'/'Peluang Besar'
+    is_rekomendasi BOOLEAN NOT NULL DEFAULT false, -- true jika masuk "Rekomendasi Jurusan"
+    UNIQUE (assessment_id, urutan_pilihan, is_rekomendasi)
+);
+
+CREATE INDEX idx_assessment_pilihan_assessment ON assessment_pilihan(assessment_id);
+
+-- ============================================================================
+-- KELAS BIMBINGAN & ENROLLMENT (Bagian 7.5)
+-- ============================================================================
+
+CREATE TABLE kelas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama VARCHAR(255) NOT NULL,
+    tingkat_kelas tingkat_kelas NOT NULL,
+    subtes_id UUID NOT NULL REFERENCES subtes(id),
+    mentor_id UUID REFERENCES users(id),   -- FK ke users yg role_type='mentor' aktif
+    kapasitas INT NOT NULL,
+    harga DECIMAL(12,2) NOT NULL DEFAULT 0,
+    jadwal JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_kelas_mentor ON kelas(mentor_id);
+
+CREATE TABLE enrollments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kelas_id UUID NOT NULL REFERENCES kelas(id),
+    status_pembayaran status_pembayaran_enrollment NOT NULL DEFAULT 'menunggu',
+    progres_persen SMALLINT NOT NULL DEFAULT 0 CHECK (progres_persen BETWEEN 0 AND 100),
+    tanggal_daftar TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, kelas_id)
+);
+
+-- ============================================================================
+-- TRY OUT (Bagian 7.6 — Free/Premium, timer, navigator soal)
+-- ============================================================================
+
+CREATE TABLE tryouts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama VARCHAR(255) NOT NULL,
+    kategori tryout_kategori NOT NULL,
+    ptn_terkait UUID REFERENCES ptn_jurusan(id),  -- wajib diisi jika kategori='mandiri' (BR-8)
+    subtes_id UUID NOT NULL REFERENCES subtes(id),
+    durasi_menit INT NOT NULL,
+    tipe_akses tryout_akses NOT NULL DEFAULT 'free',
+    jadwal TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_mandiri_wajib_ptn CHECK (
+        (kategori <> 'mandiri') OR (kategori = 'mandiri' AND ptn_terkait IS NOT NULL)
+    )
+);
+
+-- FR-T5–T8: navigator soal & timer server-side
+CREATE TABLE tryout_attempts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tryout_id UUID NOT NULL REFERENCES tryouts(id),
+    jawaban JSONB NOT NULL DEFAULT '{}',
+    status_per_soal JSONB NOT NULL DEFAULT '{}',   -- {"1": "dikerjakan", "2": "belum", ...}
+    skor DECIMAL(6,2),
+    waktu_mulai TIMESTAMPTZ NOT NULL DEFAULT now(),
+    waktu_tersisa_server INT NOT NULL,             -- detik tersisa, source of truth (FR-T2)
+    waktu_selesai TIMESTAMPTZ,
+    immutable_lock BOOLEAN NOT NULL DEFAULT false, -- true setelah submit (BR-9)
+    pdf_export_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_tryout_attempts_user ON tryout_attempts(user_id);
+CREATE INDEX idx_tryout_attempts_tryout ON tryout_attempts(tryout_id);
+
+-- ============================================================================
+-- REFERRAL & GAMIFIKASI (Bagian 7.1–7.3)
+-- ============================================================================
+
+CREATE TABLE referrals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    referrer_id UUID NOT NULL REFERENCES users(id),
+    referee_id UUID NOT NULL REFERENCES users(id),
+    kode_referral VARCHAR(30) NOT NULL,
+    status referral_status NOT NULL DEFAULT 'terdaftar',
+    tanggal_daftar TIMESTAMPTZ NOT NULL DEFAULT now(),
+    tanggal_konversi TIMESTAMPTZ,
+    CONSTRAINT chk_no_self_referral CHECK (referrer_id <> referee_id)  -- BR-11
+);
+
+CREATE UNIQUE INDEX idx_referrals_referee ON referrals(referee_id); -- 1 referee cuma dirujuk 1x
+CREATE INDEX idx_referrals_referrer ON referrals(referrer_id);
+
+CREATE TABLE referral_rewards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    referral_id UUID NOT NULL REFERENCES referrals(id) ON DELETE CASCADE,
+    jenis_reward VARCHAR(50) NOT NULL,     -- 'diskon' / 'saldo' / 'poin'
+    nominal_atau_poin DECIMAL(12,2) NOT NULL,
+    status_pencairan reward_pencairan_status NOT NULL DEFAULT 'tertunda',
+    tanggal TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE gamifikasi_profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    total_poin INT NOT NULL DEFAULT 0,
+    level VARCHAR(50) NOT NULL DEFAULT 'Rookie Referrer',
+    streak_counter INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE badges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama VARCHAR(100) NOT NULL,
+    kriteria TEXT NOT NULL,
+    ikon TEXT
+);
+
+CREATE TABLE gamifikasi_user_badges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    gamifikasi_profile_id UUID NOT NULL REFERENCES gamifikasi_profiles(id) ON DELETE CASCADE,
+    badge_id UUID NOT NULL REFERENCES badges(id),
+    earned_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (gamifikasi_profile_id, badge_id)
+);
+
+CREATE TABLE reward_catalog (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama_reward VARCHAR(255) NOT NULL,
+    biaya_poin INT NOT NULL,
+    stok_atau_anggaran_tersisa INT NOT NULL DEFAULT 0,  -- BR-13: anggaran wajib ada cap
+    dikelola_oleh_admin_id UUID NOT NULL REFERENCES users(id)
+);
+
+CREATE TABLE reward_redemptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    reward_catalog_id UUID NOT NULL REFERENCES reward_catalog(id),
+    poin_terpakai INT NOT NULL,
+    status redemption_status NOT NULL DEFAULT 'diproses',
+    tanggal TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ============================================================================
+-- PAYMENT (Bagian 8 BR-19: hanya webhook/admin override yang bisa ubah status)
+-- ============================================================================
+
+CREATE TABLE payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    item_type payment_item_type NOT NULL,
+    item_id UUID NOT NULL,               -- polymorphic: kelas.id atau tryouts.id
+    jumlah DECIMAL(12,2) NOT NULL,
+    metode VARCHAR(50),
+    status payment_status NOT NULL DEFAULT 'menunggu',
+    kode_promo VARCHAR(30),
+    gateway_reference TEXT,              -- id transaksi dari Midtrans/Xendit, utk idempotency webhook
+    dibuat_pada TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX idx_payments_gateway_ref ON payments(gateway_reference)
+    WHERE gateway_reference IS NOT NULL;  -- cegah webhook diproses ganda
+
+-- ============================================================================
+-- KONTEN BEASISWA / INTERNSHIP / EVENT (Bagian 7 — FR-7.x)
+-- ============================================================================
+
+CREATE TABLE konten_info (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tipe konten_info_tipe NOT NULL,
+    judul VARCHAR(255) NOT NULL,
+    deskripsi TEXT,
+    deadline DATE,
+    target_filter JSONB,                 -- kriteria personalisasi (jurusan/PTN)
+    status konten_info_status NOT NULL DEFAULT 'aktif',
+    dibuat_oleh_admin_id UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE konten_info_interactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    konten_info_id UUID NOT NULL REFERENCES konten_info(id) ON DELETE CASCADE,
+    jenis interaksi_konten_jenis NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, konten_info_id, jenis)
+);
+
+-- ============================================================================
+-- AI MENTOR & AI PEMBUAT SOAL (Bagian 7.7, BR-17/BR-18/BR-21/BR-22)
+-- ============================================================================
+
+CREATE TABLE ai_mentor_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    pertanyaan TEXT NOT NULL,
+    jawaban TEXT NOT NULL,
+    eskalasi_bool BOOLEAN NOT NULL DEFAULT false,
+    dibuat_pada TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE soal_ai (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subtes_id UUID NOT NULL REFERENCES subtes(id),
+    konsep_sumber TEXT NOT NULL,          -- referensi konsep, BUKAN teks sumber asli (BR-18)
+    redaksi TEXT NOT NULL,
+    jawaban TEXT NOT NULL,
+    pembahasan TEXT NOT NULL,
+    tingkat_kesulitan soal_ai_kesulitan NOT NULL,
+    estimasi_waktu_detik INT NOT NULL,
+    versi INT NOT NULL DEFAULT 1,
+    status soal_ai_status NOT NULL DEFAULT 'draft',  -- wajib direview dulu (BR-17)
+    direview_oleh_id UUID REFERENCES users(id),
+    tanggal_review TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ============================================================================
+-- CATATAN IMPLEMENTASI
+-- ============================================================================
+-- 1. Semua FK ke users(id) untuk "mentor_id"/"dikelola_oleh_admin_id" TIDAK divalidasi
+--    di level DB bahwa role user tsb memang mentor/admin — validasi ini WAJIB
+--    dilakukan di application layer (RBAC middleware, FR-1.7), karena Postgres
+--    tidak bisa cek "role aktif" lintas tabel user_roles lewat FK constraint biasa.
+-- 2. Audit log (Bagian 15 PRD) belum dibuat sebagai tabel terpisah di sini —
+--    disarankan pakai extension seperti pgAudit atau tabel `audit_logs` generik
+--    (actor_id, action, entity, entity_id, before, after, created_at) sebagai
+--    langkah berikutnya jika diperlukan lebih detail.
+-- 3. Tipe data DECIMAL dipakai untuk uang/skor agar presisi, hindari FLOAT.
+-- 4. Sesuaikan lagi index tambahan setelah pola query nyata dari aplikasi terlihat
+--    (mis. composite index leaderboard per periode di Fase 2).
+-- ============================================================================
