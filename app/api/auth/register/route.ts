@@ -327,13 +327,14 @@ export async function POST(request: Request) {
     }
   }
 
-  // ---- Token verifikasi (BR-15: klik link, WA sebagai kanal utama) ----
+  // ---- Token verifikasi (BR-15: klik link; Email/Resend jadi kanal utama sementara,
+  // WA ditunda sampai ada revenue — lihat CLAUDE.md) ----
   const token = generateVerificationToken();
   const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const { error: tokenError } = await supabaseServer.from("verification_tokens").insert({
     user_id: userId,
     token,
-    channel: "wa",
+    channel: "email",
     expired_at: expiredAt,
   });
 
@@ -345,7 +346,7 @@ export async function POST(request: Request) {
   return NextResponse.json(
     {
       success: true,
-      message: "Registrasi berhasil. Cek WhatsApp kamu untuk link verifikasi.",
+      message: "Registrasi berhasil. Cek email kamu untuk link verifikasi.",
       userId,
       warnings: warnings.length > 0 ? warnings : undefined,
     },

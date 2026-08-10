@@ -352,10 +352,7 @@ export default function RegisterPage() {
         return;
       }
 
-      const params = new URLSearchParams({
-        whatsapp: form.whatsapp,
-        email: form.email,
-      });
+      const params = new URLSearchParams({ email: form.email });
       router.push(`/verifikasi?${params.toString()}`);
     } catch {
       setSubmitError("Gagal terhubung ke server. Periksa koneksi internet kamu.");

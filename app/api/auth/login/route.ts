@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
   // ---- Cari user & verifikasi password (pesan error SENGAJA generik, lihat di bawah) ----
   const { data: user, error: userQueryError } = await supabaseServer
     .from("users")
-    .select("id, email, no_wa, password_hash, status_verifikasi_akun")
+    .select("id, email, password_hash, status_verifikasi_akun")
     .eq("email", email)
     .maybeSingle();
 
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
   // ---- BR-15: akun unverified tidak boleh masuk ke dashboard ----
   if (user.status_verifikasi_akun === "unverified") {
-    const params = new URLSearchParams({ email: user.email, whatsapp: user.no_wa ?? "" });
+    const params = new URLSearchParams({ email: user.email });
     return errorResponse("Akun kamu belum diverifikasi. Cek link verifikasi yang sudah dikirim.", 403, {
       reason: "unverified",
       redirectTo: `/verifikasi?${params.toString()}`,

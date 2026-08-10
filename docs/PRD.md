@@ -160,7 +160,7 @@ Form tunggal: Email/Username + Password, opsi "Lupa Password?", tombol "Login de
 *Jalur Siswa (5 langkah total):*
 - Langkah 2: "Sekarang kamu kelas berapa" — pilih Kelas 10 / 11 / 12 / Gap Year
 - Langkah 3: "Mapel apa yang paling sulit menurutmu?" — checklist multi-select (Matematika, Bahasa Inggris, Bahasa Indonesia, Kimia, Fisika, Biologi, Sejarah, Ekonomi, Geografi, Lainnya). **Data ini menjadi input tambahan ke Assessment/rekomendasi kelas** — bukan sekadar data profil pasif.
-- Langkah 4: "Tulis nomor WhatsApp kamu" — dipakai untuk verifikasi & informasi penting.
+- Langkah 4: "Tulis nomor WhatsApp kamu" — dipakai untuk informasi penting (bukan verifikasi, lihat 7.0.3).
 
 *Jalur Mentor (6 langkah total — 1 langkah lebih banyak dari Siswa):*
 - Langkah 2: "Kamu kuliah di PTN mana?" — dropdown pilih PTN
@@ -469,7 +469,7 @@ Langkah 4: Tulis nomor WhatsApp kamu
 Langkah Terakhir: Email, Nama Lengkap, Password, Kode Referral (Opsional) → submit
    │
    ▼
-Link verifikasi terkirim ke WA (fallback email)
+Link verifikasi terkirim ke Email
    │
    ▼
 User klik link → akun "Verified" → redirect ke Dashboard Student
@@ -504,7 +504,7 @@ Langkah Terakhir: Email, Nama Lengkap, Password, Kode Referral (Opsional) → su
 Akun berstatus "Pending" (belum bisa login penuh)
    │
    ▼
-Link verifikasi terkirim ke WA (fallback email) → user klik → email/WA terverifikasi
+Link verifikasi terkirim ke Email → user klik → akun terverifikasi
    │
    ▼
 Admin menerima notifikasi pendaftaran mentor baru → review data (PTN, semester, jurusan, subtes)
@@ -643,7 +643,7 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 
 | Kategori API | Kebutuhan |
 |---|---|
-| **Auth & Onboarding API** | Register progresif per langkah (simpan draft), submit final, generate & kirim verification token (WA + email fallback), verify token, login, RBAC middleware, admin approve/reject mentor |
+| **Auth & Onboarding API** | Register progresif per langkah (simpan draft), submit final, generate & kirim verification token (Email/Resend — jalur utama sementara, lihat 7.0.3), verify token, login, RBAC middleware, admin approve/reject mentor |
 | **Assessment API** | Submit input per jalur, ambil data Sekolah otomatis untuk SNBP, hitung `keketatan_score` & `peluang_score` terpisah, generate rekomendasi |
 | **Kelas/Enrollment API** | CRUD kelas, enroll, tracking progres |
 | **Tryout API** | Ambil soal (timer server-side), submit jawaban, scoring, generate PDF hasil |
