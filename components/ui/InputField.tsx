@@ -54,19 +54,19 @@ interface BaseFieldProps {
 
 export interface TextInputFieldProps
   extends BaseFieldProps,
-    Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
+    Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "size"> {
   type: "text";
 }
 
 export interface PasswordInputFieldProps
   extends BaseFieldProps,
-    Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
+    Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "size"> {
   type: "password";
 }
 
 export interface DropdownInputFieldProps
   extends BaseFieldProps,
-    Omit<SelectHTMLAttributes<HTMLSelectElement>, "children"> {
+    Omit<SelectHTMLAttributes<HTMLSelectElement>, "children" | "size"> {
   type: "dropdown";
   options: { label: string; value: string }[];
   placeholder?: string;
@@ -74,7 +74,7 @@ export interface DropdownInputFieldProps
 
 export interface FileInputFieldProps
   extends BaseFieldProps,
-    Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "onChange" | "value"> {
+    Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "onChange" | "value" | "size"> {
   type: "file";
   helperText?: string;
   errorText?: string;
@@ -218,9 +218,11 @@ function FileInput({
   errorText = "Max file size: 5GB",
   onFilesSelected,
   type: _type,
+  size: _size,
   ...props
 }: FileInputFieldProps) {
   void _type;
+  void _size;
   const autoId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
