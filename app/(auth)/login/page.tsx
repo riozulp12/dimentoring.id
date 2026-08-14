@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import Mascot from "@/components/ui/Mascot";
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const searchParams = useSearchParams();
+  // PRD Bagian 7.4.1b: kalau login dipicu dari alur "submit ke-3+ assessment
+  // anonim", teruskan id ini ke API supaya assessment ditautkan ke akun & login
+  // redirect langsung ke halaman hasil, bukan ke Dashboard biasa.
+  const pendingAssessmentId = searchParams.get("pending_assessment");
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -27,7 +32,11 @@ export default function LoginPage() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          pendingAssessmentId: pendingAssessmentId || undefined,
+        }),
       });
       const json = await response.json();
 
@@ -189,5 +198,13 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
   );
 }

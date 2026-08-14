@@ -1,18 +1,25 @@
-import { randomBytes, randomInt } from "node:crypto";
-import { NextResponse } from "next/server";
+import { randomInt } from "node:crypto";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { hashPassword } from "@/lib/auth/password";
+import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
+import { linkPendingAssessment } from "@/lib/assessment/linkPendingAssessment";
 
 /**
  * Register API — PRD Bagian 7.0.2 (progressive profiling) & Bagian 13 (Data Model).
  *
+ * BR-15 (direvisi September 2026, Bagian 7.0.3): verifikasi akun DITUNDA ke Fase 2.
+ * Akun langsung dibuat berstatus `verified`, tanpa generate/kirim verification token.
+ * Field `status_verifikasi_akun` & tabel `verification_tokens` tetap dipertahankan di
+ * skema untuk diaktifkan lagi nanti — jangan dihapus.
+ *
  * Catatan atomicity: supabase-js (lewat PostgREST) tidak punya transaksi multi-statement
  * bawaan. Insert dilakukan berurutan; kalau salah satu insert "wajib" (users/user_roles/
  * mentor_profiles/mentor_subtes_diampu/user_mapel_tersulit) gagal, kita hapus row `users`
- * yang baru dibuat (ON DELETE CASCADE membersihkan child table lainnya). Referral & token
- * verifikasi diperlakukan best-effort (tidak membatalkan registrasi kalau gagal), sesuai
- * FR-1.5 ("kode referral salah tidak fatal"). Untuk atomicity penuh, pertimbangkan pindah
- * ke Postgres function (RPC) di iterasi berikutnya.
+ * yang baru dibuat (ON DELETE CASCADE membersihkan child table lainnya). Referral
+ * diperlakukan best-effort (tidak membatalkan registrasi kalau gagal), sesuai FR-1.5
+ * ("kode referral salah tidak fatal"). Untuk atomicity penuh, pertimbangkan pindah ke
+ * Postgres function (RPC) di iterasi berikutnya.
  */
 
 const VALID_ROLES = ["siswa", "mentor"] as const;
@@ -43,6 +50,9 @@ interface RegisterRequestBody {
   whatsapp: string;
   password: string;
   kodeReferral?: string;
+  // PRD Bagian 7.4.1b: id assessment anonim yang mau ditautkan ke akun baru ini,
+  // dikirim frontend dari query param ?pending_assessment= di halaman Daftar.
+  pendingAssessmentId?: string;
   // khusus Siswa
   kelas?: string;
   mapelSulit?: string[];
@@ -81,15 +91,11 @@ function generateReferralCode(namaLengkap: string) {
   return `${prefix}${digits}${randomSuffix}`;
 }
 
-function generateVerificationToken() {
-  return randomBytes(32).toString("hex");
-}
-
 function errorResponse(message: string, status: number) {
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   let body: RegisterRequestBody;
   try {
     body = await request.json();
@@ -201,6 +207,7 @@ export async function POST(request: Request) {
         email,
         no_wa: whatsapp,
         password_hash: passwordHash,
+        status_verifikasi_akun: "verified",
         sub_status: body.role === "siswa" ? "calon_mahasiswa" : null,
         tingkat_kelas: body.role === "siswa" ? tingkatKelas : null,
         kode_referral: ownReferralCode,
@@ -327,26 +334,19 @@ export async function POST(request: Request) {
     }
   }
 
-  // ---- Token verifikasi (BR-15: klik link; Email/Resend jadi kanal utama sementara,
-  // WA ditunda sampai ada revenue — lihat CLAUDE.md) ----
-  const token = generateVerificationToken();
-  const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  const { error: tokenError } = await supabaseServer.from("verification_tokens").insert({
-    user_id: userId,
-    token,
-    channel: "email",
-    expired_at: expiredAt,
-  });
-
-  if (tokenError) {
-    console.error("[register] insert verification_tokens failed:", tokenError);
-    warnings.push("Token verifikasi gagal dibuat, minta kirim ulang link dari halaman verifikasi.");
-  }
+  // ---- PRD Bagian 7.4.1b (best-effort): kalau register dipicu dari alur
+  // "submit ke-3+ assessment anonim", tautkan sekarang juga supaya assessment
+  // langsung ter-attribute ke akun baru (BR-29: baru dianggap lead resmi
+  // begitu ditautkan) — tidak menunggu langkah Login berikutnya. Kegagalan di
+  // sini TIDAK membatalkan registrasi (helper sudah aman kalau id kosong/tidak
+  // cocok trial cookie-nya).
+  const trialId = request.cookies.get(TRIAL_COOKIE_NAME)?.value ?? null;
+  await linkPendingAssessment(body.pendingAssessmentId, trialId, userId);
 
   return NextResponse.json(
     {
       success: true,
-      message: "Registrasi berhasil. Cek email kamu untuk link verifikasi.",
+      message: "Registrasi berhasil. Kamu sudah bisa login.",
       userId,
       warnings: warnings.length > 0 ? warnings : undefined,
     },

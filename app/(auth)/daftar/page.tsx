@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
@@ -271,8 +271,13 @@ function SingleSelectGrid({
   );
 }
 
-export default function RegisterPage() {
+function RegisterPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // PRD Bagian 7.4.1b: kalau register dipicu dari alur "submit ke-3+ assessment
+  // anonim" (redirect dari /assessment ke /daftar?pending_assessment=[id]),
+  // teruskan id ini ke API supaya assessment ditautkan ke akun baru.
+  const pendingAssessmentId = searchParams.get("pending_assessment");
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [stepIndex, setStepIndex] = useState(0);
   const [attempted, setAttempted] = useState(false);
@@ -326,6 +331,7 @@ export default function RegisterPage() {
       whatsapp: form.whatsapp,
       password: form.password,
       kodeReferral: form.kodeReferral.trim() || undefined,
+      pendingAssessmentId: pendingAssessmentId || undefined,
     };
 
     if (form.role === "siswa") {
@@ -352,8 +358,15 @@ export default function RegisterPage() {
         return;
       }
 
+      // BR-15 (revisi September 2026): verifikasi ditunda ke Fase 2, akun langsung
+      // 'verified' & bisa dipakai — arahkan ke Login, bukan halaman verifikasi.
       const params = new URLSearchParams({ email: form.email });
-      router.push(`/verifikasi?${params.toString()}`);
+      // Teruskan terus ke Login supaya linking (kalau belum sempat lewat Register
+      // barusan) tetap punya kesempatan lain, dan Login tahu mau redirect ke hasil.
+      if (pendingAssessmentId) {
+        params.set("pending_assessment", pendingAssessmentId);
+      }
+      router.push(`/login?${params.toString()}`);
     } catch {
       setSubmitError("Gagal terhubung ke server. Periksa koneksi internet kamu.");
       setIsSubmitting(false);
@@ -663,5 +676,13 @@ export default function RegisterPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterPageInner />
+    </Suspense>
   );
 }

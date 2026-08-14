@@ -8,11 +8,17 @@ import {
   verifySessionToken,
   type SessionRole,
 } from "@/lib/auth/session";
+import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
+import { linkPendingAssessment } from "@/lib/assessment/linkPendingAssessment";
 
 /**
  * Login API — PRD Bagian 7.0.1 (Login) & Bagian 7.0.6 (multi-role).
  * Business rules: Bagian 8 BR-2 (Mentor pending sampai approve Admin),
- * BR-15 (akun unverified akses terbatas).
+ * BR-27 (direvisi September 2026 — Mentor Pending tetap bisa login, cuma fitur
+ * mengajar dikunci di sisi frontend lewat flag `mentorStatus`).
+ *
+ * BR-15 (direvisi September 2026, Bagian 7.0.3): verifikasi akun DITUNDA ke Fase 2 —
+ * tidak ada lagi blokir login berdasarkan `status_verifikasi_akun`.
  */
 
 // Hash scrypt dummy (bukan dari akun manapun) — dipakai kalau email tidak ditemukan,
@@ -30,6 +36,9 @@ const ROLE_DASHBOARD_PATH: Record<SessionRole, string> = {
 interface LoginRequestBody {
   email: string;
   password: string;
+  // PRD Bagian 7.4.1b: id assessment anonim yang mau ditautkan ke akun ini,
+  // dikirim frontend dari query param ?pending_assessment= di halaman Login.
+  pendingAssessmentId?: string;
 }
 
 function errorResponse(message: string, status: number, extra?: Record<string, unknown>) {
@@ -62,7 +71,7 @@ export async function POST(request: NextRequest) {
   // ---- Cari user & verifikasi password (pesan error SENGAJA generik, lihat di bawah) ----
   const { data: user, error: userQueryError } = await supabaseServer
     .from("users")
-    .select("id, email, password_hash, status_verifikasi_akun")
+    .select("id, email, password_hash")
     .eq("email", email)
     .maybeSingle();
 
@@ -79,47 +88,62 @@ export async function POST(request: NextRequest) {
     return errorResponse("Email atau password salah.", 401);
   }
 
-  // ---- BR-15: akun unverified tidak boleh masuk ke dashboard ----
-  if (user.status_verifikasi_akun === "unverified") {
-    const params = new URLSearchParams({ email: user.email });
-    return errorResponse("Akun kamu belum diverifikasi. Cek link verifikasi yang sudah dikirim.", 403, {
-      reason: "unverified",
-      redirectTo: `/verifikasi?${params.toString()}`,
-    });
-  }
-
   // ---- Role SELALU dibaca dari database, tidak pernah dari input client ----
   const { data: roleRows, error: roleError } = await supabaseServer
     .from("user_roles")
-    .select("role_type")
-    .eq("user_id", user.id)
-    .eq("status", "active");
+    .select("role_type, status")
+    .eq("user_id", user.id);
 
   if (roleError) {
     console.error("[login] query user_roles failed:", roleError);
     return errorResponse("Gagal memproses login. Coba lagi nanti.", 500);
   }
 
-  const activeRoles = (roleRows ?? []).map((row) => row.role_type as SessionRole);
+  const activeRoles = (roleRows ?? [])
+    .filter((row) => row.status === "active")
+    .map((row) => row.role_type as SessionRole);
 
-  // Mis. Mentor yang masih 'pending' approval & belum punya role aktif lain (BR-2).
-  if (activeRoles.length === 0) {
+  // BR-27: Mentor 'pending' tetap boleh login ke Dashboard Mentor (mode "On Review"),
+  // meski belum punya role aktif lain.
+  const pendingMentor = (roleRows ?? []).find(
+    (row) => row.role_type === "mentor" && row.status === "pending",
+  );
+
+  let activeRole: SessionRole;
+  let mentorStatus: "pending" | undefined;
+
+  if (activeRoles.length > 0) {
+    // "Role terakhir dipakai" dibaca dari session cookie SEBELUMNYA — hanya dipakai kalau
+    // memang milik user yang sama (cegah bocor preferensi user lain di browser bersama).
+    const previousSession = verifySessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
+    const lastUsedRole =
+      previousSession && previousSession.userId === user.id ? previousSession.role : null;
+    activeRole = pickActiveRole(activeRoles, lastUsedRole);
+  } else if (pendingMentor) {
+    activeRole = "mentor";
+    mentorStatus = "pending";
+  } else {
+    // Tidak ada role aktif maupun pengajuan Mentor pending (mis. seluruh role 'rejected').
     return errorResponse("Akun kamu masih menunggu approval Admin.", 403, {
       reason: "no_active_role",
     });
   }
 
-  // "Role terakhir dipakai" dibaca dari session cookie SEBELUMNYA — hanya dipakai kalau
-  // memang milik user yang sama (cegah bocor preferensi user lain di browser bersama).
-  const previousSession = verifySessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
-  const lastUsedRole =
-    previousSession && previousSession.userId === user.id ? previousSession.role : null;
-  const activeRole = pickActiveRole(activeRoles, lastUsedRole);
+  // ---- PRD Bagian 7.4.1b/checklist item 7: assessment anonim (submit ke-3+,
+  // atau yang sudah sempat ditautkan lewat Register) diarahkan ke halaman
+  // hasil-nya sendiri, BUKAN ke Dashboard biasa. ----
+  let redirectTo: string = ROLE_DASHBOARD_PATH[activeRole];
+  const trialId = request.cookies.get(TRIAL_COOKIE_NAME)?.value ?? null;
+  const linkedAssessmentId = await linkPendingAssessment(body.pendingAssessmentId, trialId, user.id);
+  if (linkedAssessmentId) {
+    redirectTo = `/assessment/hasil/${linkedAssessmentId}`;
+  }
 
   const response = NextResponse.json({
     success: true,
     role: activeRole,
-    redirectTo: ROLE_DASHBOARD_PATH[activeRole],
+    redirectTo,
+    ...(mentorStatus ? { mentorStatus } : {}),
   });
 
   response.cookies.set(SESSION_COOKIE_NAME, createSessionToken({ userId: user.id, role: activeRole }), {

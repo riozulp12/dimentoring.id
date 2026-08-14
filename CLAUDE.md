@@ -26,8 +26,8 @@ Ini rangkuman business rules paling kritis dari PRD. Detail lengkap & alasan ada
 - Akun Mentor dibuat lewat self-register, tapi **baru aktif setelah di-approve Admin** — jangan buat jalur yang langsung mengaktifkan mentor tanpa approval.
 - Akun Admin **hanya** dibuat lewat undangan Admin lain, tidak ada form publik untuk role Admin.
 - Satu akun (satu `user_id`) **boleh punya lebih dari satu role aktif sekaligus** (mis. Student + Mentor) lewat tabel `user_roles` — jangan asumsikan satu user = satu role tunggal saat menulis query atau middleware.
-- Verifikasi akun pakai **klik link**, bukan input kode OTP manual. **Jalur utama saat ini: Email (Resend)** — sementara, karena WhatsApp API berbayar dan belum ada revenue. Token verifikasi wajib punya masa berlaku (expiry).
-- Akun berstatus `unverified` tidak boleh bisa melakukan transaksi Payment.
+- **Verifikasi akun (email/WA) DITUNDA — tidak aktif di Fase 1** (revisi September 2026). Akun langsung `Verified` otomatis saat dibuat, langsung bisa dipakai Payment. Infrastruktur `verification_tokens` tetap ada di skema, jangan dihapus — akan diaktifkan lagi di Fase 2.
+- **Mentor dengan status Pending TETAP BISA LOGIN** (ini beda dari sebelumnya) — tampilkan label "On Review" di Navbar, kunci fitur mengajar (Kelas Saya, Siswa Binaan, assignment baru), tapi jangan blokir login sepenuhnya. Approval Admin tetap wajib sebelum fitur mengajar terbuka (BR-2 tidak berubah, cuma akses login-nya).
 
 ### Payment
 - Status pembayaran **hanya** boleh berubah lewat webhook payment gateway atau override manual Admin dengan log audit — tidak ada jalur lain, termasuk dari sisi client.

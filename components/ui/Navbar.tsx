@@ -13,9 +13,19 @@ export interface NavbarProps {
   isLoggedIn?: boolean;
   userName?: string;
   avatarSrc?: string;
+  /** BR-27 / PRD Bagian 12.2: badge "On Review" untuk Mentor status UserRole.status = 'pending'. */
+  mentorStatus?: "pending";
   onLoginClick?: () => void;
   onRegisterClick?: () => void;
   onNotificationClick?: () => void;
+}
+
+function OnReviewBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-sm font-medium leading-none text-amber-700">
+      On Review
+    </span>
+  );
 }
 
 interface NavItemConfig {
@@ -89,6 +99,7 @@ export default function Navbar({
   isLoggedIn = false,
   userName = "Dulce",
   avatarSrc = "/images/navbar-avatar-placeholder.png",
+  mentorStatus,
   onLoginClick,
   onRegisterClick,
   onNotificationClick,
@@ -154,8 +165,9 @@ export default function Navbar({
                   <Image src="/icons/navbar-notification.svg" width={32} height={32} alt="" />
                 </button>
                 <div className="flex items-center gap-6">
-                  <span className="text-2xl font-normal leading-[1.5] tracking-[-0.48px] text-[#081EEA]">
+                  <span className="flex items-center gap-2 text-2xl font-normal leading-[1.5] tracking-[-0.48px] text-[#081EEA]">
                     {userName}
+                    {mentorStatus === "pending" ? <OnReviewBadge /> : null}
                   </span>
                   <Image
                     src={avatarSrc}
@@ -203,8 +215,9 @@ export default function Navbar({
                     alt={userName}
                     className="rounded-full object-cover"
                   />
-                  <span className="text-lg font-normal leading-[1.5] tracking-[-0.36px] text-[#081EEA]">
+                  <span className="flex items-center gap-2 text-lg font-normal leading-[1.5] tracking-[-0.36px] text-[#081EEA]">
                     {userName}
+                    {mentorStatus === "pending" ? <OnReviewBadge /> : null}
                   </span>
                 </div>
                 <button
