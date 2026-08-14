@@ -8,8 +8,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 // diverifikasi tiap request supaya user_id/role tidak bisa dipalsukan (lihat aturan
 // "role tidak boleh dari input client" di CLAUDE.md).
 
-export const SESSION_COOKIE_NAME = "dimentoring_session";
-export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 hari
+export { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "./session-constants";
 
 export type SessionRole = "student" | "mentor" | "admin";
 

@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 
 const AVATARS = [
@@ -10,6 +13,8 @@ const AVATARS = [
 ];
 
 export default function Hero() {
+  const router = useRouter();
+
   return (
     <section className="w-full bg-gradient-to-b from-[#E7EAFF] to-[#F7F8FF] px-5 py-10 sm:px-8 sm:py-14 md:px-12 lg:px-20 lg:py-[72px]">
       <div className="flex w-full flex-col items-center gap-10 sm:gap-12 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
@@ -31,7 +36,12 @@ export default function Hero() {
             </p>
 
             <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row sm:gap-6 lg:gap-8">
-              <Button variant="primary" size="md" className="w-full sm:w-auto">
+              <Button
+                variant="primary"
+                size="md"
+                className="w-full sm:w-auto"
+                onClick={() => router.push("/assessment")}
+              >
                 Cek Peluang Masuk PTN mu
               </Button>
               <Button variant="secondary" size="md" className="w-full sm:w-auto">

@@ -83,14 +83,12 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     status_verifikasi_akun status_verifikasi_akun NOT NULL DEFAULT 'unverified',
     sub_status sub_status_student,               -- NULL jika bukan Student
-    tingkat_kelas tingkat_kelas,                  -- khusus Student (onboarding Langkah 2), NULL jika bukan Student
     sekolah_id UUID REFERENCES sekolah(id),       -- khusus Student
     kota_id UUID REFERENCES kota(id),
     provinsi_id UUID REFERENCES provinsi(id),
     nama_panggilan VARCHAR(50),                   -- dipakai di leaderboard (privasi anak)
     consent_leaderboard_lokasi BOOLEAN NOT NULL DEFAULT false,
     opt_out_leaderboard BOOLEAN NOT NULL DEFAULT false,
-    kode_referral VARCHAR(20) UNIQUE,             -- kode referral unik milik user sendiri (FR-R1)
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -148,34 +146,53 @@ CREATE INDEX idx_verification_tokens_user ON verification_tokens(user_id);
 -- ASSESSMENT PREDIKSI PTN (Bagian 7.4 — Keketatan vs Peluang terpisah)
 -- ============================================================================
 
+CREATE TYPE jenjang_prodi AS ENUM ('D3', 'D4', 'S1');
+
 CREATE TABLE ptn_jurusan (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nama_universitas VARCHAR(255) NOT NULL,
     nama_jurusan VARCHAR(255) NOT NULL,
+    jenjang jenjang_prodi NOT NULL,       -- S1/D3/D4 dianggap prodi berbeda (FR-3.9)
+    provinsi_id UUID NOT NULL REFERENCES provinsi(id), -- lokasi PTN, wajib untuk validasi BR-28
     kuota_tahun_berjalan INT NOT NULL,
     jumlah_peminat_tahun_lalu INT NOT NULL,
     jalur jalur_seleksi NOT NULL,
     sumber_data VARCHAR(100) NOT NULL,   -- 'snpmb.id' / 'input_manual_ptn'
     tahun_data INT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (nama_universitas, nama_jurusan, jalur, tahun_data)
+    UNIQUE (nama_universitas, nama_jurusan, jenjang, jalur, tahun_data)
 );
+
+CREATE INDEX idx_ptn_jurusan_provinsi ON ptn_jurusan(provinsi_id);
 
 CREATE TABLE assessments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE, -- NULLABLE: NULL = assessment anonim (Bagian 7.4.1b/BR-29)
+    anonymous_trial_id TEXT,             -- cookie trial ID, diisi kalau user_id NULL; NULL kalau sudah ditautkan ke akun
     jalur jalur_seleksi NOT NULL,
     input_data JSONB NOT NULL,           -- nilai rapor, prestasi, dsb. (lihat 7.4.2)
+    rata_rata_rapor DECIMAL(5,2),        -- rata-rata Semester 1-5 (Bagian 7.4.3 #0)
+    nilai_prestasi DECIMAL(5,2),         -- NULL jika siswa tidak isi Prestasi
+    nilai_akhir DECIMAL(5,2),            -- rata-rata rapor+prestasi, atau = rata_rata_rapor jika prestasi NULL
+    nilai_akhir_label VARCHAR(30),       -- 'Sangat Tinggi'/'Tinggi'/'Sedang'/'Rendah'/'Sangat Rendah' (FR-3.8)
     hasil_breakdown JSONB,               -- catatan/insight tambahan
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_assessments_user ON assessments(user_id);
+CREATE INDEX idx_assessments_anonymous_trial ON assessments(anonymous_trial_id) WHERE anonymous_trial_id IS NOT NULL;
+
+ALTER TABLE assessments ADD CONSTRAINT chk_assessment_owner
+  CHECK (user_id IS NOT NULL OR anonymous_trial_id IS NOT NULL); -- salah satu wajib ada
 
 -- Setiap assessment punya 1-4 pilihan (sesuai desain Hasil Assessment SNBP)
 CREATE TABLE assessment_pilihan (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     assessment_id UUID NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    -- Catatan: SNBP maksimal 2 pilihan (aturan Kemendikbudristek SNBP 2026, BR-28),
+    -- SNBT tetap 4 pilihan. Constraint DB dilonggarkan ke 1-4 supaya menampung
+    -- kedua jalur; penegakan "maksimal 2 khusus SNBP" dan validasi provinsi
+    -- WAJIB dilakukan di application layer (FR-3.10), bukan cuma di sini.
     urutan_pilihan SMALLINT NOT NULL CHECK (urutan_pilihan BETWEEN 1 AND 4),
     ptn_jurusan_id UUID NOT NULL REFERENCES ptn_jurusan(id),
     keketatan_score DECIMAL(5,2) NOT NULL,   -- formula publik: (kuota/peminat)*100
@@ -394,6 +411,29 @@ CREATE TABLE soal_ai (
     tanggal_review TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ============================================================================
+-- ROW LEVEL SECURITY (WAJIB — Supabase mengekspos setiap tabel lewat API publik
+-- secara default. Tanpa RLS, siapa pun dengan anon key bisa baca/tulis langsung
+-- ke tabel manapun, melewati seluruh business rule di application layer)
+-- ============================================================================
+-- Aktifkan RLS untuk SEMUA tabel di schema public. Tidak ada policy dibuat di
+-- sini secara sengaja — artinya default akses via anon/authenticated key jadi
+-- TERTUTUP TOTAL. Backend (Next.js API routes) tetap bisa akses normal selama
+-- memakai service_role key di sisi server (key ini melewati RLS sepenuhnya).
+-- Jika nanti ada kebutuhan akses langsung dari client (mis. leaderboard publik
+-- di Fase 2/3), baru tambahkan policy granular per tabel saat itu terjadi.
+
+DO $$
+DECLARE
+    t text;
+BEGIN
+    FOR t IN
+        SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', t);
+    END LOOP;
+END $$;
 
 -- ============================================================================
 -- CATATAN IMPLEMENTASI

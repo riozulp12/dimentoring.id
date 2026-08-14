@@ -106,7 +106,7 @@ Tidak ada kompetitor besar yang eksplisit menjanjikan **pendampingan berlanjut p
 | Role | Deskripsi | Sub-status / Status Akun |
 |---|---|---|
 | **Student** | Siswa SMA (10-12) atau gap year hingga alumni PTN | `calon_mahasiswa` vs `mahasiswa/alumni` — menentukan fitur yang tampil |
-| **Mentor** | Tutor/mentor kelas. **Register mandiri (self-register) di sistem**, tapi baru aktif setelah di-approve Admin. Mentor menerima notifikasi approval via email atau WhatsApp. | `Pending` → `Approved` / `Rejected` |
+| **Mentor** | Tutor/mentor kelas. **Register mandiri (self-register) di sistem, langsung bisa login begitu akun dibuat** (Fase 1 — lihat catatan Verifikasi di Bagian 7.0.3). Selama `UserRole.status = Pending`, akun tampil dengan label **"On Review"** di seluruh antarmuka Mentor, dan **belum bisa mengajar/menerima siswa** — cuma bisa lihat dashboard terbatas & lengkapi profil. Begitu Admin approve, label hilang dan fitur mengajar penuh terbuka. | `Pending (On Review)` → `Active` / `Rejected` |
 | **Admin** | Tim internal (CEO/COO/CTO/staf ops) — kelola konten, user, keuangan, analytics, dan marketing (leads, dll). Akun Admin **hanya** dibuat lewat undangan Admin lain, tidak lewat form publik. | — |
 
 ---
@@ -160,7 +160,7 @@ Form tunggal: Email/Username + Password, opsi "Lupa Password?", tombol "Login de
 *Jalur Siswa (5 langkah total):*
 - Langkah 2: "Sekarang kamu kelas berapa" — pilih Kelas 10 / 11 / 12 / Gap Year
 - Langkah 3: "Mapel apa yang paling sulit menurutmu?" — checklist multi-select (Matematika, Bahasa Inggris, Bahasa Indonesia, Kimia, Fisika, Biologi, Sejarah, Ekonomi, Geografi, Lainnya). **Data ini menjadi input tambahan ke Assessment/rekomendasi kelas** — bukan sekadar data profil pasif.
-- Langkah 4: "Tulis nomor WhatsApp kamu" — dipakai untuk informasi penting (bukan verifikasi, lihat 7.0.3).
+- Langkah 4: "Tulis nomor WhatsApp kamu" — dipakai untuk verifikasi & informasi penting.
 
 *Jalur Mentor (6 langkah total — 1 langkah lebih banyak dari Siswa):*
 - Langkah 2: "Kamu kuliah di PTN mana?" — dropdown pilih PTN
@@ -172,19 +172,18 @@ Form tunggal: Email/Username + Password, opsi "Lupa Password?", tombol "Login de
 
 **Catatan implementasi progress bar:** Karena jalur Mentor (6 langkah) dan Siswa (5 langkah) punya jumlah langkah berbeda, komponen progress bar **wajib dibuat dinamis** (jumlah segmen menyesuaikan role yang dipilih di Langkah 1), bukan fixed 5 segmen untuk semua.
 
-### 7.0.3 Verifikasi Akun
-**Metode: verifikasi via klik link, bukan input kode OTP manual.**
-- **Jalur utama (per keputusan efisiensi anggaran, Agustus 2026): Email**, dikirim lewat Resend (free tier, 3.000 email/bulan) — dipilih sementara karena WhatsApp Business API pihak ketiga (Fonnte/Wablas) berbayar bulanan terlepas dari volume pemakaian, sementara belum ada revenue masuk.
-- **Jalur WhatsApp ditunda sampai ada revenue dari campaign** yang bisa menutup biaya langganan API-nya — begitu itu terjadi, WA direkomendasikan **kembali jadi jalur utama** (sesuai kebiasaan siswa yang lebih sering cek WA dibanding email, dan ini kanal utama komunikasi Dimentoring secara bisnis).
-- **Wajib pakai domain custom terverifikasi di Resend** (bukan domain default penyedia) supaya email tidak masuk folder Spam — verifikasi domain butuh setup DNS (SPF/DKIM) yang punya waktu propagasi, perlu disiapkan di awal, bukan mepet deadline.
-- Link berupa token dengan masa berlaku terbatas (expiry). Klik link → akun berstatus `Verified` → redirect ke Dashboard.
-- Akun berstatus `Unverified` memiliki akses terbatas (tidak bisa transaksi Payment) sampai verifikasi selesai.
+### 7.0.3 Verifikasi Akun — **DITUNDA KE FASE 2 (revisi September 2026)**
+**Keputusan scope Fase 1: verifikasi akun (email/WA) TIDAK diaktifkan dulu.** Alasan: menghilangkan dependency ke domain custom + setup Resend/WA API yang sempat jadi blocker signifikan, demi mempercepat rilis Fase 1. Akun (Student maupun Mentor) **langsung berstatus `Verified` otomatis saat dibuat**, tanpa proses klik link.
+
+- Field `status_verifikasi_akun` dan tabel `verification_tokens` **tetap ada di skema database** (tidak perlu di-drop) — infrastrukturnya dipertahankan supaya gampang diaktifkan lagi begitu domain email sudah siap, tanpa migrasi ulang.
+- Konsekuensi: akun bisa langsung dipakai transaksi Payment begitu dibuat (BR-15 lama soal "akun Unverified tidak bisa Payment" **tidak berlaku dulu** selama Fase 1 — lihat BR-15 revisi di Bagian 8).
+- **Fitur Lupa Password tetap butuh email/WA berfungsi** (karena sifatnya beda — itu keamanan akun, bukan syarat aktivasi) — kalau Lupa Password juga mau ditunda, perlu keputusan terpisah, belum termasuk di scope perubahan ini.
 
 ### 7.0.4 Functional Requirements
 - FR-1.1: Login & Register memakai komponen UI yang identik lintas role (shared page architecture).
 - FR-1.2: Role ditentukan backend berdasarkan jalur akses (publik = Student; token undangan = Admin) atau pilihan eksplisit di Langkah 1 (Student/Mentor) — **tidak pernah dari parameter yang bisa dimanipulasi client**.
 - FR-1.3: Data profiling (kelas, mapel tersulit / PTN, semester, jurusan, subtes diampu) disimpan progresif per langkah — jika user keluar di tengah alur, progres tersimpan (draft) dan bisa dilanjutkan.
-- FR-1.4: Akun Mentor otomatis berstatus `Pending` setelah Langkah Terakhir disubmit — tidak bisa login penuh/mengajar sampai Admin approve (lihat Flow 9.9).
+- FR-1.4 (DIREVISI): Akun Mentor otomatis berstatus `UserRole.status = Pending` setelah Langkah Terakhir disubmit, **DAN langsung bisa login** ke Dashboard Mentor (tidak diblokir seperti versi sebelumnya). Selama `Pending`: seluruh antarmuka Mentor menampilkan **badge/label "On Review"** yang jelas terlihat (lihat Bagian 12.2), dan fitur mengajar (lihat/kelola Kelas Saya, Siswa Binaan, dapat assignment kelas baru) **dikunci/disabled** sampai Admin approve. Begitu status berubah jadi `Active`, label hilang otomatis dan fitur terbuka tanpa perlu logout/login ulang.
 - FR-1.5: Kode Referral (jika diisi) divalidasi sebagai kode aktif milik user lain — jika tidak valid, tampilkan pesan error tapi tidak memblokir pendaftaran (field opsional, kesalahan kode tidak fatal).
 - FR-1.6: Onboarding singkat untuk Admin (undangan) tetap terpisah dari alur publik — pakai token undangan unik dari Admin lain.
 - FR-1.7: Role-Based Access Control (RBAC) — setiap role melihat menu & fitur sesuai hak akses.
@@ -192,6 +191,8 @@ Form tunggal: Email/Username + Password, opsi "Lupa Password?", tombol "Login de
 ### 7.0.6 Upgrade Role: Siswa → Mentor (Satu Akun, Bukan Daftar Ulang)
 
 **Tujuan:** Mengakomodasi siswa Dimentoring yang sudah diterima PTN (`sub_status = mahasiswa`) dan ingin menjadi Mentor, tanpa memaksa mereka membuat akun baru — menjaga kontinuitas riwayat referral, poin gamifikasi, dan status verifikasi yang sudah ada.
+
+
 
 **Functional Requirements:**
 - FR-1.8: Akun **tidak dibatasi satu role tunggal** — satu `user_id` dapat memegang lebih dari satu role aktif sekaligus (Student + Mentor), masing-masing dengan status approval independen.
@@ -304,33 +305,61 @@ Tab selector di bagian atas: **SNBP | SNBT | Jalur Mandiri**. Setiap tab menampi
 
 Ini memenuhi BR-3 dan sudah diimplementasikan di desain — pertahankan pola ini konsisten di ketiga tab.
 
-### 7.4.2 Input — SNBP (referensi implementasi, jalur lain mengikuti pola serupa)
+### 7.4.1b Akses Anonim (Trial Tanpa Login) — **BARU**
+
+**Tujuan:** Assessment jadi hook akuisisi yang bisa langsung dirasakan calon siswa (UX lengkap sampai hasil) sebelum diminta komitmen daftar akun — konsisten dengan prinsip Commitment Effect & Endowed Progress di Bagian 10.
+
+**Mekanisme:**
+- Halaman `/assessment` **bisa diakses tanpa login**, termasuk mengisi form dan submit.
+- Setiap browser yang belum login diberi **cookie trial ID** (httpOnly, random, tidak berisi data pribadi) saat pertama kali membuka halaman ini.
+- **2 kali pertama** submit assessment (dihitung per trial ID, lintas jalur SNBP/SNBT/Mandiri digabung dalam satu hitungan) → user **langsung lihat hasil lengkap** (seluruh 6 accordion di Bagian 7.4.3), tanpa perlu akun.
+- **Submit ke-3 dan seterusnya** (masih dengan trial ID yang sama) → form tetap bisa diisi dan disubmit (tidak diblokir mengisi), TAPI setelah submit, user **diarahkan ke halaman Login/Register** dengan pesan yang jelas (mis. "Hasil assessment kamu sudah siap — masuk dulu buat lihat hasilnya") alih-alih langsung ke halaman hasil.
+- **Begitu user login/register setelah submit ke-3+**, assessment yang baru saja diisi otomatis **ditautkan ke akun barunya** (`assessments.user_id` diisi dari NULL menjadi user_id yang login), lalu redirect ke halaman hasil — jadi usaha yang sudah dia lakukan (isi form) tidak hilang percuma, ini justru memperkuat dorongan buat menyelesaikan pendaftaran (loss aversion).
+- **Data yang disimpan untuk trial anonim tetap minimal** — cuma data akademik (nilai rapor, prestasi, pilihan PTN), tidak ada nama/email/WA yang diminta di alur ini sama sekali, konsisten dengan prinsip privasi data anak (BR-23) karena belum ada verifikasi identitas siapa pun di titik ini.
+
+**Batasan yang perlu disadari (bukan bug, tapi trade-off sadar):**
+- Hitungan 2x ini berbasis cookie — kalau user hapus cookie/pakai mode incognito/ganti browser, hitungannya reset. Ini **diterima sebagai batasan MVP**, bukan dianggap celah yang harus segera ditambal — kalau nanti terbukti disalahgunakan secara signifikan (mis. dipakai bot generate leads palsu), baru pertimbangkan lapisan tambahan seperti rate-limit berbasis IP.
+
+### 7.4.2 Input — SNBP (referensi implementasi, jalur lain mengikuti pola serupa) — **DIREVISI, aturan resmi Kemendikbudristek SNBP 2026**
 
 | Section (accordion) | Field |
 |---|---|
 | **Nilai Raport** | Nilai Semester 1, 2, 3, 4, 5 (5 semester — semester 6 tidak diminta karena belum final saat pendaftaran SNBP berlangsung) |
 | **Prestasi (Opsional)** | Jenis Prestasi (dropdown), Juara Berapa (dropdown), Tingkat Kejuaraan (dropdown) |
-| **Pilihan Universitas dan Jurusan** | 4 pilihan (Pilihan 1-4), masing-masing: Universitas (dropdown), Jurusan (dropdown) |
+| **Pilihan Universitas dan Jurusan** | **Maksimal 2 pilihan** (bukan 4 — koreksi dari desain sebelumnya, lihat aturan di bawah), masing-masing: Universitas (dropdown), Jurusan+Jenjang (dropdown) |
 
 **Perubahan penting dari spesifikasi v2:**
 - **Ranking sekolah, akreditasi sekolah, dan kuota sekolah TIDAK diminta langsung ke siswa.** Data ini diambil otomatis dari entitas `Sekolah` yang sudah dipilih siswa saat onboarding (Bagian 7.0.2, Langkah "Kelas") — asumsikan field sekolah nantinya diperluas untuk menangkap `sekolah_id`, bukan hanya nama bebas.
 - **Nilai TKA dihapus total dari input SNBP.** Secara faktual, SNBP tidak menggunakan skor TKA sebagai faktor penilaian — ini murni jalur nilai rapor & prestasi. Nilai TKA relevan untuk SNBT, bukan SNBP (koreksi dari kekeliruan di draf v2).
 
+**Aturan Pilihan Prodi (baru, sesuai ketentuan resmi Kemendikbudristek SNBP 2026 — WAJIB divalidasi sistem, bukan cuma disclaimer teks):**
+- Siswa memilih **1 atau 2 program studi** (bukan 4). UI wajib menyesuaikan — mulai dari 1 pilihan wajib, opsi "+ Tambah Pilihan Kedua (Opsional)" untuk pilihan kedua, bukan 4 slot tetap seperti desain sebelumnya.
+- **Kalau cuma pilih 1 prodi**: bebas pilih PTN di provinsi mana pun se-Indonesia, tidak ada validasi tambahan.
+- **Kalau pilih 2 prodi**: **minimal salah satu dari 2 pilihan itu wajib berada di PTN yang provinsinya sama dengan provinsi sekolah asal siswa** (diambil dari `Sekolah.kota_id` → `Kota.provinsi_id`, bukan input manual). Sistem **wajib validasi ini di backend** sebelum submit diterima — kalau kedua pilihan di luar provinsi sekolah asal, tolak submit dengan pesan jelas.
+- **Urutan pilihan berpengaruh ke proses seleksi** (Pilihan 1 diprioritaskan dulu, baru Pilihan 2 kalau tidak lolos) — ini sudah konsisten dengan bagaimana Rekomendasi Jurusan/Kelas/Tryout kita rancang berdasarkan urutan, tidak perlu perubahan logika di situ.
+
 ### 7.4.3 Output — Hasil Assessment SNBP
 
-Struktur accordion:
+Struktur accordion (dikonfirmasi dari desain — 6 accordion berurutan, semua collapsible dengan pola sama):
 
-**1. Hasil Prediksi** — per pilihan (1-4), menampilkan:
-- Nama Jurusan + Nama Universitas
-- **Keketatan** — persentase + label kualitatif (mis. "3,53% - Sangat Ketat"), dihitung murni dari rumus `(Kuota Tahun Berjalan ÷ Jumlah Peminat Tahun Sebelumnya) × 100%` — angka ini sama untuk semua siswa yang memilih PTN+jurusan yang sama, tidak personal.
-- **Peluang** — skor numerik + label kualitatif (mis. "1.52 - Peluang Kecil"), **metrik terpisah dari Keketatan**, mempertimbangkan profil personal siswa (nilai rapor, prestasi) relatif terhadap tingkat keketatan. Ini adalah personalisasi yang membedakan siswa satu dengan yang lain meski memilih PTN+jurusan sama.
+**1. "Nilai Akhir"** (subtitle: "Nilai rata-rata rapotmu + Prestasi") — accordion PERTAMA, satu kali per assessment (bukan per pilihan, karena murni dari data akademik siswa sendiri, tidak tergantung PTN/jurusan yang dipilih):
+- **Nilai Rata-Rata Raportmu** — rata-rata dari input Semester 1-5.
+- **Nilai Prestasimu** (tampil hanya jika siswa mengisi accordion Prestasi saat input; kalau tidak diisi, tampilkan "-", bukan 0) — dikonversi dari Jenis Prestasi/Juara Berapa/Tingkat Kejuaraan jadi satu angka skala 0-100 (mapping di FR-3.7).
+- **Nilai Akhir** — `(Nilai Rata-Rata Raportmu + Nilai Prestasimu) / 2`. Kalau Prestasi tidak diisi, Nilai Akhir = Nilai Rata-Rata Raportmu saja. **Tampil dengan label kualitatif** di sebelah angka (pola sama seperti Keketatan/Peluang) — lihat skala label di FR-3.8.
+
+Nilai Akhir ini jadi salah satu input ke perhitungan `peluang_score` per pilihan di accordion berikutnya — jadi siswa bisa lihat transparan dari mana angka Peluang-nya berasal, bukan kotak hitam.
+
+**2. "Hasil Prediksi"** — per pilihan (**1-2**, sesuai jumlah yang dipilih siswa — bukan fixed 4), menampilkan:
+- **Jenjang + Nama Jurusan** (mis. "S1 Teknologi Informasi", "D4 Teknologi Informasi", "D3 Teknologi Informasi" — jenjang berbeda dianggap prodi berbeda dengan keketatan masing-masing, lihat FR-3.9) + Nama Universitas
+- **Keketatan** — persentase + label kualitatif (mis. "3,53% - Sangat Ketat"), dihitung murni dari rumus `(Kuota Tahun Berjalan ÷ Jumlah Peminat Tahun Sebelumnya) × 100%` — angka ini sama untuk semua siswa yang memilih PTN+jurusan+jenjang yang sama, tidak personal.
+- **Peluang** — skor numerik + label kualitatif (mis. "1.52 - Peluang Kecil"), **metrik terpisah dari Keketatan**, dihitung dari Nilai Akhir (accordion #1) relatif terhadap tingkat keketatan.
 - Kode warna: merah (ketat/peluang kecil), hijau (sedang), biru (longgar/peluang besar).
 
-**2. Rekomendasi Jurusan** — alternatif jurusan/universitas dengan keketatan lebih realistis dibanding pilihan awal siswa, format sama (Keketatan + Peluang).
+**3. "Rekomendasi Jurusan"** — alternatif jurusan/universitas dengan keketatan lebih realistis dibanding pilihan awal siswa, format sama (Jenjang + Jurusan, Keketatan, Peluang).
 
-**3. Rekomendasi Kelas** — rekomendasi program bimbingan yang relevan (cross-sell natural ke Bagian 7.5).
+**4. "Rekomendasi Kelas"** — rekomendasi program bimbingan yang relevan (cross-sell natural ke Bagian 7.5).
 
-**4. Rekomendasi Paket Tryout (baru — ditambahkan eksplisit sesuai keputusan Rio)** — accordion terpisah, ditempatkan setelah "Rekomendasi Kelas" dan sebelum "Note". Menampilkan paket tryout yang relevan dengan hasil assessment siswa, format konsisten dengan section lain:
+**5. "Rekomendasi Paket Tryout"** — accordion terpisah, ditempatkan setelah "Rekomendasi Kelas" dan sebelum "Note". Menampilkan paket tryout yang relevan dengan hasil assessment siswa:
 - Nama paket tryout (mis. "Paket Tryout SNBP Ilmu Kelautan — Undip")
 - Kategori (Free/Premium)
 - Alasan rekomendasi singkat (mis. "Direkomendasikan karena Keketatan pilihan ini Sedang — latihan tryout membantu memperbesar Peluang")
@@ -338,15 +367,28 @@ Struktur accordion:
 
 Sumber rekomendasi: hasil pemetaan otomatis antara `jurusan_tujuan` + `ptn_tujuan` (dari Hasil Prediksi & Rekomendasi Jurusan) terhadap katalog `TryOut` yang tersedia di Bagian 7.6 — bukan rekomendasi acak, harus relevan dengan subtes/jalur yang sesuai pilihan siswa.
 
-**5. Note** — catatan tambahan (konten pastinya perlu dikonfirmasi ke tim akademik).
+**6. "Note"** — catatan tambahan (konten pastinya perlu dikonfirmasi ke tim akademik).
 
 ### 7.4.4 Functional Requirements
-- FR-3.1: Input berbeda per jalur (SNBP: lihat 7.4.2; SNBT: 4 pilihan universitas + 4 pilihan jurusan wajib, skor try out internal opsional; Jalur Mandiri: pilihan universitas + jurusan per kampus tujuan).
-- FR-3.2: Output **dua metrik terpisah**: `keketatan_score` (formula publik, sama untuk semua siswa pada kombinasi PTN+jurusan yang sama) dan `peluang_score` (personal, mempertimbangkan input siswa).
+- FR-3.1: Input berbeda per jalur (SNBP: **maksimal 2 pilihan**, lihat 7.4.2; SNBT: 4 pilihan universitas + 4 pilihan jurusan wajib, skor try out internal opsional — **aturan SNBT TIDAK berubah, cuma SNBP**; Jalur Mandiri: pilihan universitas + jurusan per kampus tujuan).
+- FR-3.2: Output **dua metrik terpisah**: `keketatan_score` (formula publik, sama untuk semua siswa pada kombinasi PTN+jurusan+jenjang yang sama) dan `peluang_score` (personal, mempertimbangkan Nilai Akhir siswa).
 - FR-3.3: Data sekolah (akreditasi, kuota, ranking — khusus SNBP) diambil dari entitas `Sekolah`, bukan input manual siswa.
 - FR-3.4: Hasil tersimpan di histori siswa, muncul di Dashboard.
 - FR-3.5: Rekomendasi jurusan, kelas, dan **paket tryout** muncul otomatis setelah hasil keluar (lihat section "Rekomendasi Paket Tryout" di 7.4.3).
 - FR-3.6: Disclaimer wajib tampil permanen di setiap tab jalur, termasuk tahun data yang dipakai.
+- FR-3.7: **Mapping Nilai Prestasi** — konversi Jenis Prestasi/Juara Berapa/Tingkat Kejuaraan jadi satu angka skala 0-100 (sama skalanya dengan nilai rapor, supaya rata-ratanya masuk akal). Tabel awal (PLACEHOLDER, perlu divalidasi tim akademik):
+
+  | Tingkat Kejuaraan | Juara 1 | Juara 2 | Juara 3 | Peserta/Partisipasi |
+  |---|---|---|---|---|
+  | Internasional | 100 | 95 | 90 | 80 |
+  | Nasional | 90 | 85 | 80 | 70 |
+  | Provinsi | 80 | 75 | 70 | 60 |
+  | Kabupaten/Kota | 70 | 65 | 60 | 50 |
+
+  Kalau siswa isi lebih dari satu prestasi, ambil nilai **tertinggi** saja (bukan dijumlah/dirata-rata semua prestasi).
+- FR-3.8 (baru): **Label kualitatif Nilai Akhir** (PLACEHOLDER, perlu divalidasi tim akademik): ≥90 = "Sangat Tinggi", 75-89 = "Tinggi", 60-74 = "Sedang", 45-59 = "Rendah", <45 = "Sangat Rendah".
+- FR-3.9 (baru): **Jenjang sebagai pembeda prodi** — kombinasi Universitas+Jurusan+**Jenjang** (S1/D3/D4/dst.) dianggap prodi yang sepenuhnya berbeda, masing-masing punya `kuota_tahun_berjalan` dan `jumlah_peminat_tahun_lalu` sendiri di tabel `ptn_jurusan`. Dropdown "Pilihan Universitas dan Jurusan" di form input (7.4.2) wajib menampilkan jenjang secara eksplisit supaya siswa tidak salah pilih (mis. "S1 Teknologi Informasi" vs "D3 Teknologi Informasi" sebagai opsi terpisah, bukan tergabung).
+- FR-3.10 (baru — aturan resmi SNBP 2026): **Validasi jumlah & lokasi pilihan prodi SNBP.** Backend wajib menolak submit kalau: (a) jumlah pilihan SNBP lebih dari 2, atau (b) tepat 2 pilihan dipilih TAPI tidak satu pun berada di provinsi yang sama dengan `Sekolah.kota_id → Kota.provinsi_id` milik siswa. Validasi ini **tidak boleh cuma di frontend** (client bisa dimanipulasi) — wajib dicek ulang di API sebelum data masuk ke `assessment_pilihan`.
 
 ---
 
@@ -407,13 +449,16 @@ Diimplementasikan konsisten di: Empty state, Loading, Achievement/Badge, **AI Me
 - **BR-1**: Seluruh role wajib login; tidak ada akses konten berbayar tanpa autentikasi.
 - **BR-2 (DIREVISI)**: Akun Mentor dibuat via **self-register** (jalur publik, alur Bagian 7.0.2), tapi baru **aktif dan bisa digunakan setelah mendapat approval Admin**. Mentor menerima notifikasi approval via email atau WhatsApp.
 - **BR-3**: Akun Admin **hanya** dibuat lewat undangan/approval Admin lain, tidak lewat form publik.
-- **BR-15 (direvisi Agustus 2026)**: Verifikasi akun dilakukan lewat klik link, bukan input kode OTP manual. **Jalur utama saat ini: Email (Resend)** — sementara, sampai ada revenue yang menutup biaya langganan WhatsApp API. Akun `Unverified` tidak bisa melakukan transaksi Payment.
+- **BR-15 (direvisi September 2026 — DITUNDA KE FASE 2)**: Verifikasi akun (email/WA) **tidak diaktifkan di Fase 1**. Akun langsung berstatus `Verified` otomatis saat dibuat. Akun boleh langsung melakukan transaksi Payment tanpa syarat verifikasi tambahan selama Fase 1. Infrastruktur (`verification_tokens`, field `status_verifikasi_akun`) tetap dipertahankan di skema untuk diaktifkan kembali di Fase 2.
+- **BR-27 (baru, September 2026)**: Akun Mentor dengan `UserRole.status = Pending` **tetap bisa login** ke Dashboard Mentor (tidak diblokir) — tapi seluruh antarmuka wajib menampilkan label **"On Review"** yang jelas, dan fitur mengajar (kelola Kelas, lihat/terima Siswa Binaan, menerima assignment kelas baru dari Admin) **wajib dikunci** sampai status berubah jadi `Active`. Ini beda dari BR-2 (approval tetap wajib) — yang berubah cuma akses login-nya, bukan levelnya.
 - **BR-26 (baru)**: Satu akun (satu `user_id`) dapat memegang lebih dari satu role aktif sekaligus (mis. Student + Mentor). Siswa yang sudah berstatus `mahasiswa` dapat mengajukan role Mentor **dari dalam akun existing** (bukan daftar ulang) — pengajuan ini tetap wajib melalui proses approval Admin yang sama seperti Mentor baru (BR-2), tidak ada jalur otomatis-aktif. Sebelum disetujui, role tambahan berstatus `Pending` dan tidak mengubah pengalaman role yang sudah aktif.
 
 ### Assessment & Prediksi
 - **BR-4**: Setiap hasil Assessment (Keketatan maupun Peluang) wajib menampilkan disclaimer estimasi + tahun data, permanen di setiap tab jalur.
-- **BR-5**: Data input assessment rahasia — hanya terlihat siswa ybs, mentor pembimbing, Admin.
+- **BR-5 (direvisi)**: Data input assessment rahasia — hanya terlihat siswa ybs, mentor pembimbing, Admin. **Untuk assessment anonim (belum login, Bagian 7.4.1b)**: hasil hanya bisa diakses lewat trial ID yang sama (cookie di browser yang sama) sampai ditautkan ke akun setelah login — tidak ada cara pihak lain mengakses hasil assessment anonim orang lain.
 - **BR-16 (baru)**: Data sekolah (akreditasi, kuota, ranking) untuk perhitungan SNBP **tidak boleh diminta ulang ke siswa** — wajib diambil dari entitas `Sekolah` yang sudah tersimpan di profil siswa.
+- **BR-28 (baru — aturan resmi Kemendikbudristek SNBP 2026)**: Siswa hanya boleh memilih **maksimal 2 program studi** untuk SNBP (bukan 4). Kalau memilih 2, **minimal satu wajib berada di PTN dengan provinsi yang sama dengan sekolah asal siswa**. Ini aturan eksternal resmi (bukan keputusan bisnis Dimentoring) — sistem wajib menegakkan ini secara otomatis, dan **PRD/desain harus di-update ulang setiap kali SNPMB mengubah aturan** di tahun-tahun berikutnya (jangan asumsikan aturan ini permanen selamanya).
+- **BR-29 (baru)**: Assessment dapat diakses tanpa login, dibatasi **2 kali lihat hasil lengkap per trial ID (cookie)**, lintas jalur digabung (bukan 2x per jalur). Submit ke-3 dan seterusnya tetap bisa mengisi form, tapi hasil digembok di balik Login/Register. Assessment anonim yang belum ditautkan ke akun manapun **tidak dianggap sebagai lead resmi** untuk keperluan Analytics/CRM sampai benar-benar ditautkan ke user_id via login.
 
 ### Kelas & Tryout
 - **BR-6**: Akses kelas/tryout premium hanya terbuka setelah status Payment "berhasil" terkonfirmasi via webhook.
@@ -469,7 +514,7 @@ Langkah 4: Tulis nomor WhatsApp kamu
 Langkah Terakhir: Email, Nama Lengkap, Password, Kode Referral (Opsional) → submit
    │
    ▼
-Link verifikasi terkirim ke Email
+Link verifikasi terkirim ke WA (fallback email)
    │
    ▼
 User klik link → akun "Verified" → redirect ke Dashboard Student
@@ -504,7 +549,7 @@ Langkah Terakhir: Email, Nama Lengkap, Password, Kode Referral (Opsional) → su
 Akun berstatus "Pending" (belum bisa login penuh)
    │
    ▼
-Link verifikasi terkirim ke Email → user klik → akun terverifikasi
+Link verifikasi terkirim ke WA (fallback email) → user klik → email/WA terverifikasi
    │
    ▼
 Admin menerima notifikasi pendaftaran mentor baru → review data (PTN, semester, jurusan, subtes)
@@ -519,7 +564,7 @@ Admin assign mentor ke kelas/subtes yang relevan
 Mentor login penuh ke Dashboard Mentor
 ```
 
-## 9.3 Flow: Login Lintas Role (Shared Page)
+## 9.3 Flow: Login Lintas Role (Shared Page) — DIREVISI September 2026
 ```
 User buka satu halaman Login (sama untuk Student/Mentor/Admin)
    │
@@ -530,8 +575,14 @@ Isi Email/Username + Password → submit (atau "Login dengan Google")
 Backend validasi kredensial → ambil role dari database (bukan input user)
    │
    ▼
-Redirect otomatis: Student → /dashboard/siswa | Mentor → /dashboard/mentor | Admin → /dashboard/admin
+Redirect otomatis:
+   ├── Student → /dashboard/siswa
+   ├── Mentor (UserRole.status = Active)  → /dashboard/mentor (fitur mengajar penuh)
+   ├── Mentor (UserRole.status = Pending) → /dashboard/mentor (mode "On Review" —
+   │      fitur mengajar terkunci, tapi tetap bisa login & lengkapi profil)
+   └── Admin → /dashboard/admin
 ```
+*(Catatan: verifikasi email/WA dihapus dari alur ini untuk Fase 1 — lihat Bagian 7.0.3.)*
 
 ## 9.4 Flow: Assessment Prediksi PTN (SNBP — referensi implementasi)
 ```
@@ -547,16 +598,20 @@ Isi accordion "Nilai Raport" (Semester 1-5)
 Isi accordion "Prestasi" (opsional)
    │
    ▼
-Isi accordion "Pilihan Universitas dan Jurusan" (4 pilihan)
+Isi accordion "Pilihan Universitas dan Jurusan" — pilih 1 prodi (Pilihan 1, wajib), opsional tambah Pilihan 2
    │
    ▼
-Submit → sistem ambil data Sekolah (akreditasi/kuota/ranking) otomatis dari profil siswa
+[Jika isi Pilihan 2] Submit → validasi backend: minimal 1 dari 2 pilihan wajib satu provinsi
+dengan sekolah asal siswa (FR-3.10/BR-28) → gagal validasi = tolak submit, tampilkan pesan error
+   │
+   ▼
+Submit (lolos validasi) → sistem ambil data Sekolah (akreditasi/kuota/ranking) otomatis dari profil siswa
    │
    ▼
 Sistem hitung Keketatan (formula publik) + Peluang (personal) per pilihan
    │
    ▼
-Tampilkan "Hasil Prediksi" (4 pilihan, Keketatan + Peluang) → "Rekomendasi Jurusan" → "Rekomendasi Kelas" → "Note"
+Tampilkan "Nilai Akhir" → "Hasil Prediksi" (1-2 pilihan, Keketatan + Peluang) → "Rekomendasi Jurusan" → "Rekomendasi Kelas" → "Rekomendasi Paket Tryout" → "Note"
    │
    ▼
 [Jika belum bayar] → redirect ke Payment untuk akses kelas/tryout yang direkomendasikan
@@ -605,6 +660,16 @@ Catatan kehati-hatian tetap berlaku: mekanisme gamifikasi dan reminder wajib pun
 - **Komponen form**: input field dengan background abu muda, label di atas field, dropdown dengan chevron icon, checklist grid 2 kolom untuk multi-select (Mapel Tersulit, Subtes Diampu).
 - **Komponen baru wajib masuk design system**: Badge/Achievement card, Leaderboard row, Progress bar dinamis (jumlah segmen variabel), Referral share card, Poin/level indicator, Reward catalog card, PDF export button, Assessment result card (Keketatan + Peluang dengan kode warna merah/hijau/biru), Rekomendasi Paket Tryout card, Disclaimer banner dengan maskot (sudah ada polanya di Assessment), **Timer countdown component** (dengan varian warna normal/peringatan), **Navigator Soal grid** (kotak bernomor dengan minimal 2 varian status: terisi solid = sudah dikerjakan, outline kosong = belum dikerjakan).
 
+### 12.2 Komponen Baru: Badge "On Review" (Mentor Pending)
+
+Dipicu oleh BR-27 — tampil di seluruh antarmuka Mentor selama `UserRole.status = Pending`.
+
+**Requirement fungsional untuk desain:**
+- **Lokasi**: nempel di dekat nama/avatar Mentor di Navbar (pola sama seperti area akun yang sudah ada) — supaya terlihat tanpa perlu buka menu apa pun, dan konsisten di semua halaman Dashboard Mentor.
+- **Visual**: badge kecil warna kuning/amber (bukan merah — ini status menunggu, bukan error/ditolak), teks "On Review" atau "Menunggu Approval".
+- **Fitur yang terkunci** (Kelas Saya, Siswa Binaan, dst) tetap **terlihat di sidebar** (bukan disembunyikan total) tapi dalam kondisi disabled dengan tooltip singkat, mis. "Tersedia setelah akun disetujui Admin" — supaya Mentor tahu fitur itu ada dan menunggu, bukan bingung kenapa hilang.
+- **Begitu status berubah jadi Active**: badge hilang otomatis di sesi berikutnya (atau real-time kalau arsitekturnya mendukung), fitur terbuka tanpa perlu logout/login ulang.
+
 ### 12.1 Komponen Baru: Role Switcher (belum ada preseden desain — spesifikasi awal)
 
 Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul jika user memiliki lebih dari satu `UserRole` berstatus `Active`** (mis. Student + Mentor). Untuk user dengan satu role aktif, komponen ini tidak ditampilkan sama sekali (bukan ditampilkan tapi disabled).
@@ -630,7 +695,8 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **MentorProfile** — id, user_id, asal_ptn, semester, jurusan, **subtes_diampu** (array, hasil checklist onboarding), kelas_diampu (relasi ke Kelas). *(Status approval kini ada di `UserRole.status`, bukan field terpisah di sini, agar konsisten dengan role lain.)*
 - **VerificationToken (baru)** — id, user_id, token, channel (`wa`/`email`), expired_at, used_at.
 - **PTNJurusan** — id, nama_universitas, nama_jurusan, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu, jalur (SNBP/SNBT/Mandiri), sumber_data, tahun_data.
-- **Assessment** — id, user_id, jalur, input_data (json), ptn_tujuan, jurusan_tujuan, **keketatan_score** (formula publik), **peluang_score** (personal, terpisah dari keketatan), hasil_breakdown, dibuat_pada.
+- **Assessment (direvisi — Bagian 7.4.1b/BR-29, akses anonim)** — id, **user_id (nullable)**, **anonymous_trial_id (baru, nullable — cookie trial ID, diisi kalau `user_id` NULL)**, jalur, input_data (json), rata_rata_rapor, nilai_prestasi, nilai_akhir, nilai_akhir_label, hasil_breakdown, dibuat_pada. Tepat salah satu dari `user_id`/`anonymous_trial_id` yang terisi — begitu assessment anonim ditautkan ke akun (register/login dengan trial ID yang sama), `user_id` diisi dan `anonymous_trial_id` di-NULL-kan.
+- **AssessmentPilihan** — id, assessment_id, urutan_pilihan (1-2 untuk SNBP sesuai BR-28, 1-4 untuk SNBT), ptn_jurusan_id, **keketatan_score** (formula publik), keketatan_label, **peluang_score** (personal, terpisah dari keketatan), peluang_label, is_rekomendasi.
 - **Referral** — id, referrer_id, referee_id, kode_referral, status, tanggal_daftar, tanggal_konversi.
 - **ReferralReward** — id, referral_id, jenis_reward, nominal_atau_poin, status_pencairan, tanggal.
 - **GamifikasiProfile** — id, user_id, total_poin, level, badge_list, streak_counter.
@@ -643,7 +709,7 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 
 | Kategori API | Kebutuhan |
 |---|---|
-| **Auth & Onboarding API** | Register progresif per langkah (simpan draft), submit final, generate & kirim verification token (Email/Resend — jalur utama sementara, lihat 7.0.3), verify token, login, RBAC middleware, admin approve/reject mentor |
+| **Auth & Onboarding API** | Register progresif per langkah (simpan draft), submit final, generate & kirim verification token (WA + email fallback), verify token, login, RBAC middleware, admin approve/reject mentor |
 | **Assessment API** | Submit input per jalur, ambil data Sekolah otomatis untuk SNBP, hitung `keketatan_score` & `peluang_score` terpisah, generate rekomendasi |
 | **Kelas/Enrollment API** | CRUD kelas, enroll, tracking progres |
 | **Tryout API** | Ambil soal (timer server-side), submit jawaban, scoring, generate PDF hasil |
