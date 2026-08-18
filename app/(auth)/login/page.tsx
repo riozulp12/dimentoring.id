@@ -14,6 +14,12 @@ function LoginPageInner() {
   // anonim", teruskan id ini ke API supaya assessment ditautkan ke akun & login
   // redirect langsung ke halaman hasil, bukan ke Dashboard biasa.
   const pendingAssessmentId = searchParams.get("pending_assessment");
+  // BR-5: dipakai app/assessment/hasil/[id]/page.tsx saat hasil sudah ditautkan
+  // ke akun LAIN (bukan pending anonim) — arahkan balik ke halaman hasil itu
+  // setelah login sukses, bukan ke Dashboard default. Hanya dipakai kalau TIDAK
+  // ada pendingAssessmentId (linking anonim tetap prioritas, lihat handleSubmit).
+  const redirectAfterLogin = searchParams.get("redirect");
+  const noticeMessage = searchParams.get("message");
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,7 +55,13 @@ function LoginPageInner() {
         return;
       }
 
-      router.push(json.redirectTo);
+      // `redirect` (dari akses hasil Assessment milik akun lain, BR-5) hanya dipakai
+      // kalau tidak ada pending_assessment — linking anonim server-side tetap prioritas.
+      const safeRedirect =
+        !pendingAssessmentId && redirectAfterLogin?.startsWith("/") && !redirectAfterLogin.startsWith("//")
+          ? redirectAfterLogin
+          : null;
+      router.push(safeRedirect ?? json.redirectTo);
     } catch {
       setSubmitError("Gagal terhubung ke server. Periksa koneksi internet kamu.");
       setIsSubmitting(false);
@@ -91,6 +103,12 @@ function LoginPageInner() {
               Yuk Lanjutkan belajarmu dan capai tujuanmu
             </p>
           </div>
+
+          {noticeMessage ? (
+            <p className="w-full rounded-[16px] bg-[#F9FAFF] px-4 py-3 text-center text-sm leading-[1.5] tracking-[-0.28px] text-[#081EEA] sm:text-base">
+              {noticeMessage}
+            </p>
+          ) : null}
 
           <form
             className="flex w-full flex-col items-start gap-4"
