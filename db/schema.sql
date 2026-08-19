@@ -175,6 +175,7 @@ CREATE TABLE assessments (
     nilai_prestasi DECIMAL(5,2),         -- NULL jika siswa tidak isi Prestasi
     nilai_akhir DECIMAL(5,2),            -- rata-rata rapor+prestasi, atau = rata_rata_rapor jika prestasi NULL
     nilai_akhir_label VARCHAR(30),       -- 'Sangat Tinggi'/'Tinggi'/'Sedang'/'Rendah'/'Sangat Rendah' (FR-3.8)
+    note_ai TEXT,                        -- hasil generate Gemini untuk section "Note" (BR-30), NULL jika belum/gagal generate
     hasil_breakdown JSONB,               -- catatan/insight tambahan
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -434,6 +435,20 @@ BEGIN
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', t);
     END LOOP;
 END $$;
+
+-- Pengecualian sadar: ptn_jurusan dan subtes adalah data referensi PUBLIK
+-- (bukan data pribadi), dan wajib bisa dibaca tanpa login karena halaman
+-- Assessment sekarang bisa diakses anonim (Bagian 7.4.1b PRD). Beri akses
+-- SELECT saja (bukan INSERT/UPDATE/DELETE) untuk anon & authenticated key.
+CREATE POLICY "ptn_jurusan_public_read" ON ptn_jurusan
+  FOR SELECT
+  TO anon, authenticated
+  USING (true);
+
+CREATE POLICY "subtes_public_read" ON subtes
+  FOR SELECT
+  TO anon, authenticated
+  USING (true);
 
 -- ============================================================================
 -- CATATAN IMPLEMENTASI

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { ANONYMOUS_FREE_RESULT_LIMIT, TRIAL_COOKIE_MAX_AGE_SECONDS, TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
+import { generateAssessmentNote } from "@/lib/ai/generateNote";
 import {
   calculateKeketatan,
   calculateNilaiAkhir,
@@ -299,6 +300,36 @@ export async function POST(request: NextRequest) {
     // ON DELETE CASCADE membersihkan baris assessment_pilihan parsial (kalau ada).
     await supabaseServer.from("assessments").delete().eq("id", assessmentId);
     return errorResponse("Gagal menyimpan pilihan program studi. Coba lagi nanti.", 500);
+  }
+
+  // ---- BR-30: generate section "Note" (Gemini) — prompt anonim total, hanya
+  // angka/label, TIDAK PERNAH nama/email/WA siswa. generateAssessmentNote()
+  // sendiri tidak pernah throw (fallback internal), tapi tetap dibungkus di
+  // sini supaya kegagalan simpan note_ai juga tidak menggagalkan submit. ----
+  try {
+    const noteAi = await generateAssessmentNote({
+      nilaiAkhir,
+      nilaiAkhirLabel,
+      pilihan: pilihanResults.map(({ ptnJurusan, keketatan, peluang }) => ({
+        jenjang: ptnJurusan.jenjang as string,
+        jurusan: ptnJurusan.nama_jurusan as string,
+        keketatanLabel: keketatan.label,
+        peluangLabel: peluang.label,
+      })),
+    });
+
+    const { error: noteUpdateError } = await supabaseServer
+      .from("assessments")
+      .update({ note_ai: noteAi })
+      .eq("id", assessmentId);
+
+    if (noteUpdateError) {
+      console.error("[assessment/snbp] update note_ai failed:", noteUpdateError);
+    }
+  } catch (error) {
+    // Section "Note" pelengkap, bukan inti fitur (PRD 7.4.3 #6) — kegagalan
+    // apa pun di sini tidak boleh menggagalkan submit assessment.
+    console.error("[assessment/snbp] generate/simpan note_ai gagal:", error);
   }
 
   // ---- Redirect logic (BR-29): login -> selalu hasil lengkap. Anonim -> 2x

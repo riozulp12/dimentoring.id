@@ -105,7 +105,7 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
 
   const { data: assessment, error: assessmentError } = await supabaseServer
     .from("assessments")
-    .select("id, user_id, anonymous_trial_id, rata_rata_rapor, nilai_prestasi, nilai_akhir, nilai_akhir_label")
+    .select("id, user_id, anonymous_trial_id, rata_rata_rapor, nilai_prestasi, nilai_akhir, nilai_akhir_label, note_ai")
     .eq("id", id)
     .maybeSingle();
 
@@ -241,6 +241,7 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
     nilaiPrestasi: assessment.nilai_prestasi as number | null,
     nilaiAkhir: assessment.nilai_akhir as number | null,
     nilaiAkhirLabel: assessment.nilai_akhir_label as string | null,
+    noteAi: assessment.note_ai as string | null,
     hasilPrediksi,
     rekomendasiJurusan,
     isLoggedInOwner,

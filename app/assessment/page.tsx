@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
+import Navbar from "@/components/ui/Navbar";
+import Footer from "@/components/sections/Footer";
 import AssessmentSNBPForm, { type PtnJurusanOption } from "./AssessmentSNBPForm";
 
 /**
@@ -23,12 +25,16 @@ export default async function AssessmentPage() {
 
   if (session && session.role !== "student") {
     return (
-      <main className="mx-auto flex min-h-[60vh] w-full max-w-[1760px] items-center justify-center px-5 py-20 sm:px-8 md:px-12 lg:px-20">
-        <p className="max-w-md text-center text-lg text-[#7E7C7C]">
-          Assessment Prediksi Masuk PTN khusus untuk akun Siswa. Ganti ke Mode Siswa lewat menu akun kalau
-          kamu punya lebih dari satu role.
-        </p>
-      </main>
+      <div className="flex w-full flex-col">
+        <Navbar />
+        <main className="mx-auto flex min-h-[60vh] w-full max-w-[1760px] items-center justify-center px-5 py-20 sm:px-8 md:px-12 lg:px-20">
+          <p className="max-w-md text-center text-lg text-[#7E7C7C]">
+            Assessment Prediksi Masuk PTN khusus untuk akun Siswa. Ganti ke Mode Siswa lewat menu akun kalau
+            kamu punya lebih dari satu role.
+          </p>
+        </main>
+        <Footer />
+      </div>
     );
   }
 
@@ -59,5 +65,11 @@ export default async function AssessmentPage() {
     return latest === null || tahun > latest ? tahun : latest;
   }, null);
 
-  return <AssessmentSNBPForm ptnJurusanOptions={options} tahunData={tahunData} />;
+  return (
+    <div className="flex w-full flex-col">
+      <Navbar />
+      <AssessmentSNBPForm ptnJurusanOptions={options} tahunData={tahunData} />
+      <Footer />
+    </div>
+  );
 }

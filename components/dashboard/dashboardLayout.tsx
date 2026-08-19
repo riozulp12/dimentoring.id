@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useState } from "react";
 import Sidebar from "./sidebar";
 import Header from "./header";
 
@@ -9,17 +11,16 @@ type DashboardLayoutProps = {
 export default function DashboardLayout({
   children,
 }: DashboardLayoutProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
-    <div className="flex min-h-screen flex-row">
-      <Sidebar />
+    <div className="min-h-screen">
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Header onMenuClick={() => setSidebarOpen(true)} />
 
-      <div className="flex w-full flex-col">
-        <Header />
-
-        <main className="flex-1">
-          {children}
-        </main>
-      </div>
+      <main className="min-h-screen min-w-0 pt-14 lg:pl-64">
+        {children}
+      </main>
     </div>
   );
 }

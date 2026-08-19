@@ -35,6 +35,7 @@ export interface AssessmentHasilData {
   nilaiPrestasi: number | null;
   nilaiAkhir: number | null;
   nilaiAkhirLabel: string | null;
+  noteAi: string | null;
   hasilPrediksi: PilihanCardData[];
   rekomendasiJurusan: PilihanCardData[];
   isLoggedInOwner: boolean;
@@ -42,6 +43,11 @@ export interface AssessmentHasilData {
   tryoutRekomendasi: TryoutRekomendasiData[];
   showDaftarCta: boolean;
 }
+
+// Sama dengan FALLBACK_NOTE di lib/ai/generateNote.ts — dipakai kalau note_ai
+// masih NULL (mis. data lama sebelum BR-30 aktif, atau update sempat gagal).
+const NOTE_FALLBACK =
+  "Terus semangat belajar — tiap langkah kecil bawa kamu lebih dekat ke PTN impian!";
 
 function formatNilai(value: number | null): string {
   if (value === null) return "-";
@@ -271,7 +277,12 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
       </AccordionSection>
 
       <AccordionSection title="Note" open={openSections.note} onToggle={() => toggle("note")}>
-        <p className="text-base text-[#7E7C7C] sm:text-xl">Catatan dari mentor akan muncul di sini</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-base leading-[1.5] tracking-[-0.02em] text-black sm:text-xl">
+            {data.noteAi ?? NOTE_FALLBACK}
+          </p>
+          <p className="text-xs text-[#7E7C7C] sm:text-sm">Catatan dibuat otomatis</p>
+        </div>
       </AccordionSection>
 
       {data.showDaftarCta ? (

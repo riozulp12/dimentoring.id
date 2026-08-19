@@ -55,6 +55,14 @@ interface PilihanState {
 
 const EMPTY_PILIHAN: PilihanState = { universitas: "", ptnJurusanId: "" };
 
+/** Nilai Raport wajib number only — buang semua karakter selain digit & satu titik desimal. */
+function sanitizeNilaiInput(value: string) {
+  const cleaned = value.replace(/[^0-9.]/g, "");
+  const firstDotIndex = cleaned.indexOf(".");
+  if (firstDotIndex === -1) return cleaned;
+  return cleaned.slice(0, firstDotIndex + 1) + cleaned.slice(firstDotIndex + 1).replace(/\./g, "");
+}
+
 function AccordionSection({
   title,
   subtitle,
@@ -286,10 +294,13 @@ export default function AssessmentSNBPForm({
                       <InputField
                         id={`nilai-${key}`}
                         type="text"
+                        size="md"
                         inputMode="decimal"
                         placeholder={`Nilai ${label}`}
                         value={raw}
-                        onChange={(e) => setNilaiRapor((prev) => ({ ...prev, [key]: e.target.value }))}
+                        onChange={(e) =>
+                          setNilaiRapor((prev) => ({ ...prev, [key]: sanitizeNilaiInput(e.target.value) }))
+                        }
                         status={hasError ? "error" : "default"}
                       />
                     </div>
@@ -318,6 +329,7 @@ export default function AssessmentSNBPForm({
                   <InputField
                     id="jenis-prestasi"
                     type="dropdown"
+                    size="md"
                     placeholder="Pilih salah satu"
                     options={JENIS_PRESTASI_OPTIONS.map((label) => ({ label, value: label }))}
                     value={jenisPrestasi}
@@ -334,6 +346,7 @@ export default function AssessmentSNBPForm({
                   <InputField
                     id="juara-berapa"
                     type="dropdown"
+                    size="md"
                     placeholder="Pilih salah satu"
                     options={JUARA_BERAPA_OPTIONS}
                     value={juaraBerapa}
@@ -350,6 +363,7 @@ export default function AssessmentSNBPForm({
                   <InputField
                     id="tingkat-kejuaraan"
                     type="dropdown"
+                    size="md"
                     placeholder="Pilih salah satu"
                     options={TINGKAT_KEJUARAAN_OPTIONS}
                     value={tingkatKejuaraan}
@@ -388,6 +402,7 @@ export default function AssessmentSNBPForm({
                     <InputField
                       id="pilihan1-universitas"
                       type="dropdown"
+                      size="md"
                       placeholder="Pilih salah satu"
                       options={universitasOptions}
                       value={pilihan1.universitas}
@@ -405,6 +420,7 @@ export default function AssessmentSNBPForm({
                     <InputField
                       id="pilihan1-jurusan"
                       type="dropdown"
+                      size="md"
                       placeholder="Pilih salah satu"
                       options={jurusanOptionsFor(pilihan1.universitas)}
                       value={pilihan1.ptnJurusanId}
@@ -432,6 +448,7 @@ export default function AssessmentSNBPForm({
                       <InputField
                         id="pilihan2-universitas"
                         type="dropdown"
+                        size="md"
                         placeholder="Pilih salah satu"
                         options={universitasOptions}
                         value={pilihan2.universitas}
@@ -448,6 +465,7 @@ export default function AssessmentSNBPForm({
                       <InputField
                         id="pilihan2-jurusan"
                         type="dropdown"
+                        size="md"
                         placeholder="Pilih salah satu"
                         options={jurusanOptionsFor(pilihan2.universitas)}
                         value={pilihan2.ptnJurusanId}

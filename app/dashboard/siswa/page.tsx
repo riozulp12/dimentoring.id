@@ -1,11 +1,10 @@
 import DashboardLayout from "@/components/dashboard/dashboardLayout";
+import DashboardOverview from "@/components/dashboard/DashboardOverview";
 
-export default function StudentDashboard(){
-    return(
-        <DashboardLayout>
-            <div className="p-6">
-                <h1>Dashboard Siswa</h1>
-            </div>
-        </DashboardLayout>
-    )
+export default function StudentDashboard() {
+  return (
+    <DashboardLayout>
+      <DashboardOverview />
+    </DashboardLayout>
+  );
 }

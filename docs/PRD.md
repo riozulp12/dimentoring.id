@@ -367,7 +367,20 @@ Nilai Akhir ini jadi salah satu input ke perhitungan `peluang_score` per pilihan
 
 Sumber rekomendasi: hasil pemetaan otomatis antara `jurusan_tujuan` + `ptn_tujuan` (dari Hasil Prediksi & Rekomendasi Jurusan) terhadap katalog `TryOut` yang tersedia di Bagian 7.6 — bukan rekomendasi acak, harus relevan dengan subtes/jalur yang sesuai pilihan siswa.
 
-**6. "Note"** — catatan tambahan (konten pastinya perlu dikonfirmasi ke tim akademik).
+**6. "Note" — DIREVISI: digenerate AI (Gemini), masuk Fase 1 (bukan lagi Fase 3)**
+
+Catatan interpretatif/motivasional 2-4 kalimat, digenerate sekali oleh Gemini API saat assessment dihitung (bukan digenerate ulang tiap halaman dibuka), disimpan ke database supaya konsisten dan tidak boros API call.
+
+**Prinsip konten (mengikuti pola BR-21 yang sudah ditetapkan untuk AI Mentor):**
+- **Tidak boleh memberi kepastian palsu** ("pasti keterima", "dijamin lolos", dsb.) — tetap dalam kerangka estimasi, sejalan disclaimer utama halaman.
+- Nada: hangat, mendorong, tapi jujur — sesuai brand voice Dimentoring (approachable tapi kredibel, bukan generik/kaku).
+- Referensikan angka spesifik siswa (Nilai Akhir, Keketatan/Peluang pilihannya) supaya terasa personal, bukan template kosong.
+
+**Privasi (WAJIB, ini yang membedakan dari AI Mentor biasa):** prompt yang dikirim ke Gemini **hanya berisi data numerik/kategorikal anonim** (nilai_akhir, nilai_akhir_label, keketatan_score+label, peluang_score+label, nama jurusan+jenjang) — **TIDAK PERNAH** menyertakan nama, email, no. WA, atau identitas siswa apa pun. Ini berlaku untuk assessment anonim maupun yang sudah login, tanpa kecuali.
+
+**Fallback:** kalau panggilan API Gemini gagal/timeout, tampilkan teks default netral (mis. "Terus semangat belajar — tiap langkah kecil bawa kamu lebih dekat ke PTN impian!") — **jangan sampai kegagalan API bikin seluruh halaman hasil gagal tampil**, karena section ini pelengkap, bukan inti fitur.
+
+**Transparansi:** tampilkan label kecil "Catatan dibuat otomatis" di bawah teks — konsisten dengan prinsip kejujuran ke pengguna soal apa yang manusia vs AI yang buat.
 
 ### 7.4.4 Functional Requirements
 - FR-3.1: Input berbeda per jalur (SNBP: **maksimal 2 pilihan**, lihat 7.4.2; SNBT: 4 pilihan universitas + 4 pilihan jurusan wajib, skor try out internal opsional — **aturan SNBT TIDAK berubah, cuma SNBP**; Jalur Mandiri: pilihan universitas + jurusan per kampus tujuan).
@@ -459,6 +472,7 @@ Diimplementasikan konsisten di: Empty state, Loading, Achievement/Badge, **AI Me
 - **BR-16 (baru)**: Data sekolah (akreditasi, kuota, ranking) untuk perhitungan SNBP **tidak boleh diminta ulang ke siswa** — wajib diambil dari entitas `Sekolah` yang sudah tersimpan di profil siswa.
 - **BR-28 (baru — aturan resmi Kemendikbudristek SNBP 2026)**: Siswa hanya boleh memilih **maksimal 2 program studi** untuk SNBP (bukan 4). Kalau memilih 2, **minimal satu wajib berada di PTN dengan provinsi yang sama dengan sekolah asal siswa**. Ini aturan eksternal resmi (bukan keputusan bisnis Dimentoring) — sistem wajib menegakkan ini secara otomatis, dan **PRD/desain harus di-update ulang setiap kali SNPMB mengubah aturan** di tahun-tahun berikutnya (jangan asumsikan aturan ini permanen selamanya).
 - **BR-29 (baru)**: Assessment dapat diakses tanpa login, dibatasi **2 kali lihat hasil lengkap per trial ID (cookie)**, lintas jalur digabung (bukan 2x per jalur). Submit ke-3 dan seterusnya tetap bisa mengisi form, tapi hasil digembok di balik Login/Register. Assessment anonim yang belum ditautkan ke akun manapun **tidak dianggap sebagai lead resmi** untuk keperluan Analytics/CRM sampai benar-benar ditautkan ke user_id via login.
+- **BR-30 (baru — dipercepat dari Fase 3 ke Fase 1)**: Section "Note" di Hasil Assessment digenerate AI (Gemini API, free tier). Prompt yang dikirim ke Gemini **wajib anonim total** — hanya data numerik/kategorikal (nilai, label, nama jurusan), tidak pernah nama/email/WA siswa. Tidak boleh memberi kepastian palsu soal kelulusan (pola sama dengan BR-21 AI Mentor). Kegagalan API tidak boleh menggagalkan render halaman hasil secara keseluruhan (wajib ada fallback teks statis).
 
 ### Kelas & Tryout
 - **BR-6**: Akses kelas/tryout premium hanya terbuka setelah status Payment "berhasil" terkonfirmasi via webhook.
@@ -695,7 +709,7 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **MentorProfile** — id, user_id, asal_ptn, semester, jurusan, **subtes_diampu** (array, hasil checklist onboarding), kelas_diampu (relasi ke Kelas). *(Status approval kini ada di `UserRole.status`, bukan field terpisah di sini, agar konsisten dengan role lain.)*
 - **VerificationToken (baru)** — id, user_id, token, channel (`wa`/`email`), expired_at, used_at.
 - **PTNJurusan** — id, nama_universitas, nama_jurusan, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu, jalur (SNBP/SNBT/Mandiri), sumber_data, tahun_data.
-- **Assessment (direvisi — Bagian 7.4.1b/BR-29, akses anonim)** — id, **user_id (nullable)**, **anonymous_trial_id (baru, nullable — cookie trial ID, diisi kalau `user_id` NULL)**, jalur, input_data (json), rata_rata_rapor, nilai_prestasi, nilai_akhir, nilai_akhir_label, hasil_breakdown, dibuat_pada. Tepat salah satu dari `user_id`/`anonymous_trial_id` yang terisi — begitu assessment anonim ditautkan ke akun (register/login dengan trial ID yang sama), `user_id` diisi dan `anonymous_trial_id` di-NULL-kan.
+- **Assessment (direvisi — Bagian 7.4.1b/BR-29, akses anonim)** — id, **user_id (nullable)**, **anonymous_trial_id (baru, nullable — cookie trial ID, diisi kalau `user_id` NULL)**, jalur, input_data (json), rata_rata_rapor, nilai_prestasi, nilai_akhir, nilai_akhir_label, **note_ai (baru — BR-30, hasil generate Gemini section "Note", NULL jika belum/gagal generate)**, hasil_breakdown, dibuat_pada. Tepat salah satu dari `user_id`/`anonymous_trial_id` yang terisi — begitu assessment anonim ditautkan ke akun (register/login dengan trial ID yang sama), `user_id` diisi dan `anonymous_trial_id` di-NULL-kan.
 - **AssessmentPilihan** — id, assessment_id, urutan_pilihan (1-2 untuk SNBP sesuai BR-28, 1-4 untuk SNBT), ptn_jurusan_id, **keketatan_score** (formula publik), keketatan_label, **peluang_score** (personal, terpisah dari keketatan), peluang_label, is_rekomendasi.
 - **Referral** — id, referrer_id, referee_id, kode_referral, status, tanggal_daftar, tanggal_konversi.
 - **ReferralReward** — id, referral_id, jenis_reward, nominal_atau_poin, status_pencairan, tanggal.
