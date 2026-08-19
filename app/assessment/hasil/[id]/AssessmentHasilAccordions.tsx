@@ -47,7 +47,7 @@ export interface AssessmentHasilData {
 // Sama dengan FALLBACK_NOTE di lib/ai/generateNote.ts — dipakai kalau note_ai
 // masih NULL (mis. data lama sebelum BR-30 aktif, atau update sempat gagal).
 const NOTE_FALLBACK =
-  "Terus semangat belajar — tiap langkah kecil bawa kamu lebih dekat ke PTN impian!";
+  "Angka-angka di atas adalah gambaran, bukan keputusan akhir — banyak siswa yang keketatannya terlihat berat tetap berhasil lolos karena persiapan yang tepat, dan sebaliknya. Yang paling penting sekarang bukan cuma melihat hasilnya, tapi memakainya sebagai peta: kalau ada subtes yang masih terasa berat, itu titik yang paling worth dilatih dulu. Coba mulai dari Try Out gratis buat lihat sejauh mana pemahamanmu sekarang, atau ikut kelas bimbingan yang sesuai kebutuhanmu. Perjalanan ke PTN impian itu proses, bukan satu kali tes — dan kamu masih punya waktu buat memperbesar peluang itu.";
 
 function formatNilai(value: number | null): string {
   if (value === null) return "-";
@@ -140,10 +140,86 @@ function PilihanCard({ pilihan, label }: { pilihan: PilihanCardData; label: stri
   );
 }
 
+function MainPilihanCard({ pilihan, label }: { pilihan: PilihanCardData; label: string }) {
+  return (
+    <div className="relative flex flex-col items-center gap-3 overflow-hidden rounded-[20px] border border-[#CAC9C9] bg-white py-6 pl-8 pr-6 sm:gap-4 sm:py-8 sm:pl-10 sm:pr-8">
+      <div className="absolute inset-y-0 left-0 w-[6px] rounded-l-[20px] bg-[#081EEA]" />
+      <span className="text-lg font-semibold tracking-[-0.02em] text-black sm:text-xl">{label}</span>
+      <p className="text-center text-base tracking-[-0.02em] text-black sm:text-lg">
+        {pilihan.jenjang} {pilihan.namaJurusan}
+      </p>
+      <p className="text-center text-xl font-semibold tracking-[-0.02em] text-[#081EEA] sm:text-2xl">
+        {pilihan.namaUniversitas}
+      </p>
+      <div className="mt-2 flex w-full items-start justify-center gap-10 sm:gap-16">
+        <div className="flex flex-col items-center gap-1 sm:gap-2">
+          <p className="text-sm text-[#7E7C7C] sm:text-base">Keketatan</p>
+          <p
+            className={`text-center text-base font-semibold tracking-[-0.02em] sm:text-lg ${labelColorClass(pilihan.keketatanLabel)}`}
+          >
+            {formatNilai(pilihan.keketatanScore)}% - {pilihan.keketatanLabel}
+          </p>
+        </div>
+        <div className="flex flex-col items-center gap-1 sm:gap-2">
+          <p className="text-sm text-[#7E7C7C] sm:text-base">Peluang</p>
+          <p
+            className={`text-center text-base font-semibold tracking-[-0.02em] sm:text-lg ${labelColorClass(pilihan.peluangLabel)}`}
+          >
+            {formatNilai(pilihan.peluangScore)} - {pilihan.peluangLabel}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MainResultCard({ data }: { data: AssessmentHasilData }) {
+  const columns = data.hasilPrediksi.length;
+
+  return (
+    <div className="relative w-full rounded-[32px] border-[0.6px] border-[#E3E3E3] bg-white px-5 py-8 shadow-[1px_2px_4px_rgba(0,0,0,0.1)] sm:px-10 sm:py-10 lg:px-16">
+      <div className="flex flex-col items-center gap-6 text-center sm:gap-8">
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-sm font-medium text-[#7E7C7C] sm:text-lg">
+            Berdasarkan perhitungan, berikut hasil untuk nilai kamu
+          </p>
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-base font-medium text-black sm:text-xl">Nilai Akhir</p>
+            <p className="text-3xl font-semibold tracking-[-0.02em] text-[#081EEA] sm:text-4xl">
+              {formatNilai(data.nilaiAkhir)}
+              {data.nilaiAkhirLabel ? (
+                <span className="ml-2 font-normal">({data.nilaiAkhirLabel})</span>
+              ) : null}
+            </p>
+          </div>
+        </div>
+
+        <div
+          className={`grid w-full grid-cols-1 gap-6 sm:gap-8 ${
+            columns === 2 ? "sm:grid-cols-2" : "sm:max-w-xl"
+          }`}
+        >
+          {data.hasilPrediksi.map((pilihan) => (
+            <MainPilihanCard
+              key={pilihan.urutanPilihan}
+              pilihan={pilihan}
+              label={`Pilihan ${pilihan.urutanPilihan}`}
+            />
+          ))}
+        </div>
+      </div>
+
+      <Mascot
+        variant="Guidance"
+        alt=""
+        className="pointer-events-none absolute -right-3 -bottom-4 hidden h-28 w-auto select-none sm:block sm:h-32 lg:h-36"
+      />
+    </div>
+  );
+}
+
 export default function AssessmentHasilAccordions({ data }: { data: AssessmentHasilData }) {
   const [openSections, setOpenSections] = useState({
-    nilaiAkhir: true,
-    hasilPrediksi: true,
     rekomendasiJurusan: false,
     rekomendasiKelas: false,
     rekomendasiTryout: false,
@@ -156,42 +232,7 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
 
   return (
     <div className="flex flex-col gap-6 sm:gap-10">
-      <AccordionSection
-        title="Nilai Akhir"
-        subtitle="Nilai rata-rata rapotmu + Prestasi"
-        open={openSections.nilaiAkhir}
-        onToggle={() => toggle("nilaiAkhir")}
-      >
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-8">
-          <div className="flex flex-col gap-2">
-            <p className="text-base text-[#7E7C7C] sm:text-xl">Nilai Rata-Rata Raportmu</p>
-            <p className="text-2xl font-semibold tracking-[-0.02em] text-black sm:text-[28px]">
-              {formatNilai(data.rataRataRapor)}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <p className="text-base text-[#7E7C7C] sm:text-xl">Nilai Prestasimu</p>
-            <p className="text-2xl font-semibold tracking-[-0.02em] text-black sm:text-[28px]">
-              {formatNilai(data.nilaiPrestasi)}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <p className="text-base text-[#7E7C7C] sm:text-xl">Nilai Akhir</p>
-            <p className="text-2xl font-semibold tracking-[-0.02em] text-[#081EEA] sm:text-[28px]">
-              {formatNilai(data.nilaiAkhir)}
-              {data.nilaiAkhirLabel ? (
-                <span className="ml-2 font-normal">({data.nilaiAkhirLabel})</span>
-              ) : null}
-            </p>
-          </div>
-        </div>
-      </AccordionSection>
-
-      <AccordionSection title="Hasil Prediksi" open={openSections.hasilPrediksi} onToggle={() => toggle("hasilPrediksi")}>
-        {data.hasilPrediksi.map((pilihan) => (
-          <PilihanCard key={pilihan.urutanPilihan} pilihan={pilihan} label={`Pilihan ${pilihan.urutanPilihan}`} />
-        ))}
-      </AccordionSection>
+      <MainResultCard data={data} />
 
       <AccordionSection
         title="Rekomendasi Jurusan"
@@ -203,7 +244,7 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
             <PilihanCard key={pilihan.urutanPilihan} pilihan={pilihan} label={`Pilihan ${pilihan.urutanPilihan}`} />
           ))
         ) : (
-          <p className="text-base text-[#7E7C7C] sm:text-xl">Belum ada rekomendasi jurusan alternatif saat ini.</p>
+          <p className="text-base text-[#7E7C7C] sm:text-xl">Belum ada rekomendasi tersedia untuk saat ini</p>
         )}
       </AccordionSection>
 

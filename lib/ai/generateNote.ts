@@ -2,7 +2,7 @@ import "server-only";
 import { GoogleGenAI } from "@google/genai";
 
 /**
- * Generate section "Note" — PRD Bagian 7.4.3 accordion #6 (direvisi), BR-30.
+ * Generate section "Note" — PRD Bagian 7.4.3 accordion #4 (direvisi), BR-30.
  *
  * Dipanggil dari app/api/assessment/snbp/route.ts (Sesi 1) setelah Keketatan &
  * Peluang selesai dihitung, SEBELUM response dikirim ke frontend. Hasilnya
@@ -17,7 +17,7 @@ const MODEL = "gemini-2.5-flash-lite";
 const GENERATE_TIMEOUT_MS = 8000;
 
 const FALLBACK_NOTE =
-  "Terus semangat belajar — tiap langkah kecil bawa kamu lebih dekat ke PTN impian!";
+  "Angka-angka di atas adalah gambaran, bukan keputusan akhir — banyak siswa yang keketatannya terlihat berat tetap berhasil lolos karena persiapan yang tepat, dan sebaliknya. Yang paling penting sekarang bukan cuma melihat hasilnya, tapi memakainya sebagai peta: kalau ada subtes yang masih terasa berat, itu titik yang paling worth dilatih dulu. Coba mulai dari Try Out gratis buat lihat sejauh mana pemahamanmu sekarang, atau ikut kelas bimbingan yang sesuai kebutuhanmu. Perjalanan ke PTN impian itu proses, bukan satu kali tes — dan kamu masih punya waktu buat memperbesar peluang itu.";
 
 // WAJIB persis seperti ini (PRD Bagian 7.4.3 #6) — jangan diringkas.
 const SYSTEM_PROMPT = `Kamu adalah asisten Dimentoring, platform bimbingan masuk PTN untuk siswa SMA Indonesia. Tulis catatan singkat (2-4 kalimat) untuk siswa berdasarkan hasil Assessment Prediksi PTN mereka.

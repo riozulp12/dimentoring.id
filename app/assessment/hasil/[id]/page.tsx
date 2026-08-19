@@ -14,7 +14,9 @@ import AssessmentHasilAccordions, {
 } from "./AssessmentHasilAccordions";
 
 /**
- * Hasil Assessment SNBP — PRD Bagian 7.4.3 (6 accordion), Bagian 7.4.1b/BR-29
+ * Hasil Assessment SNBP — PRD Bagian 7.4.3 (direvisi): 1 card utama (Nilai
+ * Akhir + Hasil Prediksi, selalu terbuka) + 4 accordion collapsible
+ * (Rekomendasi Jurusan/Kelas/Paket Tryout/Note), Bagian 7.4.1b/BR-29
  * (akses anonim), BR-5 (akses hasil assessment rahasia).
  *
  * PENTING: halaman ini WAJIB public route (sama seperti /assessment) — TIDAK
@@ -182,7 +184,7 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
       return latest === null || tahun > latest ? tahun : latest;
     }, null);
 
-  // ---- Accordion 4: Rekomendasi Kelas — hanya untuk assessment yang sudah
+  // ---- Accordion 2: Rekomendasi Kelas — hanya untuk assessment yang sudah
   // ditautkan ke akun (butuh mapel_tersulit dari profil siswa). ----
   let kelasRekomendasi: KelasRekomendasiData[] = [];
   if (assessmentUserId) {
@@ -208,7 +210,7 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
     }
   }
 
-  // ---- Accordion 5: Rekomendasi Paket Tryout ----
+  // ---- Accordion 3: Rekomendasi Paket Tryout ----
   // PLACEHOLDER FASE 1: skema belum punya pemetaan eksplisit ptn_jurusan/jurusan_tujuan
   // -> subtes tryout (tryout_kategori tidak punya nilai 'snbp'). Sebagai proxy yang
   // relevan lintas jalur, ambil paket tryout kategori 'tka' (kesiapan materi umum) —

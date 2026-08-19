@@ -65,6 +65,7 @@ function round2(value: number): number {
 }
 
 export async function POST(request: NextRequest) {
+  console.log("=== SNBP ROUTE DIPANGGIL ===");
   // ---- Auth OPSIONAL (BR-29): kalau ada session, role WAJIB student. Kalau
   // tidak ada session, jalan sebagai trial anonim lewat cookie dm_trial_id. ----
   const session = verifySessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
@@ -86,7 +87,8 @@ export async function POST(request: NextRequest) {
   let body: SnbpAssessmentRequestBody;
   try {
     body = await request.json();
-  } catch {
+  } catch (error) {
+    console.error("[assessment/snbp] Error saat parse JSON body:", error);
     return errorResponse("Body request harus JSON yang valid.", 400);
   }
 
@@ -300,6 +302,66 @@ export async function POST(request: NextRequest) {
     // ON DELETE CASCADE membersihkan baris assessment_pilihan parsial (kalau ada).
     await supabaseServer.from("assessments").delete().eq("id", assessmentId);
     return errorResponse("Gagal menyimpan pilihan program studi. Coba lagi nanti.", 500);
+  }
+
+  // ---- Accordion "Rekomendasi Jurusan" (PRD 7.4.3 #1): alternatif jurusan
+  // dengan Keketatan lebih longgar (lebih realistis) dibanding rata-rata
+  // Keketatan pilihan siswa sendiri. Kegagalan di sini tidak menggagalkan
+  // submit — accordion cukup tampil dengan pesan "belum ada rekomendasi"
+  // di frontend kalau tabel rekomendasiJurusan kosong. ----
+  try {
+    const avgKeketatan = round2(
+      pilihanResults.reduce((sum, p) => sum + p.keketatan.score, 0) / pilihanResults.length,
+    );
+    const chosenIdSet = new Set(resolvedPilihan.map((p) => p.id as string));
+
+    const { data: kandidatRows, error: kandidatError } = await supabaseServer
+      .from("ptn_jurusan")
+      .select("id, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu")
+      .eq("jalur", "snbp");
+
+    if (kandidatError) {
+      console.error("[assessment/snbp] query kandidat rekomendasi jurusan failed:", kandidatError);
+    } else {
+      const rekomendasi = (kandidatRows ?? [])
+        .filter((row) => !chosenIdSet.has(row.id as string))
+        .map((row) => ({
+          row,
+          keketatan: calculateKeketatan(
+            row.kuota_tahun_berjalan as number,
+            row.jumlah_peminat_tahun_lalu as number,
+          ),
+        }))
+        .filter(({ keketatan }) => keketatan.score > avgKeketatan)
+        .sort((a, b) => b.keketatan.score - a.keketatan.score)
+        .slice(0, 2)
+        .map(({ row, keketatan }) => ({
+          row,
+          keketatan,
+          peluang: calculatePeluang(nilaiAkhir, keketatan.score),
+        }));
+
+      if (rekomendasi.length > 0) {
+        const { error: rekomendasiError } = await supabaseServer.from("assessment_pilihan").insert(
+          rekomendasi.map(({ row, keketatan, peluang }, index) => ({
+            assessment_id: assessmentId,
+            urutan_pilihan: index + 1,
+            ptn_jurusan_id: row.id,
+            keketatan_score: keketatan.score,
+            keketatan_label: keketatan.label,
+            peluang_score: peluang.score,
+            peluang_label: peluang.label,
+            is_rekomendasi: true,
+          })),
+        );
+
+        if (rekomendasiError) {
+          console.error("[assessment/snbp] insert rekomendasi jurusan failed:", rekomendasiError);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[assessment/snbp] hitung rekomendasi jurusan gagal:", error);
   }
 
   // ---- BR-30: generate section "Note" (Gemini) — prompt anonim total, hanya

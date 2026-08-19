@@ -338,28 +338,23 @@ Ini memenuhi BR-3 dan sudah diimplementasikan di desain — pertahankan pola ini
 - **Kalau pilih 2 prodi**: **minimal salah satu dari 2 pilihan itu wajib berada di PTN yang provinsinya sama dengan provinsi sekolah asal siswa** (diambil dari `Sekolah.kota_id` → `Kota.provinsi_id`, bukan input manual). Sistem **wajib validasi ini di backend** sebelum submit diterima — kalau kedua pilihan di luar provinsi sekolah asal, tolak submit dengan pesan jelas.
 - **Urutan pilihan berpengaruh ke proses seleksi** (Pilihan 1 diprioritaskan dulu, baru Pilihan 2 kalau tidak lolos) — ini sudah konsisten dengan bagaimana Rekomendasi Jurusan/Kelas/Tryout kita rancang berdasarkan urutan, tidak perlu perubahan logika di situ.
 
-### 7.4.3 Output — Hasil Assessment SNBP
+### 7.4.3 Output — Hasil Assessment SNBP — **DIREVISI (desain terbaru)**
 
-Struktur accordion (dikonfirmasi dari desain — 6 accordion berurutan, semua collapsible dengan pola sama):
+**Struktur berubah dari versi sebelumnya.** Sekarang: **1 card utama (selalu terbuka, BUKAN accordion)** berisi Nilai Akhir + Hasil Prediksi digabung, diikuti **3 accordion collapsible** di bawahnya.
 
-**1. "Nilai Akhir"** (subtitle: "Nilai rata-rata rapotmu + Prestasi") — accordion PERTAMA, satu kali per assessment (bukan per pilihan, karena murni dari data akademik siswa sendiri, tidak tergantung PTN/jurusan yang dipilih):
-- **Nilai Rata-Rata Raportmu** — rata-rata dari input Semester 1-5.
-- **Nilai Prestasimu** (tampil hanya jika siswa mengisi accordion Prestasi saat input; kalau tidak diisi, tampilkan "-", bukan 0) — dikonversi dari Jenis Prestasi/Juara Berapa/Tingkat Kejuaraan jadi satu angka skala 0-100 (mapping di FR-3.7).
-- **Nilai Akhir** — `(Nilai Rata-Rata Raportmu + Nilai Prestasimu) / 2`. Kalau Prestasi tidak diisi, Nilai Akhir = Nilai Rata-Rata Raportmu saja. **Tampil dengan label kualitatif** di sebelah angka (pola sama seperti Keketatan/Peluang) — lihat skala label di FR-3.8.
+**Card Utama (selalu terbuka, di atas accordion apa pun):**
+- Judul kecil: "Berdasarkan perhitungan, berikut hasil untuk nilai kamu"
+- **Nilai Akhir**: label "Nilai Akhir" + angka + label kualitatif (mis. "88,65 (Sedang)") — skala label FR-3.8. **Breakdown Nilai Rata-Rata Rapor dan Nilai Prestasi TIDAK ditampilkan terpisah lagi di UI** (beda dari draf sebelumnya) — cukup angka final. Kedua angka itu **tetap dihitung & disimpan di database** (`assessments.rata_rata_rapor`, `assessments.nilai_prestasi`) untuk keperluan Analytics/audit nanti, cuma tidak ditampilkan ke siswa di halaman ini.
+- **Pilihan siswa (1-2, tampilan berdampingan 2 kolom kalau ada 2)**: tiap pilihan menampilkan Jenjang+Jurusan, Universitas, Keketatan (persen+label+warna), Peluang (skor+label+warna) — ini konten yang sebelumnya disebut "Hasil Prediksi", sekarang jadi bagian dari card yang sama, bukan accordion terpisah.
+- Maskot muncul sebagai elemen dekoratif di sisi card ini (bukan di disclaimer saja).
 
-Nilai Akhir ini jadi salah satu input ke perhitungan `peluang_score` per pilihan di accordion berikutnya — jadi siswa bisa lihat transparan dari mana angka Peluang-nya berasal, bukan kotak hitam.
+**Accordion di bawahnya (3 buah, urutan tetap):**
 
-**2. "Hasil Prediksi"** — per pilihan (**1-2**, sesuai jumlah yang dipilih siswa — bukan fixed 4), menampilkan:
-- **Jenjang + Nama Jurusan** (mis. "S1 Teknologi Informasi", "D4 Teknologi Informasi", "D3 Teknologi Informasi" — jenjang berbeda dianggap prodi berbeda dengan keketatan masing-masing, lihat FR-3.9) + Nama Universitas
-- **Keketatan** — persentase + label kualitatif (mis. "3,53% - Sangat Ketat"), dihitung murni dari rumus `(Kuota Tahun Berjalan ÷ Jumlah Peminat Tahun Sebelumnya) × 100%` — angka ini sama untuk semua siswa yang memilih PTN+jurusan+jenjang yang sama, tidak personal.
-- **Peluang** — skor numerik + label kualitatif (mis. "1.52 - Peluang Kecil"), **metrik terpisah dari Keketatan**, dihitung dari Nilai Akhir (accordion #1) relatif terhadap tingkat keketatan.
-- Kode warna: merah (ketat/peluang kecil), hijau (sedang), biru (longgar/peluang besar).
+**1. "Rekomendasi Jurusan"** — alternatif jurusan/universitas dengan keketatan lebih realistis dibanding pilihan awal siswa, format sama (Jenjang + Jurusan, Keketatan, Peluang).
 
-**3. "Rekomendasi Jurusan"** — alternatif jurusan/universitas dengan keketatan lebih realistis dibanding pilihan awal siswa, format sama (Jenjang + Jurusan, Keketatan, Peluang).
+**2. "Rekomendasi Kelas"** — rekomendasi program bimbingan yang relevan (cross-sell natural ke Bagian 7.5).
 
-**4. "Rekomendasi Kelas"** — rekomendasi program bimbingan yang relevan (cross-sell natural ke Bagian 7.5).
-
-**5. "Rekomendasi Paket Tryout"** — accordion terpisah, ditempatkan setelah "Rekomendasi Kelas" dan sebelum "Note". Menampilkan paket tryout yang relevan dengan hasil assessment siswa:
+**3. "Rekomendasi Paket Tryout"** — Menampilkan paket tryout yang relevan dengan hasil assessment siswa:
 - Nama paket tryout (mis. "Paket Tryout SNBP Ilmu Kelautan — Undip")
 - Kategori (Free/Premium)
 - Alasan rekomendasi singkat (mis. "Direkomendasikan karena Keketatan pilihan ini Sedang — latihan tryout membantu memperbesar Peluang")
@@ -367,7 +362,7 @@ Nilai Akhir ini jadi salah satu input ke perhitungan `peluang_score` per pilihan
 
 Sumber rekomendasi: hasil pemetaan otomatis antara `jurusan_tujuan` + `ptn_tujuan` (dari Hasil Prediksi & Rekomendasi Jurusan) terhadap katalog `TryOut` yang tersedia di Bagian 7.6 — bukan rekomendasi acak, harus relevan dengan subtes/jalur yang sesuai pilihan siswa.
 
-**6. "Note" — DIREVISI: digenerate AI (Gemini), masuk Fase 1 (bukan lagi Fase 3)**
+**4. "Note" — digenerate AI (Gemini), Fase 1**
 
 Catatan interpretatif/motivasional 2-4 kalimat, digenerate sekali oleh Gemini API saat assessment dihitung (bukan digenerate ulang tiap halaman dibuka), disimpan ke database supaya konsisten dan tidak boros API call.
 
@@ -378,7 +373,7 @@ Catatan interpretatif/motivasional 2-4 kalimat, digenerate sekali oleh Gemini AP
 
 **Privasi (WAJIB, ini yang membedakan dari AI Mentor biasa):** prompt yang dikirim ke Gemini **hanya berisi data numerik/kategorikal anonim** (nilai_akhir, nilai_akhir_label, keketatan_score+label, peluang_score+label, nama jurusan+jenjang) — **TIDAK PERNAH** menyertakan nama, email, no. WA, atau identitas siswa apa pun. Ini berlaku untuk assessment anonim maupun yang sudah login, tanpa kecuali.
 
-**Fallback:** kalau panggilan API Gemini gagal/timeout, tampilkan teks default netral (mis. "Terus semangat belajar — tiap langkah kecil bawa kamu lebih dekat ke PTN impian!") — **jangan sampai kegagalan API bikin seluruh halaman hasil gagal tampil**, karena section ini pelengkap, bukan inti fitur.
+**Fallback:** kalau panggilan API Gemini gagal/timeout, tampilkan teks default (lihat draf paragraf di catatan internal tim) — **jangan sampai kegagalan API bikin seluruh halaman hasil gagal tampil**, karena section ini pelengkap, bukan inti fitur.
 
 **Transparansi:** tampilkan label kecil "Catatan dibuat otomatis" di bawah teks — konsisten dengan prinsip kejujuran ke pengguna soal apa yang manusia vs AI yang buat.
 
