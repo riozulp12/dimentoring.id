@@ -403,6 +403,26 @@ Catatan interpretatif/motivasional 2-4 kalimat, digenerate sekali oleh Gemini AP
 - FR-3.9 (baru): **Jenjang sebagai pembeda prodi** — kombinasi Universitas+Jurusan+**Jenjang** (S1/D3/D4/dst.) dianggap prodi yang sepenuhnya berbeda, masing-masing punya `kuota_tahun_berjalan` dan `jumlah_peminat_tahun_lalu` sendiri di tabel `ptn_jurusan`. Dropdown "Pilihan Universitas dan Jurusan" di form input (7.4.2) wajib menampilkan jenjang secara eksplisit supaya siswa tidak salah pilih (mis. "S1 Teknologi Informasi" vs "D3 Teknologi Informasi" sebagai opsi terpisah, bukan tergabung).
 - FR-3.10 (baru — aturan resmi SNBP 2026): **Validasi jumlah & lokasi pilihan prodi SNBP.** Backend wajib menolak submit kalau: (a) jumlah pilihan SNBP lebih dari 2, atau (b) tepat 2 pilihan dipilih TAPI tidak satu pun berada di provinsi yang sama dengan `Sekolah.kota_id → Kota.provinsi_id` milik siswa. Validasi ini **tidak boleh cuma di frontend** (client bisa dimanipulasi) — wajib dicek ulang di API sebelum data masuk ke `assessment_pilihan`.
 
+### 7.4.5 Widget Cek Keketatan (Landing Page — BARU, terpisah dari Assessment penuh)
+
+**Tujuan:** Hook engagement paling ringan di landing page — user cek keketatan PTN+jurusan pilihan **tanpa isi data personal apa pun** (tidak ada nilai rapor/prestasi), sebelum diarahkan ke `/assessment` untuk pengalaman personal penuh (Peluang, rekomendasi, dst).
+
+**Beda mendasar dari Assessment (Bagian 7.4):**
+
+| | Widget Cek Keketatan | Assessment Penuh |
+|---|---|---|
+| Input | Jalur + PTN + Jurusan+Jenjang saja | Nilai rapor, prestasi, dst |
+| Output | Cuma **Keketatan** (persen+label) | Keketatan **dan** Peluang, + Nilai Akhir, rekomendasi |
+| Login/trial | Tidak relevan — bisa dipakai berkali-kali tanpa batas, tidak ada "hasil" yang disimpan | Dibatasi 2x trial gratis (BR-29) |
+| Tampilan | Popup/modal di landing page | Halaman penuh `/assessment` |
+| Penyimpanan data | **Tidak disimpan ke database sama sekali** — murni lookup real-time dari `ptn_jurusan`, tidak ada assessment record yang dibuat | Tersimpan ke `assessments`/`assessment_pilihan` |
+
+**Functional Requirements:**
+- FR-3.11 (baru): Widget di landing page — 3 dropdown berurutan (Jalur → Universitas → Jurusan+Jenjang, dropdown kedua/ketiga terisi setelah yang sebelumnya dipilih), tombol "Cek Keketatan".
+- FR-3.12: Submit → panggil endpoint ringan yang cuma hitung `keketatan_score` dari `ptn_jurusan` yang dipilih (formula sama seperti Bagian 7.4, TIDAK butuh data sekolah/personal apa pun) → tampilkan di **popup/modal**, bukan redirect ke halaman baru.
+- FR-3.13: Popup berisi: Keketatan (persen+label+warna, pola sama seperti Hasil Assessment), disclaimer singkat (versi ringkas dari BR-4), dan **tombol CTA "Coba Cek Peluang Kamu"** yang mengarah ke `/assessment` (bawa PTN+Jurusan yang tadi dipilih sebagai pre-fill kalau memungkinkan, supaya user tidak perlu pilih ulang).
+- FR-3.14: Widget ini **tidak memiliki batasan pemakaian** (beda dari BR-29 Assessment) — karena tidak ada "hasil personal" yang bocor/berharga di sini, cuma data publik keketatan.
+
 ---
 
 ## 7.5 Kelas Bimbingan Belajar (per Kelas & Subtes)
@@ -709,8 +729,7 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **MentorProfile** — id, user_id, asal_ptn, semester, jurusan, **subtes_diampu** (array, hasil checklist onboarding), kelas_diampu (relasi ke Kelas). *(Status approval kini ada di `UserRole.status`, bukan field terpisah di sini, agar konsisten dengan role lain.)*
 - **VerificationToken (baru)** — id, user_id, token, channel (`wa`/`email`), expired_at, used_at.
 - **PTNJurusan** — id, nama_universitas, nama_jurusan, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu, jalur (SNBP/SNBT/Mandiri), sumber_data, tahun_data.
-- **Assessment (direvisi — Bagian 7.4.1b/BR-29, akses anonim)** — id, **user_id (nullable)**, **anonymous_trial_id (baru, nullable — cookie trial ID, diisi kalau `user_id` NULL)**, jalur, input_data (json), rata_rata_rapor, nilai_prestasi, nilai_akhir, nilai_akhir_label, **note_ai (baru — BR-30, hasil generate Gemini section "Note", NULL jika belum/gagal generate)**, hasil_breakdown, dibuat_pada. Tepat salah satu dari `user_id`/`anonymous_trial_id` yang terisi — begitu assessment anonim ditautkan ke akun (register/login dengan trial ID yang sama), `user_id` diisi dan `anonymous_trial_id` di-NULL-kan.
-- **AssessmentPilihan** — id, assessment_id, urutan_pilihan (1-2 untuk SNBP sesuai BR-28, 1-4 untuk SNBT), ptn_jurusan_id, **keketatan_score** (formula publik), keketatan_label, **peluang_score** (personal, terpisah dari keketatan), peluang_label, is_rekomendasi.
+- **Assessment** — id, user_id, jalur, input_data (json), ptn_tujuan, jurusan_tujuan, **keketatan_score** (formula publik), **peluang_score** (personal, terpisah dari keketatan), hasil_breakdown, dibuat_pada.
 - **Referral** — id, referrer_id, referee_id, kode_referral, status, tanggal_daftar, tanggal_konversi.
 - **ReferralReward** — id, referral_id, jenis_reward, nominal_atau_poin, status_pencairan, tanggal.
 - **GamifikasiProfile** — id, user_id, total_poin, level, badge_list, streak_counter.

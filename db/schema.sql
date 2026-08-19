@@ -159,6 +159,7 @@ CREATE TABLE ptn_jurusan (
     jalur jalur_seleksi NOT NULL,
     sumber_data VARCHAR(100) NOT NULL,   -- 'snpmb.id' / 'input_manual_ptn'
     tahun_data INT NOT NULL,
+    rata_rata_nilai_diterima DECIMAL(5,2), -- nilai rata-rata siswa yang diterima tahun lalu (kalau ada dari sumber_data), bukan input formula Keketatan/Peluang — murni referensi tambahan
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (nama_universitas, nama_jurusan, jenjang, jalur, tahun_data)
 );
