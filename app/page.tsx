@@ -1,4 +1,7 @@
+import { cookies } from "next/headers";
 import Navbar from "@/components/ui/Navbar";
+import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
+import { getNavbarProps } from "@/lib/dashboard/getNavbarProps";
 import Hero from "@/components/sections/Hero";
 import Value from "@/components/sections/Value";
 import Prediction, { type PtnJurusanCheckOption } from "@/components/sections/Prediction";
@@ -31,9 +34,15 @@ export default async function Home() {
     jalur: row.jalur as PtnJurusanCheckOption["jalur"],
   }));
 
+  // Navbar berubah kalau sudah login (PRD 7.0.6/12.1) — session dibaca di
+  // server, sama seperti app/api/assessment/snbp/route.ts, bukan dari client.
+  const cookieStore = await cookies();
+  const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  const navbarProps = await getNavbarProps(session);
+
   return (
     <div className="flex w-full flex-col">
-      <Navbar activeItem="home" />
+      <Navbar activeItem="home" {...navbarProps} />
       <Hero />
       <Value />
       <Prediction ptnJurusanOptions={ptnJurusanOptions} />

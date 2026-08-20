@@ -1,46 +1,28 @@
 "use client";
 
-import Image from "next/image";
-import { usePathname } from "next/navigation";
 import { Inter } from "next/font/google";
-import { NotificationIcon } from "./headerIcons";
+import AccountMenu, { type AccountMenuItem } from "./AccountMenu";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "600"] });
 
-const PAGE_TITLES: Record<string, string> = {
-  "/dashboard/siswa": "Dashboard Siswa",
-  "/dashboard/siswa/assessment": "Assessment Prediksi PTN",
-  "/dashboard/siswa/kelas": "Kelas Saya",
-  "/dashboard/siswa/tryout": "Try Out",
-  "/dashboard/siswa/riwayat": "Riwayat Try Out",
-  "/dashboard/siswa/referral": "Referral & Poin",
-  "/dashboard/siswa/beasiswa": "Beasiswa & Event",
-  "/dashboard/siswa/ai-mentor": "AI Mentor",
-  "/dashboard/siswa/pengaturan": "Pengaturan",
-};
-
-function getPageTitle(pathname: string) {
-  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
-  const match = Object.keys(PAGE_TITLES)
-    .filter((href) => href !== "/dashboard/siswa" && pathname.startsWith(`${href}/`))
-    .sort((a, b) => b.length - a.length)[0];
-  return match ? PAGE_TITLES[match] : "Dashboard Siswa";
-}
-
 type HeaderProps = {
+  title: string;
   onMenuClick?: () => void;
-  userName?: string;
-  avatarSrc?: string;
+  firstName: string;
+  avatarUrl: string | null;
+  menuItems: AccountMenuItem[];
+  /** BR-27/PRD 12.2: badge "On Review" untuk Mentor dengan UserRole.status = 'pending'. */
+  mentorStatus?: "pending";
 };
 
 export default function Header({
+  title,
   onMenuClick,
-  userName = "Dulce",
-  avatarSrc = "/images/navbar-avatar-placeholder.png",
+  firstName,
+  avatarUrl,
+  menuItems,
+  mentorStatus,
 }: HeaderProps) {
-  const pathname = usePathname();
-  const title = getPageTitle(pathname);
-
   return (
     <header
       className={`${inter.className} fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between bg-white px-4 shadow-[1px_2px_4px_rgba(0,0,0,0.1)] sm:px-5 lg:left-64`}
@@ -67,23 +49,12 @@ export default function Header({
         </h1>
       </div>
 
-      <div className="flex items-center gap-3 sm:gap-4">
-        <button
-          type="button"
-          aria-label="Notifikasi"
-          className="flex size-8 items-center justify-center rounded-lg text-[#7e7c7c] hover:bg-gray-100"
-        >
-          <NotificationIcon className="size-5" />
-        </button>
-
-        <div className="flex items-center gap-2 sm:gap-3">
-          <span className="hidden text-sm text-[#081eea] sm:inline">{userName}</span>
-
-          <div className="relative size-8 shrink-0 overflow-hidden rounded-full bg-[#d9d9d9] sm:size-9">
-            <Image src={avatarSrc} alt={userName} fill className="object-cover" sizes="36px" />
-          </div>
-        </div>
-      </div>
+      <AccountMenu
+        firstName={firstName}
+        avatarUrl={avatarUrl}
+        menuItems={menuItems}
+        mentorStatus={mentorStatus}
+      />
     </header>
   );
 }

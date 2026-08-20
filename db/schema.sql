@@ -87,6 +87,7 @@ CREATE TABLE users (
     kota_id UUID REFERENCES kota(id),
     provinsi_id UUID REFERENCES provinsi(id),
     nama_panggilan VARCHAR(50),                   -- dipakai di leaderboard (privasi anak)
+    avatar_url TEXT,                              -- NULL default; fitur upload foto profil belum dibangun (Navbar/Header pakai avatar default)
     consent_leaderboard_lokasi BOOLEAN NOT NULL DEFAULT false,
     opt_out_leaderboard BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -159,7 +160,6 @@ CREATE TABLE ptn_jurusan (
     jalur jalur_seleksi NOT NULL,
     sumber_data VARCHAR(100) NOT NULL,   -- 'snpmb.id' / 'input_manual_ptn'
     tahun_data INT NOT NULL,
-    rata_rata_nilai_diterima DECIMAL(5,2), -- nilai rata-rata siswa yang diterima tahun lalu (kalau ada dari sumber_data), bukan input formula Keketatan/Peluang — murni referensi tambahan
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (nama_universitas, nama_jurusan, jenjang, jalur, tahun_data)
 );
@@ -398,9 +398,12 @@ CREATE TABLE ai_mentor_logs (
     dibuat_pada TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TYPE konten_sumber AS ENUM ('ai_generated', 'upload_mentor');
+
 CREATE TABLE soal_ai (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     subtes_id UUID NOT NULL REFERENCES subtes(id),
+    kelas_id UUID REFERENCES kelas(id),   -- NULL kalau soal generik lintas kelas (mis. bank tryout)
     konsep_sumber TEXT NOT NULL,          -- referensi konsep, BUKAN teks sumber asli (BR-18)
     redaksi TEXT NOT NULL,
     jawaban TEXT NOT NULL,
@@ -408,11 +411,36 @@ CREATE TABLE soal_ai (
     tingkat_kesulitan soal_ai_kesulitan NOT NULL,
     estimasi_waktu_detik INT NOT NULL,
     versi INT NOT NULL DEFAULT 1,
-    status soal_ai_status NOT NULL DEFAULT 'draft',  -- wajib direview dulu (BR-17)
+    sumber konten_sumber NOT NULL DEFAULT 'ai_generated',  -- BR-31: manual mentor = auto-published
+    status soal_ai_status NOT NULL DEFAULT 'draft',  -- wajib direview dulu KALAU sumber='ai_generated' (BR-17/BR-31)
+    dibuat_oleh_id UUID REFERENCES users(id),  -- mentor yang upload manual; NULL kalau AI-generated
     direview_oleh_id UUID REFERENCES users(id),
     tanggal_review TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Materi belajar (BARU, BR-31): sama pola dengan soal_ai — bisa AI-generated (wajib review)
+-- atau upload manual mentor (auto-published)
+CREATE TYPE materi_tipe AS ENUM ('video', 'dokumen', 'rangkuman_teks');
+
+CREATE TABLE materi (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kelas_id UUID NOT NULL REFERENCES kelas(id),
+    subtes_id UUID REFERENCES subtes(id),
+    judul VARCHAR(255) NOT NULL,
+    tipe materi_tipe NOT NULL,
+    konten TEXT,                          -- rangkuman teks, atau URL video/dokumen
+    sumber konten_sumber NOT NULL DEFAULT 'ai_generated',
+    status soal_ai_status NOT NULL DEFAULT 'draft',  -- reuse enum status yang sama (draft/published/ditolak)
+    dibuat_oleh_id UUID REFERENCES users(id),
+    direview_oleh_id UUID REFERENCES users(id),
+    tanggal_review TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_materi_kelas ON materi(kelas_id);
+CREATE INDEX idx_materi_status ON materi(status) WHERE status = 'draft';
+CREATE INDEX idx_soal_ai_status ON soal_ai(status) WHERE status = 'draft';
 
 -- ============================================================================
 -- ROW LEVEL SECURITY (WAJIB — Supabase mengekspos setiap tabel lewat API publik

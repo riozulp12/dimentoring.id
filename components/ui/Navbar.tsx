@@ -5,27 +5,21 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Button from "./Button";
 import Logo from "./Logo";
+import AccountMenu, { type AccountMenuItem } from "@/components/dashboard/AccountMenu";
 
 export type NavItemKey = "home" | "program" | "testimonial" | "faq";
 
 export interface NavbarProps {
   activeItem?: NavItemKey;
   isLoggedIn?: boolean;
-  userName?: string;
-  avatarSrc?: string;
+  firstName?: string;
+  avatarUrl?: string | null;
+  menuItems?: AccountMenuItem[];
   /** BR-27 / PRD Bagian 12.2: badge "On Review" untuk Mentor status UserRole.status = 'pending'. */
   mentorStatus?: "pending";
   onLoginClick?: () => void;
   onRegisterClick?: () => void;
   onNotificationClick?: () => void;
-}
-
-function OnReviewBadge() {
-  return (
-    <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-sm font-medium leading-none text-amber-700">
-      On Review
-    </span>
-  );
 }
 
 interface NavItemConfig {
@@ -97,8 +91,9 @@ function MenuIcon({ open }: { open: boolean }) {
 export default function Navbar({
   activeItem,
   isLoggedIn = false,
-  userName = "Dulce",
-  avatarSrc = "/images/navbar-avatar-placeholder.png",
+  firstName = "Pengguna",
+  avatarUrl = null,
+  menuItems = [],
   mentorStatus,
   onLoginClick,
   onRegisterClick,
@@ -155,29 +150,13 @@ export default function Navbar({
 
           <div className="hidden lg:flex lg:items-center lg:gap-3 min-[1440px]:gap-8">
             {isLoggedIn ? (
-              <>
-                <button
-                  type="button"
-                  onClick={onNotificationClick}
-                  aria-label="Notifikasi"
-                  className="shrink-0"
-                >
-                  <Image src="/icons/navbar-notification.svg" width={32} height={32} alt="" />
-                </button>
-                <div className="flex items-center gap-6">
-                  <span className="flex items-center gap-2 text-2xl font-normal leading-[1.5] tracking-[-0.48px] text-[#081EEA]">
-                    {userName}
-                    {mentorStatus === "pending" ? <OnReviewBadge /> : null}
-                  </span>
-                  <Image
-                    src={avatarSrc}
-                    width={56}
-                    height={56}
-                    alt={userName}
-                    className="rounded-full object-cover"
-                  />
-                </div>
-              </>
+              <AccountMenu
+                firstName={firstName}
+                avatarUrl={avatarUrl}
+                menuItems={menuItems}
+                mentorStatus={mentorStatus}
+                onNotificationClick={onNotificationClick}
+              />
             ) : (
               <>
                 <Button variant="primary" size="md" onClick={handleLoginClick}>
@@ -207,27 +186,13 @@ export default function Navbar({
 
             {isLoggedIn ? (
               <div className="flex w-full items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <Image
-                    src={avatarSrc}
-                    width={44}
-                    height={44}
-                    alt={userName}
-                    className="rounded-full object-cover"
-                  />
-                  <span className="flex items-center gap-2 text-lg font-normal leading-[1.5] tracking-[-0.36px] text-[#081EEA]">
-                    {userName}
-                    {mentorStatus === "pending" ? <OnReviewBadge /> : null}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={onNotificationClick}
-                  aria-label="Notifikasi"
-                  className="shrink-0"
-                >
-                  <Image src="/icons/navbar-notification.svg" width={28} height={28} alt="" />
-                </button>
+                <AccountMenu
+                  firstName={firstName}
+                  avatarUrl={avatarUrl}
+                  menuItems={menuItems}
+                  mentorStatus={mentorStatus}
+                  onNotificationClick={onNotificationClick}
+                />
               </div>
             ) : (
               <div className="flex w-full flex-col gap-3">

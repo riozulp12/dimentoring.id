@@ -422,13 +422,35 @@ Catatan interpretatif/motivasional 2-4 kalimat, digenerate sekali oleh Gemini AP
 
 ## 7.5 Kelas Bimbingan Belajar (per Kelas & Subtes)
 
-Struktur konten hierarkis: Kelas → Subtes → Topik → Sesi/Materi. Subtes mengikuti struktur resmi: Tes Potensi Skolastik (Penalaran Umum, Pemahaman Bacaan & Menulis, Pengetahuan & Pemahaman Umum, Pengetahuan Kuantitatif) dan Tes Literasi (Literasi B. Indonesia, Literasi B. Inggris, Penalaran Matematika), plus TKA per mata pelajaran wajib & elektif. Materi berupa video, dokumen, live session terjadwal, kuis latihan. Admin assign mentor ke kelas berdasarkan **Subtes yang Diampu** yang diisi mentor saat onboarding (Bagian 7.0.2).
+Struktur konten hierarkis: Kelas → Subtes → Topik → Sesi/Materi. Subtes mengikuti struktur resmi: Tes Potensi Skolastik (Penalaran Umum, Pemahaman Bacaan & Menulis, Pengetahuan & Pemahaman Umum, Pengetahuan Kuantitatif) dan Tes Literasi (Literasi B. Indonesia, Literasi B. Inggris, Penalaran Matematika), plus TKA per mata pelajaran wajib & elektif. Live session terjadwal tetap dikelola manual mentor (link Meet, dst — lihat Bagian 7.5.2 kalau nanti dibutuhkan). Admin assign mentor ke kelas berdasarkan **Subtes yang Diampu** yang diisi mentor saat onboarding (Bagian 7.0.2).
+
+### 7.5.1 Materi Belajar — **DIREVISI: bisa AI-generated ATAU upload manual mentor, dipercepat ke Fase 1**
+
+Materi (video, dokumen, rangkuman teks) untuk tiap Kelas/Subtes bisa berasal dari dua sumber:
+
+- **Upload manual Mentor** — mentor unggah sendiri (dokumen/link video). Karena mentor sudah melalui proses approval (BR-2), materi dari sumber ini **langsung berstatus `published`** tanpa gerbang review tambahan — mentor yang sudah di-approve dianggap cukup tepercaya untuk konten yang dia buat sendiri.
+- **AI-generated** — digenerate otomatis (mis. rangkuman materi per topik). **Wajib human review** sebelum tayang ke siswa (status `draft` → `published`), sama seperti aturan AI Pembuat Soal (BR-17 pola yang sama, lihat BR-31 baru di Bagian 8). Mentor **juga bisa** memicu generate materi AI untuk topik yang dia ampu, tapi hasilnya tetap masuk antrian review sebelum tayang — tidak otomatis publish meski yang memicu adalah mentor yang sama.
+
+**Format konten per jenis (WAJIB, ini keputusan final):**
+- **Video** — disimpan sebagai **link** (YouTube/Google Drive yang di-share), BUKAN upload file video mentah. Alasan: hemat storage, konsisten dengan pola live session yang juga pakai link Meet.
+- **Dokumen** — juga disimpan sebagai **link** (Google Drive/Docs yang di-share), sama seperti video — BUKAN upload file PDF/dokumen asli. Ini menghindari kebutuhan setup Supabase Storage yang belum ada di Fase 1.
+- **Rangkuman teks** — ini satu-satunya jenis yang isinya benar-benar teks panjang (bukan link), diketik langsung oleh mentor atau digenerate AI.
+
+Field `materi.konten` (TEXT) menampung ketiganya tanpa perlu skema berbeda — tinggal beda cara divalidasi/ditampilkan di frontend sesuai `materi.tipe` (link untuk video/dokumen, teks panjang untuk rangkuman).
+
+**Functional Requirements:**
+- FR-M1: Mentor dapat mengunggah materi manual (link video, link dokumen, atau rangkuman teks) untuk kelas yang diampunya — langsung `published`.
+- FR-M2: Mentor/Admin dapat memicu AI generate materi (rangkuman/penjelasan topik) — hasil masuk status `draft`, wajib direview sebelum `published`. AI cuma generate jenis "rangkuman teks" (AI tidak bisa generate link video/dokumen, itu jenis konten yang murni manual mentor).
+- FR-M3: Halaman "review konten" (lihat 7.7 revisi) menampilkan antrian gabungan Materi AI + Soal AI yang berstatus `draft`, dengan aksi Setujui/Tolak per item.
+- FR-M4 (baru): Form upload materi manual (jenis Video/Dokumen) wajib validasi input berupa URL yang valid (format link), bukan sekadar teks bebas — mencegah mentor salah isi.
 
 ---
 
 ## 7.6 Sistem Tryout (Free & Premium)
 
 Tryout Gratis (soal terbatas, funnel akuisisi) dan Tryout Premium (bank soal lengkap, model kuota per paket) untuk TKA & SNBT di Fase 1; Jalur Mandiri per PTN di Fase 3.
+
+**Tidak ada review manual mentor terhadap hasil pengerjaan siswa** — soal Tryout bersifat objektif (auto-scoring), begitu siswa submit, **skor dan pembahasan langsung tersedia otomatis**: skor dihitung backend (server-side, real-time saat submit), pembahasan diambil dari field yang sudah tersimpan di database bersamaan dengan soalnya (bukan ditulis manual per siswa). Yang direview mentor itu **soal-nya sebelum dipakai siswa** (lihat 7.7 revisi), bukan hasil kerjaan siswa satu-satu.
 
 ### 7.6.1 Halaman Pengerjaan Tryout — Requirement UI Baru
 
@@ -450,12 +472,20 @@ Tryout Gratis (soal terbatas, funnel akuisisi) dan Tryout Premium (bank soal len
 **Acceptance Criteria tambahan:**
 - Timer dan navigator soal wajib tetap terlihat/dapat diakses sepanjang sesi tryout berlangsung (sticky/fixed position), tidak hilang saat scroll.
 - Jika koneksi terputus di tengah pengerjaan, progres jawaban (termasuk status navigator) harus tetap tersimpan di server dan bisa dilanjutkan begitu koneksi pulih, tanpa kehilangan waktu tersisa (timer tetap berjalan di server selama terputus, sesuai FR-T2).
+- FR-T9 (baru): Setelah submit, halaman hasil tryout langsung tampil (tanpa status "menunggu review") — skor + pembahasan per soal ditampilkan otomatis dari data yang sudah tersimpan.
 
 ---
 
-## 7.7 AI Pembuat Soal
+## 7.7 AI Pembuat Soal & Materi — **DIPERCEPAT ke Fase 1 (dari Fase 3), scope diperluas mencakup Materi**
 
-AI menghasilkan soal 3 tingkat kesulitan (Mudah/Sedang/HOTS) dengan jawaban, pembahasan, konsep, estimasi waktu. Orisinalitas wajib (redaksi baru, bukan salinan). Versioning untuk variasi soal antar percobaan. **Wajib human review** sebelum status `Published` — tidak ada soal AI tayang tanpa approval Mentor/Admin. Fase 3.
+AI menghasilkan **soal** (3 tingkat kesulitan Mudah/Sedang/HOTS, dengan jawaban, pembahasan, konsep, estimasi waktu) **dan materi belajar** (rangkuman/penjelasan topik). Orisinalitas wajib (redaksi baru, bukan salinan). Versioning untuk variasi soal antar percobaan. **Wajib human review** sebelum status `Published` — tidak ada soal/materi AI tayang tanpa approval Mentor/Admin, baik itu dipicu oleh Mentor maupun Admin (BR-31).
+
+Mentor **juga bisa upload soal/materi manual sendiri** (bukan cuma AI) — konten manual dari mentor yang sudah di-approve langsung `published` tanpa gerbang review tambahan (beda dari konten AI, lihat 7.5.1).
+
+**Halaman Review Konten (menu sidebar Mentor: "Materi & Latihan Soal"):**
+- Menampilkan antrian gabungan: Materi AI (status `draft`) + Soal AI (status `draft`) yang relevan dengan Subtes yang Diampu mentor tersebut.
+- Aksi per item: **Setujui** (→ `published`) atau **Tolak** (→ `ditolak`, dengan catatan alasan opsional).
+- Mentor **tidak** melakukan review terhadap hasil pengerjaan tryout siswa di halaman ini — itu di luar scope, karena tryout auto-scoring (lihat 7.6).
 
 ---
 
@@ -488,6 +518,7 @@ Diimplementasikan konsisten di: Empty state, Loading, Achievement/Badge, **AI Me
 - **BR-28 (baru — aturan resmi Kemendikbudristek SNBP 2026)**: Siswa hanya boleh memilih **maksimal 2 program studi** untuk SNBP (bukan 4). Kalau memilih 2, **minimal satu wajib berada di PTN dengan provinsi yang sama dengan sekolah asal siswa**. Ini aturan eksternal resmi (bukan keputusan bisnis Dimentoring) — sistem wajib menegakkan ini secara otomatis, dan **PRD/desain harus di-update ulang setiap kali SNPMB mengubah aturan** di tahun-tahun berikutnya (jangan asumsikan aturan ini permanen selamanya).
 - **BR-29 (baru)**: Assessment dapat diakses tanpa login, dibatasi **2 kali lihat hasil lengkap per trial ID (cookie)**, lintas jalur digabung (bukan 2x per jalur). Submit ke-3 dan seterusnya tetap bisa mengisi form, tapi hasil digembok di balik Login/Register. Assessment anonim yang belum ditautkan ke akun manapun **tidak dianggap sebagai lead resmi** untuk keperluan Analytics/CRM sampai benar-benar ditautkan ke user_id via login.
 - **BR-30 (baru — dipercepat dari Fase 3 ke Fase 1)**: Section "Note" di Hasil Assessment digenerate AI (Gemini API, free tier). Prompt yang dikirim ke Gemini **wajib anonim total** — hanya data numerik/kategorikal (nilai, label, nama jurusan), tidak pernah nama/email/WA siswa. Tidak boleh memberi kepastian palsu soal kelulusan (pola sama dengan BR-21 AI Mentor). Kegagalan API tidak boleh menggagalkan render halaman hasil secara keseluruhan (wajib ada fallback teks statis).
+- **BR-31 (baru — dipercepat dari Fase 3 ke Fase 1)**: Materi dan Soal yang di-generate AI **wajib direview Mentor/Admin sebelum status `published`** — tidak ada jalur otomatis-tayang untuk konten AI, siapa pun yang memicu generate-nya (termasuk Mentor sendiri). Materi/Soal yang **diupload manual** oleh Mentor yang sudah `Active` (approved) **langsung `published`** tanpa gerbang review tambahan — aturan review cuma berlaku untuk konten bersumber AI, bukan konten buatan manusia yang sudah tepercaya. Hasil pengerjaan Tryout siswa **tidak melalui review manual mentor** — auto-scoring dan pembahasan otomatis tersedia begitu siswa submit (FR-T9).
 
 ### Kelas & Tryout
 - **BR-6**: Akses kelas/tryout premium hanya terbuka setelah status Payment "berhasil" terkonfirmasi via webhook.
@@ -718,7 +749,7 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 
 # BAGIAN 13 — DATA MODEL (Diperluas & Direvisi)
 
-- **User** — id, nama, email, no_wa, password_hash, **status_verifikasi_akun** (`Unverified`/`Verified` — status akun keseluruhan, terpisah dari status per-role), sub_status (Student: `calon_mahasiswa`/`mahasiswa`), sekolah_id (relasi ke `Sekolah`, khusus Student), kota_id, provinsi_id, nama_panggilan, consent_leaderboard_lokasi, opt_out_leaderboard, **mapel_tersulit** (array, khusus Student), dibuat_pada. *(Field `role` tunggal DIHAPUS dari User — digantikan `UserRole` di bawah, agar satu akun bisa memegang lebih dari satu role.)*
+- **User** — id, nama, email, no_wa, password_hash, **status_verifikasi_akun** (`Unverified`/`Verified` — status akun keseluruhan, terpisah dari status per-role), sub_status (Student: `calon_mahasiswa`/`mahasiswa`), sekolah_id (relasi ke `Sekolah`, khusus Student), kota_id, provinsi_id, nama_panggilan, **avatar_url** (baru — URL foto profil, NULL default karena fitur upload foto belum dibangun; Navbar/Header tampilkan avatar default kalau NULL), consent_leaderboard_lokasi, opt_out_leaderboard, **mapel_tersulit** (array, khusus Student), dibuat_pada. *(Field `role` tunggal DIHAPUS dari User — digantikan `UserRole` di bawah, agar satu akun bisa memegang lebih dari satu role.)*
 - **UserRole (baru)** — id, user_id, role_type (`Student`/`Mentor`/`Admin`), status (`Active`/`Pending`/`Rejected`), dibuat_pada, **sumber_pengajuan** (`register_publik`/`upgrade_dari_akun_existing`). Satu `user_id` dapat memiliki lebih dari satu baris dengan status `Active` sekaligus — dasar teknis fitur Role Switcher (FR-1.12) tanpa duplikasi akun.
 - **Sekolah** — id, nama, kota_id, **akreditasi**, **kuota_snbp**, **ranking_data** (jika tersedia) — sumber data untuk auto-fill input SNBP (BR-16).
 - **MentorProfile** — id, user_id, asal_ptn, semester, jurusan, **subtes_diampu** (array, hasil checklist onboarding), kelas_diampu (relasi ke Kelas). *(Status approval kini ada di `UserRole.status`, bukan field terpisah di sini, agar konsisten dengan role lain.)*

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
+import { getNavbarProps, type NavbarSessionProps } from "@/lib/dashboard/getNavbarProps";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import Mascot from "@/components/ui/Mascot";
@@ -72,13 +73,15 @@ function toPilihanCard(row: AssessmentPilihanRow): PilihanCardData | null {
 function CenteredMessageState({
   title,
   description,
+  navbarProps,
 }: {
   title: string;
   description: string;
+  navbarProps: NavbarSessionProps;
 }) {
   return (
     <div className="flex w-full flex-col">
-      <Navbar />
+      <Navbar {...navbarProps} />
       <main className="mx-auto flex min-h-[60vh] w-full max-w-[1760px] flex-col items-center justify-center gap-4 px-5 py-20 text-center sm:px-8 md:px-12 lg:px-20">
         <Mascot variant="Confuse" alt="" className="h-24 w-auto sm:h-32" />
         <p className="text-xl font-semibold text-[#081EEA] sm:text-2xl">{title}</p>
@@ -92,18 +95,20 @@ function CenteredMessageState({
 export default async function AssessmentHasilPage({ params }: PageProps) {
   const { id } = await params;
 
+  const cookieStore = await cookies();
+  const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  const trialId = cookieStore.get(TRIAL_COOKIE_NAME)?.value ?? null;
+  const navbarProps = await getNavbarProps(session);
+
   if (!UUID_RE.test(id)) {
     return (
       <CenteredMessageState
         title="Hasil Tidak Ditemukan"
         description="Link hasil Assessment ini tidak valid. Coba isi ulang Assessment untuk dapat hasil baru."
+        navbarProps={navbarProps}
       />
     );
   }
-
-  const cookieStore = await cookies();
-  const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  const trialId = cookieStore.get(TRIAL_COOKIE_NAME)?.value ?? null;
 
   const { data: assessment, error: assessmentError } = await supabaseServer
     .from("assessments")
@@ -120,6 +125,7 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
       <CenteredMessageState
         title="Hasil Tidak Ditemukan"
         description="Hasil Assessment yang kamu cari tidak ditemukan. Coba isi ulang Assessment untuk dapat hasil baru."
+        navbarProps={navbarProps}
       />
     );
   }
@@ -143,6 +149,7 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
       <CenteredMessageState
         title="Hasil Ini Tidak Bisa Diakses Dari Sini"
         description="Hasil Assessment anonim hanya bisa dibuka lewat browser yang sama saat mengisinya. Isi ulang Assessment kalau kamu ingin lihat hasil baru di sini."
+        navbarProps={navbarProps}
       />
     );
   }
@@ -254,7 +261,7 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
 
   return (
     <div className="flex w-full flex-col">
-      <Navbar />
+      <Navbar {...navbarProps} />
       <main className="mx-auto flex w-full max-w-[1760px] flex-col gap-8 px-5 py-8 sm:gap-10 sm:px-8 sm:py-12 md:px-12 lg:gap-12 lg:px-20 lg:py-16 min-[1440px]:gap-14">
         <header className="flex flex-col gap-4 sm:gap-5">
           <div className="flex flex-col gap-2">

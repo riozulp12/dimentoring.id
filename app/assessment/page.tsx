@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
+import { getNavbarProps } from "@/lib/dashboard/getNavbarProps";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import AssessmentSNBPForm, { type PtnJurusanOption } from "./AssessmentSNBPForm";
@@ -22,11 +23,12 @@ import AssessmentSNBPForm, { type PtnJurusanOption } from "./AssessmentSNBPForm"
 export default async function AssessmentPage() {
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  const navbarProps = await getNavbarProps(session);
 
   if (session && session.role !== "student") {
     return (
       <div className="flex w-full flex-col">
-        <Navbar />
+        <Navbar {...navbarProps} />
         <main className="mx-auto flex min-h-[60vh] w-full max-w-[1760px] items-center justify-center px-5 py-20 sm:px-8 md:px-12 lg:px-20">
           <p className="max-w-md text-center text-lg text-[#7E7C7C]">
             Assessment Prediksi Masuk PTN khusus untuk akun Siswa. Ganti ke Mode Siswa lewat menu akun kalau
@@ -67,7 +69,7 @@ export default async function AssessmentPage() {
 
   return (
     <div className="flex w-full flex-col">
-      <Navbar />
+      <Navbar {...navbarProps} />
       <AssessmentSNBPForm ptnJurusanOptions={options} tahunData={tahunData} />
       <Footer />
     </div>

@@ -16,47 +16,66 @@ import {
   SettingIcon,
   LogoutIcon,
 } from "./sidebarIcons";
+import {
+  sidebarMenus,
+  sidebarBottomMenus,
+  type SidebarIconKey,
+  type SidebarRole,
+} from "./sidebarMenuConfig";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "600"] });
 
-type NavItem = {
-  label: string;
-  href: string;
-  icon: ComponentType<{ className?: string }>;
+const ICONS: Record<SidebarIconKey, ComponentType<{ className?: string }>> = {
+  dashboard: DashboardIcon,
+  assessment: AssessmentIcon,
+  kelas: KelasIcon,
+  tryout: TryoutIcon,
+  referral: ReferralIcon,
+  beasiswa: BeasiswaIcon,
+  "ai-mentor": AiMentorIcon,
+  setting: SettingIcon,
+  logout: LogoutIcon,
 };
 
-const belajarItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard/siswa", icon: DashboardIcon },
-  { label: "Assessment Prediksi PTN", href: "/dashboard/siswa/assessment", icon: AssessmentIcon },
-  { label: "Kelas Saya", href: "/dashboard/siswa/kelas", icon: KelasIcon },
-  { label: "Try Out", href: "/dashboard/siswa/tryout", icon: TryoutIcon },
-];
-
-const lainnyaItems: NavItem[] = [
-  { label: "Referral & Poin", href: "/dashboard/siswa/referral", icon: ReferralIcon },
-  { label: "Beasiswa & Event", href: "/dashboard/siswa/beasiswa", icon: BeasiswaIcon },
-  { label: "AI Mentor", href: "/dashboard/siswa/ai-mentor", icon: AiMentorIcon },
-];
-
 function isActive(pathname: string, href: string) {
-  if (href === "/dashboard/siswa") return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function NavRow({
-  item,
+  icon,
+  label,
+  href,
   active,
+  locked,
   onNavigate,
 }: {
-  item: NavItem;
+  icon: SidebarIconKey;
+  label: string;
+  href: string;
   active: boolean;
+  locked?: boolean;
   onNavigate?: () => void;
 }) {
-  const Icon = item.icon;
+  const Icon = ICONS[icon];
+
+  if (locked) {
+    return (
+      <div
+        aria-disabled="true"
+        title="Tersedia setelah akun disetujui Admin"
+        className="flex w-full cursor-not-allowed items-center gap-2.5 rounded-lg px-3 py-2.5 text-[#b3b1b1]"
+      >
+        <Icon className="size-5 shrink-0" />
+        <span className="text-sm leading-[1.4] font-normal tracking-[-0.2px] whitespace-nowrap">
+          {label}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <Link
-      href={item.href}
+      href={href}
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 transition-colors ${
@@ -69,7 +88,7 @@ function NavRow({
           active ? "font-semibold" : "font-normal"
         }`}
       >
-        {item.label}
+        {label}
       </span>
     </Link>
   );
@@ -80,12 +99,17 @@ function Divider() {
 }
 
 type SidebarProps = {
+  role: SidebarRole;
+  /** BR-27: true kalau UserRole Mentor sesi ini berstatus 'pending'. */
+  mentorPending?: boolean;
   isOpen?: boolean;
   onClose?: () => void;
 };
 
-export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
+export default function Sidebar({ role, mentorPending = false, isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const groups = sidebarMenus[role];
+  const bottomItems = sidebarBottomMenus[role];
 
   return (
     <>
@@ -120,50 +144,40 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
         <div className="flex w-full flex-1 flex-col justify-between overflow-y-auto">
           <div className="flex w-full flex-col gap-2">
-            <div className="flex flex-col gap-2">
-              <p className="text-sm leading-[1.4] tracking-[-0.2px] text-[#7e7c7c]">Belajar</p>
-              <nav className="flex w-full flex-col items-start gap-1">
-                {belajarItems.map((item) => (
-                  <NavRow
-                    key={item.href}
-                    item={item}
-                    active={isActive(pathname, item.href)}
-                    onNavigate={onClose}
-                  />
-                ))}
-              </nav>
-            </div>
-
-            <Divider />
-
-            <div className="flex w-full flex-col gap-2">
-              <p className="text-sm leading-[1.4] tracking-[-0.2px] text-[#7e7c7c]">Lainnya</p>
-              <nav className="flex w-full flex-col items-start gap-1">
-                {lainnyaItems.map((item) => (
-                  <NavRow
-                    key={item.href}
-                    item={item}
-                    active={isActive(pathname, item.href)}
-                    onNavigate={onClose}
-                  />
-                ))}
-              </nav>
-            </div>
+            {groups.map((group, index) => (
+              <div key={group.group} className="flex w-full flex-col gap-2">
+                {index > 0 ? <Divider /> : null}
+                <p className="text-sm leading-[1.4] tracking-[-0.2px] text-[#7e7c7c]">{group.group}</p>
+                <nav className="flex w-full flex-col items-start gap-1">
+                  {group.items.map((item) => (
+                    <NavRow
+                      key={item.href}
+                      icon={item.icon}
+                      label={item.label}
+                      href={item.href}
+                      active={isActive(pathname, item.href)}
+                      locked={mentorPending && item.lockedForPendingMentor}
+                      onNavigate={onClose}
+                    />
+                  ))}
+                </nav>
+              </div>
+            ))}
           </div>
 
           <div className="flex w-full flex-col">
             <Divider />
             <nav className="flex w-full flex-col items-start gap-1 pt-1">
-              <NavRow
-                item={{ label: "Pengaturan", href: "/dashboard/siswa/pengaturan", icon: SettingIcon }}
-                active={isActive(pathname, "/dashboard/siswa/pengaturan")}
-                onNavigate={onClose}
-              />
-              <NavRow
-                item={{ label: "Keluar", href: "/logout", icon: LogoutIcon }}
-                active={false}
-                onNavigate={onClose}
-              />
+              {bottomItems.map((item) => (
+                <NavRow
+                  key={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  href={item.href}
+                  active={item.icon === "logout" ? false : isActive(pathname, item.href)}
+                  onNavigate={onClose}
+                />
+              ))}
             </nav>
           </div>
         </div>

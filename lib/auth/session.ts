@@ -12,6 +12,14 @@ export { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "./session-constant
 
 export type SessionRole = "student" | "mentor" | "admin";
 
+// Dipakai login route (redirect setelah login) & tiap dashboard/{role}/page.tsx
+// (guard supaya role session lain tidak bisa buka dashboard role lain lewat URL).
+export const ROLE_DASHBOARD_PATH: Record<SessionRole, string> = {
+  student: "/dashboard/siswa",
+  mentor: "/dashboard/mentor",
+  admin: "/dashboard/admin",
+};
+
 export interface SessionPayload {
   userId: string;
   role: SessionRole;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { verifyPassword } from "@/lib/auth/password";
 import {
+  ROLE_DASHBOARD_PATH,
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SECONDS,
   createSessionToken,
@@ -26,12 +27,6 @@ import { linkPendingAssessment } from "@/lib/assessment/linkPendingAssessment";
 // jalur email valid. Mencegah timing attack yang bisa dipakai menebak email terdaftar.
 const DUMMY_PASSWORD_HASH =
   "scrypt$64ca0d48f328da570f514640165fae25$99f29c8dfb118c5193589c2a43ca9bdf12b851ec69e1d6892f6a9ecde68b71f7140160227d7c576cf0964d8943b8d8535ae666b85e936553851b0eeae325b29f";
-
-const ROLE_DASHBOARD_PATH: Record<SessionRole, string> = {
-  student: "/dashboard/siswa",
-  mentor: "/dashboard/mentor",
-  admin: "/dashboard/admin",
-};
 
 interface LoginRequestBody {
   email: string;
