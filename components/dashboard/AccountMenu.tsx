@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import Avatar from "@/components/ui/Avatar";
-import Modal from "@/components/ui/Modal";
-import Button from "@/components/ui/Button";
+import LogoutConfirmModal from "@/components/shared/LogoutConfirmModal";
 import { DashboardIcon, KelasIcon, LogoutIcon, SettingIcon } from "./sidebarIcons";
 import { NotificationIcon } from "./headerIcons";
 
@@ -163,33 +162,7 @@ export default function AccountMenu({
         ) : null}
       </div>
 
-      <Modal open={logoutConfirmOpen} onClose={() => setLogoutConfirmOpen(false)}>
-        <div className="flex flex-col items-center gap-5 text-center">
-          <p className="text-lg font-semibold text-black">Apakah kamu yakin ingin keluar?</p>
-          <div className="flex w-full gap-3">
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              className="flex-1"
-              onClick={() => setLogoutConfirmOpen(false)}
-            >
-              Tidak
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              className="flex-1"
-              onClick={() => {
-                window.location.href = "/api/auth/logout";
-              }}
-            >
-              Iya, Yakin
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <LogoutConfirmModal open={logoutConfirmOpen} onClose={() => setLogoutConfirmOpen(false)} />
     </div>
   );
 }

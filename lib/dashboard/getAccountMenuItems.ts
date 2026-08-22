@@ -21,7 +21,7 @@ export function getAccountMenuItems(
   const items: AccountMenuItem[] = [
     { label: "Profil", href: "/profil", icon: "profil" },
     { label: "Dashboard", href: `/dashboard/${slug}`, icon: "dashboard" },
-    { label: "Pengaturan", href: `/pengaturan/${slug}`, icon: "pengaturan" },
+    { label: "Pengaturan", href: "/pengaturan", icon: "pengaturan" },
   ];
 
   if (role === "student" && canApplyMentor) {

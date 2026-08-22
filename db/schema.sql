@@ -93,10 +93,32 @@ CREATE TABLE users (
     kode_referral TEXT UNIQUE,                    -- generate otomatis saat akun dibuat (FR-R1)
     referral_click_count INT NOT NULL DEFAULT 0,  -- jumlah klik link referral (FR-R3)
     avatar_url TEXT,
+    notif_email BOOLEAN NOT NULL DEFAULT true,
+    notif_wa BOOLEAN NOT NULL DEFAULT true,
+    permintaan_hapus_akun BOOLEAN NOT NULL DEFAULT false,
+    alasan_hapus_akun TEXT,
+    tanggal_permintaan_hapus TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_users_provinsi ON users(provinsi_id);
+
+CREATE TYPE notifikasi_tipe AS ENUM (
+    'approval_mentor', 'materi_baru', 'konten_review', 'sistem'
+);
+
+CREATE TABLE notifikasi (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tipe notifikasi_tipe NOT NULL,
+    judul VARCHAR(255) NOT NULL,
+    pesan TEXT,
+    link_tujuan TEXT,              -- URL relatif untuk diarahkan saat diklik
+    dibaca BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_notifikasi_user ON notifikasi(user_id, dibaca);
 
 -- Field mapel_tersulit (array Student, FR onboarding Langkah 3) dinormalisasi jadi join table
 CREATE TABLE user_mapel_tersulit (
