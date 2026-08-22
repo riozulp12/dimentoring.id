@@ -15,6 +15,7 @@ import type { AccountMenuItem } from "@/components/dashboard/AccountMenu";
 export interface NavbarSessionProps {
   isLoggedIn: boolean;
   firstName?: string;
+  fullName?: string;
   avatarUrl?: string | null;
   menuItems?: AccountMenuItem[];
   mentorStatus?: "pending";
@@ -31,6 +32,7 @@ export async function getNavbarProps(session: SessionPayload | null): Promise<Na
   return {
     isLoggedIn: true,
     firstName: accountData.firstName,
+    fullName: accountData.fullName,
     avatarUrl: accountData.avatarUrl,
     menuItems: getAccountMenuItems(session.role, accountData.canApplyMentor),
     mentorStatus: mentorStatus === "pending" ? "pending" : undefined,

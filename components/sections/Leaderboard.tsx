@@ -17,7 +17,7 @@ export default function Leaderboard() {
   return (
     <section className="flex w-full flex-col items-center gap-10 bg-[#081EEA] px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:flex-row lg:items-center lg:gap-10 lg:px-12 lg:py-16 min-[1440px]:gap-16 min-[1440px]:px-16 min-[1920px]:gap-[120px] min-[1920px]:px-[164px]">
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center sm:gap-5 lg:items-start lg:text-left">
-        <h4 className="text-2xl leading-[1.5] font-semibold tracking-[-0.48px] text-white sm:text-[32px] sm:tracking-[-0.64px] lg:text-[40px] lg:tracking-[-0.8px]">
+        <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-white sm:text-xl">
           Belajar Jadi Seru dengan Referral & Leaderboard
         </h4>
         <p className="text-lg leading-[1.5] tracking-[-0.36px] text-white">

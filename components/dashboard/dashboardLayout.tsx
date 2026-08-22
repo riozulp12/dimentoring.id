@@ -12,6 +12,7 @@ type DashboardLayoutProps = {
   /** BR-27: true kalau UserRole Mentor sesi ini berstatus 'pending'. */
   mentorPending?: boolean;
   firstName: string;
+  fullName: string;
   avatarUrl: string | null;
   menuItems: AccountMenuItem[];
   children: React.ReactNode;
@@ -21,31 +22,46 @@ function DashboardChrome({
   role,
   mentorPending = false,
   firstName,
+  fullName,
   avatarUrl,
   menuItems,
   children,
 }: DashboardLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Mobile: drawer show/hide penuh. Desktop: collapse ke icon-only. Satu
+  // tombol hamburger men-toggle KEDUANYA sekaligus — aman karena efek
+  // masing-masing state di-scope lewat breakpoint Tailwind (lg:) di
+  // Sidebar/Header, jadi toggle "collapsed" tidak berdampak apa pun di
+  // mobile dan toggle "mobileOpen" tidak berdampak apa pun di desktop.
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const { title } = usePageTitle();
+
+  function handleMenuClick() {
+    setMobileOpen((prev) => !prev);
+    setCollapsed((prev) => !prev);
+  }
 
   return (
     <div className="min-h-screen">
       <Sidebar
         role={role}
         mentorPending={mentorPending}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        isOpen={mobileOpen}
+        collapsed={collapsed}
+        onClose={() => setMobileOpen(false)}
       />
       <Header
         title={title}
-        onMenuClick={() => setSidebarOpen(true)}
+        onMenuClick={handleMenuClick}
+        collapsed={collapsed}
         firstName={firstName}
+        fullName={fullName}
         avatarUrl={avatarUrl}
         menuItems={menuItems}
         mentorStatus={mentorPending ? "pending" : undefined}
       />
 
-      <main className="min-h-screen min-w-0 pt-14 lg:pl-64">
+      <main className={`min-h-screen min-w-0 pt-20 transition-[padding] duration-200 ${collapsed ? "lg:pl-20" : "lg:pl-64"}`}>
         {children}
       </main>
     </div>
@@ -56,6 +72,7 @@ export default function DashboardLayout({
   role,
   mentorPending,
   firstName,
+  fullName,
   avatarUrl,
   menuItems,
   children,
@@ -66,6 +83,7 @@ export default function DashboardLayout({
         role={role}
         mentorPending={mentorPending}
         firstName={firstName}
+        fullName={fullName}
         avatarUrl={avatarUrl}
         menuItems={menuItems}
       >

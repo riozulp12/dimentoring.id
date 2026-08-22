@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import Logo from "../ui/Logo";
 
 interface SocialLink {
@@ -96,7 +97,9 @@ export default function Footer() {
     <footer className="flex w-full flex-col gap-10 bg-[#F9F9F9] px-5 pt-12 pb-8 shadow-[0px_-2px_4px_0px_rgba(0,0,0,0.1)] sm:px-8 md:px-12 lg:px-20 lg:pt-20 lg:pb-10">
       <div className="flex w-full flex-col items-center gap-10 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col items-center gap-8 sm:gap-12 lg:gap-[75px]">
-          <Logo variant="primary" mark="full" className="h-12 w-auto sm:h-16 lg:h-[88px]" />
+          <Link href="/" aria-label="Ke landing page" className="flex items-center">
+            <Logo variant="primary" mark="full" className="h-12 w-auto sm:h-16 lg:h-[88px]" />
+          </Link>
           <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 lg:gap-12">
             {SOCIAL_LINKS.map((social) => (
               <a

@@ -278,7 +278,13 @@ function RegisterPageInner() {
   // anonim" (redirect dari /assessment ke /daftar?pending_assessment=[id]),
   // teruskan id ini ke API supaya assessment ditautkan ke akun baru.
   const pendingAssessmentId = searchParams.get("pending_assessment");
-  const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  // FR-R2/PRD 7.1: klik link referral (/r/[kode]) redirect ke sini dengan
+  // ?ref=[kode] — pre-fill field Kode Referral di Langkah Terakhir, tapi
+  // tetap bisa diedit/dihapus user (bukan read-only).
+  const [form, setForm] = useState<FormState>(() => ({
+    ...INITIAL_FORM,
+    kodeReferral: searchParams.get("ref")?.trim() ?? "",
+  }));
   const [stepIndex, setStepIndex] = useState(0);
   const [attempted, setAttempted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);

@@ -9,7 +9,7 @@ export default function Statement() {
           className="pointer-events-none h-[140px] w-auto select-none sm:h-[200px] lg:absolute lg:top-8 lg:left-6 lg:h-[260px] min-[1440px]:top-11 min-[1440px]:left-8 min-[1440px]:h-[380px]"
         />
         <div className="flex flex-col gap-3 sm:gap-4 lg:gap-[14px] lg:py-8 lg:pr-10 lg:pl-[320px] min-[1440px]:gap-[18px] min-[1440px]:py-10 min-[1440px]:pr-16 min-[1440px]:pl-[476px]">
-          <h4 className="text-[28px] leading-[1.5] font-semibold tracking-[-0.56px] text-black">
+          <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black sm:text-xl">
             Tidak Semua{" "}
             <span className="text-[#081EEA]">Perjalanan Belajarmu</span> Sama
             dengan Temanmu

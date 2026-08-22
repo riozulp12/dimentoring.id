@@ -87,10 +87,10 @@ function AccordionSection({
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-3 px-5 py-5 text-left sm:gap-4 sm:px-10 sm:py-8 lg:px-16"
       >
-        <span className="min-w-0 flex-1 text-lg font-semibold leading-[1.5] tracking-[-0.02em] text-[#081EEA] sm:text-2xl lg:text-[28px]">
+        <span className="min-w-0 flex-1 text-lg font-semibold leading-[1.5] tracking-[-0.02em] text-[#081EEA] sm:text-xl">
           {title}
           {subtitle ? (
-            <span className="ml-2 text-sm font-normal text-[#7E7C7C] sm:text-lg lg:text-xl">{subtitle}</span>
+            <span className="ml-2 text-sm font-normal text-[#7E7C7C] sm:text-base">{subtitle}</span>
           ) : null}
         </span>
         <Image
@@ -111,26 +111,26 @@ function AccordionSection({
 function PilihanCard({ pilihan, label }: { pilihan: PilihanCardData; label: string }) {
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
-      <span className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-2xl">{label}</span>
+      <span className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">{label}</span>
       <div className="flex w-full flex-col gap-5 rounded-[20px] border border-[#CAC9C9] bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-8 sm:py-5">
         <div className="flex flex-col gap-2 sm:gap-3">
-          <p className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-2xl">
+          <p className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">
             {pilihan.jenjang} {pilihan.namaJurusan}
           </p>
-          <p className="text-xl font-semibold tracking-[-0.02em] text-[#081EEA] sm:text-2xl">
+          <p className="text-lg font-semibold tracking-[-0.02em] text-[#081EEA] sm:text-xl">
             {pilihan.namaUniversitas}
           </p>
         </div>
         <div className="flex gap-6 sm:gap-10 lg:gap-16">
           <div className="flex flex-col items-center gap-2 sm:gap-4">
-            <p className="text-sm text-[#7E7C7C] sm:text-lg lg:text-xl">Keketatan</p>
-            <p className={`text-center text-lg font-semibold tracking-[-0.02em] sm:text-2xl ${labelColorClass(pilihan.keketatanLabel)}`}>
+            <p className="text-sm text-[#7E7C7C] sm:text-base">Keketatan</p>
+            <p className={`text-center text-base font-semibold tracking-[-0.02em] sm:text-lg ${labelColorClass(pilihan.keketatanLabel)}`}>
               {formatNilai(pilihan.keketatanScore)}% - {pilihan.keketatanLabel}
             </p>
           </div>
           <div className="flex flex-col items-center gap-2 sm:gap-4">
-            <p className="text-sm text-[#7E7C7C] sm:text-lg lg:text-xl">Peluang</p>
-            <p className={`text-center text-lg font-semibold tracking-[-0.02em] sm:text-2xl ${labelColorClass(pilihan.peluangLabel)}`}>
+            <p className="text-sm text-[#7E7C7C] sm:text-base">Peluang</p>
+            <p className={`text-center text-base font-semibold tracking-[-0.02em] sm:text-lg ${labelColorClass(pilihan.peluangLabel)}`}>
               {formatNilai(pilihan.peluangScore)} - {pilihan.peluangLabel}
             </p>
           </div>
@@ -244,7 +244,7 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
             <PilihanCard key={pilihan.urutanPilihan} pilihan={pilihan} label={`Pilihan ${pilihan.urutanPilihan}`} />
           ))
         ) : (
-          <p className="text-base text-[#7E7C7C] sm:text-xl">Belum ada rekomendasi tersedia untuk saat ini</p>
+          <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada rekomendasi tersedia untuk saat ini</p>
         )}
       </AccordionSection>
 
@@ -254,7 +254,7 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
         onToggle={() => toggle("rekomendasiKelas")}
       >
         {!data.isLoggedInOwner ? (
-          <p className="text-base text-[#7E7C7C] sm:text-xl">
+          <p className="text-base text-[#7E7C7C] sm:text-lg">
             Login untuk lihat rekomendasi kelas personal berdasarkan mapel tersulitmu.
           </p>
         ) : data.kelasRekomendasi.length > 0 ? (
@@ -265,7 +265,7 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
                 className="flex flex-col gap-4 rounded-[20px] border border-[#CAC9C9] bg-white px-5 py-4 sm:px-6 sm:py-5"
               >
                 <p className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">{kelas.nama}</p>
-                <p className="text-xl font-semibold tracking-[-0.02em] text-[#081EEA] sm:text-2xl">
+                <p className="text-lg font-semibold tracking-[-0.02em] text-[#081EEA] sm:text-xl">
                   {formatRupiah(kelas.harga)}
                 </p>
                 <Link href={`/kelas/${kelas.id}`} className="self-start">
@@ -275,7 +275,7 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
             ))}
           </div>
         ) : (
-          <p className="text-base text-[#7E7C7C] sm:text-xl">
+          <p className="text-base text-[#7E7C7C] sm:text-lg">
             Belum ada rekomendasi kelas yang cocok dengan mapel tersulitmu saat ini.
           </p>
         )}
@@ -313,7 +313,7 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
             ))}
           </div>
         ) : (
-          <p className="text-base text-[#7E7C7C] sm:text-xl">Belum ada paket tryout yang relevan saat ini.</p>
+          <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada paket tryout yang relevan saat ini.</p>
         )}
       </AccordionSection>
 

@@ -10,11 +10,17 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: ButtonSize;
 }
 
+/**
+ * Design Audit: teks tombol/CTA dikunci 14-16px (bukan tumbuh sampai 24px di
+ * breakpoint besar seperti sebelumnya) — beda ukuran variant sekarang murni
+ * dari padding, bukan font-size, supaya CTA tidak lebih besar dari body text
+ * biasa (kecuali hero landing page, yang tetap pakai size="md" seperti biasa).
+ */
 const SIZE_STYLES: Record<ButtonSize, string> = {
-  sm: "px-5 py-2 text-sm sm:text-base tracking-[-0.32px]",
-  md: "px-6 py-2 sm:px-7 sm:py-2.5 lg:px-8 text-base sm:text-lg lg:text-xl tracking-[-0.4px]",
-  lg: "px-6 py-2.5 sm:px-7 lg:px-8 text-lg sm:text-xl lg:text-2xl tracking-[-0.48px]",
-  xl: "px-6 py-3 sm:px-7 sm:py-4 lg:px-8 lg:py-5 text-lg sm:text-xl lg:text-2xl tracking-[-0.48px]",
+  sm: "px-5 py-2 text-sm tracking-[-0.32px]",
+  md: "px-6 py-2 sm:px-7 sm:py-2.5 lg:px-8 text-sm sm:text-base tracking-[-0.4px]",
+  lg: "px-6 py-2.5 sm:px-7 lg:px-8 text-base tracking-[-0.48px]",
+  xl: "px-6 py-3 sm:px-7 sm:py-4 lg:px-8 lg:py-5 text-base tracking-[-0.48px]",
 };
 
 const VARIANT_STYLES: Record<ButtonVariant, string> = {

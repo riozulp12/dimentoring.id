@@ -50,6 +50,7 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
       role={role}
       mentorPending={mentorPending}
       firstName={accountData.firstName}
+      fullName={accountData.fullName}
       avatarUrl={accountData.avatarUrl}
       menuItems={menuItems}
     >

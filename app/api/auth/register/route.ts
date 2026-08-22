@@ -266,6 +266,19 @@ export async function POST(request: NextRequest) {
     return errorResponse("Gagal menyimpan role akun. Coba lagi nanti.", 500);
   }
 
+  // ---- Insert gamifikasi_profiles (FR-R1: setiap akun butuh "tabungan" poin
+  // referral sejak awal, Student maupun Mentor) — total_poin default 0 lewat
+  // kolom DB, jadi cukup insert user_id-nya.
+  const { error: gamifikasiError } = await supabaseServer
+    .from("gamifikasi_profiles")
+    .insert({ user_id: userId });
+
+  if (gamifikasiError) {
+    console.error("[register] insert gamifikasi_profiles failed:", gamifikasiError);
+    await rollbackUser();
+    return errorResponse("Gagal menyiapkan profil gamifikasi. Coba lagi nanti.", 500);
+  }
+
   // ---- Data role-spesifik ----
   if (body.role === "mentor") {
     const { data: mentorProfile, error: mentorProfileError } = await supabaseServer

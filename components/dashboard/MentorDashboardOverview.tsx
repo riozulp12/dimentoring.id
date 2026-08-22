@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Inter } from "next/font/google";
 import type { MentorKelasSiswaProgress, MentorKelasTerdaftar, MentorStats } from "@/lib/mentor/dashboardData";
 import type { BeasiswaEventItem } from "@/lib/dashboard/getInfoBeasiswaEvent";
+import { formatJadwal } from "@/lib/shared/formatJadwal";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"] });
 
@@ -83,16 +84,6 @@ function ProgressBar({ persen }: { persen: number }) {
   );
 }
 
-function formatJadwal(jadwal: unknown): string {
-  if (!jadwal || typeof jadwal !== "object") return "Jadwal belum diatur";
-  const j = jadwal as Record<string, unknown>;
-  const hari = typeof j.hari === "string" ? j.hari : null;
-  const jamMulai = typeof j.jam_mulai === "string" ? j.jam_mulai : null;
-  if (hari && jamMulai) return `${hari}, ${jamMulai} WIB`;
-  if (hari) return hari;
-  return "Jadwal belum diatur";
-}
-
 function LockedMengajarNotice() {
   return (
     <Card className="items-center gap-3 border-amber-200 bg-amber-50 text-center">
@@ -116,7 +107,7 @@ export default function MentorDashboardOverview({
       className={`${inter.className} mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:gap-10 lg:p-10`}
     >
       <div className="flex flex-col gap-1 sm:gap-2">
-        <h1 className="text-2xl font-semibold tracking-[-0.02em] text-black sm:text-3xl lg:text-[32px]">
+        <h1 className="text-2xl font-semibold tracking-[-0.02em] text-black sm:text-3xl">
           Haloo Kak {mentorName} 👋
         </h1>
         <p className="text-base text-black">Terus dampingi siswa binaanmu menuju PTN impian</p>
@@ -143,7 +134,7 @@ export default function MentorDashboardOverview({
           </div>
 
           <Card className="gap-5 sm:gap-6">
-            <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-[28px]">
+            <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">
               Progress Siswa Binaan
             </h3>
             {progressByKelas.length === 0 ? (
@@ -176,7 +167,7 @@ export default function MentorDashboardOverview({
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-10">
             <Card className="gap-4 sm:gap-5">
-              <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-[28px]">
+              <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">
                 Kelas Terdaftar
               </h3>
               {kelasTerdaftar.length === 0 ? (
@@ -197,7 +188,7 @@ export default function MentorDashboardOverview({
             </Card>
 
             <Card className="gap-4 sm:gap-5">
-              <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-[28px]">
+              <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">
                 Info Beasiswa & Event
               </h3>
               {beasiswaEvent.length === 0 ? (

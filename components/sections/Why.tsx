@@ -37,7 +37,7 @@ export default function Why() {
   return (
     <section className="flex w-full flex-col items-center gap-8 px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:gap-12 lg:px-[120px] lg:py-16">
       <div className="flex w-[643px] max-w-full flex-col items-center gap-3 text-center sm:gap-5">
-        <h4 className="text-2xl leading-[1.5] font-semibold tracking-[-0.48px] text-black sm:text-[32px] sm:tracking-[-0.64px] lg:text-[40px] lg:tracking-[-0.8px]">
+        <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black sm:text-xl">
           Kenapa Harus <span className="text-[#081EEA]">Dimentoring</span>?
         </h4>
         <p className="text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">

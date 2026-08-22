@@ -19,14 +19,14 @@ export function getAccountMenuItems(
 ): AccountMenuItem[] {
   const slug = ROLE_URL_SLUG[role];
   const items: AccountMenuItem[] = [
-    { label: "Profil", href: `/profil/${slug}` },
-    { label: "Pengaturan", href: `/pengaturan/${slug}` },
+    { label: "Profil", href: `/profil/${slug}`, icon: "profil" },
+    { label: "Pengaturan", href: `/pengaturan/${slug}`, icon: "pengaturan" },
   ];
 
   if (role === "student" && canApplyMentor) {
-    items.push({ label: "Jadi Mentor", href: "/jadi-mentor" });
+    items.push({ label: "Jadi Mentor", href: "/jadi-mentor", icon: "jadi-mentor" });
   }
 
-  items.push({ label: "Logout", href: "/api/auth/logout" });
+  items.push({ label: "Logout", href: "/api/auth/logout", icon: "logout" });
   return items;
 }

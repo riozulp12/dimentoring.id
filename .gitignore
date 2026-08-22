@@ -43,3 +43,6 @@ next-env.d.ts
 # claude code local state (per-user settings, stray agent worktrees)
 .claude/settings.local.json
 .claude/worktrees/
+
+# scratch/seed scripts for local QA testing (not part of the product)
+_tmp_seed_qa.mjs

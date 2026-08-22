@@ -422,7 +422,20 @@ Catatan interpretatif/motivasional 2-4 kalimat, digenerate sekali oleh Gemini AP
 
 ## 7.5 Kelas Bimbingan Belajar (per Kelas & Subtes)
 
-Struktur konten hierarkis: Kelas → Subtes → Topik → Sesi/Materi. Subtes mengikuti struktur resmi: Tes Potensi Skolastik (Penalaran Umum, Pemahaman Bacaan & Menulis, Pengetahuan & Pemahaman Umum, Pengetahuan Kuantitatif) dan Tes Literasi (Literasi B. Indonesia, Literasi B. Inggris, Penalaran Matematika), plus TKA per mata pelajaran wajib & elektif. Live session terjadwal tetap dikelola manual mentor (link Meet, dst — lihat Bagian 7.5.2 kalau nanti dibutuhkan). Admin assign mentor ke kelas berdasarkan **Subtes yang Diampu** yang diisi mentor saat onboarding (Bagian 7.0.2).
+Struktur konten hierarkis: Kelas → Subtes → Topik → Sesi/Materi. Subtes mengikuti struktur resmi: Tes Potensi Skolastik (Penalaran Umum, Pemahaman Bacaan & Menulis, Pengetahuan & Pemahaman Umum, Pengetahuan Kuantitatif) dan Tes Literasi (Literasi B. Indonesia, Literasi B. Inggris, Penalaran Matematika), plus TKA per mata pelajaran wajib & elektif. Live session terjadwal tetap dikelola manual mentor (link Meet, dst — lihat Bagian 7.5.2 kalau nanti dibutuhkan). Admin assign mentor ke kelas berdasarkan **Subtes yang Diampu** yang diisi mentor saat onboarding (Bagian 7.0.2). Setiap Kelas punya `tipe_kelas` (`private`/`semi_private`/`grouping`) yang menentukan persentase honor mentor (lihat 7.5.3).
+
+### 7.5.3 Honor Mentor — **BARU (rumus resmi, sebelumnya placeholder)**
+
+**Rumus:** `Honor = Harga Kelas × Persentase (sesuai tipe_kelas) / 100`, dihitung per siswa yang enrollment-nya `status_pembayaran='lunas'` di kelas itu (bukan flat per kelas — kalau kelas grouping isinya 5 siswa, honornya dihitung dari 5 pembayaran, bukan 1).
+
+**Persentase (dikonfigurasi di tabel `honor_persentase_config`, bukan hardcode kode — Admin bisa ubah lewat Table Editor tanpa perlu developer redeploy):**
+- **Private**: 65%
+- **Semi-Private**: 65%
+- **Grouping** (termasuk Small Group, Reguler, dan varian kelas grup lain): 50%
+
+Prinsip ini konsisten dengan pembelajaran bisnis Dimentoring dari awal: **persentase, bukan flat Rupiah** — supaya margin tetap konsisten meski ada diskon/promo yang mengubah harga akhir kelas.
+
+**Ketergantungan:** Angka honor ini baru **benar-benar terisi** setelah Payment dibangun (status `lunas` di enrollments baru bisa tercapai lewat webhook Payment yang sukses). Sebelum itu, total honor akan selalu tampil Rp 0 — bukan bug, memang belum ada data pembayaran sungguhan.
 
 ### 7.5.1 Materi Belajar — **DIREVISI: bisa AI-generated ATAU upload manual mentor, dipercepat ke Fase 1**
 
@@ -447,6 +460,7 @@ Field `materi.konten` (TEXT) menampung ketiganya tanpa perlu skema berbeda — t
 ---
 
 ## 7.6 Sistem Tryout (Free & Premium)
+
 
 Tryout Gratis (soal terbatas, funnel akuisisi) dan Tryout Premium (bank soal lengkap, model kuota per paket) untuk TKA & SNBT di Fase 1; Jalur Mandiri per PTN di Fase 3.
 
@@ -749,8 +763,8 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 
 # BAGIAN 13 — DATA MODEL (Diperluas & Direvisi)
 
-- **User** — id, nama, email, no_wa, password_hash, **status_verifikasi_akun** (`Unverified`/`Verified` — status akun keseluruhan, terpisah dari status per-role), sub_status (Student: `calon_mahasiswa`/`mahasiswa`), sekolah_id (relasi ke `Sekolah`, khusus Student), kota_id, provinsi_id, nama_panggilan, **avatar_url** (baru — URL foto profil, NULL default karena fitur upload foto belum dibangun; Navbar/Header tampilkan avatar default kalau NULL), consent_leaderboard_lokasi, opt_out_leaderboard, **mapel_tersulit** (array, khusus Student), dibuat_pada. *(Field `role` tunggal DIHAPUS dari User — digantikan `UserRole` di bawah, agar satu akun bisa memegang lebih dari satu role.)*
-- **UserRole (baru)** — id, user_id, role_type (`Student`/`Mentor`/`Admin`), status (`Active`/`Pending`/`Rejected`), dibuat_pada, **sumber_pengajuan** (`register_publik`/`upgrade_dari_akun_existing`). Satu `user_id` dapat memiliki lebih dari satu baris dengan status `Active` sekaligus — dasar teknis fitur Role Switcher (FR-1.12) tanpa duplikasi akun.
+- **User** — id, nama, email, no_wa, password_hash, **status_verifikasi_akun** (`Unverified`/`Verified` — status akun keseluruhan, terpisah dari status per-role), sub_status (Student: `calon_mahasiswa`/`mahasiswa`), sekolah_id (relasi ke `Sekolah`, khusus Student), kota_id, provinsi_id, nama_panggilan, consent_leaderboard_lokasi, opt_out_leaderboard, **mapel_tersulit** (array, khusus Student), dibuat_pada. *(Field `role` tunggal DIHAPUS dari User — digantikan `UserRole` di bawah, agar satu akun bisa memegang lebih dari satu role.)*
+- **UserRole (baru)** — id, user_id, role_type (`Student`/`Mentor`/`Admin`), status (`Active`/`Pending`/`Rejected`), dibuat_pada, **sumber_pengajuan** (`register_publik`/`upgrade_dari_akun_existing`), **direview_oleh_id** (FK ke `User` — Admin yang approve/reject, NULL selama `Pending`), **tanggal_review**, **alasan_tolak** (opsional, cuma relevan kalau status `Rejected`) — log audit approval Mentor (BR-2, Bagian 11 Auditability). Satu `user_id` dapat memiliki lebih dari satu baris dengan status `Active` sekaligus — dasar teknis fitur Role Switcher (FR-1.12) tanpa duplikasi akun.
 - **Sekolah** — id, nama, kota_id, **akreditasi**, **kuota_snbp**, **ranking_data** (jika tersedia) — sumber data untuk auto-fill input SNBP (BR-16).
 - **MentorProfile** — id, user_id, asal_ptn, semester, jurusan, **subtes_diampu** (array, hasil checklist onboarding), kelas_diampu (relasi ke Kelas). *(Status approval kini ada di `UserRole.status`, bukan field terpisah di sini, agar konsisten dengan role lain.)*
 - **VerificationToken (baru)** — id, user_id, token, channel (`wa`/`email`), expired_at, used_at.

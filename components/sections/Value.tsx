@@ -27,10 +27,10 @@ export default function Value() {
             <div className="hidden h-[100px] w-0 border-l-2 border-[#E3E3E3] min-[1440px]:block" />
           )}
           <div className="relative flex h-28 w-full shrink-0 flex-col items-center justify-center gap-0.5 rounded-[16px] border-[0.8px] border-[#CAC9C9] bg-white px-3 sm:h-32 sm:rounded-[20px] lg:h-28 min-[1440px]:h-[132px] min-[1440px]:!w-[300px]">
-            <p className="w-full min-w-0 text-center text-2xl leading-[1.5] font-semibold tracking-[-0.36px] text-[#081EEA] sm:text-[28px] lg:text-[32px]">
+            <p className="w-full min-w-0 text-center text-3xl leading-[1.5] font-semibold tracking-[-0.36px] text-[#081EEA] sm:text-4xl">
               {formatCount(item.count)}
             </p>
-            <p className="w-full min-w-0 text-center text-lg leading-[1.5] tracking-[-0.36px] text-black">
+            <p className="w-full min-w-0 text-center text-base leading-[1.5] tracking-[-0.36px] text-black">
               {item.label}
             </p>
             <Mascot

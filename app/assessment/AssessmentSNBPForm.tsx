@@ -84,10 +84,10 @@ function AccordionSection({
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-3 px-5 py-5 text-left sm:gap-4 sm:px-10 sm:py-8 lg:px-16"
       >
-        <span className="min-w-0 flex-1 text-lg font-semibold leading-[1.5] tracking-[-0.02em] text-[#081EEA] sm:text-2xl lg:text-[28px]">
+        <span className="min-w-0 flex-1 text-lg font-semibold leading-[1.5] tracking-[-0.02em] text-[#081EEA] sm:text-xl">
           {title}
           {subtitle ? (
-            <span className="ml-2 text-sm font-normal text-black sm:text-xl lg:text-2xl">{subtitle}</span>
+            <span className="ml-2 text-sm font-normal text-black sm:text-base">{subtitle}</span>
           ) : null}
         </span>
         <Image
@@ -215,10 +215,10 @@ export default function AssessmentSNBPForm({
     <main className="mx-auto flex w-full max-w-[1760px] flex-col gap-8 px-5 py-8 sm:gap-10 sm:px-8 sm:py-12 md:px-12 lg:gap-12 lg:px-20 lg:py-16 min-[1440px]:gap-14">
       <header className="flex flex-col gap-4 sm:gap-5">
         <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold leading-[1.5] tracking-[-0.02em] text-[#081EEA] sm:text-[32px] lg:text-[40px]">
+          <h1 className="text-2xl font-semibold leading-[1.5] tracking-[-0.02em] text-[#081EEA] sm:text-3xl">
             Assessment Prediksi Masuk PTN
           </h1>
-          <p className="text-base text-[#7E7C7C] sm:text-xl lg:text-2xl">
+          <p className="text-base text-[#7E7C7C] sm:text-lg">
             Pilih jalur yang ingin kamu cek peluangnya
           </p>
         </div>
@@ -233,7 +233,7 @@ export default function AssessmentSNBPForm({
                 onClick={() => setActiveTab(tab.key)}
                 aria-pressed={isActive}
                 className={[
-                  "rounded-[12px] px-5 py-2 text-sm font-medium tracking-[-0.02em] drop-shadow-[2px_2px_0px_black] transition-colors sm:px-8 sm:py-3 sm:text-xl",
+                  "rounded-[12px] px-5 py-2 text-sm font-medium tracking-[-0.02em] drop-shadow-[2px_2px_0px_black] transition-colors sm:px-8 sm:py-3 sm:text-base",
                   isActive ? "bg-[#081EEA] text-white" : "border border-[#7E7C7C] bg-white text-[#7E7C7C]",
                 ].join(" ")}
               >
@@ -244,7 +244,7 @@ export default function AssessmentSNBPForm({
         </div>
 
         <div className="flex w-full items-center gap-4 rounded-[24px] border border-[#FDD803] bg-[#FFF5BA] px-5 py-4 sm:gap-6 sm:rounded-[32px] sm:px-8">
-          <p className="min-w-0 flex-1 text-sm leading-[1.5] tracking-[-0.02em] text-[#988101] sm:text-xl lg:text-2xl">
+          <p className="min-w-0 flex-1 text-sm leading-[1.5] tracking-[-0.02em] text-[#988101] sm:text-base">
             <span className="font-semibold">Disclaimer: </span>
             Hasil ini adalah estimasi berbasis data keketatan historis (tahun data: {tahunData ?? "-"}), bukan
             jaminan kelulusan. Kebijakan kampus & jumlah peminat tahun berjalan bisa berubah.
@@ -256,7 +256,7 @@ export default function AssessmentSNBPForm({
       {activeTab !== "snbp" ? (
         <section className="flex min-h-[240px] w-full flex-col items-center justify-center gap-4 rounded-[32px] border-[0.6px] border-[#E3E3E3] bg-white px-5 py-12 text-center shadow-[1px_2px_4px_rgba(0,0,0,0.1)] sm:min-h-[320px] sm:py-20">
           <Mascot variant="Confuse" alt="" className="h-24 w-auto sm:h-32" />
-          <p className="text-xl font-semibold text-[#081EEA] sm:text-2xl">Segera Hadir</p>
+          <p className="text-lg font-semibold text-[#081EEA] sm:text-xl">Segera Hadir</p>
           <p className="max-w-md text-base text-[#7E7C7C] sm:text-lg">
             Assessment {activeTab === "snbt" ? "SNBT" : "Jalur Mandiri"} masih dalam pengembangan. Coba tab SNBP
             dulu, ya.
@@ -265,10 +265,10 @@ export default function AssessmentSNBPForm({
       ) : (
         <section className="flex flex-col gap-6 sm:gap-8">
           <div className="flex flex-col gap-2">
-            <h2 className="text-xl font-semibold leading-[1.5] tracking-[-0.02em] text-[#081EEA] sm:text-[32px]">
+            <h2 className="text-lg font-semibold leading-[1.5] tracking-[-0.02em] text-[#081EEA] sm:text-xl">
               Assesment Prediksi SNBP
             </h2>
-            <p className="text-base text-[#7E7C7C] sm:text-xl lg:text-2xl">Jalur nilai raport dan prestasi</p>
+            <p className="text-base text-[#7E7C7C] sm:text-lg">Jalur nilai raport dan prestasi</p>
           </div>
 
           <div className="flex flex-col gap-6 sm:gap-10">
@@ -287,7 +287,7 @@ export default function AssessmentSNBPForm({
                     <div key={key} className="flex flex-col gap-3">
                       <label
                         htmlFor={`nilai-${key}`}
-                        className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-2xl"
+                        className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg"
                       >
                         {label}
                       </label>
@@ -322,7 +322,7 @@ export default function AssessmentSNBPForm({
                 <div className="flex flex-col gap-3">
                   <label
                     htmlFor="jenis-prestasi"
-                    className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-2xl"
+                    className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg"
                   >
                     Jenis Prestasi
                   </label>
@@ -339,7 +339,7 @@ export default function AssessmentSNBPForm({
                 <div className="flex flex-col gap-3">
                   <label
                     htmlFor="juara-berapa"
-                    className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-2xl"
+                    className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg"
                   >
                     Juara Berapa?
                   </label>
@@ -356,7 +356,7 @@ export default function AssessmentSNBPForm({
                 <div className="flex flex-col gap-3">
                   <label
                     htmlFor="tingkat-kejuaraan"
-                    className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-2xl"
+                    className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg"
                   >
                     Tingkat Kejuaraan
                   </label>
@@ -386,7 +386,7 @@ export default function AssessmentSNBPForm({
             >
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-3">
-                  <span className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-2xl">
+                  <span className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">
                     Pilihan 1
                   </span>
                   <span className="text-sm text-[#E70A0A] sm:text-base">*Wajib</span>
@@ -395,7 +395,7 @@ export default function AssessmentSNBPForm({
                   <div className="flex flex-col gap-3">
                     <label
                       htmlFor="pilihan1-universitas"
-                      className="text-lg font-normal tracking-[-0.02em] text-black sm:text-xl lg:text-2xl"
+                      className="text-base font-normal tracking-[-0.02em] text-black sm:text-lg"
                     >
                       Universitas
                     </label>
@@ -413,7 +413,7 @@ export default function AssessmentSNBPForm({
                   <div className="flex flex-col gap-3">
                     <label
                       htmlFor="pilihan1-jurusan"
-                      className="text-lg font-normal tracking-[-0.02em] text-black sm:text-xl lg:text-2xl"
+                      className="text-base font-normal tracking-[-0.02em] text-black sm:text-lg"
                     >
                       Jurusan
                     </label>
@@ -434,14 +434,14 @@ export default function AssessmentSNBPForm({
 
               {showPilihan2 ? (
                 <div className="flex flex-col gap-4">
-                  <span className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-2xl">
+                  <span className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">
                     Pilihan 2
                   </span>
                   <div className="grid grid-cols-1 gap-4 sm:pl-4">
                     <div className="flex flex-col gap-3">
                       <label
                         htmlFor="pilihan2-universitas"
-                        className="text-lg font-normal tracking-[-0.02em] text-black sm:text-xl lg:text-2xl"
+                        className="text-base font-normal tracking-[-0.02em] text-black sm:text-lg"
                       >
                         Universitas
                       </label>
@@ -458,7 +458,7 @@ export default function AssessmentSNBPForm({
                     <div className="flex flex-col gap-3">
                       <label
                         htmlFor="pilihan2-jurusan"
-                        className="text-lg font-normal tracking-[-0.02em] text-black sm:text-xl lg:text-2xl"
+                        className="text-base font-normal tracking-[-0.02em] text-black sm:text-lg"
                       >
                         Jurusan
                       </label>

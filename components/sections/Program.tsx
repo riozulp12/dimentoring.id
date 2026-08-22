@@ -1,12 +1,14 @@
 import Mascot, { type MascotVariant } from "@/components/ui/Mascot";
 
-interface ProgramItem {
+export interface ProgramItem {
   title: string;
   description: string;
   mascot: MascotVariant;
 }
 
-const PROGRAMS: ProgramItem[] = [
+/** Diekspor supaya dropdown "Program" di Navbar (components/ui/Navbar.tsx)
+ * bisa reuse data yang sama persis — jangan duplikasi daftar program. */
+export const PROGRAMS: ProgramItem[] = [
   {
     title: "TKA",
     description: "Kelas Mapel Wajib & Pilihan",
@@ -31,9 +33,12 @@ const PROGRAMS: ProgramItem[] = [
 
 export default function Program() {
   return (
-    <section className="flex w-full flex-col items-center gap-10 bg-[#081EEA] px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:flex-row lg:items-center lg:justify-between lg:gap-16 lg:px-[120px] lg:py-16">
+    <section
+      id="program"
+      className="flex w-full scroll-mt-24 flex-col items-center gap-10 bg-[#081EEA] px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:flex-row lg:items-center lg:justify-between lg:gap-16 lg:px-[120px] lg:py-16 min-[1440px]:scroll-mt-32"
+    >
       <div className="flex w-[585px] max-w-full flex-col items-center gap-3 text-center sm:gap-5 lg:items-start lg:text-left">
-        <h4 className="text-2xl leading-[1.5] font-semibold tracking-[-0.48px] text-white sm:text-[32px] sm:tracking-[-0.64px] lg:text-[40px] lg:tracking-[-0.8px]">
+        <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-white sm:text-xl">
           Program & Kelas Dimentoring
         </h4>
         <p className="text-lg leading-[1.5] tracking-[-0.36px] text-white">

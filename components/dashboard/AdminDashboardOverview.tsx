@@ -90,7 +90,7 @@ export default function AdminDashboardOverview({
       className={`${inter.className} mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:gap-10 lg:p-10`}
     >
       <div className="flex flex-col gap-1 sm:gap-2">
-        <h1 className="text-2xl font-semibold tracking-[-0.02em] text-black sm:text-3xl lg:text-[32px]">
+        <h1 className="text-2xl font-semibold tracking-[-0.02em] text-black sm:text-3xl">
           Haloo {adminName} 👋
         </h1>
         <p className="text-base text-black">Ringkasan operasional Dimentoring hari ini</p>
@@ -115,15 +115,20 @@ export default function AdminDashboardOverview({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-10">
         <Card className="gap-5 sm:gap-6 lg:col-span-2">
-          <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-[28px]">
-            Antrian Approval Mentor
-          </h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">
+              Antrian Approval Mentor
+            </h3>
+            <Link href="/approval-mentor" className="shrink-0 text-sm font-medium text-[#081EEA]">
+              Lihat Semua
+            </Link>
+          </div>
           <ApprovalMentorList items={mentorPengajuan} />
         </Card>
 
         <div className="flex flex-col gap-6 lg:gap-10">
           <Card className="gap-4 sm:gap-5">
-            <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-[28px]">
+            <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">
               Pendaftaran Siswa Terbaru
             </h3>
             {siswaTerbaru.length === 0 ? (
@@ -144,7 +149,7 @@ export default function AdminDashboardOverview({
           </Card>
 
           <Card className="gap-4 sm:gap-5">
-            <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl lg:text-[28px]">
+            <h3 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">
               Konten AI Menunggu Review
             </h3>
             {kontenAiPreview.length === 0 ? (

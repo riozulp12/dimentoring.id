@@ -12,6 +12,8 @@ type Action = "setujui" | "tolak";
 interface ApprovalMentorBody {
   userRoleId: string;
   action: Action;
+  /** Opsional, cuma dipakai kalau action='tolak' — boleh dikosongkan. */
+  alasan?: string;
 }
 
 function errorResponse(message: string, status: number) {
@@ -57,9 +59,17 @@ export async function POST(request: NextRequest) {
     return errorResponse("Pengajuan ini sudah diproses sebelumnya.", 409);
   }
 
+  const tanggalReview = new Date().toISOString();
+  const alasanTolak = body.action === "tolak" ? (body.alasan?.trim() || null) : null;
+
   const { error: updateError } = await supabaseServer
     .from("user_roles")
-    .update({ status: body.action === "setujui" ? "active" : "rejected" })
+    .update({
+      status: body.action === "setujui" ? "active" : "rejected",
+      direview_oleh_id: session.userId,
+      tanggal_review: tanggalReview,
+      alasan_tolak: alasanTolak,
+    })
     .eq("id", body.userRoleId);
 
   if (updateError) {
@@ -67,5 +77,5 @@ export async function POST(request: NextRequest) {
     return errorResponse("Gagal menyimpan keputusan. Coba lagi nanti.", 500);
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, tanggalReview, alasanTolak });
 }

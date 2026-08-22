@@ -9,6 +9,8 @@ import type { SessionRole } from "@/lib/auth/session";
 
 export interface AccountMenuData {
   firstName: string;
+  /** Nama lengkap — dipakai item "Profil" di dropdown akun (beda dari firstName di label navbar). */
+  fullName: string;
   avatarUrl: string | null;
   /** Cuma relevan untuk role 'student' — lihat FR-1.9. */
   canApplyMentor: boolean;
@@ -37,9 +39,11 @@ export async function getAccountMenuData(userId: string, role: SessionRole): Pro
 
   const nama = userRes.data?.nama ?? "";
   const firstName = nama.trim().split(/\s+/)[0] || "Pengguna";
+  const fullName = nama.trim() || "Pengguna";
 
   return {
     firstName,
+    fullName,
     avatarUrl: userRes.data?.avatar_url ?? null,
     canApplyMentor,
   };

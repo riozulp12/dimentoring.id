@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getSiswaDashboardData } from "@/lib/dashboard/getSiswaDashboardData";
+import { getUserDisplayName } from "@/lib/dashboard/getUserDisplayName";
 import PageTitle from "@/components/dashboard/PageTitle";
 import DashboardOverview from "@/components/dashboard/DashboardOverview";
 
@@ -16,12 +17,15 @@ export default async function StudentDashboard() {
     redirect(ROLE_DASHBOARD_PATH[session.role]);
   }
 
-  const data = await getSiswaDashboardData(session.userId);
+  const [userName, data] = await Promise.all([
+    getUserDisplayName(session.userId, "Kamu"),
+    getSiswaDashboardData(session.userId),
+  ]);
 
   return (
     <>
       <PageTitle value="Dashboard Siswa" />
-      <DashboardOverview {...data} />
+      <DashboardOverview userName={userName} {...data} />
     </>
   );
 }

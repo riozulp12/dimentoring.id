@@ -1,6 +1,8 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getInfoBeasiswaEvent } from "@/lib/dashboard/getInfoBeasiswaEvent";
+import { formatJadwal } from "@/lib/shared/formatJadwal";
+import { formatDeadline } from "@/lib/shared/formatDeadline";
 import type {
   InfoBeasiswaItem,
   KelasTerdaftarItem,
@@ -61,25 +63,6 @@ export function getBadgeTryout(skor: number): string {
 
 function formatKeketatanScore(score: number): string {
   return `${score.toFixed(2).replace(".", ",")}%`;
-}
-
-function formatDeadline(deadline: string | null): string {
-  if (!deadline) return "Tanpa deadline";
-  return new Date(deadline).toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function formatJadwal(jadwal: unknown): string {
-  if (!jadwal || typeof jadwal !== "object") return "Jadwal belum diatur";
-  const j = jadwal as Record<string, unknown>;
-  const hari = typeof j.hari === "string" ? j.hari : null;
-  const jamMulai = typeof j.jam_mulai === "string" ? j.jam_mulai : null;
-  if (hari && jamMulai) return `${hari}, ${jamMulai} WIB`;
-  if (hari) return hari;
-  return "Jadwal belum diatur";
 }
 
 /** 1. Target PTN — dari pilihan urutan_pilihan=1 di assessment TERBARU siswa. */

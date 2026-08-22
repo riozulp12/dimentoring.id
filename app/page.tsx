@@ -6,7 +6,9 @@ import Hero from "@/components/sections/Hero";
 import Value from "@/components/sections/Value";
 import Prediction, { type PtnJurusanCheckOption } from "@/components/sections/Prediction";
 import Why from "@/components/sections/Why";
+import InfoBeasiswa from "@/components/sections/InfoBeasiswa";
 import Program from "@/components/sections/Program";
+import TryoutCTA from "@/components/sections/TryoutCTA";
 import Mentor from "@/components/sections/Mentor";
 import Testimonial from "@/components/sections/Testimonial";
 import Leaderboard from "@/components/sections/Leaderboard";
@@ -47,7 +49,9 @@ export default async function Home() {
       <Value />
       <Prediction ptnJurusanOptions={ptnJurusanOptions} />
       <Why />
+      <InfoBeasiswa />
       <Program />
+      <TryoutCTA />
       <Mentor />
       <Testimonial />
       <Leaderboard />

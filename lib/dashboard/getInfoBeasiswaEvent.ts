@@ -2,9 +2,10 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 
 /**
- * Card "Info Beasiswa & Event" — dipakai Dashboard Siswa DAN Dashboard Mentor,
- * jadi query-nya sengaja ditaruh di satu tempat (bukan per-role) supaya tidak
- * ada kode duplikat. Konten tidak spesifik ke satu siswa/mentor.
+ * Card "Info Beasiswa & Event" — dipakai Dashboard Siswa, Dashboard Mentor,
+ * DAN section "Info Beasiswa & Internship" di landing page (PRD Bagian 4.3),
+ * jadi query-nya sengaja ditaruh di satu tempat (bukan per-role/per-halaman)
+ * supaya tidak ada kode duplikat. Konten tidak spesifik ke satu siswa/mentor.
  */
 
 export interface BeasiswaEventItem {
@@ -15,13 +16,18 @@ export interface BeasiswaEventItem {
   deadline: string | null;
 }
 
-export async function getInfoBeasiswaEvent(): Promise<BeasiswaEventItem[]> {
-  const { data, error } = await supabaseServer
+/** @param limit Batasi jumlah baris (mis. landing page cuma tampil 4 preview). Tanpa limit = semua data aktif (dashboard). */
+export async function getInfoBeasiswaEvent(limit?: number): Promise<BeasiswaEventItem[]> {
+  let query = supabaseServer
     .from("konten_info")
     .select("id, tipe, judul, deskripsi, deadline")
-    .in("tipe", ["beasiswa", "event"])
+    .in("tipe", ["beasiswa", "internship", "event"])
     .eq("status", "aktif")
     .order("deadline", { ascending: true, nullsFirst: false });
+
+  if (limit) query = query.limit(limit);
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("[getInfoBeasiswaEvent] query failed:", error);

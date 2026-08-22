@@ -32,7 +32,7 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
-        className="relative w-full max-w-md rounded-[24px] bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.2)] sm:p-8"
+        className="relative max-h-[85vh] w-full max-w-md overflow-y-auto rounded-[24px] bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.2)] sm:p-8"
       >
         <button
           type="button"

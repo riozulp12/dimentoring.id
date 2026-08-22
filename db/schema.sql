@@ -83,13 +83,16 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     status_verifikasi_akun status_verifikasi_akun NOT NULL DEFAULT 'unverified',
     sub_status sub_status_student,               -- NULL jika bukan Student
+    tingkat_kelas tingkat_kelas,                  -- Kelas 10/11/12/Gap Year, diisi saat onboarding (7.0.2 Langkah 2)
     sekolah_id UUID REFERENCES sekolah(id),       -- khusus Student
     kota_id UUID REFERENCES kota(id),
     provinsi_id UUID REFERENCES provinsi(id),
     nama_panggilan VARCHAR(50),                   -- dipakai di leaderboard (privasi anak)
-    avatar_url TEXT,                              -- NULL default; fitur upload foto profil belum dibangun (Navbar/Header pakai avatar default)
     consent_leaderboard_lokasi BOOLEAN NOT NULL DEFAULT false,
     opt_out_leaderboard BOOLEAN NOT NULL DEFAULT false,
+    kode_referral TEXT UNIQUE,                    -- generate otomatis saat akun dibuat (FR-R1)
+    referral_click_count INT NOT NULL DEFAULT 0,  -- jumlah klik link referral (FR-R3)
+    avatar_url TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -109,6 +112,9 @@ CREATE TABLE user_roles (
     role_type role_type NOT NULL,
     status role_status NOT NULL DEFAULT 'pending',
     sumber_pengajuan sumber_pengajuan_role NOT NULL DEFAULT 'register_publik',
+    direview_oleh_id UUID REFERENCES users(id),  -- Admin yang approve/reject (audit trail)
+    tanggal_review TIMESTAMPTZ,
+    alasan_tolak TEXT,                            -- opsional, diisi kalau status='rejected'
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (user_id, role_type)   -- satu user tidak boleh punya baris role_type ganda
 );
@@ -160,6 +166,7 @@ CREATE TABLE ptn_jurusan (
     jalur jalur_seleksi NOT NULL,
     sumber_data VARCHAR(100) NOT NULL,   -- 'snpmb.id' / 'input_manual_ptn'
     tahun_data INT NOT NULL,
+    rata_rata_nilai_diterima DECIMAL(5,2), -- data referensi tambahan, BUKAN input formula keketatan/peluang
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (nama_universitas, nama_jurusan, jenjang, jalur, tahun_data)
 );
@@ -211,19 +218,54 @@ CREATE INDEX idx_assessment_pilihan_assessment ON assessment_pilihan(assessment_
 -- KELAS BIMBINGAN & ENROLLMENT (Bagian 7.5)
 -- ============================================================================
 
+CREATE TYPE kelas_tipe AS ENUM ('private', 'semi_private', 'grouping');
+
 CREATE TABLE kelas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nama VARCHAR(255) NOT NULL,
     tingkat_kelas tingkat_kelas NOT NULL,
+    tipe_kelas kelas_tipe NOT NULL DEFAULT 'grouping',  -- dasar hitung persentase honor mentor
     subtes_id UUID NOT NULL REFERENCES subtes(id),
     mentor_id UUID REFERENCES users(id),   -- FK ke users yg role_type='mentor' aktif
     kapasitas INT NOT NULL,
     harga DECIMAL(12,2) NOT NULL DEFAULT 0,
+    -- Array of {hari, jam_mulai} — bisa lebih dari satu slot per minggu (mis.
+    -- Senin & Rabu). Data lama (satu object tunggal, bukan array) tetap
+    -- dibaca benar oleh lib/shared/formatJadwal.ts (backward-compatible).
     jadwal JSONB,
+    link_meet TEXT,                        -- link recurring statis per Kelas (bukan per siswa)
+    deskripsi TEXT,                        -- manual atau AI-generated, tampil di halaman detail kelas
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_kelas_mentor ON kelas(mentor_id);
+
+-- Konfigurasi persentase honor per tipe kelas — tabel terpisah (bukan hardcode
+-- di query) supaya Admin bisa ubah angkanya lewat Table Editor tanpa perlu
+-- developer redeploy kode. Persentase berlaku dari HARGA KELAS, bukan flat
+-- Rupiah (prinsip bisnis: margin konsisten meski ada diskon).
+CREATE TABLE honor_persentase_config (
+    tipe_kelas kelas_tipe PRIMARY KEY,
+    persentase DECIMAL(5,2) NOT NULL
+);
+
+INSERT INTO honor_persentase_config (tipe_kelas, persentase) VALUES
+    ('private', 65.00),
+    ('semi_private', 65.00),
+    ('grouping', 50.00);
+
+-- Lacak materi mana yang sudah "selesai" per siswa — dasar perhitungan
+-- enrollments.progres_persen (bukan angka manual yang mengambang)
+CREATE TABLE materi_progress (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    materi_id UUID NOT NULL REFERENCES materi(id) ON DELETE CASCADE,
+    selesai BOOLEAN NOT NULL DEFAULT false,
+    tanggal_selesai TIMESTAMPTZ,
+    UNIQUE (user_id, materi_id)
+);
+
+CREATE INDEX idx_materi_progress_user ON materi_progress(user_id);
 
 CREATE TABLE enrollments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

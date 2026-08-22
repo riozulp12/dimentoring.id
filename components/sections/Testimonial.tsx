@@ -65,9 +65,12 @@ export default function Testimonial() {
   const loopTestimonials = [...TESTIMONIALS, ...TESTIMONIALS, ...TESTIMONIALS];
 
   return (
-    <section className="flex w-full flex-col items-center gap-8 px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:gap-12 lg:px-20 lg:py-16">
+    <section
+      id="testimonial"
+      className="flex w-full scroll-mt-24 flex-col items-center gap-8 px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:gap-12 lg:px-20 lg:py-16 min-[1440px]:scroll-mt-32"
+    >
       <div className="flex flex-col items-center gap-3 text-center sm:gap-5">
-        <h4 className="text-2xl leading-[1.5] font-semibold tracking-[-0.48px] text-black sm:text-[32px] sm:tracking-[-0.64px] lg:text-[40px] lg:tracking-[-0.8px]">
+        <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black sm:text-xl">
           Kisah Sukses <span className="text-[#081EEA]">Dimentorian</span>
         </h4>
         <p className="text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">

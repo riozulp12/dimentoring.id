@@ -84,7 +84,7 @@ function CenteredMessageState({
       <Navbar {...navbarProps} />
       <main className="mx-auto flex min-h-[60vh] w-full max-w-[1760px] flex-col items-center justify-center gap-4 px-5 py-20 text-center sm:px-8 md:px-12 lg:px-20">
         <Mascot variant="Confuse" alt="" className="h-24 w-auto sm:h-32" />
-        <p className="text-xl font-semibold text-[#081EEA] sm:text-2xl">{title}</p>
+        <p className="text-lg font-semibold text-[#081EEA] sm:text-xl">{title}</p>
         <p className="max-w-md text-base text-[#7E7C7C] sm:text-lg">{description}</p>
       </main>
       <Footer />
@@ -265,14 +265,14 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
       <main className="mx-auto flex w-full max-w-[1760px] flex-col gap-8 px-5 py-8 sm:gap-10 sm:px-8 sm:py-12 md:px-12 lg:gap-12 lg:px-20 lg:py-16 min-[1440px]:gap-14">
         <header className="flex flex-col gap-4 sm:gap-5">
           <div className="flex flex-col gap-2">
-            <h1 className="text-2xl font-semibold leading-[1.5] tracking-[-0.02em] text-[#081EEA] sm:text-[32px] lg:text-[40px]">
+            <h1 className="text-2xl font-semibold leading-[1.5] tracking-[-0.02em] text-[#081EEA] sm:text-3xl">
               Hasil Assessment Prediksi SNBP
             </h1>
-            <p className="text-base text-[#7E7C7C] sm:text-xl lg:text-2xl">Jalur nilai raport dan prestasi</p>
+            <p className="text-base text-[#7E7C7C] sm:text-lg">Jalur nilai raport dan prestasi</p>
           </div>
 
           <div className="flex w-full items-center gap-4 rounded-[24px] border border-[#FDD803] bg-[#FFF5BA] px-5 py-4 sm:gap-6 sm:rounded-[32px] sm:px-8">
-            <p className="min-w-0 flex-1 text-sm leading-[1.5] tracking-[-0.02em] text-[#988101] sm:text-xl lg:text-2xl">
+            <p className="min-w-0 flex-1 text-sm leading-[1.5] tracking-[-0.02em] text-[#988101] sm:text-base">
               <span className="font-semibold">Disclaimer: </span>
               Hasil ini adalah estimasi berbasis data keketatan historis (tahun data: {tahunData ?? "-"}), bukan
               jaminan kelulusan. Kebijakan kampus & jumlah peminat tahun berjalan bisa berubah.

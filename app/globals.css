@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+html {
+  scroll-behavior: smooth;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -10,6 +14,33 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /*
+   * Skala tipografi terpusat (Design Audit) — REDEFINISI token font-size
+   * default Tailwind supaya SEMUA pemakaian `text-xs`/`text-lg`/`text-3xl`/dst.
+   * di seluruh app otomatis ikut skala baru ini, tanpa perlu edit satu-satu
+   * tiap komponen. Target skala:
+   *   - Body text (paragraf/deskripsi umum): 16px/1.5 → text-base (tidak diubah,
+   *     default Tailwind sudah pas). JANGAN pernah turun di bawah 14px (text-sm).
+   *   - Judul section/card (H2/H3): 18-20px semibold → text-lg / text-xl
+   *     (tidak diubah, default sudah pas 18/20px).
+   *   - Judul halaman (H1, <Header title="..."/> & hero-style heading): 24-26px
+   *     bold → text-2xl / text-3xl (3xl diturunkan dari 30px ke 26px).
+   *   - Angka besar stat card (Nilai Akhir, Honor, dsb.): maksimal 28-32px →
+   *     text-4xl diturunkan dari 36px ke 30px.
+   *   - Label kecil/badge (mis. "On Review", tanggal): 12-13px → text-xs
+   *     dinaikkan sedikit dari 12px ke 13px supaya tetap terbaca.
+   * Bracket value arbitrer (mis. `text-[40px]`) TIDAK terpengaruh redefinisi
+   * ini — sudah diganti manual ke kelas bernama di komponen terkait.
+   */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.4;
+  --text-3xl: 1.625rem;
+  --text-3xl--line-height: 1.3;
+  --text-4xl: 1.875rem;
+  --text-4xl--line-height: 1.25;
+  --text-5xl: 2rem;
+  --text-5xl--line-height: 1.2;
 }
 
 body {
