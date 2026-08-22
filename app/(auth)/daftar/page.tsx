@@ -6,6 +6,7 @@ import Link from "next/link";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import Mascot from "@/components/ui/Mascot";
+import ChecklistGrid from "@/components/ui/ChecklistGrid";
 
 /**
  * Register wizard — progressive profiling flow per PRD Bagian 7.0.2.
@@ -207,40 +208,6 @@ function ProgressBar({ total, current }: { total: number; current: number }) {
           ].join(" ")}
         />
       ))}
-    </div>
-  );
-}
-
-function ChecklistGrid({
-  options,
-  selected,
-  onToggle,
-}: {
-  options: string[];
-  selected: string[];
-  onToggle: (value: string) => void;
-}) {
-  return (
-    <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 lg:gap-3">
-      {options.map((option) => {
-        const isSelected = selected.includes(option);
-        return (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={isSelected}
-            onClick={() => onToggle(option)}
-            className={[
-              "rounded-[12px] border px-2.5 py-2 text-left text-xs leading-[1.4] tracking-[-0.02em] transition-colors sm:px-3 sm:py-2.5 sm:text-sm lg:px-4 lg:py-3 lg:text-base",
-              isSelected
-                ? "border-[#081EEA] bg-[#081EEA] font-medium text-white"
-                : "border-[#CAC9C9] bg-white text-black hover:border-[#081EEA]",
-            ].join(" ")}
-          >
-            {option}
-          </button>
-        );
-      })}
     </div>
   );
 }

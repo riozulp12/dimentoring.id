@@ -84,9 +84,9 @@ CREATE TABLE users (
     status_verifikasi_akun status_verifikasi_akun NOT NULL DEFAULT 'unverified',
     sub_status sub_status_student,               -- NULL jika bukan Student
     tingkat_kelas tingkat_kelas,                  -- Kelas 10/11/12/Gap Year, diisi saat onboarding (7.0.2 Langkah 2)
-    sekolah_id UUID REFERENCES sekolah(id),       -- khusus Student
+    nama_sekolah VARCHAR(255),                    -- DIREVISI: text bebas, bukan FK ke tabel sekolah (terlalu banyak sekolah untuk dipopulate satu-satu)
     kota_id UUID REFERENCES kota(id),
-    provinsi_id UUID REFERENCES provinsi(id),
+    provinsi_id UUID REFERENCES provinsi(id),     -- WAJIB diisi untuk Student — dasar validasi BR-28 (aturan provinsi SNBP), bukan lagi lewat sekolah→kota→provinsi
     nama_panggilan VARCHAR(50),                   -- dipakai di leaderboard (privasi anak)
     consent_leaderboard_lokasi BOOLEAN NOT NULL DEFAULT false,
     opt_out_leaderboard BOOLEAN NOT NULL DEFAULT false,
@@ -96,7 +96,7 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_users_sekolah ON users(sekolah_id);
+CREATE INDEX idx_users_provinsi ON users(provinsi_id);
 
 -- Field mapel_tersulit (array Student, FR onboarding Langkah 3) dinormalisasi jadi join table
 CREATE TABLE user_mapel_tersulit (
@@ -166,7 +166,6 @@ CREATE TABLE ptn_jurusan (
     jalur jalur_seleksi NOT NULL,
     sumber_data VARCHAR(100) NOT NULL,   -- 'snpmb.id' / 'input_manual_ptn'
     tahun_data INT NOT NULL,
-    rata_rata_nilai_diterima DECIMAL(5,2), -- data referensi tambahan, BUKAN input formula keketatan/peluang
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (nama_universitas, nama_jurusan, jenjang, jalur, tahun_data)
 );
@@ -229,12 +228,9 @@ CREATE TABLE kelas (
     mentor_id UUID REFERENCES users(id),   -- FK ke users yg role_type='mentor' aktif
     kapasitas INT NOT NULL,
     harga DECIMAL(12,2) NOT NULL DEFAULT 0,
-    -- Array of {hari, jam_mulai} — bisa lebih dari satu slot per minggu (mis.
-    -- Senin & Rabu). Data lama (satu object tunggal, bukan array) tetap
-    -- dibaca benar oleh lib/shared/formatJadwal.ts (backward-compatible).
-    jadwal JSONB,
+    deskripsi TEXT,                        -- manual atau AI-generated, tampil di detail kelas
+    jadwal JSONB,                          -- array of {hari, jam} — mendukung lebih dari satu slot
     link_meet TEXT,                        -- link recurring statis per Kelas (bukan per siswa)
-    deskripsi TEXT,                        -- manual atau AI-generated, tampil di halaman detail kelas
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -439,6 +435,27 @@ CREATE TABLE ai_mentor_logs (
     eskalasi_bool BOOLEAN NOT NULL DEFAULT false,
     dibuat_pada TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Data kampanye iklan (BARU) — input MANUAL oleh Admin, karena belum ada
+-- integrasi API ke Meta/TikTok Ads Manager (dianggap belum perlu di Fase 1)
+CREATE TYPE platform_iklan AS ENUM ('meta', 'tiktok', 'lainnya');
+
+CREATE TABLE campaign_data (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama_campaign VARCHAR(255) NOT NULL,
+    platform platform_iklan NOT NULL,
+    periode_mulai DATE NOT NULL,
+    periode_selesai DATE NOT NULL,
+    biaya DECIMAL(12,2),
+    reach INT,
+    klik INT,
+    leads_dihasilkan INT,          -- estimasi manual Admin, dari data Ads Manager
+    catatan TEXT,
+    dicatat_oleh_id UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_campaign_data_periode ON campaign_data(periode_mulai, periode_selesai);
 
 CREATE TYPE konten_sumber AS ENUM ('ai_generated', 'upload_mentor');
 

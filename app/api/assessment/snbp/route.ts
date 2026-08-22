@@ -19,10 +19,11 @@ import {
  * Assessment SNBP API — PRD Bagian 7.4.1b/7.4.2/7.4.4 (FR-3.1–FR-3.10),
  * Bagian 8 BR-4, BR-5, BR-16, BR-28, BR-29.
  *
- * BR-16: data Sekolah (akreditasi/kuota/provinsi) diambil otomatis dari profil
- * user, TIDAK diminta ulang lewat body request.
+ * BR-16 (direvisi): Provinsi diambil otomatis dari users.provinsi_id (diisi di
+ * halaman Profil), TIDAK diminta ulang lewat body request. Nama Sekolah sudah
+ * jadi teks bebas dan tidak lagi dipakai untuk validasi provinsi manapun.
  * BR-28/FR-3.10: maksimal 2 pilihan prodi; kalau 2 DAN sudah login, minimal
- * satu wajib berada di provinsi yang sama dengan sekolah asal siswa.
+ * satu wajib berada di provinsi yang sama dengan users.provinsi_id siswa.
  * BR-29/7.4.1b: login OPSIONAL. Anonim (trial cookie) boleh isi & submit
  * form, validasi provinsi DILEWATI (belum ada data sekolah), dan dibatasi
  * 2x lihat hasil lengkap gratis (lintas jalur digabung) — submit ke-3 dst
@@ -160,21 +161,16 @@ export async function POST(request: NextRequest) {
   }
   const resolvedPilihan = orderedPilihan as NonNullable<(typeof orderedPilihan)[number]>[];
 
-  // ---- Ambil data Sekolah user secara OTOMATIS (BR-16) — HANYA kalau login.
-  // Anonim belum py profil sekolah sama sekali, jadi dilewati (7.4.1b). ----
-  let sekolahSnapshot: {
-    sekolahId: string;
-    namaSekolah: string;
-    akreditasi: string | null;
-    kuotaSnbp: number | null;
-    provinsiId: string;
-    provinsiNama: string;
-  } | null = null;
+  // ---- Ambil Provinsi siswa secara OTOMATIS (BR-16/BR-28 DIREVISI) — langsung
+  // dari users.provinsi_id (diisi di halaman Profil), BUKAN lagi diturunkan
+  // lewat sekolah->kota->provinsi. HANYA relevan kalau login — anonim belum
+  // punya profil sama sekali, jadi dilewati (7.4.1b). ----
+  let provinsiSiswa: { id: string; nama: string } | null = null;
 
   if (userId) {
     const { data: userRow, error: userError } = await supabaseServer
       .from("users")
-      .select("id, sekolah_id")
+      .select("id, provinsi_id, provinsi:provinsi_id(id, nama)")
       .eq("id", userId)
       .maybeSingle();
 
@@ -183,58 +179,25 @@ export async function POST(request: NextRequest) {
       return errorResponse("Gagal memuat profil kamu. Coba lagi nanti.", 500);
     }
 
-    if (userRow.sekolah_id) {
-      const { data: sekolahRow, error: sekolahError } = await supabaseServer
-        .from("sekolah")
-        .select("id, nama, akreditasi, kuota_snbp, kota_id")
-        .eq("id", userRow.sekolah_id)
-        .maybeSingle();
-
-      if (sekolahError) {
-        console.error("[assessment/snbp] query sekolah failed:", sekolahError);
-        return errorResponse("Gagal memuat data sekolah kamu. Coba lagi nanti.", 500);
-      }
-
-      if (sekolahRow) {
-        const { data: kotaRow, error: kotaError } = await supabaseServer
-          .from("kota")
-          .select("id, provinsi_id, provinsi:provinsi_id(id, nama)")
-          .eq("id", sekolahRow.kota_id)
-          .maybeSingle();
-
-        if (kotaError) {
-          console.error("[assessment/snbp] query kota failed:", kotaError);
-          return errorResponse("Gagal memuat data lokasi sekolah kamu. Coba lagi nanti.", 500);
-        }
-
-        const provinsi = kotaRow?.provinsi as unknown as { id: string; nama: string } | null;
-        if (kotaRow && provinsi) {
-          sekolahSnapshot = {
-            sekolahId: sekolahRow.id as string,
-            namaSekolah: sekolahRow.nama as string,
-            akreditasi: (sekolahRow.akreditasi as string | null) ?? null,
-            kuotaSnbp: (sekolahRow.kuota_snbp as number | null) ?? null,
-            provinsiId: provinsi.id,
-            provinsiNama: provinsi.nama,
-          };
-        }
-      }
+    const provinsi = userRow.provinsi as unknown as { id: string; nama: string } | null;
+    if (userRow.provinsi_id && provinsi) {
+      provinsiSiswa = provinsi;
     }
   }
 
   // ---- FR-3.10/BR-28(b): kalau 2 pilihan DAN sudah login, minimal satu wajib
-  // satu provinsi dengan sekolah. Anonim: dilewati total (7.4.1b/BR-29). ----
+  // satu provinsi dengan Profil siswa. Anonim: dilewati total (7.4.1b/BR-29). ----
   if (userId && resolvedPilihan.length === 2) {
-    if (!sekolahSnapshot) {
+    if (!provinsiSiswa) {
       return errorResponse(
-        "Data sekolah kamu belum lengkap di profil, jadi sistem tidak bisa memvalidasi Pilihan Kedua. Lengkapi dulu profil sekolah kamu, atau isi 1 pilihan saja.",
+        "Lengkapi Provinsi di halaman Profil dulu sebelum isi Assessment dengan 2 pilihan.",
         400,
       );
     }
-    const salahSatuSeprovinsi = resolvedPilihan.some((p) => p.provinsi_id === sekolahSnapshot!.provinsiId);
+    const salahSatuSeprovinsi = resolvedPilihan.some((p) => p.provinsi_id === provinsiSiswa!.id);
     if (!salahSatuSeprovinsi) {
       return errorResponse(
-        `Salah satu pilihan harus berada di PTN provinsi ${sekolahSnapshot.provinsiNama}`,
+        `Salah satu pilihan harus berada di PTN provinsi ${provinsiSiswa.nama}.`,
         400,
       );
     }
@@ -271,7 +234,7 @@ export async function POST(request: NextRequest) {
       nilai_prestasi: nilaiPrestasi,
       nilai_akhir: nilaiAkhir,
       nilai_akhir_label: nilaiAkhirLabel,
-      hasil_breakdown: { sekolah: sekolahSnapshot },
+      hasil_breakdown: { provinsi: provinsiSiswa },
     })
     .select("id")
     .single();
