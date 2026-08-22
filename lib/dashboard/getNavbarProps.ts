@@ -19,6 +19,8 @@ export interface NavbarSessionProps {
   avatarUrl?: string | null;
   menuItems?: AccountMenuItem[];
   mentorStatus?: "pending";
+  /** Level gamifikasi referral (mis. "Rookie Referrer") — ditampilkan di item "Profil" dropdown akun. */
+  referralLevel?: string | null;
 }
 
 export async function getNavbarProps(session: SessionPayload | null): Promise<NavbarSessionProps> {
@@ -36,5 +38,6 @@ export async function getNavbarProps(session: SessionPayload | null): Promise<Na
     avatarUrl: accountData.avatarUrl,
     menuItems: getAccountMenuItems(session.role, accountData.canApplyMentor),
     mentorStatus: mentorStatus === "pending" ? "pending" : undefined,
+    referralLevel: accountData.referralLevel,
   };
 }

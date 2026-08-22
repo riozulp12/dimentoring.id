@@ -33,6 +33,8 @@ export interface AccountMenuProps {
   menuItems: AccountMenuItem[];
   /** BR-27/PRD 12.2: badge "On Review" untuk Mentor dengan UserRole.status = 'pending'. */
   mentorStatus?: "pending";
+  /** Level gamifikasi referral (mis. "Rookie Referrer") — ditampilkan di bawah nama pada item "Profil". */
+  referralLevel?: string | null;
   onNotificationClick?: () => void;
 }
 
@@ -57,6 +59,7 @@ export default function AccountMenu({
   avatarUrl,
   menuItems,
   mentorStatus,
+  referralLevel,
   onNotificationClick,
 }: AccountMenuProps) {
   const [open, setOpen] = useState(false);
@@ -114,7 +117,12 @@ export default function AccountMenu({
                     className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-gray-50"
                   >
                     <Avatar avatarUrl={avatarUrl} nama={fullName} size="sm" />
-                    <span className="min-w-0 truncate text-sm font-medium text-black">{fullName}</span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="min-w-0 truncate text-sm font-medium text-black">{fullName}</span>
+                      {referralLevel ? (
+                        <span className="min-w-0 truncate text-xs text-[#7E7C7C]">{referralLevel}</span>
+                      ) : null}
+                    </span>
                   </Link>
                 );
               }
@@ -129,9 +137,9 @@ export default function AccountMenu({
                       setOpen(false);
                       setLogoutConfirmOpen(true);
                     }}
-                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-black transition-colors hover:bg-gray-50"
+                    className="group flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-black transition-colors hover:bg-red-50 hover:text-red-600"
                   >
-                    <LogoutIcon className="size-4 shrink-0 text-[#7e7c7c]" />
+                    <LogoutIcon className="size-4 shrink-0 text-[#7e7c7c] group-hover:text-red-600" />
                     {item.label}
                   </button>
                 );

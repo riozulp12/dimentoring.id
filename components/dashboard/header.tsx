@@ -16,6 +16,8 @@ type HeaderProps = {
   menuItems: AccountMenuItem[];
   /** BR-27/PRD 12.2: badge "On Review" untuk Mentor dengan UserRole.status = 'pending'. */
   mentorStatus?: "pending";
+  /** Level gamifikasi referral (mis. "Rookie Referrer") — ditampilkan di item "Profil" dropdown akun. */
+  referralLevel?: string | null;
 };
 
 export default function Header({
@@ -27,6 +29,7 @@ export default function Header({
   avatarUrl,
   menuItems,
   mentorStatus,
+  referralLevel,
 }: HeaderProps) {
   return (
     <header
@@ -60,6 +63,7 @@ export default function Header({
         avatarUrl={avatarUrl}
         menuItems={menuItems}
         mentorStatus={mentorStatus}
+        referralLevel={referralLevel}
       />
     </header>
   );

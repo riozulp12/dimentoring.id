@@ -15,6 +15,8 @@ type DashboardLayoutProps = {
   fullName: string;
   avatarUrl: string | null;
   menuItems: AccountMenuItem[];
+  /** Level gamifikasi referral (mis. "Rookie Referrer") — ditampilkan di item "Profil" dropdown akun. */
+  referralLevel?: string | null;
   children: React.ReactNode;
 };
 
@@ -25,6 +27,7 @@ function DashboardChrome({
   fullName,
   avatarUrl,
   menuItems,
+  referralLevel,
   children,
 }: DashboardLayoutProps) {
   // Mobile: drawer show/hide penuh. Desktop: collapse ke icon-only. Satu
@@ -59,6 +62,7 @@ function DashboardChrome({
         avatarUrl={avatarUrl}
         menuItems={menuItems}
         mentorStatus={mentorPending ? "pending" : undefined}
+        referralLevel={referralLevel}
       />
 
       <main className={`min-h-screen min-w-0 pt-20 transition-[padding] duration-200 ${collapsed ? "lg:pl-20" : "lg:pl-64"}`}>
@@ -75,6 +79,7 @@ export default function DashboardLayout({
   fullName,
   avatarUrl,
   menuItems,
+  referralLevel,
   children,
 }: DashboardLayoutProps) {
   return (
@@ -86,6 +91,7 @@ export default function DashboardLayout({
         fullName={fullName}
         avatarUrl={avatarUrl}
         menuItems={menuItems}
+        referralLevel={referralLevel}
       >
         {children}
       </DashboardChrome>

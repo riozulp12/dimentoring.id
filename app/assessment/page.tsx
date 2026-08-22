@@ -28,7 +28,7 @@ export default async function AssessmentPage() {
   if (session && session.role !== "student") {
     return (
       <div className="flex w-full flex-col">
-        <Navbar {...navbarProps} />
+        <Navbar activeItem="cek-peluang" {...navbarProps} />
         <main className="mx-auto flex min-h-[60vh] w-full max-w-[1760px] items-center justify-center px-5 py-20 sm:px-8 md:px-12 lg:px-20">
           <p className="max-w-md text-center text-lg text-[#7E7C7C]">
             Assessment Prediksi Masuk PTN khusus untuk akun Siswa. Ganti ke Mode Siswa lewat menu akun kalau
@@ -69,7 +69,7 @@ export default async function AssessmentPage() {
 
   return (
     <div className="flex w-full flex-col">
-      <Navbar {...navbarProps} />
+      <Navbar activeItem="cek-peluang" {...navbarProps} />
       <AssessmentSNBPForm ptnJurusanOptions={options} tahunData={tahunData} />
       <Footer />
     </div>

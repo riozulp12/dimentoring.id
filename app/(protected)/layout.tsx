@@ -53,6 +53,7 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
       fullName={accountData.fullName}
       avatarUrl={accountData.avatarUrl}
       menuItems={menuItems}
+      referralLevel={accountData.referralLevel}
     >
       {children}
     </DashboardLayout>

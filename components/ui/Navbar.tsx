@@ -20,6 +20,8 @@ export interface NavbarProps {
   menuItems?: AccountMenuItem[];
   /** BR-27 / PRD Bagian 12.2: badge "On Review" untuk Mentor status UserRole.status = 'pending'. */
   mentorStatus?: "pending";
+  /** Level gamifikasi referral (mis. "Rookie Referrer") — ditampilkan di item "Profil" dropdown akun. */
+  referralLevel?: string | null;
   onLoginClick?: () => void;
   onRegisterClick?: () => void;
   onNotificationClick?: () => void;
@@ -193,6 +195,7 @@ export default function Navbar({
   avatarUrl = null,
   menuItems = [],
   mentorStatus,
+  referralLevel,
   onLoginClick,
   onRegisterClick,
   onNotificationClick,
@@ -304,6 +307,7 @@ export default function Navbar({
                 avatarUrl={avatarUrl}
                 menuItems={menuItems}
                 mentorStatus={mentorStatus}
+                referralLevel={referralLevel}
                 onNotificationClick={onNotificationClick}
               />
             ) : (
@@ -364,6 +368,7 @@ export default function Navbar({
                   avatarUrl={avatarUrl}
                   menuItems={menuItems}
                   mentorStatus={mentorStatus}
+                  referralLevel={referralLevel}
                   onNotificationClick={onNotificationClick}
                 />
               </div>
