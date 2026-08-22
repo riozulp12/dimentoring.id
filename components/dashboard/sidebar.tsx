@@ -1,10 +1,11 @@
 "use client";
 
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Inter } from "next/font/google";
 import Logo from "@/components/ui/Logo";
+import LogoutConfirmModal from "@/components/shared/LogoutConfirmModal";
 import {
   DashboardIcon,
   AssessmentIcon,
@@ -49,6 +50,7 @@ function NavRow({
   locked,
   collapsed,
   onNavigate,
+  onClick,
 }: {
   icon: SidebarIconKey;
   label: string;
@@ -57,6 +59,8 @@ function NavRow({
   locked?: boolean;
   collapsed?: boolean;
   onNavigate?: () => void;
+  /** Cuma dipakai untuk item "Keluar" — buka modal konfirmasi, bukan navigasi langsung. */
+  onClick?: () => void;
 }) {
   const Icon = ICONS[icon];
   const labelClass = collapsed ? "lg:hidden" : "";
@@ -73,6 +77,22 @@ function NavRow({
           {label}
         </span>
       </div>
+    );
+  }
+
+  if (icon === "logout") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={collapsed ? label : undefined}
+        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[#7e7c7c] transition-colors hover:bg-gray-50"
+      >
+        <Icon className="size-5 shrink-0" />
+        <span className={`text-sm leading-[1.4] font-normal tracking-[-0.2px] whitespace-nowrap ${labelClass}`}>
+          {label}
+        </span>
+      </button>
     );
   }
 
@@ -123,6 +143,7 @@ export default function Sidebar({
   const groups = sidebarMenus[role];
   const bottomItems = sidebarBottomMenus[role];
   const groupLabelClass = collapsed ? "lg:hidden" : "";
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
 
   return (
     <>
@@ -195,12 +216,22 @@ export default function Sidebar({
                   active={item.icon === "logout" ? false : isActive(pathname, item.href)}
                   collapsed={collapsed}
                   onNavigate={onClose}
+                  onClick={
+                    item.icon === "logout"
+                      ? () => {
+                          onClose?.();
+                          setLogoutModalOpen(true);
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </nav>
           </div>
         </div>
       </aside>
+
+      <LogoutConfirmModal open={logoutModalOpen} onClose={() => setLogoutModalOpen(false)} />
     </>
   );
 }

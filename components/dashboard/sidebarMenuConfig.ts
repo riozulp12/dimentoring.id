@@ -91,15 +91,15 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
 /** Item bawah (Pengaturan/Keluar) — sama polanya di semua role, cuma href beda. */
 export const sidebarBottomMenus: Record<SidebarRole, SidebarMenuItem[]> = {
   siswa: [
-    { icon: "setting", label: "Pengaturan", href: "/pengaturan/siswa" },
+    { icon: "setting", label: "Pengaturan", href: "/pengaturan" },
     { icon: "logout", label: "Keluar", href: "/api/auth/logout" },
   ],
   mentor: [
-    { icon: "setting", label: "Pengaturan", href: "/pengaturan/mentor" },
+    { icon: "setting", label: "Pengaturan", href: "/pengaturan" },
     { icon: "logout", label: "Keluar", href: "/api/auth/logout" },
   ],
   admin: [
-    { icon: "setting", label: "Pengaturan", href: "/pengaturan/admin" },
+    { icon: "setting", label: "Pengaturan", href: "/pengaturan" },
     { icon: "logout", label: "Keluar", href: "/api/auth/logout" },
   ],
 };
