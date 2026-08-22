@@ -45,6 +45,18 @@ const NAV_ITEMS: NavItemConfig[] = [
   { key: "faq", label: "FAQ", href: "/#faq", activeColor: "#051185" },
 ];
 
+/** Section id landing page yang punya nav item terkait — dipakai scroll-spy
+ * di bawah supaya nav item aktif otomatis ikut section yang lagi kelihatan
+ * pas scroll (bukan cuma statis "home" terus). Hanya jalan kalau section-nya
+ * memang ada di DOM (halaman "/"); di halaman lain (mis. /assessment) tidak
+ * ada efek karena getElementById selalu null. */
+const SCROLL_SPY_SECTIONS: { id: string; key: NavItemKey }[] = [
+  { id: "program", key: "program" },
+  { id: "mentor", key: "mentor" },
+  { id: "testimonial", key: "testimonial" },
+  { id: "faq", key: "faq" },
+];
+
 function NavLink({
   label,
   href,
@@ -64,7 +76,7 @@ function NavLink({
       onClick={onNavigate}
       data-active={isActive}
       style={{ "--nav-active-color": activeColor } as CSSProperties}
-      className="group flex flex-col items-center gap-1 text-[20px] leading-[1.5] tracking-[-0.36px] text-[#7E7C7C] transition-colors duration-150 data-[active=true]:text-[color:var(--nav-active-color)]"
+      className="group flex flex-col items-center gap-1 text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C] transition-colors duration-150 data-[active=true]:text-[color:var(--nav-active-color)]"
     >
       <span className="font-normal group-data-[active=true]:font-semibold">{label}</span>
       <Image
@@ -104,7 +116,7 @@ function ProgramDropdown({ isActive, onNavigate }: { isActive: boolean; onNaviga
         aria-expanded={open}
         data-active={isActive}
         style={{ "--nav-active-color": "#081EEA" } as CSSProperties}
-        className="group flex flex-col items-center gap-1 text-[20px] leading-[1.5] tracking-[-0.36px] text-[#7E7C7C] transition-colors duration-150 data-[active=true]:text-[color:var(--nav-active-color)]"
+        className="group flex flex-col items-center gap-1 text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C] transition-colors duration-150 data-[active=true]:text-[color:var(--nav-active-color)]"
       >
         <span className="flex items-center gap-1.5 font-normal group-data-[active=true]:font-semibold">
           Program
@@ -203,6 +215,46 @@ export default function Navbar({
     return () => observer.disconnect();
   }, []);
 
+  // Scroll-spy: nav item aktif otomatis ikut section landing page yang lagi
+  // kelihatan pas scroll. Kalau section-nya nggak ada di DOM (bukan halaman
+  // "/"), `sections` kosong dan effect ini no-op — activeItem dari prop
+  // (server-computed, per halaman) yang dipakai apa adanya.
+  const [scrollActiveItem, setScrollActiveItem] = useState<NavItemKey | undefined>(undefined);
+
+  useEffect(() => {
+    const sections = SCROLL_SPY_SECTIONS.map(({ id, key }) => ({
+      el: document.getElementById(id),
+      key,
+    })).filter((section): section is { el: HTMLElement; key: NavItemKey } => section.el !== null);
+
+    if (sections.length === 0) return;
+
+    setScrollActiveItem("home");
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+
+        if (visible.length > 0) {
+          const match = sections.find((section) => section.el === visible[0].target);
+          if (match) setScrollActiveItem(match.key);
+          return;
+        }
+
+        const firstSectionTop = sections[0].el.getBoundingClientRect().top;
+        if (firstSectionTop > 0) setScrollActiveItem("home");
+      },
+      { rootMargin: "-40% 0px -55% 0px", threshold: 0 },
+    );
+
+    sections.forEach((section) => observer.observe(section.el));
+    return () => observer.disconnect();
+  }, []);
+
+  const effectiveActiveItem = scrollActiveItem ?? activeItem;
+
   const [homeItem, cekPeluangItem, mentorItem, testimonialItem, faqItem] = NAV_ITEMS;
 
   return (
@@ -227,20 +279,20 @@ export default function Navbar({
           </button>
 
           <div className="hidden items-center gap-4 lg:flex min-[1440px]:gap-16">
-            <NavLink label={homeItem.label} href={homeItem.href} isActive={activeItem === homeItem.key} />
-            <ProgramDropdown isActive={activeItem === "program"} />
-            <NavLink label={cekPeluangItem.label} href={cekPeluangItem.href} isActive={activeItem === cekPeluangItem.key} />
-            <NavLink label={mentorItem.label} href={mentorItem.href} isActive={activeItem === mentorItem.key} />
+            <NavLink label={homeItem.label} href={homeItem.href} isActive={effectiveActiveItem === homeItem.key} />
+            <ProgramDropdown isActive={effectiveActiveItem === "program"} />
+            <NavLink label={cekPeluangItem.label} href={cekPeluangItem.href} isActive={effectiveActiveItem === cekPeluangItem.key} />
+            <NavLink label={mentorItem.label} href={mentorItem.href} isActive={effectiveActiveItem === mentorItem.key} />
             <NavLink
               label={testimonialItem.label}
               href={testimonialItem.href}
-              isActive={activeItem === testimonialItem.key}
+              isActive={effectiveActiveItem === testimonialItem.key}
             />
             <NavLink
               label={faqItem.label}
               href={faqItem.href}
               activeColor={faqItem.activeColor}
-              isActive={activeItem === faqItem.key}
+              isActive={effectiveActiveItem === faqItem.key}
             />
           </div>
 
@@ -273,33 +325,33 @@ export default function Navbar({
               <NavLink
                 label={homeItem.label}
                 href={homeItem.href}
-                isActive={activeItem === homeItem.key}
+                isActive={effectiveActiveItem === homeItem.key}
                 onNavigate={() => setIsMenuOpen(false)}
               />
-              <ProgramDropdown isActive={activeItem === "program"} onNavigate={() => setIsMenuOpen(false)} />
+              <ProgramDropdown isActive={effectiveActiveItem === "program"} onNavigate={() => setIsMenuOpen(false)} />
               <NavLink
                 label={cekPeluangItem.label}
                 href={cekPeluangItem.href}
-                isActive={activeItem === cekPeluangItem.key}
+                isActive={effectiveActiveItem === cekPeluangItem.key}
                 onNavigate={() => setIsMenuOpen(false)}
               />
               <NavLink
                 label={mentorItem.label}
                 href={mentorItem.href}
-                isActive={activeItem === mentorItem.key}
+                isActive={effectiveActiveItem === mentorItem.key}
                 onNavigate={() => setIsMenuOpen(false)}
               />
               <NavLink
                 label={testimonialItem.label}
                 href={testimonialItem.href}
-                isActive={activeItem === testimonialItem.key}
+                isActive={effectiveActiveItem === testimonialItem.key}
                 onNavigate={() => setIsMenuOpen(false)}
               />
               <NavLink
                 label={faqItem.label}
                 href={faqItem.href}
                 activeColor={faqItem.activeColor}
-                isActive={activeItem === faqItem.key}
+                isActive={effectiveActiveItem === faqItem.key}
                 onNavigate={() => setIsMenuOpen(false)}
               />
             </div>

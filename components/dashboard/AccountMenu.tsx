@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import Avatar from "@/components/ui/Avatar";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
-import { KelasIcon, LogoutIcon, SettingIcon } from "./sidebarIcons";
+import { DashboardIcon, KelasIcon, LogoutIcon, SettingIcon } from "./sidebarIcons";
 import { NotificationIcon } from "./headerIcons";
 
 /**
@@ -17,7 +17,7 @@ import { NotificationIcon } from "./headerIcons";
  * item dropdown pakai icon line/outline dari set yang sudah ada).
  */
 
-export type AccountMenuIconKey = "profil" | "pengaturan" | "jadi-mentor" | "logout";
+export type AccountMenuIconKey = "dashboard" | "profil" | "pengaturan" | "jadi-mentor" | "logout";
 
 export interface AccountMenuItem {
   label: string;
@@ -37,6 +37,7 @@ export interface AccountMenuProps {
 }
 
 const MENU_ICONS: Record<Exclude<AccountMenuIconKey, "profil">, ComponentType<{ className?: string }>> = {
+  dashboard: DashboardIcon,
   pengaturan: SettingIcon,
   "jadi-mentor": KelasIcon,
   logout: LogoutIcon,

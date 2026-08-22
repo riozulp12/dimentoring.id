@@ -19,6 +19,7 @@ export function getAccountMenuItems(
 ): AccountMenuItem[] {
   const slug = ROLE_URL_SLUG[role];
   const items: AccountMenuItem[] = [
+    { label: "Dashboard", href: `/dashboard/${slug}`, icon: "dashboard" },
     { label: "Profil", href: `/profil/${slug}`, icon: "profil" },
     { label: "Pengaturan", href: `/pengaturan/${slug}`, icon: "pengaturan" },
   ];
