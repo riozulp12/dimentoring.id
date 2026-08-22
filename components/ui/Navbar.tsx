@@ -24,7 +24,6 @@ export interface NavbarProps {
   referralLevel?: string | null;
   onLoginClick?: () => void;
   onRegisterClick?: () => void;
-  onNotificationClick?: () => void;
 }
 
 interface NavItemConfig {
@@ -198,7 +197,6 @@ export default function Navbar({
   referralLevel,
   onLoginClick,
   onRegisterClick,
-  onNotificationClick,
 }: NavbarProps) {
   const router = useRouter();
   const handleLoginClick = onLoginClick ?? (() => router.push("/login"));
@@ -308,7 +306,6 @@ export default function Navbar({
                 menuItems={menuItems}
                 mentorStatus={mentorStatus}
                 referralLevel={referralLevel}
-                onNotificationClick={onNotificationClick}
               />
             ) : (
               <>
@@ -369,7 +366,6 @@ export default function Navbar({
                   menuItems={menuItems}
                   mentorStatus={mentorStatus}
                   referralLevel={referralLevel}
-                  onNotificationClick={onNotificationClick}
                 />
               </div>
             ) : (

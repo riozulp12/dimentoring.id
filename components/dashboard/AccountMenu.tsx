@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import Avatar from "@/components/ui/Avatar";
 import LogoutConfirmModal from "@/components/shared/LogoutConfirmModal";
+import { formatRelativeTime } from "@/lib/shared/formatRelativeTime";
 import { DashboardIcon, KelasIcon, LogoutIcon, SettingIcon } from "./sidebarIcons";
 import { NotificationIcon } from "./headerIcons";
 
@@ -34,7 +36,16 @@ export interface AccountMenuProps {
   mentorStatus?: "pending";
   /** Level gamifikasi referral (mis. "Rookie Referrer") — ditampilkan di bawah nama pada item "Profil". */
   referralLevel?: string | null;
-  onNotificationClick?: () => void;
+}
+
+interface NotifikasiItem {
+  id: string;
+  tipe: string;
+  judul: string;
+  pesan: string | null;
+  link_tujuan: string | null;
+  dibaca: boolean;
+  created_at: string;
 }
 
 const MENU_ICONS: Record<Exclude<AccountMenuIconKey, "profil">, ComponentType<{ className?: string }>> = {
@@ -59,34 +70,146 @@ export default function AccountMenu({
   menuItems,
   mentorStatus,
   referralLevel,
-  onNotificationClick,
 }: AccountMenuProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotifikasiItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const notifContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setOpen(false);
       }
+      if (notifContainerRef.current && !notifContainerRef.current.contains(event.target as Node)) {
+        setNotifOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/notifikasi")
+      .then((res) => res.json())
+      .then((json) => {
+        if (cancelled || !json.success) return;
+        setNotifications(json.notifications ?? []);
+        setUnreadCount(json.unreadCount ?? 0);
+      })
+      .catch(() => {
+        // Gagal muat notifikasi tidak boleh mengganggu render menu akun — biarkan list kosong.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleNotifClick(notif: NotifikasiItem) {
+    setNotifOpen(false);
+    if (!notif.dibaca) {
+      try {
+        const response = await fetch(`/api/notifikasi/${notif.id}/baca`, { method: "PATCH" });
+        if (response.ok) {
+          setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, dibaca: true } : n)));
+          setUnreadCount((prev) => Math.max(0, prev - 1));
+        }
+      } catch {
+        // best-effort — navigasi tetap lanjut meski gagal menandai dibaca
+      }
+    }
+    if (notif.link_tujuan) {
+      router.push(notif.link_tujuan);
+    }
+  }
+
+  async function handleMarkAllRead() {
+    try {
+      const response = await fetch("/api/notifikasi/baca-semua", { method: "PATCH" });
+      if (response.ok) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, dibaca: true })));
+        setUnreadCount(0);
+      }
+    } catch {
+      // biarkan state apa adanya kalau gagal — user bisa coba lagi
+    }
+  }
+
   return (
     <div className="flex items-center gap-3 sm:gap-4">
       {mentorStatus === "pending" ? <OnReviewBadge /> : null}
 
-      <button
-        type="button"
-        onClick={onNotificationClick}
-        aria-label="Notifikasi"
-        className="flex size-8 items-center justify-center rounded-lg text-[#7e7c7c] hover:bg-gray-100"
-      >
-        <NotificationIcon className="size-5" />
-      </button>
+      <div ref={notifContainerRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setNotifOpen((prev) => !prev)}
+          aria-label="Notifikasi"
+          aria-haspopup="menu"
+          aria-expanded={notifOpen}
+          className="relative flex size-8 items-center justify-center rounded-lg text-[#7e7c7c] hover:bg-gray-100"
+        >
+          <NotificationIcon className="size-5" />
+          {unreadCount > 0 ? (
+            <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E70A0A] px-1 text-[10px] leading-none font-semibold text-white">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          ) : null}
+        </button>
+
+        {notifOpen ? (
+          <div
+            role="menu"
+            className="absolute top-full right-0 z-40 mt-2 max-h-[70vh] w-80 overflow-y-auto rounded-[16px] border-[0.8px] border-[#E3E3E3] bg-white py-1.5 shadow-[1px_2px_4px_rgba(0,0,0,0.1)]"
+          >
+            <div className="flex items-center justify-between px-4 py-2">
+              <span className="text-sm font-semibold text-black">Notifikasi</span>
+              {notifications.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleMarkAllRead}
+                  className="text-xs font-medium text-[#081EEA] hover:underline"
+                >
+                  Tandai semua dibaca
+                </button>
+              ) : null}
+            </div>
+
+            {notifications.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-[#7E7C7C]">Belum ada notifikasi</p>
+            ) : (
+              notifications.map((notif) => (
+                <button
+                  key={notif.id}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => handleNotifClick(notif)}
+                  className={`flex w-full items-start gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 ${
+                    notif.dibaca ? "" : "bg-[#F9FAFF]"
+                  }`}
+                >
+                  <span
+                    className={`mt-1.5 size-2 shrink-0 rounded-full ${notif.dibaca ? "" : "bg-[#081EEA]"}`}
+                    aria-hidden="true"
+                  />
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="truncate text-sm font-medium text-black">{notif.judul}</span>
+                    {notif.pesan ? (
+                      <span className="line-clamp-2 text-xs text-[#7E7C7C]">{notif.pesan}</span>
+                    ) : null}
+                    <span className="text-xs text-[#AFAFAF]">{formatRelativeTime(notif.created_at)}</span>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        ) : null}
+      </div>
 
       <div ref={containerRef} className="relative">
         <button

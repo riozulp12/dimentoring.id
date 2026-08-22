@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
+import { notifyApprovalMentor } from "@/lib/notifikasi/notify";
 
 /**
  * Approve/Reject pengajuan Mentor — PRD Bagian 8 BR-2 (approval Admin wajib
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
 
   const { data: role, error: roleError } = await supabaseServer
     .from("user_roles")
-    .select("id, role_type, status")
+    .select("id, user_id, role_type, status")
     .eq("id", body.userRoleId)
     .maybeSingle();
 
@@ -76,6 +77,8 @@ export async function POST(request: NextRequest) {
     console.error("[approval-mentor] update failed:", updateError);
     return errorResponse("Gagal menyimpan keputusan. Coba lagi nanti.", 500);
   }
+
+  await notifyApprovalMentor(role.user_id as string, body.action === "setujui", alasanTolak);
 
   return NextResponse.json({ success: true, tanggalReview, alasanTolak });
 }

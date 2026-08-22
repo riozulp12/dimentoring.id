@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
+import { notifyMateriBaruPublished } from "@/lib/notifikasi/notify";
 
 /**
  * Approve/Reject konten AI (Materi & Soal) — PRD Bagian 7.7 revisi & BR-31.
@@ -97,6 +98,22 @@ export async function POST(request: NextRequest) {
   if (updateError) {
     console.error("[review-konten] update failed:", updateError);
     return errorResponse("Gagal menyimpan hasil review. Coba lagi nanti.", 500);
+  }
+
+  // 2b: materi AI-generated yang baru di-Setujui jadi 'published' — notif ke
+  // siswa yang sama seperti materi upload manual (app/api/materi/route.ts).
+  if (body.jenis === "materi" && body.action === "setujui") {
+    const { data: materiRow, error: materiRowError } = await supabaseServer
+      .from("materi")
+      .select("judul, kelas_id")
+      .eq("id", body.id)
+      .maybeSingle();
+
+    if (materiRowError) {
+      console.error("[review-konten] query materi untuk notifikasi gagal:", materiRowError);
+    } else if (materiRow) {
+      await notifyMateriBaruPublished(materiRow.kelas_id as string, materiRow.judul as string);
+    }
   }
 
   return NextResponse.json({ success: true });

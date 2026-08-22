@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
+import { notifyMateriBaruPublished } from "@/lib/notifikasi/notify";
 
 /**
  * Upload materi manual Mentor — PRD Bagian 7.5.1 (FR-M1/FR-M4) & BR-31.
@@ -96,6 +97,8 @@ export async function POST(request: NextRequest) {
     console.error("[materi] insert failed:", insertError);
     return errorResponse("Gagal menyimpan materi. Coba lagi nanti.", 500);
   }
+
+  await notifyMateriBaruPublished(body.kelasId, judul);
 
   return NextResponse.json({ success: true });
 }
