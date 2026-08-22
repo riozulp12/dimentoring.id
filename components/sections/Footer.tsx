@@ -162,7 +162,7 @@ export default function Footer() {
         </div>
       </div>
 
-      <p className="w-full text-center text-lg leading-[1.5] tracking-[-0.36px] text-[#979696]">
+      <p className="w-full text-center text-sm leading-[1.5] tracking-[-0.36px] text-[#979696]">
         Copyright @2026 dimentoring.id
       </p>
     </footer>

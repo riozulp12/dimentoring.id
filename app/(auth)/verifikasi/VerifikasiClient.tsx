@@ -84,7 +84,7 @@ export default function VerifikasiClient({ email }: { email: string }) {
                 type="button"
                 variant="primary"
                 size="lg"
-                className="flex w-full items-center justify-center gap-2 text-[20px]!"
+                className="flex w-full items-center justify-center gap-2 text-xl!"
               >
                 <img src="/icons/footer-gmail.svg" alt="" className="h-5 w-5 sm:h-6 sm:w-6" />
                 Buka Gmail
@@ -97,7 +97,7 @@ export default function VerifikasiClient({ email }: { email: string }) {
               size="lg"
               disabled={secondsLeft > 0}
               onClick={handleResend}
-              className="flex w-full items-center justify-center gap-2 text-[20px]!"
+              className="flex w-full items-center justify-center gap-2 text-xl!"
             >
               Kirim Ulang Link
               {secondsLeft > 0 ? (

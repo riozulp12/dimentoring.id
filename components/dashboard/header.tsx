@@ -49,7 +49,7 @@ export default function Header({
           </svg>
         </button>
 
-        <h1 className="text-2xl font-semibold tracking-tight text-black sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-black sm:text-3xl">
           {title}
         </h1>
       </div>

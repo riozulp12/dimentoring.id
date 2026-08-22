@@ -71,7 +71,7 @@ export default function FAQ() {
                 aria-expanded={isOpen}
                 className="flex min-h-[56px] w-full items-center justify-between gap-4 px-5 py-4 text-left sm:gap-5 sm:px-6 sm:py-5 lg:min-h-[70px] lg:px-8"
               >
-                <span className="text-base leading-[1.5] font-semibold tracking-[-0.32px] text-black sm:text-xl sm:tracking-[-0.4px] lg:text-2xl lg:tracking-[-0.48px]">
+                <span className="text-base leading-[1.5] font-semibold tracking-[-0.32px] text-black sm:text-lg sm:tracking-[-0.4px] lg:text-xl lg:tracking-[-0.48px]">
                   {item.question}
                 </span>
                 <Image

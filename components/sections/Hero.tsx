@@ -23,7 +23,7 @@ export default function Hero() {
             <span className="inline-flex w-fit items-center rounded-[20px] border-[0.8px] border-[#CAC9C9] bg-[#F9F9F9] px-6 py-2 text-sm leading-[1.5] tracking-[-0.28px] text-[#081EEA] sm:px-8 sm:py-2.5 sm:text-lg sm:tracking-[-0.36px]">
               #BertumbuhBersama
             </span>
-            <h3 className="max-w-[934px] text-2xl leading-[1.5] font-semibold tracking-[-0.48px] text-black sm:text-3xl">
+            <h3 className="max-w-[934px] text-2xl leading-[1.5] font-bold tracking-[-0.48px] text-black sm:text-3xl">
               Setiap Siswa Punya{" "}
               <span className="text-[#081EEA]">Perjalanan</span>
               <br />

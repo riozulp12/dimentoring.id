@@ -32,7 +32,7 @@ export default function KelasSayaCard({
         ) : null}
       </div>
 
-      <h3 className="text-lg font-medium tracking-[-0.02em] text-black">{nama}</h3>
+      <h3 className="text-lg font-semibold tracking-[-0.02em] text-black">{nama}</h3>
 
       <div className="flex flex-col gap-1 text-sm text-[#7E7C7C]">
         <p>

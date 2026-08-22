@@ -79,7 +79,7 @@ export default function ReferralSummary({
       </div>
 
       <section className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
-        <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Riwayat Referral</h2>
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-black sm:text-xl">Riwayat Referral</h2>
         {referralHistory.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
             <p className="text-base text-[#7E7C7C]">
@@ -110,7 +110,7 @@ export default function ReferralSummary({
 
       <section className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
         <div className="flex flex-col gap-1.5">
-          <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Riwayat Reward</h2>
+          <h2 className="text-lg font-semibold tracking-[-0.02em] text-black sm:text-xl">Riwayat Reward</h2>
           <p className="text-sm text-[#7E7C7C]">
             Reward cair otomatis setelah temanmu melakukan pembayaran pertama
           </p>
