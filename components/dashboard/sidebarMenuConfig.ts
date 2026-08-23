@@ -45,7 +45,7 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
       group: "Lainnya",
       items: [
         { icon: "referral", label: "Referral & Poin", href: "/referral" },
-        { icon: "beasiswa", label: "Beasiswa & Event", href: "/beasiswa" },
+        { icon: "beasiswa", label: "Beasiswa & Event", href: "/beasiswa-event" },
         { icon: "ai-mentor", label: "AI Mentor", href: "/ai-mentor" },
       ],
     },
@@ -64,6 +64,7 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
           lockedForPendingMentor: true,
         },
         { icon: "beasiswa", label: "Honor", href: "/honor", lockedForPendingMentor: true },
+        { icon: "beasiswa", label: "Beasiswa & Event", href: "/beasiswa-event" },
       ],
     },
   ],
@@ -72,9 +73,11 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
       group: "Operasional",
       items: [
         { icon: "dashboard", label: "Dashboard", href: "/dashboard/admin" },
-        { icon: "assessment", label: "Approval Mentor", href: "/approval-mentor" },
+        { icon: "tryout", label: "Manajemen Mentor", href: "/approval-mentor" },
+        { icon: "ai-mentor", label: "Manajemen Siswa", href: "/manajemen-siswa" },
         { icon: "kelas", label: "Kelola Kelas", href: "/kelola-kelas" },
-        { icon: "tryout", label: "Kelola Assessment", href: "/kelola-assessment" },
+        { icon: "assessment", label: "Kelola Assessment", href: "/kelola-assessment" },
+        { icon: "setting", label: "Undang Admin", href: "/undang-admin" },
       ],
     },
     {
@@ -82,7 +85,7 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
       items: [
         { icon: "beasiswa", label: "Kelola Konten", href: "/kelola-konten" },
         { icon: "referral", label: "Payment", href: "/payment" },
-        { icon: "ai-mentor", label: "Analytics", href: "/analytics" },
+        { icon: "logout", label: "Analytics", href: "/analytics" },
       ],
     },
   ],

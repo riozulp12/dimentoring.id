@@ -1,7 +1,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
-import { getApprovalMentorList } from "@/lib/admin/getApprovalMentorData";
+import {
+  getApprovalMentorList,
+  getCalonMentorList,
+  getMentorActivityLists,
+} from "@/lib/admin/getApprovalMentorData";
 import { getUserDisplayName } from "@/lib/dashboard/getUserDisplayName";
 import PageTitle from "@/components/dashboard/PageTitle";
 import ApprovalMentorClient from "@/components/admin/ApprovalMentorClient";
@@ -15,21 +19,26 @@ export default async function ApprovalMentorPage() {
     redirect(ROLE_DASHBOARD_PATH[session.role]);
   }
 
-  const [adminName, pending, active, rejected] = await Promise.all([
+  const [adminName, pending, active, rejected, activityLists, calonMentor] = await Promise.all([
     getUserDisplayName(session.userId, "Admin"),
     getApprovalMentorList("pending"),
     getApprovalMentorList("active"),
     getApprovalMentorList("rejected"),
+    getMentorActivityLists(),
+    getCalonMentorList(),
   ]);
 
   return (
     <>
-      <PageTitle value="Approval Mentor" />
+      <PageTitle value="Manajemen Mentor" />
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-10">
         <ApprovalMentorClient
           initialPending={pending}
           initialActive={active}
           initialRejected={rejected}
+          initialAktif={activityLists.aktif}
+          initialPasif={activityLists.pasif}
+          initialCalonMentor={calonMentor}
           adminName={adminName}
         />
       </div>
