@@ -71,7 +71,7 @@ export default function ReviewKontenList({ items }: { items: ReviewKontenItem[] 
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-12 text-center">
-          <p className="text-base text-[#7E7C7C]">Tidak ada konten yang perlu direview saat ini</p>
+          <p className="text-base text-[#7E7C7C]">Tidak ada konten yang perlu direview saat ini.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -94,6 +94,7 @@ export default function ReviewKontenList({ items }: { items: ReviewKontenItem[] 
                 <p className="text-base text-black">{item.judul}</p>
                 <p className="text-sm text-[#7E7C7C]">
                   {item.subtesNama} · {formatDate(item.createdAt)}
+                  {item.mentorNama ? ` · Dibuat oleh ${item.mentorNama}` : ""}
                 </p>
                 {errorId === item.id ? (
                   <p className="text-sm text-[#E70A0A]">Gagal menyimpan, coba lagi.</p>

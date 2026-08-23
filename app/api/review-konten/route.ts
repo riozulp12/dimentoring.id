@@ -6,9 +6,12 @@ import { notifyMateriBaruPublished } from "@/lib/notifikasi/notify";
 
 /**
  * Approve/Reject konten AI (Materi & Soal) — PRD Bagian 7.7 revisi & BR-31.
- * Cuma Mentor berstatus Active yang boleh review (BR-27: fitur mengajar
- * terkunci selama Pending), dan cuma untuk item yang subtes-nya termasuk
- * Subtes yang Diampu mentor tsb (BR-7).
+ * Dipakai DUA jalur: Mentor (halaman "Materi & Latihan Soal", cuma Mentor
+ * berstatus Active — BR-27 — dan cuma untuk item di Subtes yang Diampu
+ * sendiri — BR-7) dan Admin (halaman "Kelola Konten" tab Review Konten AI,
+ * lintas subtes/mentor manapun, tanpa scoping BR-7 karena Admin memang
+ * berwenang penuh). Logic update status/notifikasi di bawah SAMA PERSIS
+ * untuk kedua role — cuma gerbang otorisasi & scoping-nya yang beda.
  */
 
 type Jenis = "materi" | "soal";
@@ -29,10 +32,10 @@ export async function POST(request: NextRequest) {
   if (!session) {
     return errorResponse("Belum login.", 401);
   }
-  if (session.role !== "mentor") {
-    return errorResponse("Cuma Mentor yang bisa review konten.", 403);
+  if (session.role !== "mentor" && session.role !== "admin") {
+    return errorResponse("Cuma Mentor atau Admin yang bisa review konten.", 403);
   }
-  if ((await getMentorRoleStatus(session.userId)) !== "active") {
+  if (session.role === "mentor" && (await getMentorRoleStatus(session.userId)) !== "active") {
     return errorResponse("Akun kamu masih menunggu approval Admin.", 403);
   }
 
@@ -55,21 +58,6 @@ export async function POST(request: NextRequest) {
 
   const table = body.jenis === "materi" ? "materi" : "soal_ai";
 
-  // BR-7: pastikan item ini termasuk Subtes yang Diampu mentor ini.
-  const { data: profile } = await supabaseServer
-    .from("mentor_profiles")
-    .select("id")
-    .eq("user_id", session.userId)
-    .maybeSingle();
-  if (!profile) {
-    return errorResponse("Profil mentor tidak ditemukan.", 403);
-  }
-  const { data: subtesRows } = await supabaseServer
-    .from("mentor_subtes_diampu")
-    .select("subtes_id")
-    .eq("mentor_profile_id", profile.id);
-  const subtesIds = (subtesRows ?? []).map((r: { subtes_id: string }) => r.subtes_id);
-
   const { data: item, error: itemError } = await supabaseServer
     .from(table)
     .select("id, subtes_id, status")
@@ -79,9 +67,29 @@ export async function POST(request: NextRequest) {
   if (itemError || !item) {
     return errorResponse("Konten tidak ditemukan.", 404);
   }
-  if (!subtesIds.includes(item.subtes_id)) {
-    return errorResponse("Konten ini di luar Subtes yang kamu ampu.", 403);
+
+  // BR-7: Mentor cuma boleh review item di Subtes yang Diampu sendiri — Admin
+  // sengaja TIDAK di-scope (lihat 'Kelola Konten' tab Review Konten AI, lintas
+  // subtes/mentor manapun).
+  if (session.role === "mentor") {
+    const { data: profile } = await supabaseServer
+      .from("mentor_profiles")
+      .select("id")
+      .eq("user_id", session.userId)
+      .maybeSingle();
+    if (!profile) {
+      return errorResponse("Profil mentor tidak ditemukan.", 403);
+    }
+    const { data: subtesRows } = await supabaseServer
+      .from("mentor_subtes_diampu")
+      .select("subtes_id")
+      .eq("mentor_profile_id", profile.id);
+    const subtesIds = (subtesRows ?? []).map((r: { subtes_id: string }) => r.subtes_id);
+    if (!subtesIds.includes(item.subtes_id)) {
+      return errorResponse("Konten ini di luar Subtes yang kamu ampu.", 403);
+    }
   }
+
   if (item.status !== "draft") {
     return errorResponse("Konten ini sudah direview sebelumnya.", 409);
   }
@@ -96,7 +104,7 @@ export async function POST(request: NextRequest) {
     .eq("id", body.id);
 
   if (updateError) {
-    console.error("[review-konten] update failed:", updateError);
+    console.error("[review-konten] update failed:", JSON.stringify(updateError, null, 2));
     return errorResponse("Gagal menyimpan hasil review. Coba lagi nanti.", 500);
   }
 

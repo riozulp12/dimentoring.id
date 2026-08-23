@@ -8,9 +8,11 @@ export interface ReviewKontenItem {
   subtesNama: string;
   createdAt: string;
   sumber: string;
+  /** Mentor yang memicu generate/upload (dibuat_oleh_id) — cuma diisi versi Admin (lintas subtes), null/absent di versi Mentor. */
+  mentorNama?: string | null;
 }
 
-function extractSubtesNama(subtes: unknown): string {
+export function extractSubtesNama(subtes: unknown): string {
   if (Array.isArray(subtes)) return (subtes[0] as { nama?: string } | undefined)?.nama ?? "-";
   return (subtes as { nama?: string } | null)?.nama ?? "-";
 }
