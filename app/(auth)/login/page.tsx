@@ -6,6 +6,7 @@ import Link from "next/link";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import Mascot from "@/components/ui/Mascot";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function LoginPageInner() {
   const router = useRouter();
@@ -23,6 +24,7 @@ function LoginPageInner() {
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,6 +67,33 @@ function LoginPageInner() {
     } catch {
       setSubmitError("Gagal terhubung ke server. Periksa koneksi internet kamu.");
       setIsSubmitting(false);
+    }
+  }
+
+  // REUSE konfigurasi OAuth yang sama dengan /daftar (lib/supabase/client.ts,
+  // app/auth/callback/page.tsx) — cuma tombolnya beda halaman. Behavior akhirnya
+  // SAMA persis (lihat app/api/auth/google-callback/route.ts): email belum ada
+  // -> dibuatkan akun baru (register implisit), bukan pesan error.
+  async function handleGoogleLogin() {
+    setSubmitError(null);
+    setIsGoogleLoading(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const redirectTo = new URL("/auth/callback", window.location.origin);
+      if (pendingAssessmentId) {
+        redirectTo.searchParams.set("pending_assessment", pendingAssessmentId);
+      }
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: redirectTo.toString() },
+      });
+      if (error) {
+        setSubmitError("Gagal membuka login Google. Coba lagi nanti.");
+        setIsGoogleLoading(false);
+      }
+    } catch {
+      setSubmitError("Gagal membuka login Google. Coba lagi nanti.");
+      setIsGoogleLoading(false);
     }
   }
 
@@ -182,7 +211,7 @@ function LoginPageInner() {
                 variant="primary"
                 size="md"
                 className="w-full"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isGoogleLoading}
               >
                 {isSubmitting ? "Memproses..." : "Login"}
               </Button>
@@ -200,9 +229,11 @@ function LoginPageInner() {
                 variant="secondary"
                 size="md"
                 className="flex w-full items-center justify-center gap-2"
+                onClick={handleGoogleLogin}
+                disabled={isSubmitting || isGoogleLoading}
               >
                 <img src="/icons/login-google.svg" alt="" className="h-5 w-5" />
-                Login dengan Google
+                {isGoogleLoading ? "Membuka Google..." : "Login dengan Google"}
               </Button>
             </div>
 

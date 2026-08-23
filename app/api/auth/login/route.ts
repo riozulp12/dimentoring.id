@@ -2,15 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { verifyPassword } from "@/lib/auth/password";
 import {
-  ROLE_DASHBOARD_PATH,
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SECONDS,
   createSessionToken,
   verifySessionToken,
-  type SessionRole,
 } from "@/lib/auth/session";
+import { resolveSessionForUser } from "@/lib/auth/resolveSession";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
-import { linkPendingAssessment } from "@/lib/assessment/linkPendingAssessment";
 
 /**
  * Login API — PRD Bagian 7.0.1 (Login) & Bagian 7.0.6 (multi-role).
@@ -20,6 +18,12 @@ import { linkPendingAssessment } from "@/lib/assessment/linkPendingAssessment";
  *
  * BR-15 (direvisi September 2026, Bagian 7.0.3): verifikasi akun DITUNDA ke Fase 2 —
  * tidak ada lagi blokir login berdasarkan `status_verifikasi_akun`.
+ *
+ * FR-1.15 (baru, Agustus 2026): SEBELUM cek role, wajib cek users.profiling_selesai
+ * — kalau false, akun ini belum pernah/belum selesai isi /lengkapi-profil (belum
+ * punya baris user_roles sama sekali), jadi TIDAK boleh masuk ke logic resolusi
+ * role sama sekali. Logic ini didelegasikan ke resolveSessionForUser() supaya SAMA
+ * persis dengan yang dipakai app/api/auth/google-callback/route.ts.
  */
 
 // Hash scrypt dummy (bukan dari akun manapun) — dipakai kalau email tidak ditemukan,
@@ -40,15 +44,6 @@ function errorResponse(message: string, status: number, extra?: Record<string, u
   return NextResponse.json({ success: false, error: message, ...extra }, { status });
 }
 
-// Urutan prioritas kalau akun punya >1 role aktif: pakai role terakhir dipakai user ini
-// (dibaca dari session cookie sebelumnya, kalau ada & masih valid), lalu fallback ke
-// Student, baru fallback ke role lain yang tersedia.
-function pickActiveRole(activeRoles: SessionRole[], lastUsedRole: SessionRole | null): SessionRole {
-  if (lastUsedRole && activeRoles.includes(lastUsedRole)) return lastUsedRole;
-  if (activeRoles.includes("student")) return "student";
-  return activeRoles[0];
-}
-
 export async function POST(request: NextRequest) {
   let body: LoginRequestBody;
   try {
@@ -66,7 +61,7 @@ export async function POST(request: NextRequest) {
   // ---- Cari user & verifikasi password (pesan error SENGAJA generik, lihat di bawah) ----
   const { data: user, error: userQueryError } = await supabaseServer
     .from("users")
-    .select("id, email, password_hash")
+    .select("id, email, password_hash, profiling_selesai")
     .eq("email", email)
     .maybeSingle();
 
@@ -75,73 +70,39 @@ export async function POST(request: NextRequest) {
     return errorResponse("Gagal memproses login. Coba lagi nanti.", 500);
   }
 
-  // Selalu jalankan verifyPassword (bahkan kalau user tidak ada, pakai dummy hash) supaya
-  // waktu respons tidak membocorkan apakah email terdaftar (BR: jangan bisa ditebak dari luar).
+  // Selalu jalankan verifyPassword (bahkan kalau user tidak ada/password_hash NULL karena akun
+  // Google-only, pakai dummy hash) supaya waktu respons tidak membocorkan apakah email terdaftar
+  // atau apakah akun itu punya password lokal (BR: jangan bisa ditebak dari luar).
   const passwordValid = await verifyPassword(password, user?.password_hash ?? DUMMY_PASSWORD_HASH);
 
   if (!user || !passwordValid) {
     return errorResponse("Email atau password salah.", 401);
   }
 
-  // ---- Role SELALU dibaca dari database, tidak pernah dari input client ----
-  const { data: roleRows, error: roleError } = await supabaseServer
-    .from("user_roles")
-    .select("role_type, status")
-    .eq("user_id", user.id);
-
-  if (roleError) {
-    console.error("[login] query user_roles failed:", roleError);
-    return errorResponse("Gagal memproses login. Coba lagi nanti.", 500);
-  }
-
-  const activeRoles = (roleRows ?? [])
-    .filter((row) => row.status === "active")
-    .map((row) => row.role_type as SessionRole);
-
-  // BR-27: Mentor 'pending' tetap boleh login ke Dashboard Mentor (mode "On Review"),
-  // meski belum punya role aktif lain.
-  const pendingMentor = (roleRows ?? []).find(
-    (row) => row.role_type === "mentor" && row.status === "pending",
-  );
-
-  let activeRole: SessionRole;
-  let mentorStatus: "pending" | undefined;
-
-  if (activeRoles.length > 0) {
-    // "Role terakhir dipakai" dibaca dari session cookie SEBELUMNYA — hanya dipakai kalau
-    // memang milik user yang sama (cegah bocor preferensi user lain di browser bersama).
-    const previousSession = verifySessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
-    const lastUsedRole =
-      previousSession && previousSession.userId === user.id ? previousSession.role : null;
-    activeRole = pickActiveRole(activeRoles, lastUsedRole);
-  } else if (pendingMentor) {
-    activeRole = "mentor";
-    mentorStatus = "pending";
-  } else {
-    // Tidak ada role aktif maupun pengajuan Mentor pending (mis. seluruh role 'rejected').
-    return errorResponse("Akun kamu masih menunggu approval Admin.", 403, {
-      reason: "no_active_role",
-    });
-  }
-
-  // ---- PRD Bagian 7.4.1b/checklist item 7: assessment anonim (submit ke-3+,
-  // atau yang sudah sempat ditautkan lewat Register) diarahkan ke halaman
-  // hasil-nya sendiri, BUKAN ke Dashboard biasa. ----
-  let redirectTo: string = ROLE_DASHBOARD_PATH[activeRole];
+  const previousSession = verifySessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   const trialId = request.cookies.get(TRIAL_COOKIE_NAME)?.value ?? null;
-  const linkedAssessmentId = await linkPendingAssessment(body.pendingAssessmentId, trialId, user.id);
-  if (linkedAssessmentId) {
-    redirectTo = `/assessment/hasil/${linkedAssessmentId}`;
+
+  const resolved = await resolveSessionForUser({
+    userId: user.id,
+    profilingSelesai: user.profiling_selesai as boolean,
+    previousSessionUserId: previousSession?.userId ?? null,
+    previousSessionRole: previousSession?.role ?? null,
+    pendingAssessmentId: body.pendingAssessmentId,
+    trialId,
+  });
+
+  if (!resolved.ok) {
+    return errorResponse(resolved.error, resolved.status, resolved.reason ? { reason: resolved.reason } : undefined);
   }
 
   const response = NextResponse.json({
     success: true,
-    role: activeRole,
-    redirectTo,
-    ...(mentorStatus ? { mentorStatus } : {}),
+    role: resolved.role,
+    redirectTo: resolved.redirectTo,
+    ...(resolved.mentorStatus ? { mentorStatus: resolved.mentorStatus } : {}),
   });
 
-  response.cookies.set(SESSION_COOKIE_NAME, createSessionToken({ userId: user.id, role: activeRole }), {
+  response.cookies.set(SESSION_COOKIE_NAME, createSessionToken({ userId: user.id, role: resolved.role }), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

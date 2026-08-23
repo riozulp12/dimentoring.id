@@ -24,7 +24,11 @@ export interface NavbarSessionProps {
 }
 
 export async function getNavbarProps(session: SessionPayload | null): Promise<NavbarSessionProps> {
-  if (!session) return { isLoggedIn: false };
+  // "unassigned" (PRD 7.0.2 DIREVISI TOTAL) = akun ada tapi belum selesai
+  // /lengkapi-profil — belum ada role/dashboard/menu akun yang valid untuk
+  // ditampilkan, jadi Navbar publik memperlakukannya sama seperti belum login
+  // (tombol Login/Daftar), bukan menampilkan menu akun yang linknya nyasar.
+  if (!session || session.role === "unassigned") return { isLoggedIn: false };
 
   const [accountData, mentorStatus] = await Promise.all([
     getAccountMenuData(session.userId, session.role),

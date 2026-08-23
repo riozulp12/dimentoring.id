@@ -79,8 +79,8 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nama VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
-    no_wa VARCHAR(20) NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
+    no_wa VARCHAR(20) UNIQUE,                     -- NULLABLE (revisi Agustus 2026): diisi belakangan di /lengkapi-profil, bukan lagi di Langkah 1 Register
+    password_hash TEXT,                           -- NULLABLE: akun dari "Daftar/Login dengan Google" tidak pernah punya password lokal
     status_verifikasi_akun status_verifikasi_akun NOT NULL DEFAULT 'unverified',
     sub_status sub_status_student,               -- NULL jika bukan Student
     tingkat_kelas tingkat_kelas,                  -- Kelas 10/11/12/Gap Year, diisi saat onboarding (7.0.2 Langkah 2)
@@ -98,6 +98,7 @@ CREATE TABLE users (
     permintaan_hapus_akun BOOLEAN NOT NULL DEFAULT false,
     alasan_hapus_akun TEXT,
     tanggal_permintaan_hapus TIMESTAMPTZ,
+    profiling_selesai BOOLEAN NOT NULL DEFAULT false,  -- FR-1.15: gerbang wajib sebelum akses dashboard
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -119,6 +120,52 @@ CREATE TABLE notifikasi (
 );
 
 CREATE INDEX idx_notifikasi_user ON notifikasi(user_id, dibaca);
+
+-- ============================================================================
+-- INTEGRASI PARTNER EKSTERNAL (BELUM FINAL — kerjasama agensoal.com
+-- masih dinegosiasikan). Tabel ini SENGAJA dipisah dengan prefix jelas
+-- supaya gampang di-DROP TABLE utuh kalau kesepakatan batal, tanpa
+-- menyentuh tabel inti lainnya.
+-- ============================================================================
+
+CREATE TABLE sso_token_eksternal (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    platform VARCHAR(50) NOT NULL DEFAULT 'agensoal',
+    token TEXT NOT NULL UNIQUE,
+    expired_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_sso_token_eksternal_user ON sso_token_eksternal(user_id);
+
+-- Log mentah — belum tahu bentuk pasti payload dari agensoal, jadi
+-- disimpan apa adanya dulu (JSONB), parsing detail menyusul setelah
+-- kontrak data final.
+CREATE TABLE webhook_log_eksternal (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    platform VARCHAR(50) NOT NULL DEFAULT 'agensoal',
+    raw_payload JSONB NOT NULL,
+    diproses BOOLEAN NOT NULL DEFAULT false,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Undangan Admin baru (BR-3) — Admin existing generate token sekali pakai,
+-- dikirim manual (WA/email) ke calon Admin. Beda dari Mentor: begitu submit,
+-- akun LANGSUNG aktif tanpa approval tambahan (generate undangan = approval).
+CREATE TABLE admin_invitations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    invited_by_id UUID NOT NULL REFERENCES users(id),
+    label TEXT,                        -- catatan opsional, mis. "untuk Amrul"
+    token TEXT NOT NULL UNIQUE,
+    expired_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    used_by_id UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_admin_invitations_token ON admin_invitations(token);
 
 -- Field mapel_tersulit (array Student, FR onboarding Langkah 3) dinormalisasi jadi join table
 CREATE TABLE user_mapel_tersulit (
@@ -299,6 +346,8 @@ CREATE TABLE enrollments (
 -- TRY OUT (Bagian 7.6 — Free/Premium, timer, navigator soal)
 -- ============================================================================
 
+CREATE TYPE tryout_sumber AS ENUM ('in_house', 'agensoal');
+
 CREATE TABLE tryouts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nama VARCHAR(255) NOT NULL,
@@ -307,12 +356,31 @@ CREATE TABLE tryouts (
     subtes_id UUID NOT NULL REFERENCES subtes(id),
     durasi_menit INT NOT NULL,
     tipe_akses tryout_akses NOT NULL DEFAULT 'free',
+    sumber tryout_sumber NOT NULL DEFAULT 'agensoal',  -- BELUM FINAL, lihat catatan integrasi agensoal
+    link_eksternal TEXT,  -- URL spesifik paket ini di agensoal.com, NULL kalau sumber='in_house'
     jadwal TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_mandiri_wajib_ptn CHECK (
         (kategori <> 'mandiri') OR (kategori = 'mandiri' AND ptn_terkait IS NOT NULL)
     )
 );
+
+-- Riwayat hasil tryout dari partner eksternal (BELUM FINAL, bagian dari
+-- modul integrasi agensoal — lihat catatan di sso_token_eksternal).
+-- TERPISAH dari TryOutAttempt in-house karena datanya cuma ringkasan
+-- (skor), bukan detail per-soal seperti tryout in-house.
+CREATE TABLE tryout_riwayat_eksternal (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tryout_id UUID NOT NULL REFERENCES tryouts(id),
+    skor DECIMAL(6,2),
+    breakdown_subtes JSONB,        -- opsional, kalau agensoal kirim rincian per subtes
+    link_review_eksternal TEXT,    -- link "Lihat Pembahasan" di agensoal, kalau tersedia
+    waktu_selesai TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_tryout_riwayat_eksternal_user ON tryout_riwayat_eksternal(user_id);
 
 -- FR-T5–T8: navigator soal & timer server-side
 CREATE TABLE tryout_attempts (
@@ -428,7 +496,9 @@ CREATE TABLE konten_info (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tipe konten_info_tipe NOT NULL,
     judul VARCHAR(255) NOT NULL,
-    deskripsi TEXT,
+    deskripsi TEXT,                      -- ringkasan singkat, dipakai di card
+    deskripsi_lengkap TEXT,              -- konten detail, dipakai di halaman detail (fallback ke deskripsi kalau kosong)
+    link_pendaftaran TEXT,               -- URL eksternal tujuan "Daftar Sekarang"
     deadline DATE,
     target_filter JSONB,                 -- kriteria personalisasi (jurusan/PTN)
     status konten_info_status NOT NULL DEFAULT 'aktif',

@@ -10,14 +10,24 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "./session-constants";
 
-export type SessionRole = "student" | "mentor" | "admin";
+// "unassigned" = login SAH (password/Google tervalidasi, cookie signed benar)
+// TAPI users.profiling_selesai masih false — user belum pilih role Siswa/Mentor
+// & belum isi wizard /lengkapi-profil (PRD 7.0.2 DIREVISI TOTAL, FR-1.15). Beda
+// dari "tidak ada session" — token ini valid, cuma role beneran belum ditentukan.
+// Sengaja BUKAN nilai role_type di DB (enum role_type cuma student/mentor/admin)
+// — murni state sesi sementara, dibuang begitu /lengkapi-profil selesai & session
+// di-reissue dengan role asli.
+export type SessionRole = "student" | "mentor" | "admin" | "unassigned";
 
 // Dipakai login route (redirect setelah login) & tiap dashboard/{role}/page.tsx
 // (guard supaya role session lain tidak bisa buka dashboard role lain lewat URL).
+// unassigned -> /lengkapi-profil (BUKAN dashboard) supaya kode yang cuma redirect
+// ke ROLE_DASHBOARD_PATH[role] otomatis benar tanpa perlu cek khusus tiap tempat.
 export const ROLE_DASHBOARD_PATH: Record<SessionRole, string> = {
   student: "/dashboard/siswa",
   mentor: "/dashboard/mentor",
   admin: "/dashboard/admin",
+  unassigned: "/lengkapi-profil",
 };
 
 export interface SessionPayload {
@@ -61,7 +71,10 @@ export function verifySessionToken(token: string | undefined | null): SessionPay
     if (
       payload &&
       typeof payload.userId === "string" &&
-      (payload.role === "student" || payload.role === "mentor" || payload.role === "admin")
+      (payload.role === "student" ||
+        payload.role === "mentor" ||
+        payload.role === "admin" ||
+        payload.role === "unassigned")
     ) {
       return payload as SessionPayload;
     }

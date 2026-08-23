@@ -151,26 +151,38 @@ Tidak ada kompetitor besar yang eksplisit menjanjikan **pendampingan berlanjut p
 ### 7.0.1 Login
 Form tunggal: Email/Username + Password, opsi "Lupa Password?", tombol "Login dengan Google" (OAuth), link "Belum Punya Akun? Buat Akun Sekarang". Setelah kredensial tervalidasi, backend membaca role dari database (bukan dari input user) dan redirect otomatis: `/dashboard/siswa`, `/dashboard/mentor`, atau `/dashboard/admin`.
 
-### 7.0.2 Register — Alur Progressive Profiling
+### 7.0.2 Register — **DIREVISI TOTAL (Agustus 2026): Akun Dulu, Profiling Belakangan**
 
-**Langkah 1 (semua role):** "Kamu mau daftar sebagai apa?" — dropdown pilih Siswa atau Mentor. *(Role Admin tidak muncul di form publik ini — akun Admin dibuat terpisah lewat undangan.)*
+**Perubahan arsitektur besar dari draf sebelumnya.** Sebelumnya: profiling dulu (role, kelas, dst), akun (email/password) di langkah terakhir. **Sekarang dibalik**: akun dibuat di **Langkah 1** (auto-login begitu submit), profiling (role + data terkait) dikerjakan **setelah** login, di halaman terpisah `/lengkapi-profil`.
 
-**Langkah 2–4/5 (bercabang sesuai role):**
+**Alasan perubahan**: mengurangi risiko kehilangan kontak calon user yang berhenti di tengah wizard lama — begitu email tersimpan di Langkah 1, itu sudah jadi kontak yang bisa di-follow-up meski profiling belum selesai. Trade-off yang disadari: kehilangan sebagian efek Commitment Effect dari progressive profiling versi lama — ini keputusan bisnis sadar, bukan kekeliruan.
 
-*Jalur Siswa (5 langkah total):*
-- Langkah 2: "Sekarang kamu kelas berapa" — pilih Kelas 10 / 11 / 12 / Gap Year
-- Langkah 3: "Mapel apa yang paling sulit menurutmu?" — checklist multi-select (Matematika, Bahasa Inggris, Bahasa Indonesia, Kimia, Fisika, Biologi, Sejarah, Ekonomi, Geografi, Lainnya). **Data ini menjadi input tambahan ke Assessment/rekomendasi kelas** — bukan sekadar data profil pasif.
-- Langkah 4: "Tulis nomor WhatsApp kamu" — dipakai untuk verifikasi & informasi penting.
+**Langkah 1 — Buat Akun (satu-satunya langkah di halaman `/daftar`):**
+- Email, Nama Lengkap, Password (single field, toggle show/hide)
+- **Tombol "Daftar dengan Google"** (OAuth, lihat catatan setup di FR-1.14)
+- **Kode Referral (Opsional)** — titik input kode referral (sama fungsinya dengan sebelumnya, cuma pindah ke Langkah 1)
+- Submit → akun `users` langsung dibuat, `profiling_selesai = false`, **auto-login** (session langsung aktif, TIDAK perlu login manual lagi setelah register), redirect ke `/lengkapi-profil`
 
-*Jalur Mentor (6 langkah total — 1 langkah lebih banyak dari Siswa):*
-- Langkah 2: "Kamu kuliah di PTN mana?" — dropdown pilih PTN
-- Langkah 3: "Semester berapa dan jurusan apa?" — input angka (semester) + teks (jurusan)
-- Langkah 4 **(baru)**: "Subtes apa yang mau kamu ampu?" — checklist multi-select, memakai daftar subtes yang sama dengan struktur di Bagian 7.5 (Literasi B. Indonesia, Literasi B. Inggris, Penalaran Matematika, Penalaran Umum, Pemahaman Bacaan & Menulis, Pengetahuan Kuantitatif, plus mapel TKA seperti Matematika, Fisika, Kimia, Biologi, dst.)
-- Langkah 5: "Tulis nomor WhatsApp kamu"
+**`/lengkapi-profil` — Wizard Profiling (setelah login, terpisah dari halaman Register):**
 
-**Langkah Terakhir (konvergen, semua role):** "Nah terakhir..." — Email, Nama Lengkap, Password (single field dengan toggle show/hide, tanpa confirm-password terpisah), **Kode Referral (Opsional)** dengan keterangan "Masukkan kode referral temenmu kalo punya". Ini adalah titik input kode referral yang dipakai sistem Referral (Bagian 7.1) untuk mengaitkan referee ke referrer.
+Langkah 1: "Kamu mau daftar sebagai apa?" — pilih Siswa atau Mentor. *(Role Admin tidak muncul — akun Admin dibuat terpisah lewat undangan, Bagian 7.0.7.)*
 
-**Catatan implementasi progress bar:** Karena jalur Mentor (6 langkah) dan Siswa (5 langkah) punya jumlah langkah berbeda, komponen progress bar **wajib dibuat dinamis** (jumlah segmen menyesuaikan role yang dipilih di Langkah 1), bukan fixed 5 segmen untuk semua.
+*Jalur Siswa:*
+- Kelas berapa (10/11/12/Gap Year)
+- Mapel Tersulit (checklist multi-select) — tetap jadi input Assessment/rekomendasi kelas
+- Nomor WhatsApp
+
+*Jalur Mentor:*
+- Kuliah di PTN mana
+- Semester & Jurusan
+- Subtes yang Diampu (checklist multi-select)
+- Nomor WhatsApp
+
+Submit langkah terakhir wizard ini → `UserRole` dibuat (status sesuai role: `active` untuk Siswa, `pending` untuk Mentor), data role-spesifik tersimpan (`user_mapel_tersulit`/`mentor_profiles`+`mentor_subtes_diampu`), `users.profiling_selesai = true`, redirect ke dashboard sesuai role.
+
+**FR-1.14 (baru): Google Sign-In** — pakai Supabase Auth provider Google (OAuth). **Tidak memerlukan domain kustom** — `localhost` sah dipakai sebagai redirect URI development, dan domain sementara (URL Vercel) bisa dipakai untuk staging/production sebelum `dimentoring.id` aktif; domain asli tinggal ditambahkan sebagai origin tambahan nanti tanpa mengganggu setup yang sudah ada. **Catatan**: untuk publish OAuth consent screen dari mode "Testing" ke "In Production" (supaya semua orang bisa pakai, bukan cuma akun test), Google mensyaratkan link Kebijakan Privasi — ini jadi trigger nyata untuk segera siapkan halaman Kebijakan Privasi dasar (terkait juga BR-23).
+
+**FR-1.15 (baru): Guard Profiling Belum Selesai** — Login (Bagian 7.0.1) dan middleware/layout `(protected)` **wajib cek** `users.profiling_selesai`. Kalau `false`: redirect paksa ke `/lengkapi-profil` (lanjutkan dari titik terakhir tersimpan, bukan mulai dari nol lagi), **tidak boleh** akses dashboard/fitur manapun sampai profiling selesai.
 
 ### 7.0.3 Verifikasi Akun — **DITUNDA KE FASE 2 (revisi September 2026)**
 **Keputusan scope Fase 1: verifikasi akun (email/WA) TIDAK diaktifkan dulu.** Alasan: menghilangkan dependency ke domain custom + setup Resend/WA API yang sempat jadi blocker signifikan, demi mempercepat rilis Fase 1. Akun (Student maupun Mentor) **langsung berstatus `Verified` otomatis saat dibuat**, tanpa proses klik link.
@@ -763,7 +775,7 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 
 # BAGIAN 13 — DATA MODEL (Diperluas & Direvisi)
 
-- **User** — id, nama, email, no_wa, password_hash, **status_verifikasi_akun** (`Unverified`/`Verified` — status akun keseluruhan, terpisah dari status per-role), sub_status (Student: `calon_mahasiswa`/`mahasiswa`), sekolah_id (relasi ke `Sekolah`, khusus Student), kota_id, provinsi_id, nama_panggilan, consent_leaderboard_lokasi, opt_out_leaderboard, **mapel_tersulit** (array, khusus Student), dibuat_pada. *(Field `role` tunggal DIHAPUS dari User — digantikan `UserRole` di bawah, agar satu akun bisa memegang lebih dari satu role.)*
+- **User** — id, nama, email, **no_wa** (nullable — diisi di `/lengkapi-profil`, bukan lagi di Langkah 1 Register), **password_hash** (nullable — NULL permanen untuk akun yang hanya pernah pakai "Daftar/Login dengan Google"), **profiling_selesai** (boolean, default false — gerbang FR-1.15, `true` setelah wizard `/lengkapi-profil` selesai), **status_verifikasi_akun** (`Unverified`/`Verified` — status akun keseluruhan, terpisah dari status per-role), sub_status (Student: `calon_mahasiswa`/`mahasiswa`, diisi belakangan di `/lengkapi-profil`), sekolah_id (relasi ke `Sekolah`, khusus Student), kota_id, provinsi_id, nama_panggilan, consent_leaderboard_lokasi, opt_out_leaderboard, **mapel_tersulit** (array, khusus Student), dibuat_pada. *(Field `role` tunggal DIHAPUS dari User — digantikan `UserRole` di bawah, agar satu akun bisa memegang lebih dari satu role.)*
 - **UserRole (baru)** — id, user_id, role_type (`Student`/`Mentor`/`Admin`), status (`Active`/`Pending`/`Rejected`), dibuat_pada, **sumber_pengajuan** (`register_publik`/`upgrade_dari_akun_existing`). Satu `user_id` dapat memiliki lebih dari satu baris dengan status `Active` sekaligus — dasar teknis fitur Role Switcher (FR-1.12) tanpa duplikasi akun.
 - **Sekolah** — id, nama, kota_id, **akreditasi**, **kuota_snbp**, **ranking_data** (jika tersedia) — sumber data untuk auto-fill input SNBP (BR-16).
 - **MentorProfile** — id, user_id, asal_ptn, semester, jurusan, **subtes_diampu** (array, hasil checklist onboarding), kelas_diampu (relasi ke Kelas). *(Status approval kini ada di `UserRole.status`, bukan field terpisah di sini, agar konsisten dengan role lain.)*

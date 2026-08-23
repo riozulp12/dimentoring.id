@@ -63,6 +63,16 @@ export async function PATCH(request: NextRequest) {
     return errorResponse("Gagal memuat akun kamu. Coba lagi nanti.", 500);
   }
 
+  // Akun yang cuma pernah pakai "Daftar/Login dengan Google" tidak punya password
+  // lokal sama sekali (password_hash NULL, lihat db/make_no_wa_password_nullable.sql)
+  // — belum ada UI untuk "set password pertama kali" di iterasi ini.
+  if (!user.password_hash) {
+    return errorResponse(
+      "Akun ini belum punya password (dibuat lewat Google) — fitur ganti password belum tersedia untuk akun ini.",
+      400,
+    );
+  }
+
   const currentValid = await verifyPassword(passwordSaatIni, user.password_hash as string);
   if (!currentValid) {
     return errorResponse("Password saat ini salah.", 401);

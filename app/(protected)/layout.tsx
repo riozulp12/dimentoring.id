@@ -15,7 +15,7 @@ import type { SidebarRole } from "@/components/dashboard/sidebarMenuConfig";
  * dari client), sesuai aturan CLAUDE.md soal role tidak boleh dari input client.
  */
 
-const SESSION_ROLE_TO_SIDEBAR_ROLE: Record<SessionRole, SidebarRole> = {
+const SESSION_ROLE_TO_SIDEBAR_ROLE: Record<Exclude<SessionRole, "unassigned">, SidebarRole> = {
   student: "siswa",
   mentor: "mentor",
   admin: "admin",
@@ -27,6 +27,14 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
 
   if (!session) {
     redirect("/login");
+  }
+
+  // FR-1.15: session sah TAPI profiling belum selesai (role masih "unassigned")
+  // -> paksa balik ke /lengkapi-profil, cegah akses dashboard/fitur manapun lewat
+  // ganti URL manual. `redirect()` bertipe `never`, jadi TypeScript otomatis
+  // mempersempit session.role jadi selain "unassigned" di bawah baris ini.
+  if (session.role === "unassigned") {
+    redirect("/lengkapi-profil");
   }
 
   const role = SESSION_ROLE_TO_SIDEBAR_ROLE[session.role];
