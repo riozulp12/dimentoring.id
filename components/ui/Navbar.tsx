@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Button from "./Button";
+import Dropdown from "./Dropdown";
 import Logo from "./Logo";
 import AccountMenu, { type AccountMenuItem } from "@/components/dashboard/AccountMenu";
 import { PROGRAMS } from "@/components/sections/Program";
@@ -96,71 +97,59 @@ function NavLink({
  * sudah ada (jangan duplikasi daftar program), tiap item scroll ke #program. */
 function ProgramDropdown({ isActive, onNavigate }: { isActive: boolean; onNavigate?: () => void }) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        data-active={isActive}
-        style={{ "--nav-active-color": "#081EEA" } as CSSProperties}
-        className="group flex flex-col items-center gap-1 text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C] transition-colors duration-150 data-[active=true]:text-[color:var(--nav-active-color)]"
-      >
-        <span className="flex items-center gap-1.5 font-normal group-data-[active=true]:font-semibold">
-          Program
-          <Image
-            src="/icons/navbar-chevron-down.svg"
-            width={24}
-            height={24}
-            alt=""
-            className={`transition-transform duration-150 ${open ? "rotate-180" : ""}`}
-          />
-        </span>
-        <Image
-          src="/icons/navbar-active-underline.svg"
-          width={43}
-          height={9}
-          alt=""
-          className="h-[6px] w-11 opacity-0 transition-opacity duration-150 group-data-[active=true]:opacity-100"
-        />
-      </button>
-
-      {open ? (
-        <div
-          role="menu"
-          className="absolute top-full left-1/2 z-40 mt-2 w-72 -translate-x-1/2 rounded-[16px] border-[0.8px] border-[#E3E3E3] bg-white py-1.5 shadow-[1px_2px_4px_rgba(0,0,0,0.1)]"
+    <Dropdown
+      open={open}
+      onOpenChange={setOpen}
+      align="center"
+      panelClassName="w-72"
+      trigger={
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          data-active={isActive}
+          style={{ "--nav-active-color": "#081EEA" } as CSSProperties}
+          className="group flex flex-col items-center gap-1 text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C] transition-colors duration-150 data-[active=true]:text-[color:var(--nav-active-color)]"
         >
-          {PROGRAMS.map((program) => (
-            <Link
-              key={program.title}
-              href="/#program"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                onNavigate?.();
-              }}
-              className="block px-4 py-2.5 transition-colors hover:bg-gray-50"
-            >
-              <span className="block text-sm font-medium text-black">{program.title}</span>
-              <span className="block text-xs text-[#7E7C7C]">{program.description}</span>
-            </Link>
-          ))}
-        </div>
-      ) : null}
-    </div>
+          <span className="flex items-center gap-1.5 font-normal group-data-[active=true]:font-semibold">
+            Program
+            <Image
+              src="/icons/navbar-chevron-down.svg"
+              width={24}
+              height={24}
+              alt=""
+              className={`transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+            />
+          </span>
+          <Image
+            src="/icons/navbar-active-underline.svg"
+            width={43}
+            height={9}
+            alt=""
+            className="h-[6px] w-11 opacity-0 transition-opacity duration-150 group-data-[active=true]:opacity-100"
+          />
+        </button>
+      }
+    >
+      {PROGRAMS.map((program) => (
+        <Link
+          key={program.title}
+          href="/#program"
+          role="menuitem"
+          onClick={() => {
+            setOpen(false);
+            onNavigate?.();
+          }}
+          className="block px-4 py-2.5 transition-colors hover:bg-gray-50"
+        >
+          <span className="block text-sm font-medium text-black">{program.title}</span>
+          <span className="block text-xs text-[#7E7C7C]">{program.description}</span>
+        </Link>
+      ))}
+    </Dropdown>
   );
 }
 

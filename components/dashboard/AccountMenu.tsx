@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import Avatar from "@/components/ui/Avatar";
+import Dropdown from "@/components/ui/Dropdown";
 import LogoutConfirmModal from "@/components/shared/LogoutConfirmModal";
 import { formatRelativeTime } from "@/lib/shared/formatRelativeTime";
 import { DashboardIcon, KelasIcon, LogoutIcon, SettingIcon } from "./sidebarIcons";
@@ -74,25 +75,10 @@ export default function AccountMenu({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotifikasiItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const notifContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-      if (notifContainerRef.current && !notifContainerRef.current.contains(event.target as Node)) {
-        setNotifOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,145 +131,143 @@ export default function AccountMenu({
     <div className="flex items-center gap-3 sm:gap-4">
       {mentorStatus === "pending" ? <OnReviewBadge /> : null}
 
-      <div ref={notifContainerRef} className="relative">
-        <button
-          type="button"
-          onClick={() => setNotifOpen((prev) => !prev)}
-          aria-label="Notifikasi"
-          aria-haspopup="menu"
-          aria-expanded={notifOpen}
-          className="relative flex size-8 items-center justify-center rounded-lg text-[#7e7c7c] hover:bg-gray-100"
-        >
-          <NotificationIcon className="size-5" />
-          {unreadCount > 0 ? (
-            <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E70A0A] px-1 text-[10px] leading-none font-semibold text-white">
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
+      <Dropdown
+        open={notifOpen}
+        onOpenChange={setNotifOpen}
+        align="right"
+        panelClassName="max-h-[70vh] w-80 overflow-y-auto"
+        trigger={
+          <button
+            type="button"
+            onClick={() => setNotifOpen((prev) => !prev)}
+            aria-label="Notifikasi"
+            aria-haspopup="menu"
+            aria-expanded={notifOpen}
+            className="relative flex size-8 items-center justify-center rounded-lg text-[#7e7c7c] hover:bg-gray-100"
+          >
+            <NotificationIcon className="size-5" />
+            {unreadCount > 0 ? (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E70A0A] px-1 text-[10px] leading-none font-semibold text-white">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            ) : null}
+          </button>
+        }
+      >
+        <div className="flex items-center justify-between px-4 py-2">
+          <span className="text-sm font-semibold text-black">Notifikasi</span>
+          {notifications.length > 0 ? (
+            <button
+              type="button"
+              onClick={handleMarkAllRead}
+              className="text-xs font-medium text-[#081EEA] hover:underline"
+            >
+              Tandai semua dibaca
+            </button>
           ) : null}
-        </button>
+        </div>
 
-        {notifOpen ? (
-          <div
-            role="menu"
-            className="absolute top-full right-0 z-40 mt-2 max-h-[70vh] w-80 overflow-y-auto rounded-[16px] border-[0.8px] border-[#E3E3E3] bg-white py-1.5 shadow-[1px_2px_4px_rgba(0,0,0,0.1)]"
+        {notifications.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-[#7E7C7C]">Belum ada notifikasi</p>
+        ) : (
+          notifications.map((notif) => (
+            <button
+              key={notif.id}
+              type="button"
+              role="menuitem"
+              onClick={() => handleNotifClick(notif)}
+              className={`flex w-full items-start gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 ${
+                notif.dibaca ? "" : "bg-[#F9FAFF]"
+              }`}
+            >
+              <span
+                className={`mt-1.5 size-2 shrink-0 rounded-full ${notif.dibaca ? "" : "bg-[#081EEA]"}`}
+                aria-hidden="true"
+              />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate text-sm font-medium text-black">{notif.judul}</span>
+                {notif.pesan ? (
+                  <span className="line-clamp-2 text-xs text-[#7E7C7C]">{notif.pesan}</span>
+                ) : null}
+                <span className="text-xs text-[#AFAFAF]">{formatRelativeTime(notif.created_at)}</span>
+              </span>
+            </button>
+          ))
+        )}
+      </Dropdown>
+
+      <Dropdown
+        open={open}
+        onOpenChange={setOpen}
+        align="right"
+        panelClassName="w-56"
+        trigger={
+          <button
+            type="button"
+            onClick={() => setOpen((prev) => !prev)}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            className="flex items-center gap-2 rounded-lg sm:gap-3"
           >
-            <div className="flex items-center justify-between px-4 py-2">
-              <span className="text-sm font-semibold text-black">Notifikasi</span>
-              {notifications.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={handleMarkAllRead}
-                  className="text-xs font-medium text-[#081EEA] hover:underline"
-                >
-                  Tandai semua dibaca
-                </button>
-              ) : null}
-            </div>
+            <span className="hidden text-sm text-[#081eea] sm:inline">{firstName}</span>
+            <Avatar avatarUrl={avatarUrl} nama={fullName} size="sm" />
+          </button>
+        }
+      >
+        {menuItems.map((item) => {
+          if (item.icon === "profil") {
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-gray-50"
+              >
+                <Avatar avatarUrl={avatarUrl} nama={fullName} size="sm" />
+                <span className="flex min-w-0 flex-col">
+                  <span className="min-w-0 truncate text-sm font-medium text-black">{fullName}</span>
+                  {referralLevel ? (
+                    <span className="min-w-0 truncate text-xs text-[#7E7C7C]">{referralLevel}</span>
+                  ) : null}
+                </span>
+              </Link>
+            );
+          }
 
-            {notifications.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-[#7E7C7C]">Belum ada notifikasi</p>
-            ) : (
-              notifications.map((notif) => (
-                <button
-                  key={notif.id}
-                  type="button"
-                  role="menuitem"
-                  onClick={() => handleNotifClick(notif)}
-                  className={`flex w-full items-start gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 ${
-                    notif.dibaca ? "" : "bg-[#F9FAFF]"
-                  }`}
-                >
-                  <span
-                    className={`mt-1.5 size-2 shrink-0 rounded-full ${notif.dibaca ? "" : "bg-[#081EEA]"}`}
-                    aria-hidden="true"
-                  />
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="truncate text-sm font-medium text-black">{notif.judul}</span>
-                    {notif.pesan ? (
-                      <span className="line-clamp-2 text-xs text-[#7E7C7C]">{notif.pesan}</span>
-                    ) : null}
-                    <span className="text-xs text-[#AFAFAF]">{formatRelativeTime(notif.created_at)}</span>
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        ) : null}
-      </div>
+          if (item.icon === "logout") {
+            return (
+              <button
+                key={item.label}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  setLogoutConfirmOpen(true);
+                }}
+                className="group flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-black transition-colors hover:bg-red-50 hover:text-red-600"
+              >
+                <LogoutIcon className="size-4 shrink-0 text-[#7e7c7c] group-hover:text-red-600" />
+                {item.label}
+              </button>
+            );
+          }
 
-      <div ref={containerRef} className="relative">
-        <button
-          type="button"
-          onClick={() => setOpen((prev) => !prev)}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          className="flex items-center gap-2 rounded-lg sm:gap-3"
-        >
-          <span className="hidden text-sm text-[#081eea] sm:inline">{firstName}</span>
-          <Avatar avatarUrl={avatarUrl} nama={fullName} size="sm" />
-        </button>
-
-        {open ? (
-          <div
-            role="menu"
-            className="absolute top-full right-0 z-40 mt-2 w-56 rounded-[16px] border-[0.8px] border-[#E3E3E3] bg-white py-1.5 shadow-[1px_2px_4px_rgba(0,0,0,0.1)]"
-          >
-            {menuItems.map((item) => {
-              if (item.icon === "profil") {
-                return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    role="menuitem"
-                    onClick={() => setOpen(false)}
-                    className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-gray-50"
-                  >
-                    <Avatar avatarUrl={avatarUrl} nama={fullName} size="sm" />
-                    <span className="flex min-w-0 flex-col">
-                      <span className="min-w-0 truncate text-sm font-medium text-black">{fullName}</span>
-                      {referralLevel ? (
-                        <span className="min-w-0 truncate text-xs text-[#7E7C7C]">{referralLevel}</span>
-                      ) : null}
-                    </span>
-                  </Link>
-                );
-              }
-
-              if (item.icon === "logout") {
-                return (
-                  <button
-                    key={item.label}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setOpen(false);
-                      setLogoutConfirmOpen(true);
-                    }}
-                    className="group flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-black transition-colors hover:bg-red-50 hover:text-red-600"
-                  >
-                    <LogoutIcon className="size-4 shrink-0 text-[#7e7c7c] group-hover:text-red-600" />
-                    {item.label}
-                  </button>
-                );
-              }
-
-              const Icon = MENU_ICONS[item.icon];
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  role="menuitem"
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-black transition-colors hover:bg-gray-50"
-                >
-                  <Icon className="size-4 shrink-0 text-[#7e7c7c]" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-        ) : null}
-      </div>
+          const Icon = MENU_ICONS[item.icon];
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm text-black transition-colors hover:bg-gray-50"
+            >
+              <Icon className="size-4 shrink-0 text-[#7e7c7c]" />
+              {item.label}
+            </Link>
+          );
+        })}
+      </Dropdown>
 
       <LogoutConfirmModal open={logoutConfirmOpen} onClose={() => setLogoutConfirmOpen(false)} />
     </div>
