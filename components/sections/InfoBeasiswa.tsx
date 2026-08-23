@@ -30,6 +30,15 @@ export default async function InfoBeasiswa() {
         </p>
       </div>
 
+      <div className="flex w-full items-center justify-end">
+        <Link
+          href="/beasiswa-event"
+          className="text-sm font-medium text-[#081EEA] transition-opacity hover:opacity-80 sm:text-base"
+        >
+          Lihat Semua &rarr;
+        </Link>
+      </div>
+
       <div className="grid w-full grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
         {items.map((item) => (
           <div

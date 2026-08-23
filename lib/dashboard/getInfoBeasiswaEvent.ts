@@ -36,3 +36,31 @@ export async function getInfoBeasiswaEvent(limit?: number): Promise<BeasiswaEven
 
   return data ?? [];
 }
+
+export interface KontenInfoListItem extends BeasiswaEventItem {
+  status: string;
+}
+
+/**
+ * Halaman publik /beasiswa-event (list) — REUSE query dasar di atas tapi
+ * SEMUA baris (termasuk status='ditutup') dan tanpa limit, supaya siswa/mentor
+ * bisa lihat riwayat konten yang sudah ditutup juga. Diurutkan status ASC
+ * ('aktif' dideklarasikan sebelum 'ditutup' di enum konten_info_status,
+ * jadi ascending = konten yang masih buka tampil duluan), lalu deadline ASC
+ * per kelompok status (nulls di akhir kelompoknya).
+ */
+export async function getKontenInfoList(): Promise<KontenInfoListItem[]> {
+  const { data, error } = await supabaseServer
+    .from("konten_info")
+    .select("id, tipe, judul, deskripsi, deadline, status")
+    .in("tipe", ["beasiswa", "internship", "event"])
+    .order("status", { ascending: true })
+    .order("deadline", { ascending: true, nullsFirst: false });
+
+  if (error) {
+    console.error("[getKontenInfoList] query failed:", error);
+    return [];
+  }
+
+  return data ?? [];
+}
