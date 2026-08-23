@@ -79,7 +79,7 @@ export async function getMentorPengajuanQueue(): Promise<MentorPengajuan[]> {
     .order("created_at", { ascending: true });
 
   if (error) {
-    console.error("[getMentorPengajuanQueue] query failed:", error);
+    console.error("[getMentorPengajuanQueue] query failed:", JSON.stringify(error, null, 2));
     return [];
   }
 
@@ -102,15 +102,18 @@ export async function getMentorPengajuanQueue(): Promise<MentorPengajuan[]> {
 
 /** Card "Pendaftaran Siswa Terbaru" — 5 siswa paling baru daftar. */
 export async function getSiswaTerbaru(): Promise<SiswaTerbaru[]> {
+  // FK disambiguation wajib: user_roles punya 2 FK ke users (user_id DAN
+  // direview_oleh_id), jadi "user_roles!inner(...)" polos gagal dengan
+  // PGRST201 "more than one relationship was found" — bukan soal kolom hilang.
   const { data, error } = await supabaseServer
     .from("users")
-    .select("nama, created_at, user_roles!inner(role_type)")
+    .select("nama, created_at, user_roles!user_roles_user_id_fkey!inner(role_type)")
     .eq("user_roles.role_type", "student")
     .order("created_at", { ascending: false })
     .limit(5);
 
   if (error) {
-    console.error("[getSiswaTerbaru] query failed:", error);
+    console.error("[getSiswaTerbaru] query failed:", JSON.stringify(error, null, 2));
     return [];
   }
 
