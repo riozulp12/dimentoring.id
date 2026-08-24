@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Mascot from "@/components/ui/Mascot";
@@ -21,9 +21,25 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 export default function AuthCallbackPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  // Guard terhadap React Strict Mode yang me-mount efek ini 2x di development.
+  // exchangeCodeForSession() memakai PKCE code_verifier sekali-pakai (dihapus dari
+  // localStorage setelah dipakai) — kalau effect ini jalan dua kali, panggilan kedua
+  // akan gagal dengan "both auth code and code verifier should be non-empty".
+  // Sengaja TIDAK pakai pola cleanup `cancelled` di sini: cleanup sintetis dari
+  // Strict Mode akan jalan di antara kedua invocation, sehingga bisa menandai
+  // panggilan PERTAMA (yang sukses) sebagai "cancelled" dan diam-diam membatalkan
+  // redirect-nya. Untuk halaman callback sekali-pakai ini, unmount di tengah proses
+  // bukan skenario nyata yang perlu ditangani.
+  const hasRunRef = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
+    if (hasRunRef.current) {
+      console.warn(
+        "[auth/callback] Duplicate exchangeCodeForSession() call diblokir (Strict Mode double-invoke di dev).",
+      );
+      return;
+    }
+    hasRunRef.current = true;
 
     async function run() {
       const supabase = getSupabaseBrowserClient();
@@ -33,7 +49,7 @@ export default function AuthCallbackPage() {
       );
 
       if (exchangeError || !data.session?.user.email) {
-        if (!cancelled) setError("Gagal login dengan Google. Coba lagi dari halaman Login.");
+        setError("Gagal login dengan Google. Coba lagi dari halaman Login.");
         return;
       }
 
@@ -56,14 +72,12 @@ export default function AuthCallbackPage() {
         json = await response.json();
       } catch {
         await supabase.auth.signOut();
-        if (!cancelled) setError("Gagal terhubung ke server. Periksa koneksi internet kamu.");
+        setError("Gagal terhubung ke server. Periksa koneksi internet kamu.");
         return;
       }
 
       // Sesi Supabase Auth sudah tidak diperlukan lagi setelah titik ini.
       await supabase.auth.signOut();
-
-      if (cancelled) return;
 
       if (!json.success || !json.redirectTo) {
         setError(json.error ?? "Gagal login dengan Google. Coba lagi dari halaman Login.");
@@ -74,10 +88,6 @@ export default function AuthCallbackPage() {
     }
 
     run();
-
-    return () => {
-      cancelled = true;
-    };
   }, [router]);
 
   return (
