@@ -13,7 +13,7 @@ import { GoogleGenAI } from "@google/genai";
  * data numerik/kategorikal anonim — TIDAK PERNAH nama/email/no. WA siswa.
  */
 
-const MODEL = "gemini-2.5-flash-lite";
+const MODEL = "gemini-3.5-flash-lite";
 const GENERATE_TIMEOUT_MS = 8000;
 
 const FALLBACK_NOTE =

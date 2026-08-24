@@ -10,7 +10,7 @@ import { GoogleGenAI } from "@google/genai";
  * manual) daripada diam-diam ke-isi teks generik yang salah konteks.
  */
 
-const MODEL = "gemini-2.5-flash-lite";
+const MODEL = "gemini-3.5-flash-lite";
 const GENERATE_TIMEOUT_MS = 8000;
 
 const SYSTEM_PROMPT = `Kamu adalah asisten Dimentoring, platform bimbingan belajar persiapan masuk PTN untuk siswa SMA Indonesia. Tulis deskripsi singkat (2-3 kalimat) untuk sebuah kelas bimbingan belajar, menjelaskan apa yang akan didapat siswa dari kelas ini.
@@ -24,18 +24,23 @@ ATURAN KETAT:
 
 export interface GenerateKelasDeskripsiInput {
   namaKelas: string;
+  programKategoriLabel: string;
   tingkatKelasLabel: string;
   tipeKelasLabel: string;
-  subtesNama: string;
+  /** Opsional — Konsultasi & Pendampingan Mahasiswa tidak selalu terikat mapel (PRD 7.5.4). */
+  subtesNama?: string | null;
 }
 
 function buildUserPrompt(data: GenerateKelasDeskripsiInput): string {
   return [
     `Nama Kelas: ${data.namaKelas}`,
+    `Kategori Program: ${data.programKategoriLabel}`,
     `Tingkat: ${data.tingkatKelasLabel}`,
     `Tipe Kelas: ${data.tipeKelasLabel}`,
-    `Subtes: ${data.subtesNama}`,
-  ].join("\n");
+    data.subtesNama ? `Subtes: ${data.subtesNama}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /** null = gagal generate (API key belum diset, error, atau respons kosong). */
