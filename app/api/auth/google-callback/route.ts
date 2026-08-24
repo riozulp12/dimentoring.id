@@ -27,6 +27,10 @@ interface GoogleCallbackBody {
   email: string;
   nama?: string | null;
   pendingAssessmentId?: string;
+  // PRD Bagian 13 (BARU) — dititipkan dari URL /daftar sebelum redirect ke
+  // Google (lihat app/auth/callback/page.tsx), cuma dipakai kalau ini akun BARU.
+  utmSource?: string;
+  utmCampaign?: string;
 }
 
 function errorResponse(message: string, status: number, extra?: Record<string, unknown>) {
@@ -70,6 +74,9 @@ export async function POST(request: NextRequest) {
   } else {
     // ---- Belum pernah daftar -> buat akun baru (register implisit). ----
     const namaLengkap = body.nama?.trim() || email.split("@")[0];
+    // Kosong = NULL di database (dianggap "organic"), bukan default string.
+    const utmSource = body.utmSource?.trim() || null;
+    const utmCampaign = body.utmCampaign?.trim() || null;
 
     const MAX_REFERRAL_ATTEMPTS = 5;
     let newUser: { id: string } | null = null;
@@ -83,6 +90,8 @@ export async function POST(request: NextRequest) {
           email,
           status_verifikasi_akun: "verified", // Google sudah memverifikasi kepemilikan email ini
           kode_referral: generateReferralCode(namaLengkap),
+          utm_source: utmSource,
+          utm_campaign: utmCampaign,
         })
         .select("id")
         .single();

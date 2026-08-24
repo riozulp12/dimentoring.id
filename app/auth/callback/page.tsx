@@ -61,13 +61,17 @@ export default function AuthCallbackPage() {
 
       const params = new URLSearchParams(window.location.search);
       const pendingAssessmentId = params.get("pending_assessment") ?? undefined;
+      // PRD Bagian 13 (BARU) — dititipkan lewat redirectTo di /daftar
+      // (handleGoogleRegister) supaya masih ada begitu balik dari Google.
+      const utmSource = params.get("utm_source") ?? undefined;
+      const utmCampaign = params.get("utm_campaign") ?? undefined;
 
       let json: { success: boolean; error?: string; redirectTo?: string };
       try {
         const response = await fetch("/api/auth/google-callback", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, nama, pendingAssessmentId }),
+          body: JSON.stringify({ email, nama, pendingAssessmentId, utmSource, utmCampaign }),
         });
         json = await response.json();
       } catch {

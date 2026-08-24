@@ -28,6 +28,12 @@ function RegisterPageInner() {
   const pendingAssessmentId = searchParams.get("pending_assessment") ?? undefined;
   // FR-R2/PRD 7.1: klik link referral (/r/[kode]) redirect ke sini dengan
   // ?ref=[kode] — pre-fill field Kode Referral, tetap bisa diedit/dihapus user.
+  // PRD Bagian 13 (BARU): ?utm_source=.../?utm_campaign=... dari link iklan
+  // (Meta/TikTok/dst) — ditangkap di sini, TIDAK ditampilkan ke user, cuma
+  // diteruskan apa adanya ke API saat akun dibuat. Tidak ada = tetap undefined
+  // (biarkan NULL di database, jangan dipaksa "organic").
+  const utmSource = searchParams.get("utm_source")?.trim() || undefined;
+  const utmCampaign = searchParams.get("utm_campaign")?.trim() || undefined;
   const [email, setEmail] = useState("");
   const [namaLengkap, setNamaLengkap] = useState("");
   const [password, setPassword] = useState("");
@@ -68,6 +74,8 @@ function RegisterPageInner() {
           password,
           kodeReferral: kodeReferral.trim() || undefined,
           pendingAssessmentId,
+          utmSource,
+          utmCampaign,
         }),
       });
       const json = await response.json();
@@ -96,6 +104,11 @@ function RegisterPageInner() {
       if (pendingAssessmentId) {
         redirectTo.searchParams.set("pending_assessment", pendingAssessmentId);
       }
+      // Teruskan UTM lewat redirectTo — begitu balik dari Google, query string
+      // /daftar yang asli sudah hilang, jadi harus dibawa manual sampai ke
+      // /auth/callback supaya masih bisa dipakai saat POST ke google-callback.
+      if (utmSource) redirectTo.searchParams.set("utm_source", utmSource);
+      if (utmCampaign) redirectTo.searchParams.set("utm_campaign", utmCampaign);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: redirectTo.toString() },

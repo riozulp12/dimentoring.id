@@ -35,6 +35,11 @@ interface RegisterRequestBody {
   kodeReferral?: string;
   // PRD Bagian 7.4.1b: id assessment anonim yang mau ditautkan ke akun baru ini.
   pendingAssessmentId?: string;
+  // PRD Bagian 13 (BARU): sumber traffic dari link iklan (?utm_source=/
+  // ?utm_campaign= di URL /daftar) — apa adanya dari client, tidak divalidasi
+  // terhadap daftar nilai tertentu (Admin bebas pakai tag apa saja di iklan).
+  utmSource?: string;
+  utmCampaign?: string;
 }
 
 function isValidEmail(value: string) {
@@ -71,6 +76,11 @@ export async function POST(request: NextRequest) {
   // ---- Hash password ----
   const passwordHash = await hashPassword(body.password);
 
+  // Kosong = biarkan NULL di database (dianggap "organic" di tampilan Dashboard
+  // Marketing) — JANGAN diisi default string apa pun di sini.
+  const utmSource = body.utmSource?.trim() || null;
+  const utmCampaign = body.utmCampaign?.trim() || null;
+
   // ---- Insert users (profiling_selesai default false lewat skema) ----
   // Format kode referral (3 huruf + 2 angka) cuma punya 100 kombinasi per prefix,
   // jadi retry beberapa kali dengan kode baru kalau tabrakan spesifik di kode_referral.
@@ -88,6 +98,8 @@ export async function POST(request: NextRequest) {
         password_hash: passwordHash,
         status_verifikasi_akun: "verified",
         kode_referral: ownReferralCode,
+        utm_source: utmSource,
+        utm_campaign: utmCampaign,
       })
       .select("id")
       .single();

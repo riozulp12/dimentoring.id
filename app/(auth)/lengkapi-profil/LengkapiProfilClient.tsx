@@ -366,6 +366,7 @@ export default function LengkapiProfilClient() {
               <InputField
                 type="dropdown"
                 size="md"
+                className="w-full"
                 placeholder="Pilih peran kamu"
                 options={ROLE_OPTIONS}
                 value={form.role}
@@ -404,6 +405,7 @@ export default function LengkapiProfilClient() {
               <InputField
                 type="dropdown"
                 size="md"
+                className="w-full"
                 placeholder="Pilih PTN kamu"
                 options={PTN_OPTIONS}
                 value={form.ptn}

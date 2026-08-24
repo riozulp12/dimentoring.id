@@ -151,6 +151,16 @@ export function SettingIcon({ className }: IconProps) {
   );
 }
 
+export function AnalyticsIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
+      <rect x="3.5" y="12.5" width="4" height="8" rx="1.25" fill="currentColor" />
+      <rect x="10" y="7" width="4" height="13.5" rx="1.25" fill="currentColor" />
+      <rect x="16.5" y="3.5" width="4" height="17" rx="1.25" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function LogoutIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 21.5006 21.5" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">

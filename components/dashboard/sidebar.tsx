@@ -15,6 +15,7 @@ import {
   BeasiswaIcon,
   AiMentorIcon,
   SettingIcon,
+  AnalyticsIcon,
   LogoutIcon,
 } from "./sidebarIcons";
 import {
@@ -35,6 +36,7 @@ const ICONS: Record<SidebarIconKey, ComponentType<{ className?: string }>> = {
   beasiswa: BeasiswaIcon,
   "ai-mentor": AiMentorIcon,
   setting: SettingIcon,
+  analytics: AnalyticsIcon,
   logout: LogoutIcon,
 };
 
@@ -86,9 +88,9 @@ function NavRow({
         type="button"
         onClick={onClick}
         title={collapsed ? label : undefined}
-        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[#7e7c7c] transition-colors hover:bg-gray-50"
+        className="group flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[#7e7c7c] transition-colors hover:bg-red-50 hover:text-red-600"
       >
-        <Icon className="size-5 shrink-0" />
+        <Icon className="size-5 shrink-0 group-hover:text-red-600" />
         <span className={`text-sm leading-[1.4] font-normal tracking-[-0.2px] whitespace-nowrap ${labelClass}`}>
           {label}
         </span>

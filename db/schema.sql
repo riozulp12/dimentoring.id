@@ -91,6 +91,8 @@ CREATE TABLE users (
     consent_leaderboard_lokasi BOOLEAN NOT NULL DEFAULT false,
     opt_out_leaderboard BOOLEAN NOT NULL DEFAULT false,
     kode_referral TEXT UNIQUE,                    -- generate otomatis saat akun dibuat (FR-R1)
+    utm_source VARCHAR(100),                      -- BARU: sumber traffic saat daftar (mis. 'meta_ads', 'organic', 'tiktok')
+    utm_campaign VARCHAR(150),                     -- BARU: nama campaign spesifik, buat cross-reference ke iklan_campaign
     referral_click_count INT NOT NULL DEFAULT 0,  -- jumlah klik link referral (FR-R3)
     avatar_url TEXT,
     notif_email BOOLEAN NOT NULL DEFAULT true,
@@ -149,6 +151,39 @@ CREATE TABLE webhook_log_eksternal (
     raw_payload JSONB NOT NULL,
     diproses BOOLEAN NOT NULL DEFAULT false,
     received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TYPE pengeluaran_kategori AS ENUM ('operasional', 'gaji_honor', 'lainnya');
+
+-- Pengeluaran umum di luar iklan (iklan_campaign.budget sudah cover itu 
+-- terpisah) — dipakai gabung buat chart "Pengeluaran" di Analytics.
+CREATE TABLE pengeluaran_bisnis (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kategori pengeluaran_kategori NOT NULL,
+    deskripsi VARCHAR(255) NOT NULL,
+    jumlah DECIMAL(12,2) NOT NULL,
+    tanggal DATE NOT NULL,
+    dibuat_oleh_id UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TYPE iklan_platform AS ENUM ('meta', 'google', 'tiktok', 'lainnya');
+
+-- Data campaign iklan diinput MANUAL oleh Admin (bukan integrasi API ke
+-- Meta/Google/TikTok Ads Manager — terlalu berat untuk tim kecil sekarang).
+-- utm_campaign_tag dipakai buat cocokkan ke users.utm_campaign supaya bisa
+-- hitung jumlah leads per campaign tanpa perlu API pihak ketiga.
+CREATE TABLE iklan_campaign (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama_campaign VARCHAR(255) NOT NULL,
+    platform iklan_platform NOT NULL,
+    budget DECIMAL(12,2),
+    tanggal_mulai DATE,
+    tanggal_selesai DATE,
+    utm_campaign_tag VARCHAR(150),        -- harus SAMA PERSIS dengan yang dipasang di link iklan
+    catatan TEXT,
+    dibuat_oleh_id UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Undangan Admin baru (BR-3) — Admin existing generate token sekali pakai,
