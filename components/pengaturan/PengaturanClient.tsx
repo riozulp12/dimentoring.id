@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
@@ -347,6 +348,9 @@ export default function PengaturanClient({
             </Button>
           </div>
           {downloadError ? <p className="text-sm text-[#E70A0A]">{downloadError}</p> : null}
+          <Link href="/kebijakan-privasi" target="_blank" rel="noopener noreferrer" className="text-sm text-[#081EEA] underline underline-offset-2">
+            Baca Kebijakan Privasi lengkap
+          </Link>
         </div>
 
         <div className="flex flex-col gap-2 border-t border-[#E3E3E3] pt-5">

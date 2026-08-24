@@ -215,6 +215,19 @@ function RegisterPageInner() {
               {isSubmitting ? "Memproses..." : "Daftar"}
             </Button>
 
+            <p className="w-full text-center text-xs leading-[1.5] tracking-[-0.24px] text-[#7E7C7C] sm:text-sm sm:tracking-[-0.28px]">
+              Dengan mendaftar, kamu menyetujui{" "}
+              <Link
+                href="/kebijakan-privasi"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-[#081EEA]"
+              >
+                Kebijakan Privasi
+              </Link>{" "}
+              kami
+            </p>
+
             <div className="flex w-full items-center justify-center gap-3 sm:gap-4">
               <div className="h-px flex-1 bg-[#E3E3E3]" />
               <p className="text-sm leading-[1.5] tracking-[-0.28px] text-[#7E7C7C]">Atau</p>

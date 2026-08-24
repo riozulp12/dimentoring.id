@@ -129,7 +129,7 @@ export default function Footer() {
                 {column.links.map((link) => (
                   <p
                     key={link}
-                    className="text-lg leading-[1.5] tracking-[-0.36px] whitespace-nowrap text-black"
+                    className="text-base leading-[1.5] tracking-[-0.36px] whitespace-nowrap text-black"
                   >
                     {link}
                   </p>
@@ -152,7 +152,7 @@ export default function Footer() {
                     alt=""
                     className="h-5 w-auto sm:h-6"
                   />
-                  <p className="text-lg leading-[1.5] tracking-[-0.36px] whitespace-nowrap text-black">
+                  <p className="text-base leading-[1.5] tracking-[-0.36px] whitespace-nowrap text-black">
                     {contact.label}
                   </p>
                 </div>
@@ -162,9 +162,17 @@ export default function Footer() {
         </div>
       </div>
 
-      <p className="w-full text-center text-sm leading-[1.5] tracking-[-0.36px] text-[#979696]">
-        Copyright @2026 dimentoring.id
-      </p>
+      <div className="flex w-full flex-col items-center gap-2 sm:flex-row sm:justify-center sm:gap-4">
+        <p className="text-center text-sm leading-[1.5] tracking-[-0.36px] text-[#979696]">
+          Copyright @2026 dimentoring.id
+        </p>
+        <Link
+          href="/kebijakan-privasi"
+          className="text-sm leading-[1.5] tracking-[-0.36px] text-[#979696] underline underline-offset-2 hover:text-black"
+        >
+          Kebijakan Privasi
+        </Link>
+      </div>
     </footer>
   );
 }
