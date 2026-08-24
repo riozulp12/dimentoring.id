@@ -20,7 +20,7 @@ export default function Leaderboard() {
         <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-white sm:text-xl">
           Belajar Jadi Seru dengan Referral & Leaderboard
         </h4>
-        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-white">
+        <p className="text-base leading-[1.5] tracking-[-0.36px] text-white">
           Kumpulkan poin dari referral & tryout, naik level, dan lihat
           posisimu di leaderboard teman & sekolah.
         </p>

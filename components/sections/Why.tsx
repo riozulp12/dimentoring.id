@@ -40,7 +40,7 @@ export default function Why() {
         <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black sm:text-xl">
           Kenapa Harus <span className="text-[#081EEA]">Dimentoring</span>?
         </h4>
-        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
+        <p className="text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
           Belajar nyaman, efektif, dan sesuai kebutuhan setiap siswa
         </p>
       </div>
@@ -64,7 +64,7 @@ export default function Why() {
               <p className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black">
                 {item.title}
               </p>
-              <p className="text-lg leading-[1.5] tracking-[-0.36px] text-black">
+              <p className="text-base leading-[1.5] tracking-[-0.36px] text-black">
                 {item.description}
               </p>
             </div>

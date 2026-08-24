@@ -135,7 +135,7 @@ export default function AccountMenu({
         open={notifOpen}
         onOpenChange={setNotifOpen}
         align="right"
-        panelClassName="max-h-[70vh] w-80 overflow-y-auto"
+        panelClassName="max-h-[70vh] w-80 max-w-[calc(100vw-2.5rem)] overflow-y-auto"
         trigger={
           <button
             type="button"

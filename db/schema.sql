@@ -79,8 +79,8 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nama VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
-    no_wa VARCHAR(20) UNIQUE,                     -- NULLABLE (revisi Agustus 2026): diisi belakangan di /lengkapi-profil, bukan lagi di Langkah 1 Register
-    password_hash TEXT,                           -- NULLABLE: akun dari "Daftar/Login dengan Google" tidak pernah punya password lokal
+    no_wa VARCHAR(20) NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
     status_verifikasi_akun status_verifikasi_akun NOT NULL DEFAULT 'unverified',
     sub_status sub_status_student,               -- NULL jika bukan Student
     tingkat_kelas tingkat_kelas,                  -- Kelas 10/11/12/Gap Year, diisi saat onboarding (7.0.2 Langkah 2)
@@ -288,12 +288,17 @@ CREATE INDEX idx_assessment_pilihan_assessment ON assessment_pilihan(assessment_
 
 CREATE TYPE kelas_tipe AS ENUM ('private', 'semi_private', 'grouping');
 
+CREATE TYPE kelas_program AS ENUM (
+    'konsultasi', 'tka', 'snbt', 'ujian_mandiri', 'pendampingan_mahasiswa'
+);
+
 CREATE TABLE kelas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nama VARCHAR(255) NOT NULL,
+    program_kategori kelas_program NOT NULL,  -- BARU: kategori bisnis (halaman /program), bukan mapel
     tingkat_kelas tingkat_kelas NOT NULL,
     tipe_kelas kelas_tipe NOT NULL DEFAULT 'grouping',  -- dasar hitung persentase honor mentor
-    subtes_id UUID NOT NULL REFERENCES subtes(id),
+    subtes_id UUID REFERENCES subtes(id),  -- DIREVISI: nullable — Konsultasi/Pendampingan Mahasiswa tidak selalu terikat mapel
     mentor_id UUID REFERENCES users(id),   -- FK ke users yg role_type='mentor' aktif
     kapasitas INT NOT NULL,
     harga DECIMAL(12,2) NOT NULL DEFAULT 0,
@@ -304,6 +309,7 @@ CREATE TABLE kelas (
 );
 
 CREATE INDEX idx_kelas_mentor ON kelas(mentor_id);
+CREATE INDEX idx_kelas_program ON kelas(program_kategori);
 
 -- Konfigurasi persentase honor per tipe kelas — tabel terpisah (bukan hardcode
 -- di query) supaya Admin bisa ubah angkanya lewat Table Editor tanpa perlu

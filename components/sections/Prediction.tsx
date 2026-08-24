@@ -109,14 +109,14 @@ export default function Prediction({ ptnJurusanOptions }: { ptnJurusanOptions: P
         <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black sm:text-xl">
           Lihat Keketatan Jurusan dan PTN Pilihanmu
         </h4>
-        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
+        <p className="text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
           Keketatan ini dihitung berdasarkan data kuota dan jumlah peminat tahun sebelumnya
         </p>
       </div>
 
       <div className="flex w-full flex-col gap-6 lg:gap-8">
         <div className="flex flex-col gap-3 sm:gap-5">
-          <p className="text-lg leading-[1.5] font-medium tracking-[-0.36px] text-black">Pilih Jalur</p>
+          <p className="text-base leading-[1.5] font-medium tracking-[-0.36px] text-black">Pilih Jalur</p>
           <div className="flex w-full flex-col items-center gap-3 sm:flex-row sm:gap-6">
             {JALUR_OPTIONS.map((option) => (
               <Button

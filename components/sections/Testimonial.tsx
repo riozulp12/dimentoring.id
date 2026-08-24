@@ -73,7 +73,7 @@ export default function Testimonial() {
         <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black sm:text-xl">
           Kisah Sukses <span className="text-[#081EEA]">Dimentorian</span>
         </h4>
-        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
+        <p className="text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
           Mereka aja bisa, kalian pasti lebih bisa
         </p>
       </div>
@@ -89,14 +89,14 @@ export default function Testimonial() {
               className="relative min-h-[220px] w-[280px] shrink-0 overflow-hidden rounded-[20px] border border-[#E3E3E3] bg-white sm:min-h-[240px] sm:w-[420px] lg:h-[254px] lg:w-[622px]"
             >
               <div className="flex h-full flex-col justify-center gap-2.5 px-5 py-4 sm:px-6 sm:py-3">
-                <p className="pr-16 text-lg leading-[1.5] tracking-[-0.36px] text-black sm:pr-24 lg:pr-0">
+                <p className="pr-16 text-base leading-[1.5] tracking-[-0.36px] text-black sm:pr-24 lg:pr-0">
                   {item.quote}
                 </p>
                 <div className="flex flex-col gap-2 sm:gap-2.5">
                   <p className="text-lg leading-[1.5] font-medium tracking-[-0.36px] text-black">
                     {item.name}
                   </p>
-                  <p className="text-lg leading-[1.5] tracking-[-0.36px] text-black">
+                  <p className="text-base leading-[1.5] tracking-[-0.36px] text-black">
                     {item.role}
                   </p>
                 </div>

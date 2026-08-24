@@ -25,7 +25,7 @@ export default async function InfoBeasiswa() {
         <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black sm:text-xl">
           Perjalananmu Nggak Berhenti Setelah Diterima <span className="text-[#081EEA]">PTN</span>
         </h4>
-        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
+        <p className="text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
           Dimentoring tetap dampingi kamu lewat info beasiswa, internship, dan event sampai kuliah
         </p>
       </div>

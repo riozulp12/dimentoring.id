@@ -15,9 +15,10 @@ export interface JadwalEntry {
 export interface KelasListItem {
   id: string;
   nama: string;
+  programKategori: string;
   tingkatKelas: string;
   tipeKelas: string;
-  subtesId: string;
+  subtesId: string | null;
   subtesNama: string;
   mentorId: string | null;
   mentorNama: string | null;
@@ -73,9 +74,10 @@ function extractJadwalEntries(jadwal: unknown): JadwalEntry[] {
 interface KelasRow {
   id: string;
   nama: string;
+  program_kategori: string;
   tingkat_kelas: string;
   tipe_kelas: string;
-  subtes_id: string;
+  subtes_id: string | null;
   mentor_id: string | null;
   kapasitas: number;
   harga: number;
@@ -92,7 +94,7 @@ export async function getKelasList(): Promise<KelasListItem[]> {
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, tingkat_kelas, tipe_kelas, subtes_id, mentor_id, kapasitas, harga, jadwal, link_meet, deskripsi,
+      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, subtes_id, mentor_id, kapasitas, harga, jadwal, link_meet, deskripsi,
        subtes:subtes_id(nama),
        mentor:mentor_id(nama),
        enrollments(status_pembayaran)`,
@@ -112,6 +114,7 @@ export async function getKelasList(): Promise<KelasListItem[]> {
     return {
       id: row.id,
       nama: row.nama,
+      programKategori: row.program_kategori,
       tingkatKelas: row.tingkat_kelas,
       tipeKelas: row.tipe_kelas,
       subtesId: row.subtes_id,

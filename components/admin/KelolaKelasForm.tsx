@@ -4,6 +4,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
 import type { JadwalEntry, KelasListItem, MentorOption, SubtesOption } from "@/lib/admin/getKelolaKelasData";
+import { PROGRAM_KATEGORI_LABEL, PROGRAM_KATEGORI_ORDER } from "@/lib/shared/kelasLabels";
 
 /**
  * Form Tambah/Edit Kelas — SATU komponen dipakai kedua mode (initialKelas
@@ -12,6 +13,11 @@ import type { JadwalEntry, KelasListItem, MentorOption, SubtesOption } from "@/l
  * yang dipilih, kosong/disabled sebelum Subtes dipilih. Jadwal bisa lebih
  * dari satu slot (hari + jam masing-masing lewat picker).
  */
+
+const PROGRAM_KATEGORI_OPTIONS = PROGRAM_KATEGORI_ORDER.map((value) => ({
+  label: PROGRAM_KATEGORI_LABEL[value],
+  value,
+}));
 
 const TINGKAT_KELAS_OPTIONS = [
   { label: "Kelas 10", value: "kelas_10" },
@@ -54,6 +60,7 @@ export default function KelolaKelasForm({
   onCancel: () => void;
 }) {
   const [nama, setNama] = useState(initialKelas?.nama ?? "");
+  const [programKategori, setProgramKategori] = useState(initialKelas?.programKategori ?? "");
   const [tingkatKelas, setTingkatKelas] = useState(initialKelas?.tingkatKelas ?? "");
   const [tipeKelas, setTipeKelas] = useState(initialKelas?.tipeKelas ?? "");
   const [subtesId, setSubtesId] = useState(initialKelas?.subtesId ?? "");
@@ -69,14 +76,29 @@ export default function KelolaKelasForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Subtes OPSIONAL (PRD 7.5.4) — kalau belum dipilih, tampilkan SEMUA mentor
+  // aktif (bukan kosong/disabled) karena kelas tanpa subtes (Konsultasi/
+  // Pendampingan Mahasiswa) tidak butuh kecocokan mapel untuk assign mentor.
+  // Opsi khusus buat Subtes yang OPSIONAL — item pertama secara eksplisit
+  // "kosongkan" pilihan (beda dari placeholder yang cuma tampil pas belum
+  // pernah dipilih), supaya Admin bisa balik ke "tanpa subtes" kalau berubah
+  // pikiran pas edit kelas Konsultasi/Pendampingan Mahasiswa.
+  const subtesSelectOptions = useMemo(
+    () => [{ label: "Tidak ada subtes (opsional)", value: "" }, ...subtesOptions.map((s) => ({ label: s.nama, value: s.id }))],
+    [subtesOptions],
+  );
+
   const filteredMentors = useMemo(
-    () => (subtesId ? mentorOptions.filter((m) => m.subtesIds.includes(subtesId)) : []),
+    () => (subtesId ? mentorOptions.filter((m) => m.subtesIds.includes(subtesId)) : mentorOptions),
     [mentorOptions, subtesId],
   );
 
   function handleSubtesChange(value: string) {
     setSubtesId(value);
-    if (mentorId && !mentorOptions.find((m) => m.id === mentorId)?.subtesIds.includes(value)) {
+    // Cuma clear mentor yang udah dipilih kalau subtes BARU diisi dan mentor
+    // itu ternyata tidak mengampunya — mengosongkan subtes (value === "")
+    // tidak perlu clear mentor, karena tanpa subtes semua mentor aktif valid.
+    if (value && mentorId && !mentorOptions.find((m) => m.id === mentorId)?.subtesIds.includes(value)) {
       setMentorId("");
     }
   }
@@ -95,8 +117,8 @@ export default function KelolaKelasForm({
 
   async function handleGenerateDeskripsi() {
     setDeskripsiError(null);
-    if (!nama.trim() || !tingkatKelas || !tipeKelas || !subtesId) {
-      setDeskripsiError("Isi Nama Kelas, Tingkat, Tipe, dan Subtes dulu sebelum generate deskripsi.");
+    if (!nama.trim() || !programKategori || !tingkatKelas || !tipeKelas) {
+      setDeskripsiError("Isi Nama Kelas, Kategori Program, Tingkat, dan Tipe dulu sebelum generate deskripsi.");
       return;
     }
 
@@ -105,7 +127,13 @@ export default function KelolaKelasForm({
       const response = await fetch("/api/kelola-kelas/generate-deskripsi", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ namaKelas: nama.trim(), tingkatKelas, tipeKelas, subtesId }),
+        body: JSON.stringify({
+          namaKelas: nama.trim(),
+          programKategori,
+          tingkatKelas,
+          tipeKelas,
+          subtesId: subtesId || undefined,
+        }),
       });
       const json = await response.json();
       if (!response.ok || !json.success) {
@@ -137,9 +165,10 @@ export default function KelolaKelasForm({
     setIsSubmitting(true);
     const payload = {
       nama,
+      programKategori,
       tingkatKelas,
       tipeKelas,
-      subtesId,
+      subtesId: subtesId || null,
       mentorId: mentorId || null,
       kapasitas: Number(kapasitas),
       harga: Number(harga),
@@ -173,9 +202,10 @@ export default function KelolaKelasForm({
       onSuccess({
         id: initialKelas?.id ?? (json.id as string),
         nama,
+        programKategori,
         tingkatKelas,
         tipeKelas,
-        subtesId,
+        subtesId: subtesId || null,
         subtesNama,
         mentorId: mentorId || null,
         mentorNama,
@@ -210,6 +240,19 @@ export default function KelolaKelasForm({
         />
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-black">Kategori Program</label>
+        <InputField
+          type="dropdown"
+          size="md"
+          placeholder="Pilih kategori program"
+          required
+          value={programKategori}
+          onChange={(e) => setProgramKategori(e.target.value)}
+          options={PROGRAM_KATEGORI_OPTIONS}
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-black">Tingkat Kelas</label>
@@ -238,16 +281,18 @@ export default function KelolaKelasForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-black">Subtes</label>
+        <label className="text-sm font-medium text-black">Subtes (Opsional)</label>
         <InputField
           type="dropdown"
           size="md"
-          placeholder="Pilih subtes"
-          required
+          placeholder="Pilih subtes — kosongkan kalau tidak terikat mapel"
           value={subtesId}
           onChange={(e) => handleSubtesChange(e.target.value)}
-          options={subtesOptions.map((s) => ({ label: s.nama, value: s.id }))}
+          options={subtesSelectOptions}
         />
+        <p className="text-xs text-[#7E7C7C]">
+          Boleh dikosongkan, khususnya untuk kategori Konsultasi & Pendampingan Mahasiswa.
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -255,14 +300,15 @@ export default function KelolaKelasForm({
         <InputField
           type="dropdown"
           size="md"
-          placeholder={subtesId ? "Belum ada mentor" : "Pilih subtes dulu"}
-          disabled={!subtesId}
+          placeholder="Belum ada mentor"
           value={mentorId}
           onChange={(e) => setMentorId(e.target.value)}
           options={filteredMentors.map((m) => ({ label: m.nama, value: m.id }))}
         />
-        {subtesId && filteredMentors.length === 0 ? (
-          <p className="text-sm text-[#7E7C7C]">Belum ada mentor aktif yang mengampu subtes ini.</p>
+        {filteredMentors.length === 0 ? (
+          <p className="text-sm text-[#7E7C7C]">
+            {subtesId ? "Belum ada mentor aktif yang mengampu subtes ini." : "Belum ada mentor aktif."}
+          </p>
         ) : null}
       </div>
 

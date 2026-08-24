@@ -8,7 +8,7 @@ import Button from "./Button";
 import Dropdown from "./Dropdown";
 import Logo from "./Logo";
 import AccountMenu, { type AccountMenuItem } from "@/components/dashboard/AccountMenu";
-import { PROGRAMS } from "@/components/sections/Program";
+import { PROGRAM_KATEGORI_LABEL, PROGRAM_KATEGORI_ORDER, PROGRAM_KATEGORI_SLUG } from "@/lib/shared/kelasLabels";
 
 export type NavItemKey = "home" | "program" | "cek-peluang" | "mentor" | "testimonial" | "faq";
 
@@ -93,10 +93,15 @@ function NavLink({
 }
 
 /** Dropdown "Program" — pola visual sama dengan dropdown akun (panel rounded
- * card + baris hover), isi diambil langsung dari data section Program yang
- * sudah ada (jangan duplikasi daftar program), tiap item scroll ke #program. */
+ * card + baris hover). Item-nya mengarah ke halaman /program sungguhan (PRD
+ * 7.5.4), BUKAN lagi anchor scroll ke section landing lama. */
 function ProgramDropdown({ isActive, onNavigate }: { isActive: boolean; onNavigate?: () => void }) {
   const [open, setOpen] = useState(false);
+
+  function closeAndNavigate() {
+    setOpen(false);
+    onNavigate?.();
+  }
 
   return (
     <Dropdown
@@ -134,19 +139,23 @@ function ProgramDropdown({ isActive, onNavigate }: { isActive: boolean; onNaviga
         </button>
       }
     >
-      {PROGRAMS.map((program) => (
+      <Link
+        href="/program"
+        role="menuitem"
+        onClick={closeAndNavigate}
+        className="block border-b border-[#E3E3E3] px-4 py-2.5 text-sm font-semibold text-[#081EEA] transition-colors hover:bg-gray-50"
+      >
+        Semua Program
+      </Link>
+      {PROGRAM_KATEGORI_ORDER.map((kategori) => (
         <Link
-          key={program.title}
-          href="/#program"
+          key={kategori}
+          href={`/program/${PROGRAM_KATEGORI_SLUG[kategori]}`}
           role="menuitem"
-          onClick={() => {
-            setOpen(false);
-            onNavigate?.();
-          }}
-          className="block px-4 py-2.5 transition-colors hover:bg-gray-50"
+          onClick={closeAndNavigate}
+          className="block px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-gray-50"
         >
-          <span className="block text-sm font-medium text-black">{program.title}</span>
-          <span className="block text-xs text-[#7E7C7C]">{program.description}</span>
+          {PROGRAM_KATEGORI_LABEL[kategori]}
         </Link>
       ))}
     </Dropdown>
@@ -347,7 +356,12 @@ export default function Navbar({
             </div>
 
             {isLoggedIn ? (
-              <div className="flex w-full items-center justify-between">
+              // justify-end (bukan justify-between — AccountMenu satu-satunya
+              // child, jadi justify-between tidak ngefek) supaya trigger notif/
+              // avatar mepet KANAN, sesuai asumsi align="right" dropdown-nya
+              // (lihat AccountMenu.tsx) — kalau mepet KIRI panelnya nyembur ke
+              // luar layar sebelah kiri di layar sempit.
+              <div className="flex w-full items-center justify-end">
                 <AccountMenu
                   firstName={firstName}
                   fullName={fullName ?? firstName}

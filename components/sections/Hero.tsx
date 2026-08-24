@@ -4,6 +4,14 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 
+/**
+ * PRD Bagian 4.3 #1: Hero sempat punya 2 CTA setara bobot (bingungkan user
+ * mana yang diklik duluan). Direvisi jadi 1 CTA dominan ke /assessment
+ * (fitur paling langsung bisa dirasakan tanpa perlu daftar dulu), CTA kedua
+ * desainnya tetap (variant="secondary", size="md") tapi diarahkan ke
+ * /program (dibuat setelah revisi ini).
+ */
+
 const AVATARS = [
   "/images/hero-avatar-1.png",
   "/images/hero-avatar-2.png",
@@ -29,7 +37,7 @@ export default function Hero() {
               <br />
               <span className="text-[#081EEA]">Belajar</span> yang Berbeda
             </h3>
-            <p className="line-clamp-3 w-full max-w-[540px] text-lg leading-[1.5] tracking-[-0.36px] text-black">
+            <p className="line-clamp-3 w-full max-w-[540px] text-base leading-[1.5] tracking-[-0.36px] text-black">
               Mulai dari awal menyusun strategi, mempersiapkan menghadapi SNBT
               dan Ujian Mandiri sampai dengan masuk ke perkuliahan,
               Dimentoring hadir sebagai mentor dalam setiap langkahmu
@@ -38,14 +46,19 @@ export default function Hero() {
             <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row sm:gap-6 lg:gap-8">
               <Button
                 variant="primary"
-                size="md"
+                size="lg"
                 className="w-full sm:w-auto"
                 onClick={() => router.push("/assessment")}
               >
                 Cek Peluang Masuk PTN mu
               </Button>
-              <Button variant="secondary" size="md" className="w-full sm:w-auto">
-                Konsultasi
+              <Button
+                variant="secondary"
+                size="md"
+                className="w-full sm:w-auto"
+                onClick={() => router.push("/program")}
+              >
+                Lihat Program
               </Button>
             </div>
           </div>
@@ -72,7 +85,7 @@ export default function Hero() {
               <p className="text-lg font-medium leading-[1.5] tracking-[-0.36px] text-black">
                 100+ Siswa
               </p>
-              <p className="w-full max-w-[382px] text-center text-lg leading-[1.5] tracking-[-0.36px] text-black lg:text-left">
+              <p className="w-full max-w-[382px] text-center text-base leading-[1.5] tracking-[-0.36px] text-black lg:text-left">
                 Lebih dari 100 siswa telah belajar dengan kami dan mendapatkan
                 PTN impiannya
               </p>

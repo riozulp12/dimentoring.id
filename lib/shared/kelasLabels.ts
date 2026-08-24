@@ -19,3 +19,41 @@ export const TIPE_KELAS_LABEL: Record<string, string> = {
   semi_private: "Semi-Private",
   grouping: "Grouping",
 };
+
+/** Kategori bisnis kelas (PRD 7.5.4, halaman publik /program) — terpisah dari
+ * Subtes/mapel. Urutan di sini JUGA urutan tampil section /program. */
+export const PROGRAM_KATEGORI_ORDER = [
+  "konsultasi",
+  "tka",
+  "snbt",
+  "ujian_mandiri",
+  "pendampingan_mahasiswa",
+] as const;
+
+export type ProgramKategori = (typeof PROGRAM_KATEGORI_ORDER)[number];
+
+export const PROGRAM_KATEGORI_LABEL: Record<ProgramKategori, string> = {
+  konsultasi: "Konsultasi",
+  tka: "TKA",
+  snbt: "SNBT",
+  ujian_mandiri: "Ujian Mandiri",
+  pendampingan_mahasiswa: "Pendampingan Mahasiswa",
+};
+
+/** Slug URL per kategori (dipakai /program/[kategori]) — beda dari value enum
+ * DB untuk "ujian_mandiri"/"pendampingan_mahasiswa" (pakai dash, bukan underscore). */
+export const PROGRAM_KATEGORI_SLUG: Record<ProgramKategori, string> = {
+  konsultasi: "konsultasi",
+  tka: "tka",
+  snbt: "snbt",
+  ujian_mandiri: "ujian-mandiri",
+  pendampingan_mahasiswa: "pendampingan-mahasiswa",
+};
+
+const SLUG_TO_KATEGORI: Record<string, ProgramKategori> = Object.fromEntries(
+  PROGRAM_KATEGORI_ORDER.map((kategori) => [PROGRAM_KATEGORI_SLUG[kategori], kategori]),
+) as Record<string, ProgramKategori>;
+
+export function programKategoriFromSlug(slug: string): ProgramKategori | null {
+  return SLUG_TO_KATEGORI[slug] ?? null;
+}

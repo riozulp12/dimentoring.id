@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { PROGRAM_KATEGORI_ORDER } from "@/lib/shared/kelasLabels";
 
 /**
  * Validasi body request Tambah/Edit Kelas — dipakai bersama oleh
@@ -11,6 +12,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 const VALID_TINGKAT_KELAS = ["kelas_10", "kelas_11", "kelas_12", "gap_year"];
 const VALID_TIPE_KELAS = ["private", "semi_private", "grouping"];
 const VALID_HARI = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+const VALID_PROGRAM_KATEGORI: readonly string[] = PROGRAM_KATEGORI_ORDER;
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 function isValidUrl(value: string): boolean {
@@ -29,9 +31,10 @@ export interface JadwalEntryInput {
 
 export interface KelasInputBody {
   nama?: string;
+  programKategori?: string;
   tingkatKelas?: string;
   tipeKelas?: string;
-  subtesId?: string;
+  subtesId?: string | null;
   mentorId?: string | null;
   kapasitas?: number | string;
   harga?: number | string;
@@ -42,9 +45,10 @@ export interface KelasInputBody {
 
 export interface ValidatedKelasInput {
   nama: string;
+  program_kategori: string;
   tingkat_kelas: string;
   tipe_kelas: string;
-  subtes_id: string;
+  subtes_id: string | null;
   mentor_id: string | null;
   kapasitas: number;
   harga: number;
@@ -62,26 +66,31 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
   const nama = typeof body.nama === "string" ? body.nama.trim() : "";
   if (!nama) return { ok: false, error: "Nama kelas wajib diisi." };
 
+  if (!body.programKategori || !VALID_PROGRAM_KATEGORI.includes(body.programKategori)) {
+    return { ok: false, error: "Kategori Program wajib dipilih." };
+  }
   if (!body.tingkatKelas || !VALID_TINGKAT_KELAS.includes(body.tingkatKelas)) {
     return { ok: false, error: "Tingkat kelas tidak valid." };
   }
   if (!body.tipeKelas || !VALID_TIPE_KELAS.includes(body.tipeKelas)) {
     return { ok: false, error: "Tipe kelas tidak valid." };
   }
-  if (!body.subtesId || typeof body.subtesId !== "string") {
-    return { ok: false, error: "Subtes wajib dipilih." };
-  }
 
-  const { data: subtes, error: subtesError } = await supabaseServer
-    .from("subtes")
-    .select("id")
-    .eq("id", body.subtesId)
-    .maybeSingle();
-  if (subtesError) {
-    console.error("[validateKelasInput] query subtes failed:", subtesError);
-    return { ok: false, error: "Gagal memvalidasi subtes. Coba lagi nanti." };
+  // Subtes OPSIONAL (PRD 7.5.4) — Konsultasi & Pendampingan Mahasiswa tidak
+  // selalu terikat mapel. Kalau diisi, tetap divalidasi eksis di DB.
+  const subtesId = typeof body.subtesId === "string" && body.subtesId ? body.subtesId : null;
+  if (subtesId) {
+    const { data: subtes, error: subtesError } = await supabaseServer
+      .from("subtes")
+      .select("id")
+      .eq("id", subtesId)
+      .maybeSingle();
+    if (subtesError) {
+      console.error("[validateKelasInput] query subtes failed:", subtesError);
+      return { ok: false, error: "Gagal memvalidasi subtes. Coba lagi nanti." };
+    }
+    if (!subtes) return { ok: false, error: "Subtes tidak ditemukan." };
   }
-  if (!subtes) return { ok: false, error: "Subtes tidak ditemukan." };
 
   const kapasitas = Number(body.kapasitas);
   if (!Number.isInteger(kapasitas) || kapasitas <= 0) {
@@ -110,18 +119,23 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
       return { ok: false, error: "Mentor tidak ditemukan atau belum aktif." };
     }
 
-    const { data: profile, error: profileError } = await supabaseServer
-      .from("mentor_profiles")
-      .select("mentor_subtes_diampu(subtes_id)")
-      .eq("user_id", body.mentorId)
-      .maybeSingle();
-    if (profileError) {
-      console.error("[validateKelasInput] query mentor_profiles failed:", profileError);
-      return { ok: false, error: "Gagal memvalidasi subtes mentor. Coba lagi nanti." };
-    }
-    const subtesIds = (profile?.mentor_subtes_diampu ?? []).map((r: { subtes_id: string }) => r.subtes_id);
-    if (!subtesIds.includes(body.subtesId)) {
-      return { ok: false, error: "Mentor ini tidak mengampu subtes yang dipilih." };
+    // Cross-check "mentor mengampu subtes ini" cuma relevan kalau Subtes
+    // diisi — kelas tanpa subtes (Konsultasi/Pendampingan Mahasiswa) bisa
+    // diampu mentor mana pun yang aktif.
+    if (subtesId) {
+      const { data: profile, error: profileError } = await supabaseServer
+        .from("mentor_profiles")
+        .select("mentor_subtes_diampu(subtes_id)")
+        .eq("user_id", body.mentorId)
+        .maybeSingle();
+      if (profileError) {
+        console.error("[validateKelasInput] query mentor_profiles failed:", profileError);
+        return { ok: false, error: "Gagal memvalidasi subtes mentor. Coba lagi nanti." };
+      }
+      const subtesIds = (profile?.mentor_subtes_diampu ?? []).map((r: { subtes_id: string }) => r.subtes_id);
+      if (!subtesIds.includes(subtesId)) {
+        return { ok: false, error: "Mentor ini tidak mengampu subtes yang dipilih." };
+      }
     }
     mentorId = body.mentorId;
   }
@@ -158,9 +172,10 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
     ok: true,
     data: {
       nama,
+      program_kategori: body.programKategori,
       tingkat_kelas: body.tingkatKelas,
       tipe_kelas: body.tipeKelas,
-      subtes_id: body.subtesId,
+      subtes_id: subtesId,
       mentor_id: mentorId,
       kapasitas,
       harga,

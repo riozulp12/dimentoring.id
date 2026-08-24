@@ -6,8 +6,9 @@ export interface ProgramItem {
   mascot: MascotVariant;
 }
 
-/** Diekspor supaya dropdown "Program" di Navbar (components/ui/Navbar.tsx)
- * bisa reuse data yang sama persis — jangan duplikasi daftar program. */
+/** Teaser 4 program di landing page — dropdown "Program" Navbar sekarang
+ * pakai PROGRAM_KATEGORI_ORDER (lib/shared/kelasLabels.ts) & link ke halaman
+ * /program sungguhan (PRD 7.5.4), bukan lagi reuse array ini. */
 export const PROGRAMS: ProgramItem[] = [
   {
     title: "TKA",
@@ -41,7 +42,7 @@ export default function Program() {
         <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-white sm:text-xl">
           Program & Kelas Dimentoring
         </h4>
-        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-white">
+        <p className="text-base leading-[1.5] tracking-[-0.36px] text-white">
           Program buat mendukungmu belajar meraih tujuanmu
         </p>
       </div>
@@ -55,7 +56,7 @@ export default function Program() {
             <p className="max-w-[75%] text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-[#081EEA]">
               {item.title}
             </p>
-            <p className="max-w-[75%] text-lg leading-[1.5] tracking-[-0.36px] text-black">
+            <p className="max-w-[75%] text-base leading-[1.5] tracking-[-0.36px] text-black">
               {item.description}
             </p>
             <Mascot

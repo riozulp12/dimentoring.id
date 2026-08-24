@@ -4,7 +4,8 @@ import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import KelolaKelasForm from "./KelolaKelasForm";
-import { TINGKAT_KELAS_LABEL, TIPE_KELAS_LABEL } from "@/lib/shared/kelasLabels";
+import { TINGKAT_KELAS_LABEL, TIPE_KELAS_LABEL, PROGRAM_KATEGORI_LABEL } from "@/lib/shared/kelasLabels";
+import type { ProgramKategori } from "@/lib/shared/kelasLabels";
 import type { KelasListItem, MentorOption, SubtesOption } from "@/lib/admin/getKelolaKelasData";
 
 /**
@@ -102,6 +103,7 @@ export default function KelolaKelasClient({
             <thead>
               <tr className="border-b border-[#E3E3E3] text-[#7E7C7C]">
                 <th className="px-4 py-3 font-medium">Nama Kelas</th>
+                <th className="px-4 py-3 font-medium">Kategori</th>
                 <th className="px-4 py-3 font-medium">Tingkat</th>
                 <th className="px-4 py-3 font-medium">Tipe</th>
                 <th className="px-4 py-3 font-medium">Subtes</th>
@@ -118,6 +120,9 @@ export default function KelolaKelasClient({
                   className="cursor-pointer border-b border-[#E3E3E3] transition-colors last:border-0 hover:bg-gray-50"
                 >
                   <td className="px-4 py-3 text-black">{kelas.nama}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">
+                    {PROGRAM_KATEGORI_LABEL[kelas.programKategori as ProgramKategori] ?? kelas.programKategori}
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">
                     {TINGKAT_KELAS_LABEL[kelas.tingkatKelas] ?? kelas.tingkatKelas}
                   </td>
@@ -143,6 +148,12 @@ export default function KelolaKelasClient({
             <h2 className="text-lg font-semibold text-black">{detailKelas.nama}</h2>
 
             <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-[#7E7C7C]">Kategori Program</p>
+                <p className="text-black">
+                  {PROGRAM_KATEGORI_LABEL[detailKelas.programKategori as ProgramKategori] ?? detailKelas.programKategori}
+                </p>
+              </div>
               <div>
                 <p className="text-[#7E7C7C]">Tingkat Kelas</p>
                 <p className="text-black">{TINGKAT_KELAS_LABEL[detailKelas.tingkatKelas] ?? detailKelas.tingkatKelas}</p>

@@ -51,7 +51,7 @@ export default function FAQ() {
           Pertanyaan yang Sering Ditanyakan Tentang{" "}
           <span className="text-[#081EEA]">Dimentoring?</span>
         </h4>
-        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
+        <p className="text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
           Temukan jawaban cepat seputar program dan layanan Dimentoring tanpa
           perlu bingung lagi
         </p>
@@ -85,7 +85,7 @@ export default function FAQ() {
                 />
               </button>
               {isOpen ? (
-                <p className="px-5 pb-4 text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C] sm:px-6 lg:px-8 lg:pb-6">
+                <p className="px-5 pb-4 text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C] sm:px-6 lg:px-8 lg:pb-6">
                   {item.answer}
                 </p>
               ) : null}

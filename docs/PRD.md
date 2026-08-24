@@ -88,16 +88,16 @@ Tidak ada kompetitor besar yang eksplisit menjanjikan **pendampingan berlanjut p
 
 | # | Section | Status Implementasi & Catatan |
 |---|---|---|
-| 1 | Hero | ✅ Ada. **Masih 2 CTA setara bobot** — direkomendasikan satu CTA dominan (belum diubah di desain terakhir yang dicek). |
+| 1 | Hero | ✅ Direvisi: 1 CTA dominan ("Cek Peluang Masuk PTN mu") → `/assessment`, CTA sekunder ("Lihat Program") → `/program`. |
 | 2 | Value/Stats bar | ✅ 100+ Siswa, 30+ Mentor, 5+ Event, 7+ Program |
 | 3 | Prediction (Keketatan) | ✅ Ada, dengan keterangan sumber data snpmb. **Cek disclaimer sudah ada di halaman Assessment itu sendiri** (dikonfirmasi via desain Assessment SNBP) — bagus. |
 | 4 | Why (Kenapa Dimentoring) | ✅ 4 kartu termasuk "Berlanjut Sampai Kuliah" — diferensiasi utama sudah eksplisit |
-| 5 | Program & Class | ✅ TKA/SNBT/Mandiri/Mahasiswa |
+| 5 | Program & Class | ✅ Teaser TKA/SNBT/Mandiri/Mahasiswa di landing, link ke halaman penuh `/program` (5 kategori sungguhan termasuk Konsultasi — lihat Bagian 7.5.4) |
 | 6 | Mentor | ✅ Carousel mentor |
 | 7 | Testimonial | ⚠️ Masih placeholder Lorem Ipsum — **wajib diganti konten asli sebelum development lanjut** |
 | 8 | Leaderboard/Referral teaser | ✅ Poin & leaderboard dengan nama disamarkan |
 | 9 | FAQ | ✅ Ada |
-| 10 | Statement/Closing | ⚠️ Section "Statement" saat ini lebih seperti tagline penutup, belum ada CTA konversi eksplisit sebelum footer |
+| 10 | Statement/Closing | ✅ Direvisi: tagline tetap ada, ditambah CTA konversi eksplisit ("Siap Mulai Perjalanan ke PTN Impianmu?" → tombol "Daftar Sekarang" → `/daftar`) sebelum footer. |
 
 ---
 
@@ -435,6 +435,14 @@ Catatan interpretatif/motivasional 2-4 kalimat, digenerate sekali oleh Gemini AP
 ## 7.5 Kelas Bimbingan Belajar (per Kelas & Subtes)
 
 Struktur konten hierarkis: Kelas → Subtes → Topik → Sesi/Materi. Subtes mengikuti struktur resmi: Tes Potensi Skolastik (Penalaran Umum, Pemahaman Bacaan & Menulis, Pengetahuan & Pemahaman Umum, Pengetahuan Kuantitatif) dan Tes Literasi (Literasi B. Indonesia, Literasi B. Inggris, Penalaran Matematika), plus TKA per mata pelajaran wajib & elektif. Live session terjadwal tetap dikelola manual mentor (link Meet, dst — lihat Bagian 7.5.2 kalau nanti dibutuhkan). Admin assign mentor ke kelas berdasarkan **Subtes yang Diampu** yang diisi mentor saat onboarding (Bagian 7.0.2). Setiap Kelas punya `tipe_kelas` (`private`/`semi_private`/`grouping`) yang menentukan persentase honor mentor (lihat 7.5.3).
+
+### 7.5.4 Kategori Program & Halaman Publik `/program` — **BARU**
+
+Setiap Kelas juga punya `program_kategori` (**WAJIB diisi**, terpisah dari `subtes_id`/mapel) — kategori bisnis yang dipakai halaman publik `/program`, salah satu dari: **Konsultasi**, **TKA**, **SNBT**, **Ujian Mandiri**, **Pendampingan Mahasiswa**. Berbeda dari Subtes (yang mengikuti struktur ujian resmi), kategori ini murni pengelompokan produk untuk ditampilkan ke calon siswa yang belum tahu mau ambil kelas berbasis mapel apa.
+
+**Subtes jadi opsional** (`subtes_id` nullable) — Konsultasi dan Pendampingan Mahasiswa tidak selalu terikat satu mapel spesifik, jadi Admin boleh mengosongkan field ini untuk kedua kategori itu (tetap boleh diisi kalau memang relevan, mis. Konsultasi topik tertentu).
+
+**Halaman `/program`** (public, reuse Navbar landing page): 5 section berurutan sesuai kategori di atas, masing-masing menampilkan preview 3-4 kelas terbaru (`ORDER BY created_at DESC LIMIT 4`) dengan link "Lihat Semua" ke `/program/[kategori-slug]` (grid penuh + filter Tipe Kelas & Tingkat Kelas). Section yang kategorinya masih kosong disembunyikan (bukan tampil kosong). Klik kelas → `/program/kelas/[kelasId]` (detail publik: nama, kategori, subtes jika ada, tipe & tingkat kelas, deskripsi, harga, jadwal, mentor jika ada). Tombol "Daftar Kelas Ini" mengarah ke `/login` kalau belum login; kalau sudah login tetap nonaktif dengan keterangan "Pendaftaran kelas akan segera dibuka" — karena Payment belum aktif (BR terkait, lihat Bagian 8).
 
 ### 7.5.3 Honor Mentor — **BARU (rumus resmi, sebelumnya placeholder)**
 
@@ -786,7 +794,8 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **ReferralReward** — id, referral_id, jenis_reward, nominal_atau_poin, status_pencairan, tanggal.
 - **GamifikasiProfile** — id, user_id, total_poin, level, badge_list, streak_counter.
 - **TryOutAttempt (diperluas)** — id, user_id, tryout_id, jawaban (json), **status_per_soal** (json/array — mapping nomor soal → `dikerjakan`/`belum`, dipakai untuk render Navigator Soal), skor, waktu_mulai, **waktu_tersisa_server** (source of truth untuk timer, di-update tiap interaksi), waktu_selesai, immutable_lock, pdf_export_url.
-- **Kelas, Enrollment, TryOut, Payment, KontenInfo, AIMentorLog, SoalAI, Badge, RewardCatalog** — tetap sesuai definisi v2.0 (tidak berubah pada revisi ini).
+- **Kelas** — id, nama, **program_kategori** (baru: `konsultasi`/`tka`/`snbt`/`ujian_mandiri`/`pendampingan_mahasiswa` — kategori bisnis dipakai halaman publik `/program`, WAJIB diisi, terpisah dari mapel/subtes), tingkat_kelas, tipe_kelas, **subtes_id** (direvisi jadi nullable — Konsultasi & Pendampingan Mahasiswa tidak selalu terikat mapel), mentor_id, kapasitas, harga, deskripsi, jadwal, link_meet.
+- **Enrollment, TryOut, Payment, KontenInfo, AIMentorLog, SoalAI, Badge, RewardCatalog** — tetap sesuai definisi v2.0 (tidak berubah pada revisi ini).
 
 ---
 

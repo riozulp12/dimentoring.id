@@ -69,7 +69,7 @@ export default function Mentor() {
           Kenalan dengan Mentor Hebat{" "}
           <span className="text-[#081EEA]">Dimentoring</span>
         </h4>
-        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-black sm:whitespace-nowrap">
+        <p className="text-base leading-[1.5] tracking-[-0.36px] text-black sm:whitespace-nowrap">
           Mereka siap mendampingi perjalanan belajarmu dengan sepenuh hati dan
           profesionalitas
         </p>
@@ -100,7 +100,7 @@ export default function Mentor() {
                   <p className="w-full text-lg leading-[1.5] font-semibold tracking-[-0.36px]">
                     {mentor.name}
                   </p>
-                  <p className="w-full text-lg leading-[1.5] font-normal tracking-[-0.36px]">
+                  <p className="w-full text-base leading-[1.5] font-normal tracking-[-0.36px]">
                     {mentor.role}
                   </p>
                 </div>

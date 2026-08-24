@@ -15,7 +15,7 @@ export default function TryoutCTA() {
         <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black sm:text-xl">
           Uji Kesiapanmu Lewat <span className="text-[#081EEA]">Try Out</span>
         </h4>
-        <p className="text-lg leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
+        <p className="text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
           Latihan soal dan simulasi ujian sungguhan biar kamu makin percaya diri menghadapi hari-H
         </p>
       </div>
