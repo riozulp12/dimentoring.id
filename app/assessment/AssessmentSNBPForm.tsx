@@ -510,7 +510,7 @@ export default function AssessmentSNBPForm({
             </p>
           ) : null}
 
-          <div className="flex w-full flex-col sm:items-end">
+          <div className="flex w-full flex-col gap-2 sm:items-end">
             <Button
               type="button"
               size="xl"
@@ -518,8 +518,28 @@ export default function AssessmentSNBPForm({
               disabled={isSubmitting}
               className="w-full sm:w-auto"
             >
-              {isSubmitting ? "Menyimpan..." : "Lihat Hasil Prediksi"}
+              {isSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                  Menyimpan...
+                </span>
+              ) : (
+                "Lihat Hasil Prediksi"
+              )}
             </Button>
+            {isSubmitting ? (
+              <p className="text-sm text-[#7E7C7C] sm:text-right">
+                Sedang menghitung prediksi & menyiapkan catatan personal — bisa memakan waktu sampai
+                sekitar 20-25 detik, mohon tunggu, jangan tutup halaman ini.
+              </p>
+            ) : null}
           </div>
         </section>
       )}

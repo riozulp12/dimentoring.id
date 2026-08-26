@@ -11,10 +11,16 @@ import { GoogleGenAI } from "@google/genai";
  *
  * BR-30 (WAJIB, bukan opsional): prompt yang dikirim ke Gemini hanya berisi
  * data numerik/kategorikal anonim — TIDAK PERNAH nama/email/no. WA siswa.
+ *
+ * Worst-case ~25 detik (12s timeout + ~1s jeda + 12s timeout retry) kalau
+ * kedua percobaan sama-sama timeout — caller (app/api/assessment/snbp)
+ * WAJIB pastikan UI submit tetap ada loading indicator yang jelas selama
+ * itu, jangan sampai terasa nge-hang.
  */
 
 const MODEL = "gemini-3.5-flash-lite";
-const GENERATE_TIMEOUT_MS = 8000;
+const GENERATE_TIMEOUT_MS = 12000;
+const RETRY_DELAY_MS = 900;
 
 const FALLBACK_NOTE =
   "Angka-angka di atas adalah gambaran, bukan keputusan akhir — banyak siswa yang keketatannya terlihat berat tetap berhasil lolos karena persiapan yang tepat, dan sebaliknya. Yang paling penting sekarang bukan cuma melihat hasilnya, tapi memakainya sebagai peta: kalau ada subtes yang masih terasa berat, itu titik yang paling worth dilatih dulu. Coba mulai dari Try Out gratis buat lihat sejauh mana pemahamanmu sekarang, atau ikut kelas bimbingan yang sesuai kebutuhanmu. Perjalanan ke PTN impian itu proses, bukan satu kali tes — dan kamu masih punya waktu buat memperbesar peluang itu.";
@@ -56,6 +62,24 @@ function buildUserPrompt(data: GenerateAssessmentNoteInput): string {
     .join("\n");
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callGemini(ai: GoogleGenAI, data: GenerateAssessmentNoteInput): Promise<string | null> {
+  const response = await ai.models.generateContent({
+    model: MODEL,
+    contents: buildUserPrompt(data),
+    config: {
+      systemInstruction: SYSTEM_PROMPT,
+      abortSignal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
+    },
+  });
+
+  const text = response.text?.trim();
+  return text ? text : null;
+}
+
 export async function generateAssessmentNote(
   data: GenerateAssessmentNoteInput,
 ): Promise<string> {
@@ -65,21 +89,26 @@ export async function generateAssessmentNote(
     return FALLBACK_NOTE;
   }
 
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: buildUserPrompt(data),
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        abortSignal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
-      },
-    });
+  const ai = new GoogleGenAI({ apiKey });
 
-    const text = response.text?.trim();
-    return text ? text : FALLBACK_NOTE;
+  // Ditemukan lewat testing (Agustus 2026): kegagalan didominasi AbortError
+  // (timeout kena batas sebelum Gemini sempat jawab) dan ApiError 503
+  // UNAVAILABLE (model lagi overload di sisi Google) — bukan rate limit/quota.
+  // SATU retry setelah jeda singkat cukup buat model yang overload sempat
+  // pulih, tanpa bikin percobaan berkali-kali yang justru menambah beban.
+  try {
+    const text = await callGemini(ai, data);
+    if (text) return text;
   } catch (error) {
-    console.error("[generateAssessmentNote] Gagal generate note AI:", error);
-    return FALLBACK_NOTE;
+    console.error("[generateAssessmentNote] Percobaan pertama gagal, retry sekali setelah jeda:", error);
+    await sleep(RETRY_DELAY_MS);
+    try {
+      const text = await callGemini(ai, data);
+      if (text) return text;
+    } catch (retryError) {
+      console.error("[generateAssessmentNote] Percobaan retry juga gagal:", retryError);
+    }
   }
+
+  return FALLBACK_NOTE;
 }
