@@ -507,16 +507,23 @@ CREATE TABLE referral_rewards (
 
 -- Konfigurasi besaran reward referral — singleton row (selalu id=1), Admin
 -- bisa ubah lewat Table Editor tanpa perlu developer redeploy kode.
+-- DIREVISI: persentase dari nilai transaksi, dengan batas bawah & atas
+-- (bukan lagi poin flat) — supaya proporsional ke harga paket yang
+-- rentangnya lebar (Konsultasi murah s/d Pendampingan Mahasiswa).
 CREATE TABLE referral_reward_config (
     id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-    poin_referrer INT NOT NULL DEFAULT 100,   -- poin buat yang share kode
-    poin_referee INT NOT NULL DEFAULT 35,     -- poin buat yang pakai kode
+    persen_referrer DECIMAL(5,2) NOT NULL DEFAULT 5.00,  -- % dari payments.jumlah
+    persen_referee DECIMAL(5,2) NOT NULL DEFAULT 2.00,
+    poin_minimum_referrer INT NOT NULL DEFAULT 50,   -- floor
+    poin_maksimum_referrer INT NOT NULL DEFAULT 500, -- cap
+    poin_minimum_referee INT NOT NULL DEFAULT 20,
+    poin_maksimum_referee INT NOT NULL DEFAULT 200,
     rupiah_per_100_poin DECIMAL(12,2) NOT NULL DEFAULT 10000,  -- kurs referensi (100 poin = Rp 10.000)
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-INSERT INTO referral_reward_config (id, poin_referrer, poin_referee, rupiah_per_100_poin)
-VALUES (1, 100, 35, 10000);
+INSERT INTO referral_reward_config (id, persen_referrer, persen_referee, poin_minimum_referrer, poin_maksimum_referrer, poin_minimum_referee, poin_maksimum_referee, rupiah_per_100_poin)
+VALUES (1, 5.00, 2.00, 50, 500, 20, 200, 10000);
 
 CREATE TABLE gamifikasi_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

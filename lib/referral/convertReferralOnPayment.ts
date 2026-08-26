@@ -10,9 +10,33 @@ import { supabaseServer } from "@/lib/supabase/server";
  *
  * Reward DUA SISI (PRD Bagian 13, referral_rewards.penerima) — referrer (yang
  * share kode) DAN referee (yang pakai kode, akun ini sendiri) sama-sama dapat
- * poin. Besarannya dibaca dari referral_reward_config (singleton id=1), bukan
- * hardcode, supaya Admin bisa ubah lewat Table Editor tanpa redeploy.
+ * poin. Besarannya PROPORSIONAL ke nilai transaksi (bukan flat lagi) — sekian
+ * persen dari payments.jumlah, dikonversi ke poin pakai kurs rupiah_per_100_poin,
+ * lalu di-floor/cap ke poin_minimum/poin_maksimum masing-masing sisi. Semua
+ * angka dibaca dari referral_reward_config (singleton id=1), bukan hardcode,
+ * supaya Admin bisa ubah lewat Table Editor tanpa redeploy.
  */
+
+interface RewardConfig {
+  persenReferrer: number;
+  persenReferee: number;
+  poinMinimumReferrer: number;
+  poinMaksimumReferrer: number;
+  poinMinimumReferee: number;
+  poinMaksimumReferee: number;
+  rupiahPer100Poin: number;
+}
+
+/**
+ * jumlah * (persen/100) -> nilai Rupiah reward, dibagi (rupiahPer100Poin/100)
+ * -> Rupiah per 1 poin, hasilnya jumlah poin. Dibulatkan ke integer (kolom
+ * gamifikasi_profiles.total_poin bertipe INT) sebelum di-clamp ke [min, max].
+ */
+function hitungPoin(jumlah: number, persen: number, poinMinimum: number, poinMaksimum: number, rupiahPer100Poin: number): number {
+  const rawPoin = (jumlah * (persen / 100)) / (rupiahPer100Poin / 100);
+  const dibulatkan = Math.round(rawPoin);
+  return Math.min(Math.max(dibulatkan, poinMinimum), poinMaksimum);
+}
 
 async function addPoin(userId: string, amount: number): Promise<void> {
   const { data: profile, error: fetchError } = await supabaseServer
@@ -73,18 +97,54 @@ export async function convertReferralOnPayment(userId: string, currentPaymentId:
   }
   if (!referral) return; // user ini bukan referee, atau sudah pernah dikonversi
 
-  const { data: config, error: configError } = await supabaseServer
+  const { data: payment, error: paymentError } = await supabaseServer
+    .from("payments")
+    .select("jumlah")
+    .eq("id", currentPaymentId)
+    .maybeSingle();
+
+  if (paymentError || !payment) {
+    console.error("[convertReferralOnPayment] query payments failed:", paymentError);
+    return;
+  }
+  const jumlahTransaksi = Number(payment.jumlah);
+
+  const { data: configRow, error: configError } = await supabaseServer
     .from("referral_reward_config")
-    .select("poin_referrer, poin_referee")
+    .select(
+      "persen_referrer, persen_referee, poin_minimum_referrer, poin_maksimum_referrer, poin_minimum_referee, poin_maksimum_referee, rupiah_per_100_poin",
+    )
     .eq("id", 1)
     .maybeSingle();
 
-  if (configError || !config) {
+  if (configError || !configRow) {
     console.error("[convertReferralOnPayment] query referral_reward_config failed:", configError);
     return;
   }
-  const poinReferrer = Number(config.poin_referrer);
-  const poinReferee = Number(config.poin_referee);
+  const config: RewardConfig = {
+    persenReferrer: Number(configRow.persen_referrer),
+    persenReferee: Number(configRow.persen_referee),
+    poinMinimumReferrer: Number(configRow.poin_minimum_referrer),
+    poinMaksimumReferrer: Number(configRow.poin_maksimum_referrer),
+    poinMinimumReferee: Number(configRow.poin_minimum_referee),
+    poinMaksimumReferee: Number(configRow.poin_maksimum_referee),
+    rupiahPer100Poin: Number(configRow.rupiah_per_100_poin),
+  };
+
+  const poinReferrer = hitungPoin(
+    jumlahTransaksi,
+    config.persenReferrer,
+    config.poinMinimumReferrer,
+    config.poinMaksimumReferrer,
+    config.rupiahPer100Poin,
+  );
+  const poinReferee = hitungPoin(
+    jumlahTransaksi,
+    config.persenReferee,
+    config.poinMinimumReferee,
+    config.poinMaksimumReferee,
+    config.rupiahPer100Poin,
+  );
 
   const { error: updateReferralError } = await supabaseServer
     .from("referrals")
