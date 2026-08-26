@@ -553,16 +553,20 @@ CREATE TABLE payments (
     user_id UUID NOT NULL REFERENCES users(id),
     item_type payment_item_type NOT NULL,
     item_id UUID NOT NULL,               -- polymorphic: kelas.id atau tryouts.id
-    jumlah DECIMAL(12,2) NOT NULL,
+    jumlah_sebelum_diskon DECIMAL(12,2) NOT NULL,
+    jumlah DECIMAL(12,2) NOT NULL,       -- jumlah_sebelum_diskon dikurangi diskon kode_promo
     metode VARCHAR(50),
     status payment_status NOT NULL DEFAULT 'menunggu',
-    kode_promo VARCHAR(30),
+    kode_promo_id UUID REFERENCES kode_promo(id),  -- DIREVISI: relasi ke tabel resmi, bukan teks bebas
     gateway_reference TEXT,              -- id transaksi dari Midtrans/Xendit, utk idempotency webhook
+    order_id TEXT UNIQUE,                -- ID yang KITA generate, dikirim ke Midtrans sebagai order_id
+    tanggal_lunas TIMESTAMPTZ,           -- diisi saat status berubah jadi 'berhasil', dasar chart Sales
     dibuat_pada TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE UNIQUE INDEX idx_payments_gateway_ref ON payments(gateway_reference)
     WHERE gateway_reference IS NOT NULL;  -- cegah webhook diproses ganda
+CREATE INDEX idx_payments_user ON payments(user_id);
 
 -- ============================================================================
 -- KONTEN BEASISWA / INTERNSHIP / EVENT (Bagian 7 — FR-7.x)

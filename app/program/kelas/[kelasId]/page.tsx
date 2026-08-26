@@ -10,7 +10,8 @@ import Footer from "@/components/sections/Footer";
 import Button from "@/components/ui/Button";
 
 /** Detail publik 1 kelas (PRD 7.5.4) — tombol "Daftar Kelas Ini": belum
- * login -> /login; sudah login -> nonaktif (Payment belum aktif). */
+ * login -> /login; sudah login sebagai Siswa -> /checkout/[kelasId]; sudah
+ * login sebagai role lain (Mentor/Admin) -> nonaktif (kelas cuma untuk Siswa). */
 
 function formatRupiah(value: number): string {
   return `Rp${Math.round(value).toLocaleString("id-ID")}`;
@@ -67,12 +68,18 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
           ) : null}
 
           <div className="flex flex-col gap-2 border-t border-[#E3E3E3] pt-6">
-            {session ? (
+            {session?.role === "student" ? (
+              <Link href={`/checkout/${kelas.id}`} className="w-full sm:w-auto">
+                <Button type="button" variant="primary" size="lg" className="w-full sm:w-auto">
+                  Daftar Kelas Ini
+                </Button>
+              </Link>
+            ) : session ? (
               <>
                 <Button type="button" variant="primary" size="lg" className="w-full sm:w-auto" disabled>
                   Daftar Kelas Ini
                 </Button>
-                <p className="text-sm text-[#7E7C7C]">Pendaftaran kelas akan segera dibuka.</p>
+                <p className="text-sm text-[#7E7C7C]">Pendaftaran kelas hanya untuk akun Siswa.</p>
               </>
             ) : (
               <Link href="/login" className="w-full sm:w-auto">

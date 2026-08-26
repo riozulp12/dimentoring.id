@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import {
   getEnrollmentStatus,
@@ -141,13 +142,12 @@ async function PreviewSection({ kelasId }: { kelasId: string }) {
           Kamu belum terdaftar di kelas ini. Daftar &amp; selesaikan pembayaran untuk membuka semua materi dan
           sesi live bareng mentor.
         </p>
-        <span
-          aria-disabled="true"
-          title="Pendaftaran & pembayaran online segera hadir"
-          className="mx-auto inline-flex w-fit cursor-not-allowed items-center justify-center rounded-[18px] bg-[#E3E3E3] px-5 py-2 text-sm font-medium text-[#7E7C7C] sm:text-base"
+        <Link
+          href={`/checkout/${kelasId}`}
+          className="mx-auto inline-flex w-fit items-center justify-center rounded-[18px] bg-[#081EEA] px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 sm:text-base"
         >
           Daftar Kelas Ini
-        </span>
+        </Link>
       </div>
 
       <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Cuplikan Materi</h2>

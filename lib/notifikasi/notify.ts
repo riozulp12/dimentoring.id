@@ -71,6 +71,20 @@ export async function notifyMateriBaruPublished(kelasId: string, materiJudul: st
   await insertNotifikasi(rows);
 }
 
+/** 2d: Payment Berhasil — PRD Bagian 8 BR-6, dipanggil dari
+ * app/api/payment/webhook/route.ts tepat setelah enrollments diupsert 'lunas'. */
+export async function notifyPembayaranBerhasil(userId: string, kelasId: string, kelasNama: string) {
+  await insertNotifikasi([
+    {
+      user_id: userId,
+      tipe: "sistem",
+      judul: "Pembayaran berhasil!",
+      pesan: `Kelas ${kelasNama} sudah bisa diakses`,
+      link_tujuan: `/kelas/${kelasId}`,
+    },
+  ]);
+}
+
 /**
  * 2c: Konten Menunggu Review — notif ke semua Mentor berstatus Active yang
  * Subtes yang Diampu-nya cocok dengan subtes_id konten baru (soal_ai/materi
