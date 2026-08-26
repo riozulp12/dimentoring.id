@@ -16,6 +16,7 @@ import {
   AiMentorIcon,
   SettingIcon,
   AnalyticsIcon,
+  PromoIcon,
   LogoutIcon,
 } from "./sidebarIcons";
 import {
@@ -37,6 +38,7 @@ const ICONS: Record<SidebarIconKey, ComponentType<{ className?: string }>> = {
   "ai-mentor": AiMentorIcon,
   setting: SettingIcon,
   analytics: AnalyticsIcon,
+  promo: PromoIcon,
   logout: LogoutIcon,
 };
 

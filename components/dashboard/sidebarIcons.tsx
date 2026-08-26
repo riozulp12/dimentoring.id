@@ -161,6 +161,23 @@ export function AnalyticsIcon({ className }: IconProps) {
   );
 }
 
+export function PromoIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M20.4038 11.1122L12.8878 3.59619C12.5987 3.30706 12.2007 3.14453 11.7878 3.14453H4.85681C3.99762 3.14453 3.30225 3.8399 3.30225 4.69909V11.6301C3.30225 12.0429 3.46478 12.441 3.75391 12.7301L11.2699 20.2461C11.8724 20.8486 12.8484 20.8486 13.4509 20.2461L20.4038 13.2932C21.0063 12.6907 21.0063 11.7147 20.4038 11.1122Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8.07715 8.14453C8.6294 8.14453 9.07715 7.69682 9.07715 7.14453C9.07715 6.59225 8.6294 6.14453 8.07715 6.14453C7.52487 6.14453 7.07715 6.59225 7.07715 7.14453C7.07715 7.69682 7.52487 8.14453 8.07715 8.14453Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 export function LogoutIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 21.5006 21.5" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">

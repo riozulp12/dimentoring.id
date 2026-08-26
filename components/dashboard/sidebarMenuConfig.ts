@@ -16,6 +16,7 @@ export type SidebarIconKey =
   | "ai-mentor"
   | "setting"
   | "analytics"
+  | "promo"
   | "logout";
 
 export interface SidebarMenuItem {
@@ -86,6 +87,7 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
       items: [
         { icon: "beasiswa", label: "Kelola Konten", href: "/kelola-konten" },
         { icon: "referral", label: "Payment", href: "/payment" },
+        { icon: "promo", label: "Kode Promo", href: "/kode-promo" },
         { icon: "analytics", label: "Analytics", href: "/analytics" },
       ],
     },

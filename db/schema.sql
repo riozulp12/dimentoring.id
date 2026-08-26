@@ -153,6 +153,41 @@ CREATE TABLE webhook_log_eksternal (
     received_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TYPE promo_tipe_diskon AS ENUM ('persen', 'nominal');
+CREATE TYPE promo_status AS ENUM ('aktif', 'nonaktif');
+
+-- Kode Promo — TERPISAH dari iklan_campaign (beda fungsi: ini dipakai
+-- langsung siswa saat checkout, bukan cuma catatan internal Admin).
+-- Link opsional ke campaign cuma buat pelaporan, bukan penggabungan fitur.
+CREATE TABLE kode_promo (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kode VARCHAR(50) UNIQUE NOT NULL,       -- mis. 'MERDEKA17', disimpan uppercase
+    tipe_diskon promo_tipe_diskon NOT NULL,
+    nilai_diskon DECIMAL(10,2) NOT NULL,    -- persen (0-100) atau nominal Rupiah, sesuai tipe_diskon
+    tanggal_mulai DATE,
+    tanggal_selesai DATE,
+    kuota_pemakaian INT,                    -- NULL = tidak terbatas
+    jumlah_terpakai INT NOT NULL DEFAULT 0,
+    status promo_status NOT NULL DEFAULT 'aktif',
+    campaign_terkait_id UUID REFERENCES iklan_campaign(id),  -- opsional, buat pelaporan
+    label_sekolah VARCHAR(255),             -- CUMA LABEL pengingat Admin (mis. "SMAN 1 Purwokerto"),
+                                             -- TIDAK divalidasi sistem — nama_sekolah siswa teks bebas,
+                                             -- jadi scoping sekolah dilakukan lewat distribusi kode manual
+    berlaku_semua_kelas BOOLEAN NOT NULL DEFAULT true,  -- false = wajib ada baris di kode_promo_kelas
+    dibuat_oleh_id UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_kode_promo_kode ON kode_promo(kode);
+
+-- Scoping ke kelas tertentu — kalau kode_promo.berlaku_semua_kelas=false,
+-- kode cuma valid untuk kelas yang baris-nya ada di sini.
+CREATE TABLE kode_promo_kelas (
+    kode_promo_id UUID NOT NULL REFERENCES kode_promo(id) ON DELETE CASCADE,
+    kelas_id UUID NOT NULL REFERENCES kelas(id) ON DELETE CASCADE,
+    PRIMARY KEY (kode_promo_id, kelas_id)
+);
+
 CREATE TYPE pengeluaran_kategori AS ENUM ('operasional', 'gaji_honor', 'lainnya');
 
 -- Pengeluaran umum di luar iklan (iklan_campaign.budget sudah cover itu 

@@ -48,12 +48,12 @@ export default async function Home() {
       <Hero />
       <Value />
       <Prediction ptnJurusanOptions={ptnJurusanOptions} />
+      <TryoutCTA />
+      <Testimonial />
       <Why />
       <InfoBeasiswa />
       <Program />
-      <TryoutCTA />
       <Mentor />
-      <Testimonial />
       <Leaderboard />
       <FAQ />
       <Statement />
