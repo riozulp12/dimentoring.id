@@ -4,7 +4,9 @@ import type {
   ReferralStatus,
   RewardHistoryItem,
 } from "@/lib/referral/getReferralData";
+import type { RedemptionHistoryItem, RewardCatalogItem } from "@/lib/reward/getRewardCatalogData";
 import ReferralLinkCard from "./ReferralLinkCard";
+import TukarPoinSection from "./TukarPoinSection";
 
 /**
  * Blok "Kode & Link, Stat, Riwayat Referral, Riwayat Reward" — PRD Bagian
@@ -61,11 +63,15 @@ export default function ReferralSummary({
   link,
   referralHistory,
   rewardHistory,
+  rewardCatalog,
+  redemptionHistory,
 }: {
   stats: ReferralStats;
   link: string;
   referralHistory: ReferralHistoryItem[];
   rewardHistory: RewardHistoryItem[];
+  rewardCatalog: RewardCatalogItem[];
+  redemptionHistory: RedemptionHistoryItem[];
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -147,6 +153,12 @@ export default function ReferralSummary({
           </div>
         )}
       </section>
+
+      <TukarPoinSection
+        totalPoin={stats.totalPoin}
+        initialCatalog={rewardCatalog}
+        initialHistory={redemptionHistory}
+      />
     </div>
   );
 }

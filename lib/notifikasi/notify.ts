@@ -71,6 +71,19 @@ export async function notifyMateriBaruPublished(kelasId: string, materiJudul: st
   await insertNotifikasi(rows);
 }
 
+/** 2e: Permintaan Tukar Poin dibuat — PRD Bagian 7.2 (FR-G5), dipanggil dari
+ * app/api/reward/tukar/route.ts tepat setelah reward_redemptions diinsert. */
+export async function notifyRedemptionDiproses(userId: string, namaReward: string) {
+  await insertNotifikasi([
+    {
+      user_id: userId,
+      tipe: "sistem",
+      judul: "Permintaan tukar poin kamu sedang diproses",
+      pesan: `Penukaran untuk "${namaReward}" sedang diproses Admin.`,
+    },
+  ]);
+}
+
 /** 2d: Payment Berhasil — PRD Bagian 8 BR-6, dipanggil dari
  * app/api/payment/webhook/route.ts tepat setelah enrollments diupsert 'lunas'. */
 export async function notifyPembayaranBerhasil(userId: string, kelasId: string, kelasNama: string) {

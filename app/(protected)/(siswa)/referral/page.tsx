@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getReferralHistory, getReferralStats, getRewardHistory } from "@/lib/referral/getReferralData";
+import { getAvailableRewardCatalog, getRedemptionHistory } from "@/lib/reward/getRewardCatalogData";
 import PageTitle from "@/components/dashboard/PageTitle";
 import ReferralSummary from "@/components/shared/ReferralSummary";
 
@@ -14,10 +15,12 @@ export default async function ReferralPage() {
     redirect(ROLE_DASHBOARD_PATH[session.role]);
   }
 
-  const [stats, referralHistory, rewardHistory, headersList] = await Promise.all([
+  const [stats, referralHistory, rewardHistory, rewardCatalog, redemptionHistory, headersList] = await Promise.all([
     getReferralStats(session.userId),
     getReferralHistory(session.userId),
     getRewardHistory(session.userId),
+    getAvailableRewardCatalog(),
+    getRedemptionHistory(session.userId),
     headers(),
   ]);
 
@@ -32,7 +35,14 @@ export default async function ReferralPage() {
     <>
       <PageTitle value="Referral & Poin" />
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-10">
-        <ReferralSummary stats={stats} link={referralLink} referralHistory={referralHistory} rewardHistory={rewardHistory} />
+        <ReferralSummary
+          stats={stats}
+          link={referralLink}
+          referralHistory={referralHistory}
+          rewardHistory={rewardHistory}
+          rewardCatalog={rewardCatalog}
+          redemptionHistory={redemptionHistory}
+        />
       </div>
     </>
   );

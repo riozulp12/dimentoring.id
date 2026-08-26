@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getAdminReviewKontenQueue, getKontenInfoAdminList } from "@/lib/admin/getKelolaKontenData";
+import { getRedemptionRequestsAdmin, getRewardCatalogAdminList } from "@/lib/admin/getKatalogRewardData";
 import PageTitle from "@/components/dashboard/PageTitle";
 import KelolaKontenClient from "@/components/admin/KelolaKontenClient";
 
@@ -14,16 +15,23 @@ export default async function KelolaKontenPage() {
     redirect(ROLE_DASHBOARD_PATH[session.role]);
   }
 
-  const [infoItems, reviewItems] = await Promise.all([
+  const [infoItems, reviewItems, rewardCatalog, redemptionRequests] = await Promise.all([
     getKontenInfoAdminList(),
     getAdminReviewKontenQueue(),
+    getRewardCatalogAdminList(),
+    getRedemptionRequestsAdmin(),
   ]);
 
   return (
     <>
       <PageTitle value="Kelola Konten" />
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-10">
-        <KelolaKontenClient initialInfo={infoItems} initialReview={reviewItems} />
+        <KelolaKontenClient
+          initialInfo={infoItems}
+          initialReview={reviewItems}
+          initialRewardCatalog={rewardCatalog}
+          initialRedemptionRequests={redemptionRequests}
+        />
       </div>
     </>
   );

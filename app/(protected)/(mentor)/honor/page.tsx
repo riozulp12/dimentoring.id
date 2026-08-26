@@ -4,6 +4,7 @@ import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
 import { getHonorBulanIni, TIPE_KELAS_LABEL, type HonorKelasBreakdown } from "@/lib/mentor/getHonorData";
 import { getReferralHistory, getReferralStats, getRewardHistory } from "@/lib/referral/getReferralData";
+import { getAvailableRewardCatalog, getRedemptionHistory } from "@/lib/reward/getRewardCatalogData";
 import PageTitle from "@/components/dashboard/PageTitle";
 import ReferralSummary from "@/components/shared/ReferralSummary";
 
@@ -41,13 +42,16 @@ export default async function HonorPage() {
     redirect("/dashboard/mentor");
   }
 
-  const [honor, stats, referralHistory, rewardHistory, headersList] = await Promise.all([
-    getHonorBulanIni(session.userId),
-    getReferralStats(session.userId),
-    getReferralHistory(session.userId),
-    getRewardHistory(session.userId),
-    headers(),
-  ]);
+  const [honor, stats, referralHistory, rewardHistory, rewardCatalog, redemptionHistory, headersList] =
+    await Promise.all([
+      getHonorBulanIni(session.userId),
+      getReferralStats(session.userId),
+      getReferralHistory(session.userId),
+      getRewardHistory(session.userId),
+      getAvailableRewardCatalog(),
+      getRedemptionHistory(session.userId),
+      headers(),
+    ]);
 
   const host = headersList.get("host") ?? "localhost:3000";
   const protocol = host.startsWith("localhost") ? "http" : "https";
@@ -81,7 +85,14 @@ export default async function HonorPage() {
 
         <section className="flex flex-col gap-4">
           <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Kode & Poin Referral</h2>
-          <ReferralSummary stats={stats} link={referralLink} referralHistory={referralHistory} rewardHistory={rewardHistory} />
+          <ReferralSummary
+            stats={stats}
+            link={referralLink}
+            referralHistory={referralHistory}
+            rewardHistory={rewardHistory}
+            rewardCatalog={rewardCatalog}
+            redemptionHistory={redemptionHistory}
+          />
         </section>
       </div>
     </>
