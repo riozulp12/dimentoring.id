@@ -127,7 +127,9 @@ export default function ReferralSummary({
                 <div className="flex items-center justify-between gap-3 py-2.5 sm:py-3">
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <p className="truncate text-base text-black">
-                      {item.jenisReward} · {item.refereeNama}
+                      {item.peran === "referrer"
+                        ? `Kamu dapat ${item.nominalAtauPoin} poin dari ${item.counterpartNama}`
+                        : `Kamu dapat ${item.nominalAtauPoin} poin karena daftar pakai kode referral`}
                     </p>
                     <p className="text-sm text-[#7E7C7C]">{formatTanggal(item.tanggal)}</p>
                   </div>

@@ -498,11 +498,25 @@ CREATE INDEX idx_referrals_referrer ON referrals(referrer_id);
 CREATE TABLE referral_rewards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     referral_id UUID NOT NULL REFERENCES referrals(id) ON DELETE CASCADE,
+    penerima VARCHAR(20) NOT NULL DEFAULT 'referrer',  -- BARU: 'referrer' atau 'referee' — reward dua sisi
     jenis_reward VARCHAR(50) NOT NULL,     -- 'diskon' / 'saldo' / 'poin'
     nominal_atau_poin DECIMAL(12,2) NOT NULL,
     status_pencairan reward_pencairan_status NOT NULL DEFAULT 'tertunda',
     tanggal TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Konfigurasi besaran reward referral — singleton row (selalu id=1), Admin
+-- bisa ubah lewat Table Editor tanpa perlu developer redeploy kode.
+CREATE TABLE referral_reward_config (
+    id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    poin_referrer INT NOT NULL DEFAULT 100,   -- poin buat yang share kode
+    poin_referee INT NOT NULL DEFAULT 35,     -- poin buat yang pakai kode
+    rupiah_per_100_poin DECIMAL(12,2) NOT NULL DEFAULT 10000,  -- kurs referensi (100 poin = Rp 10.000)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO referral_reward_config (id, poin_referrer, poin_referee, rupiah_per_100_poin)
+VALUES (1, 100, 35, 10000);
 
 CREATE TABLE gamifikasi_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

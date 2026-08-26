@@ -26,9 +26,14 @@ export interface ReferralHistoryItem {
   status: ReferralStatus;
 }
 
+export type RewardPeran = "referrer" | "referee";
+
 export interface RewardHistoryItem {
   id: string;
-  refereeNama: string;
+  /** 'referrer' = reward krn share kode (counterpartNama = nama/alias referee yg dirujuk).
+   *  'referee' = reward krn user ini SENDIRI daftar pakai kode referral orang lain. */
+  peran: RewardPeran;
+  counterpartNama: string | null;
   jenisReward: string;
   nominalAtauPoin: number;
   statusPencairan: "tertunda" | "cair" | "ditahan";
@@ -99,15 +104,39 @@ export async function getReferralHistory(userId: string): Promise<ReferralHistor
   }));
 }
 
-/** Riwayat Reward — FR-R7 (terpisah dari riwayat referral). */
+type RewardRow = {
+  id: string;
+  referral_id: string;
+  jenis_reward: string;
+  nominal_atau_poin: number;
+  status_pencairan: RewardHistoryItem["statusPencairan"];
+  tanggal: string;
+};
+
+/**
+ * Riwayat Reward — FR-R7 (terpisah dari riwayat referral). PRD Bagian 13
+ * (referral_rewards.penerima BARU, reward dua sisi): gabungan reward yang
+ * user ini terima SEBAGAI REFERRER (dari referral yang dia rujuk) DAN
+ * SEBAGAI REFEREE (kalau dia sendiri dulu daftar pakai kode referral orang
+ * lain) — dua query terpisah karena sumber baris `referrals`-nya beda arah.
+ */
 export async function getRewardHistory(userId: string): Promise<RewardHistoryItem[]> {
+  const [asReferrer, asReferee] = await Promise.all([
+    getRewardHistoryAsReferrer(userId),
+    getRewardHistoryAsReferee(userId),
+  ]);
+
+  return [...asReferrer, ...asReferee].sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1));
+}
+
+async function getRewardHistoryAsReferrer(userId: string): Promise<RewardHistoryItem[]> {
   const { data: referralRows, error: referralError } = await supabaseServer
     .from("referrals")
     .select("id, referee:referee_id(nama, nama_panggilan)")
     .eq("referrer_id", userId);
 
   if (referralError) {
-    console.error("[getRewardHistory] query referrals failed:", referralError);
+    console.error("[getRewardHistoryAsReferrer] query referrals failed:", referralError);
     return [];
   }
 
@@ -122,19 +151,57 @@ export async function getRewardHistory(userId: string): Promise<RewardHistoryIte
     .from("referral_rewards")
     .select("id, referral_id, jenis_reward, nominal_atau_poin, status_pencairan, tanggal")
     .in("referral_id", referralIds)
+    .eq("penerima", "referrer")
     .order("tanggal", { ascending: false });
 
   if (rewardError) {
-    console.error("[getRewardHistory] query referral_rewards failed:", rewardError);
+    console.error("[getRewardHistoryAsReferrer] query referral_rewards failed:", rewardError);
     return [];
   }
 
-  return (rewardRows ?? []).map((row) => ({
-    id: row.id as string,
-    refereeNama: refereeByReferralId.get(row.referral_id as string) ?? "***",
-    jenisReward: row.jenis_reward as string,
+  return ((rewardRows ?? []) as RewardRow[]).map((row) => ({
+    id: row.id,
+    peran: "referrer" as const,
+    counterpartNama: refereeByReferralId.get(row.referral_id) ?? "***",
+    jenisReward: row.jenis_reward,
     nominalAtauPoin: Number(row.nominal_atau_poin),
-    statusPencairan: row.status_pencairan as RewardHistoryItem["statusPencairan"],
-    tanggal: row.tanggal as string,
+    statusPencairan: row.status_pencairan,
+    tanggal: row.tanggal,
+  }));
+}
+
+async function getRewardHistoryAsReferee(userId: string): Promise<RewardHistoryItem[]> {
+  const { data: referral, error: referralError } = await supabaseServer
+    .from("referrals")
+    .select("id")
+    .eq("referee_id", userId)
+    .maybeSingle();
+
+  if (referralError) {
+    console.error("[getRewardHistoryAsReferee] query referrals failed:", referralError);
+    return [];
+  }
+  if (!referral) return []; // user ini tidak pernah daftar pakai kode referral siapa pun
+
+  const { data: rewardRows, error: rewardError } = await supabaseServer
+    .from("referral_rewards")
+    .select("id, referral_id, jenis_reward, nominal_atau_poin, status_pencairan, tanggal")
+    .eq("referral_id", referral.id)
+    .eq("penerima", "referee")
+    .order("tanggal", { ascending: false });
+
+  if (rewardError) {
+    console.error("[getRewardHistoryAsReferee] query referral_rewards failed:", rewardError);
+    return [];
+  }
+
+  return ((rewardRows ?? []) as RewardRow[]).map((row) => ({
+    id: row.id,
+    peran: "referee" as const,
+    counterpartNama: null,
+    jenisReward: row.jenis_reward,
+    nominalAtauPoin: Number(row.nominal_atau_poin),
+    statusPencairan: row.status_pencairan,
+    tanggal: row.tanggal,
   }));
 }

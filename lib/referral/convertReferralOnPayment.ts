@@ -8,13 +8,43 @@ import { supabaseServer } from "@/lib/supabase/server";
  * diproses (paymentId dikecualikan saat cek "pembayaran pertama" supaya tidak
  * menghitung dirinya sendiri).
  *
- * Besaran poin di bawah ini adalah nilai default hardcode (belum ada tabel
- * konfigurasi khusus reward referral di skema, beda dari honor_persentase_config
- * untuk honor mentor) — FR-R6 menyebut "Reward ditentukan Admin", jadi angka ini
- * kandidat kuat untuk dipindah ke tabel config kalau Admin butuh mengubahnya
- * tanpa redeploy.
+ * Reward DUA SISI (PRD Bagian 13, referral_rewards.penerima) — referrer (yang
+ * share kode) DAN referee (yang pakai kode, akun ini sendiri) sama-sama dapat
+ * poin. Besarannya dibaca dari referral_reward_config (singleton id=1), bukan
+ * hardcode, supaya Admin bisa ubah lewat Table Editor tanpa redeploy.
  */
-const REFERRAL_REWARD_POIN = 100;
+
+async function addPoin(userId: string, amount: number): Promise<void> {
+  const { data: profile, error: fetchError } = await supabaseServer
+    .from("gamifikasi_profiles")
+    .select("total_poin")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error("[convertReferralOnPayment] query gamifikasi_profiles failed:", fetchError);
+    return;
+  }
+
+  if (!profile) {
+    const { error: insertError } = await supabaseServer
+      .from("gamifikasi_profiles")
+      .insert({ user_id: userId, total_poin: amount });
+    if (insertError) {
+      console.error("[convertReferralOnPayment] insert gamifikasi_profiles failed:", insertError);
+    }
+    return;
+  }
+
+  const { error: updateError } = await supabaseServer
+    .from("gamifikasi_profiles")
+    .update({ total_poin: (profile.total_poin as number) + amount })
+    .eq("user_id", userId);
+
+  if (updateError) {
+    console.error("[convertReferralOnPayment] update gamifikasi_profiles failed:", updateError);
+  }
+}
 
 export async function convertReferralOnPayment(userId: string, currentPaymentId: string): Promise<void> {
   const { count: priorSuccessCount, error: countError } = await supabaseServer
@@ -43,6 +73,19 @@ export async function convertReferralOnPayment(userId: string, currentPaymentId:
   }
   if (!referral) return; // user ini bukan referee, atau sudah pernah dikonversi
 
+  const { data: config, error: configError } = await supabaseServer
+    .from("referral_reward_config")
+    .select("poin_referrer, poin_referee")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (configError || !config) {
+    console.error("[convertReferralOnPayment] query referral_reward_config failed:", configError);
+    return;
+  }
+  const poinReferrer = Number(config.poin_referrer);
+  const poinReferee = Number(config.poin_referee);
+
   const { error: updateReferralError } = await supabaseServer
     .from("referrals")
     .update({ status: "terkonversi", tanggal_konversi: new Date().toISOString() })
@@ -53,36 +96,28 @@ export async function convertReferralOnPayment(userId: string, currentPaymentId:
     return;
   }
 
-  const { error: rewardError } = await supabaseServer.from("referral_rewards").insert({
-    referral_id: referral.id,
-    jenis_reward: "poin",
-    nominal_atau_poin: REFERRAL_REWARD_POIN,
-    status_pencairan: "cair",
-  });
+  const { error: rewardError } = await supabaseServer.from("referral_rewards").insert([
+    {
+      referral_id: referral.id,
+      penerima: "referrer",
+      jenis_reward: "poin",
+      nominal_atau_poin: poinReferrer,
+      status_pencairan: "cair",
+    },
+    {
+      referral_id: referral.id,
+      penerima: "referee",
+      jenis_reward: "poin",
+      nominal_atau_poin: poinReferee,
+      status_pencairan: "cair",
+    },
+  ]);
 
   if (rewardError) {
     console.error("[convertReferralOnPayment] insert referral_rewards failed:", rewardError);
   }
 
   const referrerId = referral.referrer_id as string;
-  const { data: gamifikasiProfile, error: gamifikasiFetchError } = await supabaseServer
-    .from("gamifikasi_profiles")
-    .select("total_poin")
-    .eq("user_id", referrerId)
-    .maybeSingle();
-
-  if (gamifikasiFetchError) {
-    console.error("[convertReferralOnPayment] query gamifikasi_profiles failed:", gamifikasiFetchError);
-    return;
-  }
-  if (!gamifikasiProfile) return; // seharusnya selalu ada (dibuat saat register)
-
-  const { error: gamifikasiUpdateError } = await supabaseServer
-    .from("gamifikasi_profiles")
-    .update({ total_poin: (gamifikasiProfile.total_poin as number) + REFERRAL_REWARD_POIN })
-    .eq("user_id", referrerId);
-
-  if (gamifikasiUpdateError) {
-    console.error("[convertReferralOnPayment] update gamifikasi_profiles failed:", gamifikasiUpdateError);
-  }
+  await addPoin(referrerId, poinReferrer);
+  await addPoin(userId, poinReferee);
 }
