@@ -88,16 +88,16 @@ Tidak ada kompetitor besar yang eksplisit menjanjikan **pendampingan berlanjut p
 
 | # | Section | Status Implementasi & Catatan |
 |---|---|---|
-| 1 | Hero | ✅ Direvisi: 1 CTA dominan ("Cek Peluang Masuk PTN mu") → `/assessment`, CTA sekunder ("Lihat Program") → `/program`. |
+| 1 | Hero | ✅ Ada. **Masih 2 CTA setara bobot** — direkomendasikan satu CTA dominan (belum diubah di desain terakhir yang dicek). |
 | 2 | Value/Stats bar | ✅ 100+ Siswa, 30+ Mentor, 5+ Event, 7+ Program |
 | 3 | Prediction (Keketatan) | ✅ Ada, dengan keterangan sumber data snpmb. **Cek disclaimer sudah ada di halaman Assessment itu sendiri** (dikonfirmasi via desain Assessment SNBP) — bagus. |
 | 4 | Why (Kenapa Dimentoring) | ✅ 4 kartu termasuk "Berlanjut Sampai Kuliah" — diferensiasi utama sudah eksplisit |
-| 5 | Program & Class | ✅ Teaser TKA/SNBT/Mandiri/Mahasiswa di landing, link ke halaman penuh `/program` (5 kategori sungguhan termasuk Konsultasi — lihat Bagian 7.5.4) |
+| 5 | Program & Class | ✅ TKA/SNBT/Mandiri/Mahasiswa |
 | 6 | Mentor | ✅ Carousel mentor |
 | 7 | Testimonial | ⚠️ Masih placeholder Lorem Ipsum — **wajib diganti konten asli sebelum development lanjut** |
 | 8 | Leaderboard/Referral teaser | ✅ Poin & leaderboard dengan nama disamarkan |
 | 9 | FAQ | ✅ Ada |
-| 10 | Statement/Closing | ✅ Direvisi: tagline tetap ada, ditambah CTA konversi eksplisit ("Siap Mulai Perjalanan ke PTN Impianmu?" → tombol "Daftar Sekarang" → `/daftar`) sebelum footer. |
+| 10 | Statement/Closing | ⚠️ Section "Statement" saat ini lebih seperti tagline penutup, belum ada CTA konversi eksplisit sebelum footer |
 
 ---
 
@@ -436,14 +436,6 @@ Catatan interpretatif/motivasional 2-4 kalimat, digenerate sekali oleh Gemini AP
 
 Struktur konten hierarkis: Kelas → Subtes → Topik → Sesi/Materi. Subtes mengikuti struktur resmi: Tes Potensi Skolastik (Penalaran Umum, Pemahaman Bacaan & Menulis, Pengetahuan & Pemahaman Umum, Pengetahuan Kuantitatif) dan Tes Literasi (Literasi B. Indonesia, Literasi B. Inggris, Penalaran Matematika), plus TKA per mata pelajaran wajib & elektif. Live session terjadwal tetap dikelola manual mentor (link Meet, dst — lihat Bagian 7.5.2 kalau nanti dibutuhkan). Admin assign mentor ke kelas berdasarkan **Subtes yang Diampu** yang diisi mentor saat onboarding (Bagian 7.0.2). Setiap Kelas punya `tipe_kelas` (`private`/`semi_private`/`grouping`) yang menentukan persentase honor mentor (lihat 7.5.3).
 
-### 7.5.4 Kategori Program & Halaman Publik `/program` — **BARU**
-
-Setiap Kelas juga punya `program_kategori` (**WAJIB diisi**, terpisah dari `subtes_id`/mapel) — kategori bisnis yang dipakai halaman publik `/program`, salah satu dari: **Konsultasi**, **TKA**, **SNBT**, **Ujian Mandiri**, **Pendampingan Mahasiswa**. Berbeda dari Subtes (yang mengikuti struktur ujian resmi), kategori ini murni pengelompokan produk untuk ditampilkan ke calon siswa yang belum tahu mau ambil kelas berbasis mapel apa.
-
-**Subtes jadi opsional** (`subtes_id` nullable) — Konsultasi dan Pendampingan Mahasiswa tidak selalu terikat satu mapel spesifik, jadi Admin boleh mengosongkan field ini untuk kedua kategori itu (tetap boleh diisi kalau memang relevan, mis. Konsultasi topik tertentu).
-
-**Halaman `/program`** (public, reuse Navbar landing page): 5 section berurutan sesuai kategori di atas, masing-masing menampilkan preview 3-4 kelas terbaru (`ORDER BY created_at DESC LIMIT 4`) dengan link "Lihat Semua" ke `/program/[kategori-slug]` (grid penuh + filter Tipe Kelas & Tingkat Kelas). Section yang kategorinya masih kosong disembunyikan (bukan tampil kosong). Klik kelas → `/program/kelas/[kelasId]` (detail publik: nama, kategori, subtes jika ada, tipe & tingkat kelas, deskripsi, harga, jadwal, mentor jika ada). Tombol "Daftar Kelas Ini" mengarah ke `/login` kalau belum login; kalau sudah login tetap nonaktif dengan keterangan "Pendaftaran kelas akan segera dibuka" — karena Payment belum aktif (BR terkait, lihat Bagian 8).
-
 ### 7.5.3 Honor Mentor — **BARU (rumus resmi, sebelumnya placeholder)**
 
 **Rumus:** `Honor = Harga Kelas × Persentase (sesuai tipe_kelas) / 100`, dihitung per siswa yang enrollment-nya `status_pembayaran='lunas'` di kelas itu (bukan flat per kelas — kalau kelas grouping isinya 5 siswa, honornya dihitung dari 5 pembayaran, bukan 1).
@@ -553,6 +545,7 @@ Diimplementasikan konsisten di: Empty state, Loading, Achievement/Badge, **AI Me
 - **BR-29 (baru)**: Assessment dapat diakses tanpa login, dibatasi **2 kali lihat hasil lengkap per trial ID (cookie)**, lintas jalur digabung (bukan 2x per jalur). Submit ke-3 dan seterusnya tetap bisa mengisi form, tapi hasil digembok di balik Login/Register. Assessment anonim yang belum ditautkan ke akun manapun **tidak dianggap sebagai lead resmi** untuk keperluan Analytics/CRM sampai benar-benar ditautkan ke user_id via login.
 - **BR-30 (baru — dipercepat dari Fase 3 ke Fase 1)**: Section "Note" di Hasil Assessment digenerate AI (Gemini API, free tier). Prompt yang dikirim ke Gemini **wajib anonim total** — hanya data numerik/kategorikal (nilai, label, nama jurusan), tidak pernah nama/email/WA siswa. Tidak boleh memberi kepastian palsu soal kelulusan (pola sama dengan BR-21 AI Mentor). Kegagalan API tidak boleh menggagalkan render halaman hasil secara keseluruhan (wajib ada fallback teks statis).
 - **BR-31 (baru — dipercepat dari Fase 3 ke Fase 1)**: Materi dan Soal yang di-generate AI **wajib direview Mentor/Admin sebelum status `published`** — tidak ada jalur otomatis-tayang untuk konten AI, siapa pun yang memicu generate-nya (termasuk Mentor sendiri). Materi/Soal yang **diupload manual** oleh Mentor yang sudah `Active` (approved) **langsung `published`** tanpa gerbang review tambahan — aturan review cuma berlaku untuk konten bersumber AI, bukan konten buatan manusia yang sudah tepercaya. Hasil pengerjaan Tryout siswa **tidak melalui review manual mentor** — auto-scoring dan pembahasan otomatis tersedia begitu siswa submit (FR-T9).
+- **BR-33 (baru — keputusan bisnis sadar, bukan celah teknis)**: Akses siswa ke Materi Kelas **berlaku seumur hidup** setelah pembayaran sukses (`enrollments.status_pembayaran='lunas'`) — **tidak ada mekanisme kedaluwarsa/pencabutan akses**, baik berdasarkan waktu maupun musim ujian. Guard di halaman Kelas cukup cek status `lunas`, **TIDAK BOLEH** ditambahkan logic pengecekan tanggal/periode kapan pun di masa depan tanpa persetujuan eksplisit ulang — ini konsisten dengan positioning "Bertumbuh Bersama, dimentoring sampai berhasil".
 
 ### Kelas & Tryout
 - **BR-6**: Akses kelas/tryout premium hanya terbuka setelah status Payment "berhasil" terkonfirmasi via webhook.
@@ -783,7 +776,7 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 
 # BAGIAN 13 — DATA MODEL (Diperluas & Direvisi)
 
-- **User** — id, nama, email, **no_wa** (nullable — diisi di `/lengkapi-profil`, bukan lagi di Langkah 1 Register), **password_hash** (nullable — NULL permanen untuk akun yang hanya pernah pakai "Daftar/Login dengan Google"), **profiling_selesai** (boolean, default false — gerbang FR-1.15, `true` setelah wizard `/lengkapi-profil` selesai), **status_verifikasi_akun** (`Unverified`/`Verified` — status akun keseluruhan, terpisah dari status per-role), sub_status (Student: `calon_mahasiswa`/`mahasiswa`, diisi belakangan di `/lengkapi-profil`), sekolah_id (relasi ke `Sekolah`, khusus Student), kota_id, provinsi_id, nama_panggilan, consent_leaderboard_lokasi, opt_out_leaderboard, **mapel_tersulit** (array, khusus Student), **utm_source, utm_campaign** (baru — nullable, ditangkap dari `?utm_source=`/`?utm_campaign=` di URL `/daftar` saat akun dibuat, berlaku juga untuk Google Sign-In lewat `redirectTo`; NULL = organic, tidak pernah dipaksa default string), dibuat_pada. *(Field `role` tunggal DIHAPUS dari User — digantikan `UserRole` di bawah, agar satu akun bisa memegang lebih dari satu role.)*
+- **User** — id, nama, email, no_wa, password_hash, **status_verifikasi_akun** (`Unverified`/`Verified` — status akun keseluruhan, terpisah dari status per-role), sub_status (Student: `calon_mahasiswa`/`mahasiswa`), sekolah_id (relasi ke `Sekolah`, khusus Student), kota_id, provinsi_id, nama_panggilan, consent_leaderboard_lokasi, opt_out_leaderboard, **mapel_tersulit** (array, khusus Student), dibuat_pada. *(Field `role` tunggal DIHAPUS dari User — digantikan `UserRole` di bawah, agar satu akun bisa memegang lebih dari satu role.)*
 - **UserRole (baru)** — id, user_id, role_type (`Student`/`Mentor`/`Admin`), status (`Active`/`Pending`/`Rejected`), dibuat_pada, **sumber_pengajuan** (`register_publik`/`upgrade_dari_akun_existing`). Satu `user_id` dapat memiliki lebih dari satu baris dengan status `Active` sekaligus — dasar teknis fitur Role Switcher (FR-1.12) tanpa duplikasi akun.
 - **Sekolah** — id, nama, kota_id, **akreditasi**, **kuota_snbp**, **ranking_data** (jika tersedia) — sumber data untuk auto-fill input SNBP (BR-16).
 - **MentorProfile** — id, user_id, asal_ptn, semester, jurusan, **subtes_diampu** (array, hasil checklist onboarding), kelas_diampu (relasi ke Kelas). *(Status approval kini ada di `UserRole.status`, bukan field terpisah di sini, agar konsisten dengan role lain.)*
@@ -791,14 +784,10 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **PTNJurusan** — id, nama_universitas, nama_jurusan, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu, jalur (SNBP/SNBT/Mandiri), sumber_data, tahun_data.
 - **Assessment** — id, user_id, jalur, input_data (json), ptn_tujuan, jurusan_tujuan, **keketatan_score** (formula publik), **peluang_score** (personal, terpisah dari keketatan), hasil_breakdown, dibuat_pada.
 - **Referral** — id, referrer_id, referee_id, kode_referral, status, tanggal_daftar, tanggal_konversi.
-- **ReferralReward (DIREVISI — reward dua sisi)** — id, referral_id, **penerima** (baru: `referrer`/`referee` — reward sekarang cair untuk KEDUA pihak: yang share kode DAN yang pakai kode, bukan cuma referrer), jenis_reward, nominal_atau_poin, status_pencairan, tanggal.
-- **ReferralRewardConfig (DIREVISI — persentase proporsional, bukan poin flat)** — id (singleton, selalu `1`), **persen_referrer, persen_referee** (persentase dari `payments.jumlah` transaksi pertama referee), **poin_minimum_referrer/poin_maksimum_referrer, poin_minimum_referee/poin_maksimum_referee** (floor & cap poin hasil hitungan persentase — supaya proporsional ke harga paket yang rentangnya lebar, Konsultasi murah s/d Pendampingan Mahasiswa, tapi tetap terkendali), rupiah_per_100_poin (kurs konversi Rupiah→poin), updated_at. Besaran reward referral (FR-R6: "ditentukan Admin") — diedit Admin lewat Table Editor tanpa perlu developer redeploy kode, bukan hardcode di aplikasi.
+- **ReferralReward** — id, referral_id, jenis_reward, nominal_atau_poin, status_pencairan, tanggal.
 - **GamifikasiProfile** — id, user_id, total_poin, level, badge_list, streak_counter.
 - **TryOutAttempt (diperluas)** — id, user_id, tryout_id, jawaban (json), **status_per_soal** (json/array — mapping nomor soal → `dikerjakan`/`belum`, dipakai untuk render Navigator Soal), skor, waktu_mulai, **waktu_tersisa_server** (source of truth untuk timer, di-update tiap interaksi), waktu_selesai, immutable_lock, pdf_export_url.
-- **Kelas** — id, nama, **program_kategori** (baru: `konsultasi`/`tka`/`snbt`/`ujian_mandiri`/`pendampingan_mahasiswa` — kategori bisnis dipakai halaman publik `/program`, WAJIB diisi, terpisah dari mapel/subtes), tingkat_kelas, tipe_kelas, **subtes_id** (direvisi jadi nullable — Konsultasi & Pendampingan Mahasiswa tidak selalu terikat mapel), mentor_id, kapasitas, harga, deskripsi, jadwal, link_meet.
-- **IklanCampaign (baru)** — id, nama_campaign, platform (`meta`/`google`/`tiktok`/`lainnya`), budget, tanggal_mulai, tanggal_selesai, **utm_campaign_tag** (harus SAMA PERSIS dengan tag di link iklan sungguhan — dasar cross-reference ke `users.utm_campaign` buat hitung Leads & CPL di Analytics), catatan, dibuat_oleh_id. Input manual Admin, bukan integrasi API ke Ads Manager.
-- **PengeluaranBisnis (baru)** — id, kategori (`operasional`/`gaji_honor`/`lainnya`), deskripsi, jumlah, tanggal, dibuat_oleh_id. Dicatat manual Admin lewat section "Pengeluaran" di Analytics; digabung dengan `IklanCampaign.budget` (GROUP BY bulan) buat chart "Pengeluaran per Bulan" — dua sumber terpisah supaya budget iklan tidak double-dicatat manual.
-- **Enrollment, TryOut, Payment, KontenInfo, AIMentorLog, SoalAI, Badge, RewardCatalog** — tetap sesuai definisi v2.0 (tidak berubah pada revisi ini).
+- **Kelas, Enrollment, TryOut, Payment, KontenInfo, AIMentorLog, SoalAI, Badge, RewardCatalog** — tetap sesuai definisi v2.0 (tidak berubah pada revisi ini).
 
 ---
 
