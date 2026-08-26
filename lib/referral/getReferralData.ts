@@ -15,6 +15,7 @@ export interface ReferralStats {
   totalPendaftaran: number;
   totalTerkonversi: number;
   totalPoin: number;
+  level: string | null;
 }
 
 export type ReferralStatus = "terdaftar" | "dalam_proses" | "terkonversi" | "tidak_valid";
@@ -69,7 +70,7 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
       .select("*", { count: "exact", head: true })
       .eq("referrer_id", userId)
       .eq("status", "terkonversi"),
-    supabaseServer.from("gamifikasi_profiles").select("total_poin").eq("user_id", userId).maybeSingle(),
+    supabaseServer.from("gamifikasi_profiles").select("total_poin, level").eq("user_id", userId).maybeSingle(),
   ]);
 
   return {
@@ -78,6 +79,7 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
     totalPendaftaran: pendaftaranRes.count ?? 0,
     totalTerkonversi: terkonversiRes.count ?? 0,
     totalPoin: (gamifikasiRes.data?.total_poin as number | undefined) ?? 0,
+    level: (gamifikasiRes.data?.level as string | null | undefined) ?? null,
   };
 }
 

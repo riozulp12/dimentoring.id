@@ -533,6 +533,23 @@ CREATE TABLE gamifikasi_profiles (
     streak_counter INT NOT NULL DEFAULT 0
 );
 
+-- Konfigurasi ambang batas tiap level — Admin bisa ubah lewat Table Editor
+-- tanpa redeploy. level di gamifikasi_profiles di-update ulang tiap kali
+-- total_poin berubah (lihat lib/referral/convertReferralOnPayment.ts).
+CREATE TABLE gamifikasi_level_tier (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nama_level VARCHAR(50) NOT NULL,
+    poin_minimum INT NOT NULL UNIQUE,
+    urutan INT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO gamifikasi_level_tier (nama_level, poin_minimum, urutan) VALUES
+    ('Rookie Referrer', 0, 1),
+    ('Rising Star', 500, 2),
+    ('Referral Master', 2000, 3),
+    ('Referral Legend', 5000, 4);
+
 CREATE TABLE badges (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nama VARCHAR(100) NOT NULL,

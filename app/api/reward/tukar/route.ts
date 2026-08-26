@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { notifyRedemptionDiproses } from "@/lib/notifikasi/notify";
+import { hitungDanUpdateLevel } from "@/lib/gamifikasi/hitungLevel";
 
 /**
  * Tukar Poin — PRD Bagian 7.2 (FR-G5) & Bagian 13 (reward_catalog,
@@ -114,6 +115,10 @@ export async function POST(request: NextRequest) {
       .eq("user_id", session.userId);
     return errorResponse("Stok reward ini sudah habis.", 409);
   }
+
+  // Poin sudah final (tidak akan di-rollback lagi setelah titik ini) — FR-G2:
+  // penukaran bisa MENURUNKAN level, wajib dicek ulang, bukan cuma saat poin naik.
+  await hitungDanUpdateLevel(session.userId);
 
   const { error: insertError } = await supabaseServer.from("reward_redemptions").insert({
     user_id: session.userId,

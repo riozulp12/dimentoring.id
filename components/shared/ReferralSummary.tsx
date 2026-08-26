@@ -46,7 +46,17 @@ function formatTanggal(iso: string) {
   return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 }
 
-function StatCard({ label, value, unit }: { label: string; value: string; unit?: string }) {
+function StatCard({
+  label,
+  value,
+  unit,
+  status,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  status?: string | null;
+}) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 text-center sm:gap-4 sm:px-8 sm:py-5">
       <p className="whitespace-nowrap text-base text-[#7E7C7C]">{label}</p>
@@ -54,6 +64,7 @@ function StatCard({ label, value, unit }: { label: string; value: string; unit?:
         {value}
         {unit ? <span className="text-base font-normal">{unit}</span> : null}
       </p>
+      {status ? <p className="text-base text-[#0CBA00]">{status}</p> : null}
     </div>
   );
 }
@@ -81,7 +92,7 @@ export default function ReferralSummary({
         <StatCard label="Total Klik" value={String(stats.totalKlik)} />
         <StatCard label="Pendaftaran" value={String(stats.totalPendaftaran)} />
         <StatCard label="Terkonversi" value={String(stats.totalTerkonversi)} />
-        <StatCard label="Poin Referral" value={String(stats.totalPoin)} unit="Poin" />
+        <StatCard label="Poin Referral" value={String(stats.totalPoin)} unit="Poin" status={stats.level} />
       </div>
 
       <section className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">

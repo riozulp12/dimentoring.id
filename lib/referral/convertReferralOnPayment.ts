@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { hitungDanUpdateLevel } from "@/lib/gamifikasi/hitungLevel";
 
 /**
  * BR-10/BR-11 (PRD Bagian 8): reward referral cair setelah pembayaran PERTAMA
@@ -15,6 +16,10 @@ import { supabaseServer } from "@/lib/supabase/server";
  * lalu di-floor/cap ke poin_minimum/poin_maksimum masing-masing sisi. Semua
  * angka dibaca dari referral_reward_config (singleton id=1), bukan hardcode,
  * supaya Admin bisa ubah lewat Table Editor tanpa redeploy.
+ *
+ * FR-G2: tiap kali total_poin salah satu pihak berubah, gamifikasi_profiles.level
+ * WAJIB dihitung ulang (hitungDanUpdateLevel) — jangan cuma diubah saat naik,
+ * karena poin bisa juga berkurang lewat fitur Tukar Poin di tempat lain.
  */
 
 interface RewardConfig {
@@ -179,5 +184,7 @@ export async function convertReferralOnPayment(userId: string, currentPaymentId:
 
   const referrerId = referral.referrer_id as string;
   await addPoin(referrerId, poinReferrer);
+  await hitungDanUpdateLevel(referrerId);
   await addPoin(userId, poinReferee);
+  await hitungDanUpdateLevel(userId);
 }

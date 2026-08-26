@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
+import { hitungDanUpdateLevel } from "@/lib/gamifikasi/hitungLevel";
 
 /**
  * Proses Permintaan Penukaran Poin — PRD Bagian 13 (reward_redemptions).
@@ -72,6 +73,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .eq("user_id", updated.user_id);
       if (refundError) {
         console.error("[redemption PATCH] refund poin failed:", JSON.stringify(refundError, null, 2));
+      } else {
+        // FR-G2: refund poin bisa menaikkan level lagi — hitung ulang, bukan cuma saat berkurang.
+        await hitungDanUpdateLevel(updated.user_id);
       }
     }
   }
