@@ -33,10 +33,13 @@ const TIPE_LABEL: Record<MateriTipe, string> = {
 
 export default async function KelasDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ kelasId: string }>;
+  searchParams: Promise<{ berhasil?: string }>;
 }) {
   const { kelasId } = await params;
+  const { berhasil } = await searchParams;
 
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
@@ -61,6 +64,11 @@ export default async function KelasDetailPage({
     <>
       <PageTitle value={kelas.nama} />
       <div className="mx-auto flex w-full max-w-[900px] flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-10">
+        {berhasil ? (
+          <p className="w-full rounded-[16px] bg-[#F0FDF4] px-4 py-3 text-center text-sm text-[#0CBA00] sm:text-base">
+            Pembayaran berhasil! Kelas ini sudah bisa diakses.
+          </p>
+        ) : null}
         <div className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
           <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-semibold tracking-[-0.02em] text-black">{kelas.nama}</h1>

@@ -1,7 +1,7 @@
 "use client";
 
 import Script from "next/script";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
@@ -49,6 +49,7 @@ export default function CheckoutForm({
   snapClientKey: string;
   isProduction: boolean;
 }) {
+  const router = useRouter();
   const [kodePromoInput, setKodePromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
@@ -56,7 +57,6 @@ export default function CheckoutForm({
 
   const [payError, setPayError] = useState<string | null>(null);
   const [isPaying, setIsPaying] = useState(false);
-  const [paymentState, setPaymentState] = useState<"idle" | "success" | "pending">("idle");
 
   const total = appliedPromo ? appliedPromo.total : harga;
 
@@ -118,37 +118,33 @@ export default function CheckoutForm({
         return;
       }
 
+      const orderId = json.orderId as string;
+
+      // onSuccess Snap.js untuk metode async (VA/e-wallet) CUMA berarti transaksi
+      // sudah dibuat, BUKAN uang sudah masuk — jadi onSuccess & onPending SAMA-SAMA
+      // diarahkan ke halaman "Menunggu Konfirmasi", bukan langsung dianggap sukses.
+      // Status final ditentukan di sana lewat polling ke payments.status (webhook).
+      function redirectToStatus(result: unknown) {
+        const metode = (result as { payment_type?: string } | null)?.payment_type;
+        const query = metode ? `?metode=${encodeURIComponent(metode)}` : "";
+        router.push(`/payment-status/${orderId}${query}`);
+      }
+
       window.snap.pay(json.snapToken as string, {
-        onSuccess: () => setPaymentState("success"),
-        onPending: () => setPaymentState("pending"),
+        onSuccess: redirectToStatus,
+        onPending: redirectToStatus,
         onError: () => {
           setPayError("Pembayaran gagal diproses. Coba lagi.");
           setIsPaying(false);
         },
+        // User menutup popup sebelum selesai — TETAP di halaman checkout, jangan
+        // diarahkan ke mana pun, supaya bisa coba bayar lagi tanpa ulang dari awal.
         onClose: () => setIsPaying(false),
       });
     } catch {
       setPayError("Gagal membuat transaksi pembayaran. Coba lagi nanti.");
       setIsPaying(false);
     }
-  }
-
-  if (paymentState !== "idle") {
-    return (
-      <div className="flex flex-col items-center gap-3 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-10 text-center">
-        <p className="text-base text-black">
-          {paymentState === "success"
-            ? "Pembayaran berhasil! Kelas akan segera terbuka."
-            : "Pembayaran sedang diproses. Kelas akan otomatis terbuka begitu dikonfirmasi."}
-        </p>
-        <Link
-          href="/kelas"
-          className="inline-flex items-center justify-center rounded-[18px] bg-[#081EEA] px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 sm:text-base"
-        >
-          Lihat Kelas Saya
-        </Link>
-      </div>
-    );
   }
 
   return (
