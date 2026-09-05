@@ -8,13 +8,13 @@ import { PROGRAM_KATEGORI_LABEL, programKategoriFromSlug } from "@/lib/shared/ke
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import KategoriFilterBar from "@/components/program/KategoriFilterBar";
+import KelasCardFrame from "@/components/program/KelasCardFrame";
+import KelasCardMeta from "@/components/program/KelasCardMeta";
 
 /** Grid penuh 1 kategori program (PRD 7.5.4) — public route, filter Tipe
- * Kelas & Tingkat Kelas lewat query string (lihat KategoriFilterBar). */
-
-function formatRupiah(value: number): string {
-  return `Rp${Math.round(value).toLocaleString("id-ID")}`;
-}
+ * Kelas & Tingkat Kelas lewat query string (lihat KategoriFilterBar). Grid +
+ * card content REUSE KelasCardFrame/KelasCardMeta yang sama dengan
+ * app/program/page.tsx supaya ukuran & isi card selalu konsisten. */
 
 export default async function ProgramKategoriPage({
   params,
@@ -62,21 +62,21 @@ export default async function ProgramKategoriPage({
           </div>
         ) : (
           <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {items.map((item) => (
-              <Link
+            {items.map((item, idx) => (
+              <KelasCardFrame
                 key={item.id}
                 href={`/program/kelas/${item.id}`}
-                className="flex flex-col gap-1.5 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white p-4 shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)] transition-shadow hover:shadow-[1px_2px_8px_0px_rgba(0,0,0,0.15)]"
+                namaKelas={item.nama}
+                index={idx}
+                diskonAktif={item.diskonAktif}
+                sisaSlot={item.sisaSlot}
+                kapasitas={item.kapasitas}
+                programKategori={item.programKategori}
+                tingkatKelas={item.tingkatKelas}
+                subtesNama={item.subtesNama}
               >
-                <span className="inline-flex w-fit items-center rounded-full bg-[#F9FAFF] px-2.5 py-0.5 text-xs font-medium text-[#081EEA]">
-                  {item.tipeKelasLabel}
-                </span>
-                <p className="text-base leading-[1.5] font-semibold tracking-[-0.36px] text-black">{item.nama}</p>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#7E7C7C]">
-                  <span className="font-medium text-black">{formatRupiah(item.harga)}</span>
-                  {item.mentorNama ? <span>Mentor: {item.mentorNama}</span> : null}
-                </div>
-              </Link>
+                <KelasCardMeta item={item} sessionRole={session?.role ?? null} />
+              </KelasCardFrame>
             ))}
           </div>
         )}
