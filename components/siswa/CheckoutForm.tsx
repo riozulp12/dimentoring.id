@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
+import MaskotLoading from "@/components/ui/MaskotLoading";
 
 /**
  * Form Checkout — PRD Bagian 7.5/Bagian 13 (payments, kode_promo). Validasi
@@ -220,7 +221,14 @@ export default function CheckoutForm({
         {payError ? <p className="text-sm text-[#E70A0A]">{payError}</p> : null}
 
         <Button variant="primary" size="xl" onClick={handleBayar} disabled={isPaying} className="w-full">
-          {isPaying ? "Memproses..." : "Bayar Sekarang"}
+          {isPaying ? (
+            <span className="flex items-center justify-center gap-2">
+              <MaskotLoading size="sm" />
+              Memproses...
+            </span>
+          ) : (
+            "Bayar Sekarang"
+          )}
         </Button>
       </div>
     </>

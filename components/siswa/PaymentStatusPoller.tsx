@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Mascot from "@/components/ui/Mascot";
+import MaskotLoading from "@/components/ui/MaskotLoading";
 
 /**
  * Halaman "Menunggu Konfirmasi" — PRD Bagian 13 (payments.status). Polling
@@ -101,7 +102,7 @@ export default function PaymentStatusPoller({
 
   return (
     <div className="flex flex-col items-center gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-10 text-center">
-      <Mascot variant="Listen" alt="Menunggu konfirmasi pembayaran" className="h-32 w-auto" />
+      <MaskotLoading size="lg" variant="Listen" />
       <p className="text-lg font-medium text-black">Pembayaran kamu sedang diproses...</p>
       <p className="text-sm text-[#7E7C7C]">
         {isInstant
