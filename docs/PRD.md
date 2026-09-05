@@ -406,7 +406,11 @@ Catatan interpretatif/motivasional 2-4 kalimat, digenerate sekali oleh Gemini AP
   | Kabupaten/Kota | 70 | 65 | 60 | 50 |
 
   Kalau siswa isi lebih dari satu prestasi, ambil nilai **tertinggi** saja (bukan dijumlah/dirata-rata semua prestasi).
-- FR-3.8 (baru): **Label kualitatif Nilai Akhir** (PLACEHOLDER, perlu divalidasi tim akademik): ≥90 = "Sangat Tinggi", 75-89 = "Tinggi", 60-74 = "Sedang", 45-59 = "Rendah", <45 = "Sangat Rendah".
+- FR-3.8 (DIREVISI — skala resmi ditetapkan Rio, bukan lagi placeholder): **Label kualitatif Nilai Akhir**: 95-100 = "Sangat Tinggi", 86-94 = "Tinggi", 76-85 = "Sedang", 66-75 = "Rendah", 50-65 = "Sangat Rendah", ≤49 = "Perlu Ditingkatkan" (istilah ini usulan — sengaja dibuat konstruktif/tidak menghakimi karena ini skor terendah yang paling mungkin bikin siswa berkecil hati, boleh diganti kalau Rio ada istilah lain yang lebih pas).
+- FR-3.9 (DIREVISI — ditulis resmi pertama kali, sebelumnya cuma ada di prompt implementasi, tidak pernah tercatat di PRD): **Formula & Label Peluang**. Formula (PLACEHOLDER, belum divalidasi statistik — lihat catatan di bawah): `Peluang (%) = (Nilai Akhir × 60%) + (MIN(Keketatan%, 100) × 40%)`. Karena kedua komponen sudah berskala 0-100, hasilnya otomatis berupa persentase — **ditampilkan dengan simbol `%`**, sama format dengan Keketatan. Label: **>85% = "Peluang Besar"**, **60-85% = "Peluang Sedang"**, **<60% = "Peluang Kecil"**.
+- FR-3.10 (baru, keputusan Rio, Agustus 2026): **Cek Peluang PTN jalur SNBT SENGAJA BELUM dibangun**, ditunda sampai integrasi Try Out Agensoal selesai. Alasan: mekanisme SNBT (dasar skor UTBK) beda total dari SNBP (dasar nilai rapor+prestasi) yang sudah dibangun — memaksa siswa input perkiraan skor UTBK manual sekarang dianggap kurang akurat dan berpotensi kerja dua kali begitu skor asli dari hasil Try Out tersedia. **Widget Cek Keketatan Jurusan TETAP diperluas mendukung filter Jalur SNBT** (FR di Bagian 7.4.1b) karena itu murni informasi kuota/peminat, tidak butuh skor personal siswa — beda kasus dari Assessment penuh ini.
+
+  **CATATAN VALIDITAS (penting, jangan dihapus)**: formula ini masuk akal secara logika (menggabungkan kekuatan akademik siswa + realita persaingan PTN), TAPI belum pernah divalidasi terhadap data kelulusan SNBP sungguhan. Karena Assessment ini jadi pintu masuk utama akuisisi Dimentoring, formula ini **direkomendasikan divalidasi** (dibandingkan ke data siswa yang sudah tahu hasil SNBP asli, atau direview pihak yang paham statistik seleksi PTN) sebelum atau tidak lama setelah go-live — bukan dianggap final selamanya.
 - FR-3.9 (baru): **Jenjang sebagai pembeda prodi** — kombinasi Universitas+Jurusan+**Jenjang** (S1/D3/D4/dst.) dianggap prodi yang sepenuhnya berbeda, masing-masing punya `kuota_tahun_berjalan` dan `jumlah_peminat_tahun_lalu` sendiri di tabel `ptn_jurusan`. Dropdown "Pilihan Universitas dan Jurusan" di form input (7.4.2) wajib menampilkan jenjang secara eksplisit supaya siswa tidak salah pilih (mis. "S1 Teknologi Informasi" vs "D3 Teknologi Informasi" sebagai opsi terpisah, bukan tergabung).
 - FR-3.10 (baru — aturan resmi SNBP 2026): **Validasi jumlah & lokasi pilihan prodi SNBP.** Backend wajib menolak submit kalau: (a) jumlah pilihan SNBP lebih dari 2, atau (b) tepat 2 pilihan dipilih TAPI tidak satu pun berada di provinsi yang sama dengan `Sekolah.kota_id → Kota.provinsi_id` milik siswa. Validasi ini **tidak boleh cuma di frontend** (client bisa dimanipulasi) — wajib dicek ulang di API sebelum data masuk ke `assessment_pilihan`.
 
@@ -719,6 +723,23 @@ Daftar Kelas & Payment, Mengerjakan Tryout, Penukaran Poin Gamifikasi, AI Pembua
 | **Social Proof** | Leaderboard, success story konkret | Sebagian sudah ada di Landing Page |
 | **Achievement System** | Badge & level terhubung ke benefit nyata | Fase 2 |
 | **Learning Streak** | Reminder dengan batas wajar, tidak guilt-tripping | Fase 2, perlu microcopy hati-hati untuk konteks ujian tinggi-stakes |
+| **Study Battle (baru, ide Rio Agustus 2026)** | Belajar bareng format game multiplayer, lihat detail konsep di bawah | Fase 2, setelah bank soal Agensoal tersedia |
+
+### Konsep "Study Battle" (Fase 2 — belum dieksekusi, didokumentasikan dulu)
+
+Room quiz multiplayer real-time, maksimal 5 siswa per room, dirancang khusus menyasar selera Gen Z (kecepatan, kompetisi sosial, momen "flex" yang bisa di-share) — bukan sekadar kuis online biasa:
+
+- **Alur**: Siswa buat room (pilih subtes + tingkat kesulitan + jumlah soal) → share kode/link ke WhatsApp → lobby "Ready Check" → game mulai serentak untuk semua peserta
+- **Skor berbasis kecepatan**: jawaban benar lebih cepat = poin lebih besar (formula ala Kahoot), bukan cuma benar/salah biasa
+- **Power-up** (didapat dari streak jawaban benar berturut-turut, ATAU dibeli pakai Poin Referral yang sudah ada — terhubung langsung ke sistem `gamifikasi_profiles` yang sudah dibangun):
+  - Freeze — hentikan sementara timer lawan
+  - 2x Poin — dobelkan poin untuk 1 soal
+  - Peek — hilangkan 2 opsi jawaban salah
+- **Leaderboard live** ditampilkan dramatis di antara soal (efek reveal)
+- **Gelar personal di akhir game** (bukan cuma ranking angka) — mis. "Sultan Matematika", "Comeback King", "Speed Demon" — dirancang jadi momen yang orang mau screenshot
+- **Kartu hasil siap di-share** ke Instagram Story/WhatsApp Status dengan branding Dimentoring — berpotensi jadi jalur pertumbuhan organik tambahan di luar sistem Referral yang sudah ada
+
+**Prasyarat sebelum eksekusi**: (1) bank soal cukup banyak & variatif — bergantung ke integrasi Agensoal yang masih berjalan, (2) ini kategori teknis baru (real-time multiplayer, sinkronisasi state antar beberapa user sekaligus) — bukan pola CRUD seperti mayoritas fitur Fase 1, perlu dirancang arsitekturnya terpisah (kemungkinan perlu Supabase Realtime atau WebSocket) sebelum estimasi waktu development bisa diberikan akurat.
 
 Catatan kehati-hatian tetap berlaku: mekanisme gamifikasi dan reminder wajib punya batas, tidak menciptakan kecemasan berlebihan bagi siswa remaja.
 
@@ -851,7 +872,7 @@ Sesuai v2.0, ditambah:
 
 **Fase 1 (sebelum TKA 2026):** Register/Login/Onboarding (progressive profiling), Dashboard, Assessment Prediksi PTN (SNBP sebagai referensi, SNBT & Mandiri menyusul pola sama), Payment, Kelas Bimbingan, Tryout TKA & SNBT (Free+Premium), Riwayat Tryout+PDF, Referral dasar, Approval Mentor, AI Mentor terbatas (opsional).
 
-**Fase 2 (menjelang SNBP/SNBT):** Info Beasiswa/Internship/Event, Analytics Dasar (termasuk funnel onboarding), Gamifikasi Referral & Tryout versi awal.
+**Fase 2 (menjelang SNBP/SNBT):** Info Beasiswa/Internship/Event, Analytics Dasar (termasuk funnel onboarding), Gamifikasi Referral & Tryout versi awal, Study Battle (game multiplayer, lihat Bagian 7).
 
 **Fase 3 (2027+):** Tryout Jalur Mandiri per PTN, Leaderboard granular penuh, AI Pembuat Soal, AI Mentor Personal, Predictive Analytics, Community & Student Ambassador.
 
