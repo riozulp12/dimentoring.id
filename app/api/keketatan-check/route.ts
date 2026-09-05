@@ -60,5 +60,7 @@ export async function POST(request: NextRequest) {
     keketatanScore: keketatan.score,
     keketatanLabel: keketatan.label,
     tahunData: ptnJurusan.tahun_data as number,
+    kuotaTahunBerjalan: ptnJurusan.kuota_tahun_berjalan as number,
+    jumlahPeminatTahunLalu: ptnJurusan.jumlah_peminat_tahun_lalu as number,
   });
 }

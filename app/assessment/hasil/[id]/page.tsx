@@ -11,6 +11,7 @@ import AssessmentHasilAccordions, {
   type AssessmentHasilData,
   type KelasRekomendasiData,
   type PilihanCardData,
+  type RekomendasiJurusanGroup,
   type TryoutRekomendasiData,
 } from "./AssessmentHasilAccordions";
 
@@ -38,6 +39,8 @@ interface PtnJurusanJoin {
   nama_jurusan: string;
   jenjang: string;
   tahun_data: number;
+  kuota_tahun_berjalan: number;
+  jumlah_peminat_tahun_lalu: number;
 }
 
 interface AssessmentPilihanRow {
@@ -67,6 +70,8 @@ function toPilihanCard(row: AssessmentPilihanRow): PilihanCardData | null {
     keketatanLabel: row.keketatan_label,
     peluangScore: row.peluang_score,
     peluangLabel: row.peluang_label,
+    kuotaTahunBerjalan: ptnJurusan.kuota_tahun_berjalan,
+    jumlahPeminatTahunLalu: ptnJurusan.jumlah_peminat_tahun_lalu,
   };
 }
 
@@ -160,7 +165,7 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
     supabaseServer
       .from("assessment_pilihan")
       .select(
-        "urutan_pilihan, keketatan_score, keketatan_label, peluang_score, peluang_label, ptn_jurusan:ptn_jurusan_id(nama_universitas, nama_jurusan, jenjang, tahun_data)",
+        "urutan_pilihan, keketatan_score, keketatan_label, peluang_score, peluang_label, ptn_jurusan:ptn_jurusan_id(nama_universitas, nama_jurusan, jenjang, tahun_data, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu)",
       )
       .eq("assessment_id", id)
       .eq("is_rekomendasi", false)
@@ -168,7 +173,7 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
     supabaseServer
       .from("assessment_pilihan")
       .select(
-        "urutan_pilihan, keketatan_score, keketatan_label, peluang_score, peluang_label, ptn_jurusan:ptn_jurusan_id(nama_universitas, nama_jurusan, jenjang, tahun_data)",
+        "urutan_pilihan, keketatan_score, keketatan_label, peluang_score, peluang_label, ptn_jurusan:ptn_jurusan_id(nama_universitas, nama_jurusan, jenjang, tahun_data, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu)",
       )
       .eq("assessment_id", id)
       .eq("is_rekomendasi", true)
@@ -178,9 +183,23 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
   const hasilPrediksi = ((pilihanRows ?? []) as AssessmentPilihanRow[])
     .map(toPilihanCard)
     .filter((row): row is PilihanCardData => row !== null);
-  const rekomendasiJurusan = ((rekomendasiRows ?? []) as AssessmentPilihanRow[])
-    .map(toPilihanCard)
-    .filter((row): row is PilihanCardData => row !== null);
+
+  // Rekomendasi Jurusan (DIREVISI, per-pilihan): backend menyimpan
+  // urutan_pilihan baris rekomendasi = urutan PILIHAN ASAL-nya (bukan index
+  // rekomendasi sendiri), lihat app/api/assessment/snbp/route.ts — jadi
+  // tinggal di-map balik ke tiap pilihan siswa. Satu grup per pilihan siswa
+  // (1 atau 2), `rekomendasi: null` kalau pilihan itu tidak dapat kandidat
+  // qualify — TIDAK menyembunyikan grup pilihan lain yang masih dapat.
+  const rekomendasiByAsal = new Map(
+    ((rekomendasiRows ?? []) as AssessmentPilihanRow[])
+      .map(toPilihanCard)
+      .filter((row): row is PilihanCardData => row !== null)
+      .map((row) => [row.urutanPilihan, row]),
+  );
+  const rekomendasiJurusan: RekomendasiJurusanGroup[] = hasilPrediksi.map((pilihan) => ({
+    pilihanAsalUrutan: pilihan.urutanPilihan,
+    rekomendasi: rekomendasiByAsal.get(pilihan.urutanPilihan) ?? null,
+  }));
 
   // Disclaimer (BR-4/FR-3.6) wajib tampilkan tahun data — ambil tahun TERBARU
   // di antara seluruh ptn_jurusan yang dipakai di hasil ini.
@@ -222,7 +241,7 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
   // -> subtes tryout (tryout_kategori tidak punya nilai 'snbp'). Sebagai proxy yang
   // relevan lintas jalur, ambil paket tryout kategori 'tka' (kesiapan materi umum) —
   // perlu divalidasi/diganti tim akademik begitu pemetaan resmi tersedia.
-  const keketatanLabelUtama = hasilPrediksi[0]?.keketatanLabel ?? rekomendasiJurusan[0]?.keketatanLabel ?? null;
+  const keketatanLabelUtama = hasilPrediksi[0]?.keketatanLabel ?? rekomendasiJurusan[0]?.rekomendasi?.keketatanLabel ?? null;
   const { data: tryoutRows } = await supabaseServer
     .from("tryouts")
     .select("id, nama, tipe_akses")

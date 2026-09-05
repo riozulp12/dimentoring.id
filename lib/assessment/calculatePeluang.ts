@@ -54,13 +54,14 @@ export function convertPrestasiToNilai(
   return PRESTASI_SCORE_MAP[tingkatKejuaraan][juaraBerapa];
 }
 
-/** FR-3.8 — label kualitatif Nilai Akhir (PLACEHOLDER, perlu divalidasi tim akademik). */
+/** FR-3.8 (DIREVISI — skala resmi ditetapkan Rio, bukan lagi placeholder). */
 export function getNilaiAkhirLabel(nilaiAkhir: number): string {
-  if (nilaiAkhir >= 90) return "Sangat Tinggi";
-  if (nilaiAkhir >= 75) return "Tinggi";
-  if (nilaiAkhir >= 60) return "Sedang";
-  if (nilaiAkhir >= 45) return "Rendah";
-  return "Sangat Rendah";
+  if (nilaiAkhir >= 95) return "Sangat Tinggi";
+  if (nilaiAkhir >= 86) return "Tinggi";
+  if (nilaiAkhir >= 76) return "Sedang";
+  if (nilaiAkhir >= 66) return "Rendah";
+  if (nilaiAkhir >= 50) return "Sangat Rendah";
+  return "Perlu Ditingkatkan";
 }
 
 export function calculateNilaiAkhir(
@@ -80,7 +81,7 @@ export function getKeketatanLabel(keketatanScore: number): string {
   return "Sangat Ketat";
 }
 
-/** Formula publik (FR-3.2/FR-3.9) — sama untuk semua siswa pada PTN+jurusan+jenjang yang sama. */
+/** Formula publik (FR-3.2) — sama untuk semua siswa pada PTN+jurusan+jenjang yang sama. */
 export function calculateKeketatan(
   kuotaTahunBerjalan: number,
   jumlahPeminatTahunLalu: number,
@@ -91,16 +92,21 @@ export function calculateKeketatan(
   return { score, label: getKeketatanLabel(score) };
 }
 
-/** Label kualitatif Peluang (PLACEHOLDER, perlu divalidasi tim akademik). */
+/** Skala label Peluang — resmi (FR-3.9, ditulis pertama kali di PRD Bagian
+ * 7.4.3/7.4.4). Formula penghitung skor (calculatePeluang di bawah) masih
+ * PLACEHOLDER belum divalidasi statistik, tapi skala label >85/60-85/<60 ini
+ * sudah resmi, bukan placeholder lagi. */
 export function getPeluangLabel(peluangScore: number): string {
-  if (peluangScore > 70) return "Peluang Besar";
-  if (peluangScore >= 40) return "Sedang";
+  if (peluangScore > 85) return "Peluang Besar";
+  if (peluangScore >= 60) return "Peluang Sedang";
   return "Peluang Kecil";
 }
 
 /**
- * PLACEHOLDER — belum divalidasi tim akademik Dimentoring. Personal (FR-3.2):
- * mempertimbangkan Nilai Akhir siswa relatif terhadap tingkat Keketatan.
+ * Formula PLACEHOLDER — belum divalidasi tim akademik Dimentoring (FR-3.9).
+ * Personal (FR-3.2): mempertimbangkan Nilai Akhir siswa relatif terhadap
+ * tingkat Keketatan. Hasil sudah berskala 0-100 (persen) — tampilkan dengan
+ * simbol "%" di frontend, sama format dengan Keketatan.
  */
 export function calculatePeluang(
   nilaiAkhir: number,

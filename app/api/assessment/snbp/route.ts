@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
   const { data: ptnJurusanRows, error: ptnJurusanError } = await supabaseServer
     .from("ptn_jurusan")
     .select(
-      "id, nama_universitas, nama_jurusan, jenjang, provinsi_id, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu, jalur",
+      "id, nama_universitas, nama_jurusan, jenjang, provinsi_id, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu, jalur, rumpun",
     )
     .in("id", ptnJurusanIds)
     .eq("jalur", "snbp");
@@ -267,26 +267,58 @@ export async function POST(request: NextRequest) {
     return errorResponse("Gagal menyimpan pilihan program studi. Coba lagi nanti.", 500);
   }
 
-  // ---- Accordion "Rekomendasi Jurusan" (PRD 7.4.3 #1): alternatif jurusan
-  // dengan Keketatan lebih longgar (lebih realistis) dibanding rata-rata
-  // Keketatan pilihan siswa sendiri. Kegagalan di sini tidak menggagalkan
-  // submit — accordion cukup tampil dengan pesan "belum ada rekomendasi"
-  // di frontend kalau tabel rekomendasiJurusan kosong. ----
+  // ---- Accordion "Rekomendasi Jurusan" (PRD 7.4.3 #1, DIREVISI): PER-PILIHAN,
+  // bukan lagi rata-rata gabungan semua pilihan. Tiap pilihan siswa (1 atau 2,
+  // loop di bawah) dicari SATU kandidat alternatif serumpun (Saintek/Soshum)
+  // dengan pilihan itu SENDIRI (bukan rumpun Pilihan 1 dipaksakan ke semua),
+  // dan keketatannya wajib lebih longgar dari keketatan pilihan itu sendiri
+  // (bukan avg semua pilihan) — supaya siswa Saintek dapat rekomendasi Saintek
+  // dan siswa Soshum dapat rekomendasi Soshum, masing-masing independen.
+  //
+  // Baris rekomendasi disimpan dengan urutan_pilihan = urutan PILIHAN ASAL-nya
+  // (bukan index rekomendasi sendiri 1..N) — karena maksimal 1 rekomendasi per
+  // pilihan asal, ini tetap unik terhadap UNIQUE(assessment_id, urutan_pilihan,
+  // is_rekomendasi) sekaligus jadi referensi eksplisit "rekomendasi ini untuk
+  // Pilihan berapa" yang dipakai frontend buat grouping label yang benar
+  // (bukan kolom terpisah — sengaja reuse urutan_pilihan yang sudah ada,
+  // supaya tidak nambah kolom yang isinya selalu sama dengan urutan asal).
+  //
+  // Kegagalan di sini tidak menggagalkan submit. Kalau salah satu pilihan
+  // tidak dapat kandidat qualify, pilihan itu cukup tidak punya baris
+  // rekomendasi (frontend tampilkan "belum ada rekomendasi" HANYA untuk
+  // pilihan itu) — pilihan lain yang masih dapat kandidat tetap tersimpan. ----
   try {
-    const avgKeketatan = round2(
-      pilihanResults.reduce((sum, p) => sum + p.keketatan.score, 0) / pilihanResults.length,
-    );
     const chosenIdSet = new Set(resolvedPilihan.map((p) => p.id as string));
+    const rekomendasiInserts: {
+      assessment_id: string;
+      urutan_pilihan: number;
+      ptn_jurusan_id: string;
+      keketatan_score: number;
+      keketatan_label: string;
+      peluang_score: number;
+      peluang_label: string;
+      is_rekomendasi: true;
+    }[] = [];
 
-    const { data: kandidatRows, error: kandidatError } = await supabaseServer
-      .from("ptn_jurusan")
-      .select("id, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu")
-      .eq("jalur", "snbp");
+    for (let i = 0; i < pilihanResults.length; i++) {
+      const { ptnJurusan, keketatan: keketatanAsal } = pilihanResults[i];
+      const urutanAsal = i + 1;
 
-    if (kandidatError) {
-      console.error("[assessment/snbp] query kandidat rekomendasi jurusan failed:", kandidatError);
-    } else {
-      const rekomendasi = (kandidatRows ?? [])
+      const { data: kandidatRows, error: kandidatError } = await supabaseServer
+        .from("ptn_jurusan")
+        .select("id, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu")
+        .eq("jalur", "snbp")
+        .eq("rumpun", ptnJurusan.rumpun as string);
+
+      if (kandidatError) {
+        console.error(
+          `[assessment/snbp] query kandidat rekomendasi jurusan (Pilihan ${urutanAsal}) failed:`,
+          kandidatError,
+        );
+        continue;
+      }
+
+      const terbaik = (kandidatRows ?? [])
         .filter((row) => !chosenIdSet.has(row.id as string))
         .map((row) => ({
           row,
@@ -295,32 +327,28 @@ export async function POST(request: NextRequest) {
             row.jumlah_peminat_tahun_lalu as number,
           ),
         }))
-        .filter(({ keketatan }) => keketatan.score > avgKeketatan)
-        .sort((a, b) => b.keketatan.score - a.keketatan.score)
-        .slice(0, 2)
-        .map(({ row, keketatan }) => ({
-          row,
-          keketatan,
-          peluang: calculatePeluang(nilaiAkhir, keketatan.score),
-        }));
+        .filter(({ keketatan }) => keketatan.score > keketatanAsal.score)
+        .sort((a, b) => b.keketatan.score - a.keketatan.score)[0];
 
-      if (rekomendasi.length > 0) {
-        const { error: rekomendasiError } = await supabaseServer.from("assessment_pilihan").insert(
-          rekomendasi.map(({ row, keketatan, peluang }, index) => ({
-            assessment_id: assessmentId,
-            urutan_pilihan: index + 1,
-            ptn_jurusan_id: row.id,
-            keketatan_score: keketatan.score,
-            keketatan_label: keketatan.label,
-            peluang_score: peluang.score,
-            peluang_label: peluang.label,
-            is_rekomendasi: true,
-          })),
-        );
+      if (!terbaik) continue; // Tidak ada kandidat serumpun yang lebih longgar untuk pilihan ini — biarkan kosong.
 
-        if (rekomendasiError) {
-          console.error("[assessment/snbp] insert rekomendasi jurusan failed:", rekomendasiError);
-        }
+      const peluang = calculatePeluang(nilaiAkhir, terbaik.keketatan.score);
+      rekomendasiInserts.push({
+        assessment_id: assessmentId,
+        urutan_pilihan: urutanAsal,
+        ptn_jurusan_id: terbaik.row.id as string,
+        keketatan_score: terbaik.keketatan.score,
+        keketatan_label: terbaik.keketatan.label,
+        peluang_score: peluang.score,
+        peluang_label: peluang.label,
+        is_rekomendasi: true,
+      });
+    }
+
+    if (rekomendasiInserts.length > 0) {
+      const { error: rekomendasiError } = await supabaseServer.from("assessment_pilihan").insert(rekomendasiInserts);
+      if (rekomendasiError) {
+        console.error("[assessment/snbp] insert rekomendasi jurusan failed:", rekomendasiError);
       }
     }
   } catch (error) {

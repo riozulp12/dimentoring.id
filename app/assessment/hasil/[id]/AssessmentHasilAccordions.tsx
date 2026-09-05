@@ -15,6 +15,16 @@ export interface PilihanCardData {
   keketatanLabel: string;
   peluangScore: number;
   peluangLabel: string;
+  kuotaTahunBerjalan: number;
+  jumlahPeminatTahunLalu: number;
+}
+
+/** Satu grup per pilihan siswa (1 atau 2) — `rekomendasi: null` berarti
+ * pilihan itu tidak dapat kandidat serumpun yang lebih longgar (bukan berarti
+ * seluruh accordion kosong; grup pilihan lain bisa tetap punya rekomendasi). */
+export interface RekomendasiJurusanGroup {
+  pilihanAsalUrutan: number;
+  rekomendasi: PilihanCardData | null;
 }
 
 export interface KelasRekomendasiData {
@@ -37,7 +47,7 @@ export interface AssessmentHasilData {
   nilaiAkhirLabel: string | null;
   noteAi: string | null;
   hasilPrediksi: PilihanCardData[];
-  rekomendasiJurusan: PilihanCardData[];
+  rekomendasiJurusan: RekomendasiJurusanGroup[];
   isLoggedInOwner: boolean;
   kelasRekomendasi: KelasRekomendasiData[];
   tryoutRekomendasi: TryoutRekomendasiData[];
@@ -49,6 +59,14 @@ export interface AssessmentHasilData {
 const NOTE_FALLBACK =
   "Angka-angka di atas adalah gambaran, bukan keputusan akhir — banyak siswa yang keketatannya terlihat berat tetap berhasil lolos karena persiapan yang tepat, dan sebaliknya. Yang paling penting sekarang bukan cuma melihat hasilnya, tapi memakainya sebagai peta: kalau ada subtes yang masih terasa berat, itu titik yang paling worth dilatih dulu. Coba mulai dari Try Out gratis buat lihat sejauh mana pemahamanmu sekarang, atau ikut kelas bimbingan yang sesuai kebutuhanmu. Perjalanan ke PTN impian itu proses, bukan satu kali tes — dan kamu masih punya waktu buat memperbesar peluang itu.";
 
+// Catatan kecil pelengkap di bawah tiap angka Peluang — TERPISAH dari
+// disclaimer besar di atas halaman (BR-4, tidak diganti/dihapus). Diringkas
+// dari draf awal supaya muat rapi di kolom sempit (card Keketatan|Peluang
+// berdampingan) tanpa mendominasi visual, tapi tetap menyampaikan dua inti:
+// bukan ramalan pasti + tetap butuh usaha sendiri.
+const PELUANG_MICRO_NOTE =
+  "Bukan ramalan pasti — cuma gambaran kasar. Lolos-nggaknya tetap tergantung usahamu sendiri.";
+
 function formatNilai(value: number | null): string {
   if (value === null) return "-";
   return value.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -56,6 +74,10 @@ function formatNilai(value: number | null): string {
 
 function formatRupiah(value: number): string {
   return value === 0 ? "Gratis" : `Rp${value.toLocaleString("id-ID")}`;
+}
+
+function formatCount(value: number): string {
+  return value.toLocaleString("id-ID");
 }
 
 /** Warna label kualitatif Keketatan/Peluang — PRD Bagian 7.4.3: merah=ketat/kecil, hijau=sedang, biru=longgar/besar. */
@@ -121,7 +143,7 @@ function PilihanCard({ pilihan, label }: { pilihan: PilihanCardData; label: stri
             {pilihan.namaUniversitas}
           </p>
         </div>
-        <div className="flex gap-6 sm:gap-10 lg:gap-16">
+        <div className="flex items-start gap-6 sm:gap-10 lg:gap-16">
           <div className="flex flex-col items-center gap-2 sm:gap-4">
             <p className="text-sm text-[#7E7C7C] sm:text-base">Keketatan</p>
             <p className={`text-center text-base font-semibold tracking-[-0.02em] sm:text-lg ${labelColorClass(pilihan.keketatanLabel)}`}>
@@ -131,10 +153,21 @@ function PilihanCard({ pilihan, label }: { pilihan: PilihanCardData; label: stri
           <div className="flex flex-col items-center gap-2 sm:gap-4">
             <p className="text-sm text-[#7E7C7C] sm:text-base">Peluang</p>
             <p className={`text-center text-base font-semibold tracking-[-0.02em] sm:text-lg ${labelColorClass(pilihan.peluangLabel)}`}>
-              {formatNilai(pilihan.peluangScore)} - {pilihan.peluangLabel}
+              {formatNilai(pilihan.peluangScore)}% - {pilihan.peluangLabel}
+            </p>
+            <p className="max-w-[8.5rem] text-center text-[10px] leading-snug text-[#7E7C7C] sm:max-w-[11rem] sm:text-[11px]">
+              {PELUANG_MICRO_NOTE}
             </p>
           </div>
         </div>
+      </div>
+      <div className="flex gap-6 text-sm text-[#7E7C7C] sm:gap-10 sm:text-base">
+        <p>
+          Kuota Tahun Berjalan: <span className="font-medium text-black">{formatCount(pilihan.kuotaTahunBerjalan)}</span>
+        </p>
+        <p>
+          Peminat Tahun Lalu: <span className="font-medium text-black">{formatCount(pilihan.jumlahPeminatTahunLalu)}</span>
+        </p>
       </div>
     </div>
   );
@@ -165,9 +198,20 @@ function MainPilihanCard({ pilihan, label }: { pilihan: PilihanCardData; label: 
           <p
             className={`text-center text-base font-semibold tracking-[-0.02em] sm:text-lg ${labelColorClass(pilihan.peluangLabel)}`}
           >
-            {formatNilai(pilihan.peluangScore)} - {pilihan.peluangLabel}
+            {formatNilai(pilihan.peluangScore)}% - {pilihan.peluangLabel}
+          </p>
+          <p className="max-w-[8.5rem] text-center text-[10px] leading-snug text-[#7E7C7C] sm:max-w-[11rem] sm:text-[11px]">
+            {PELUANG_MICRO_NOTE}
           </p>
         </div>
+      </div>
+      <div className="mt-1 flex w-full items-start justify-center gap-6 text-center text-sm text-[#7E7C7C] sm:gap-10">
+        <p>
+          Kuota Tahun Berjalan: <span className="font-medium text-black">{formatCount(pilihan.kuotaTahunBerjalan)}</span>
+        </p>
+        <p>
+          Peminat Tahun Lalu: <span className="font-medium text-black">{formatCount(pilihan.jumlahPeminatTahunLalu)}</span>
+        </p>
       </div>
     </div>
   );
@@ -240,9 +284,22 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
         onToggle={() => toggle("rekomendasiJurusan")}
       >
         {data.rekomendasiJurusan.length > 0 ? (
-          data.rekomendasiJurusan.map((pilihan) => (
-            <PilihanCard key={pilihan.urutanPilihan} pilihan={pilihan} label={`Pilihan ${pilihan.urutanPilihan}`} />
-          ))
+          data.rekomendasiJurusan.map((group) =>
+            group.rekomendasi ? (
+              <PilihanCard
+                key={group.pilihanAsalUrutan}
+                pilihan={group.rekomendasi}
+                label={`Rekomendasi untuk Pilihan ${group.pilihanAsalUrutan}`}
+              />
+            ) : (
+              <div key={group.pilihanAsalUrutan} className="flex flex-col gap-3 sm:gap-4">
+                <span className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">
+                  Rekomendasi untuk Pilihan {group.pilihanAsalUrutan}
+                </span>
+                <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada rekomendasi tersedia untuk pilihan ini.</p>
+              </div>
+            ),
+          )
         ) : (
           <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada rekomendasi tersedia untuk saat ini</p>
         )}

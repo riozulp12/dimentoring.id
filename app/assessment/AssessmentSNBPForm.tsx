@@ -6,6 +6,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import Mascot from "@/components/ui/Mascot";
+import MaskotLoading from "@/components/ui/MaskotLoading";
 import {
   JUARA_BERAPA_OPTIONS,
   TINGKAT_KEJUARAAN_OPTIONS,
@@ -18,6 +19,24 @@ export interface PtnJurusanOption {
   universitas: string;
   jurusan: string;
   jenjang: string;
+}
+
+// Ikon trash — belum ada aset serupa di public/icons, jadi dibuat mengikuti
+// pola ikon inline SVG "currentColor" yang sudah dipakai project (lihat
+// components/dashboard/sidebarIcons.tsx) supaya warnanya bisa ikut warna teks
+// tombol (merah destructive), bukan ikon fixed-color kayak SVG lain di /icons.
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M3 6h18M8 6V4.5A1.5 1.5 0 0 1 9.5 3h5A1.5 1.5 0 0 1 16 4.5V6m2 0-.7 12.6A2 2 0 0 1 15.3 20H8.7a2 2 0 0 1-2-1.9L6 6m4 4.5v6m4-6v6"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 type AssessmentTab = "snbp" | "snbt" | "mandiri";
@@ -484,8 +503,9 @@ export default function AssessmentSNBPForm({
                       setShowPilihan2(false);
                       setPilihan2(EMPTY_PILIHAN);
                     }}
-                    className="self-start text-sm text-[#7E7C7C] underline sm:text-base"
+                    className="flex items-center gap-1.5 self-start text-sm text-[#E70A0A] underline sm:text-base"
                   >
+                    <TrashIcon className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
                     Hapus Pilihan Kedua
                   </button>
                 </div>
@@ -520,14 +540,7 @@ export default function AssessmentSNBPForm({
             >
               {isSubmitting ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
+                  <MaskotLoading size="sm" />
                   Menyimpan...
                 </span>
               ) : (
