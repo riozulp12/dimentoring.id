@@ -32,26 +32,45 @@ interface RawRow {
   jalur: string;
 }
 
+function fetchPage(from: number) {
+  return supabaseServer
+    .from("ptn_jurusan")
+    .select("id, nama_universitas, nama_jurusan, jenjang, jalur")
+    // nama_universitas saja tidak unik (banyak baris jurusan per universitas)
+    // — tiebreaker "id" wajib supaya urutan antar-halaman deterministik saat
+    // di-fetch BARENGAN (tanpa ini, halaman paralel bisa tumpang tindih/
+    // bolong kalau PostgREST menata baris kembar secara berbeda per request).
+    .order("nama_universitas", { ascending: true })
+    .order("id", { ascending: true })
+    .range(from, from + PAGE_SIZE - 1);
+}
+
 export async function getPtnJurusanOptions(): Promise<PtnJurusanOptionRow[]> {
+  // 7700+ baris jelas lewat batas 1000/request, jadi tetap wajib paginate —
+  // tapi HALAMANNYA independen satu sama lain, jadi tidak perlu ditunggu
+  // bergantian (dulu ~8 round-trip berurutan). Ambil total baris dulu (count
+  // head-only, murah), baru tembak semua halaman via Promise.all.
+  const { count, error: countError } = await supabaseServer
+    .from("ptn_jurusan")
+    .select("id", { count: "exact", head: true });
+
+  if (countError || count === null) {
+    console.error("[getPtnJurusanOptions] count query failed:", countError);
+    return [];
+  }
+
+  const pageCount = Math.ceil(count / PAGE_SIZE);
+  const pages = await Promise.all(
+    Array.from({ length: pageCount }, (_, i) => fetchPage(i * PAGE_SIZE)),
+  );
+
   const rows: RawRow[] = [];
-  let from = 0;
-
-  for (;;) {
-    const { data, error } = await supabaseServer
-      .from("ptn_jurusan")
-      .select("id, nama_universitas, nama_jurusan, jenjang, jalur")
-      .order("nama_universitas", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-
+  for (const { data, error } of pages) {
     if (error) {
       console.error("[getPtnJurusanOptions] query ptn_jurusan failed:", error);
-      break;
+      continue;
     }
-    if (!data || data.length === 0) break;
-
-    rows.push(...(data as RawRow[]));
-    if (data.length < PAGE_SIZE) break;
-    from += PAGE_SIZE;
+    if (data) rows.push(...(data as RawRow[]));
   }
 
   return rows.map((row) => ({

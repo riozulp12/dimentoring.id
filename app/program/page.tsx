@@ -62,9 +62,13 @@ function ProgramSectionGrid({ section, sessionRole }: { section: ProgramSection;
 export default async function ProgramPage() {
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  const navbarProps = await getNavbarProps(session);
 
-  const sections = await getProgramPreviewSections();
+  // navbarProps & sections independen satu sama lain — Promise.all supaya
+  // tidak menunggu bergantian.
+  const [navbarProps, sections] = await Promise.all([
+    getNavbarProps(session),
+    getProgramPreviewSections(),
+  ]);
 
   return (
     <div className="flex w-full flex-col">

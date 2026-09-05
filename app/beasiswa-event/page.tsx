@@ -16,9 +16,13 @@ import BeasiswaEventListClient from "@/components/beasiswa-event/BeasiswaEventLi
 export default async function BeasiswaEventPage() {
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  const navbarProps = await getNavbarProps(session);
 
-  const items = await getKontenInfoList();
+  // navbarProps & items independen satu sama lain — Promise.all supaya
+  // tidak menunggu bergantian.
+  const [navbarProps, items] = await Promise.all([
+    getNavbarProps(session),
+    getKontenInfoList(),
+  ]);
 
   return (
     <div className="flex w-full flex-col">
