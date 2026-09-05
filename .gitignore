@@ -46,3 +46,9 @@ next-env.d.ts
 
 # scratch/seed scripts for local QA testing (not part of the product)
 _tmp_seed_qa.mjs
+
+# scripts/tarik-data-ptn.ts output — per-run generated data, not source
+scripts/progress-ptn.json
+scripts/hasil-tarik-ptn.csv
+scripts/progress-ptn-luar-jawa.json
+scripts/hasil-tarik-ptn-luar-jawa.csv

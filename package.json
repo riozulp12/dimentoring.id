@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "tarik-ptn": "tsx scripts/tarik-data-ptn.ts jawa",
+    "tarik-ptn:luar-jawa": "tsx scripts/tarik-data-ptn.ts luar-jawa"
   },
   "dependencies": {
     "@google/genai": "^2.17.1",
@@ -23,9 +25,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cheerio": "^1.2.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
+    "exceljs": "^4.4.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }
