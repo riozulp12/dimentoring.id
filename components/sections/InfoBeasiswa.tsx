@@ -22,9 +22,9 @@ export default async function InfoBeasiswa() {
   return (
     <section className="flex w-full flex-col items-center gap-8 px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:gap-12 lg:px-[120px] lg:py-16">
       <div className="flex w-[643px] max-w-full flex-col items-center gap-3 text-center sm:gap-5">
-        <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black sm:text-xl">
+        <h2 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black sm:text-xl">
           Perjalananmu Nggak Berhenti Setelah Diterima <span className="text-[#081EEA]">PTN</span>
-        </h4>
+        </h2>
         <p className="text-base leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
           Dimentoring tetap dampingi kamu lewat info beasiswa, internship, dan event sampai kuliah
         </p>

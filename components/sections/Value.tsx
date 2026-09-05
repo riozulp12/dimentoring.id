@@ -35,6 +35,7 @@ export default function Value() {
             </p>
             <Mascot
               variant={item.mascot}
+              alt=""
               className="pointer-events-none absolute right-[-6px] bottom-0 h-9 w-auto select-none sm:h-11 min-[1440px]:right-[-15px] min-[1440px]:h-20"
             />
           </div>

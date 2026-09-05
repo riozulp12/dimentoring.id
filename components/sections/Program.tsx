@@ -55,9 +55,9 @@ export default function Program() {
       className="flex w-full scroll-mt-24 flex-col items-center gap-10 bg-[#081EEA] px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:flex-row lg:items-center lg:justify-between lg:gap-16 lg:px-[120px] lg:py-16 min-[1440px]:scroll-mt-32"
     >
       <div className="flex w-[585px] max-w-full flex-col items-center gap-3 text-center sm:gap-5 lg:items-start lg:text-left">
-        <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-white sm:text-xl">
+        <h2 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-white sm:text-xl">
           Program & Kelas Dimentoring
-        </h4>
+        </h2>
         <p className="text-base leading-[1.5] tracking-[-0.36px] text-white">
           Program buat mendukungmu belajar meraih tujuanmu
         </p>
@@ -78,6 +78,7 @@ export default function Program() {
             </p>
             <Mascot
               variant={item.mascot}
+              alt=""
               className="pointer-events-none absolute right-[-8px] bottom-0 h-14 w-auto select-none sm:h-20 lg:right-[-15px] lg:h-[100px]"
             />
           </Link>

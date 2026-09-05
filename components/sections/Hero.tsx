@@ -31,12 +31,12 @@ export default function Hero() {
             <span className="inline-flex w-fit items-center rounded-[20px] border-[0.8px] border-[#CAC9C9] bg-[#F9F9F9] px-6 py-2 text-sm leading-[1.5] tracking-[-0.28px] text-[#081EEA] sm:px-8 sm:py-2.5 sm:text-lg sm:tracking-[-0.36px]">
               #BertumbuhBersama
             </span>
-            <h3 className="max-w-[934px] text-2xl leading-[1.5] font-bold tracking-[-0.48px] text-black sm:text-3xl">
+            <h1 className="max-w-[934px] text-2xl leading-[1.5] font-bold tracking-[-0.48px] text-black sm:text-3xl">
               Setiap Siswa Punya{" "}
               <span className="text-[#081EEA]">Perjalanan</span>
               <br />
               <span className="text-[#081EEA]">Belajar</span> yang Berbeda
-            </h3>
+            </h1>
             <p className="line-clamp-3 w-full max-w-[540px] text-base leading-[1.5] tracking-[-0.36px] text-black">
               Mulai dari awal menyusun strategi, mempersiapkan menghadapi SNBT
               dan Ujian Mandiri sampai dengan masuk ke perkuliahan,
@@ -97,7 +97,7 @@ export default function Hero() {
           src="/images/hero-illustration.png"
           width={716}
           height={790}
-          alt=""
+          alt="Ilustrasi siswa belajar dan dibimbing mentor Dimentoring menuju PTN impian"
           className="h-auto w-full min-w-0 max-w-[360px] sm:max-w-[480px] md:max-w-[620px] lg:max-w-none lg:flex-1"
           priority
         />
