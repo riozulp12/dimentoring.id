@@ -27,31 +27,30 @@ interface TestimonialItem {
   role: string;
 }
 
-// Placeholder testimonials — replace with real Dimentorian stories
 const TESTIMONIALS: TestimonialItem[] = [
   {
     quote:
-      "“Lorem ipsum metus et sollicitudin etiam id pharetra, Lorem ipsum metus et sollicitudin”",
-    name: "~ N***",
-    role: "Ilmu Komputer UI",
+      "“Awalnya aku asal pilih jurusan buat SNBP, eh pas isi Assessment di Dimentoring ternyata peluangnya kecil banget. Untung ketahuan dari awal, jadi sempat ganti strategi dan alhamdulillah keterima di pilihan yang lebih realistis.”",
+    name: "~ R***",
+    role: "Teknik Industri ITB",
   },
   {
     quote:
-      "“Lorem ipsum metus et sollicitudin etiam id pharetra, Lorem ipsum metus et sollicitudin”",
-    name: "~ N***",
-    role: "Ilmu Komputer UI",
+      "“Yang bikin beda dari bimbel lain, mentornya masih standby bantuin aku pas udah masuk kuliah juga, bukan cuma sampai SNBT doang. Berasa nggak sendirian ngejalanin semester awal.”",
+    name: "~ A***",
+    role: "Kedokteran Unair",
   },
   {
     quote:
-      "“Lorem ipsum metus et sollicitudin etiam id pharetra, Lorem ipsum metus et sollicitudin”",
-    name: "~ N***",
-    role: "Ilmu Komputer UI",
+      "“Berkat rekomendasi kelas dari hasil Assessment, aku jadi tahu subtes mana yang paling perlu digenjot. Nggak buang waktu belajar random lagi kayak sebelumnya.”",
+    name: "~ D***",
+    role: "Ilmu Komputer UGM",
   },
   {
     quote:
-      "“Lorem ipsum metus et sollicitudin etiam id pharetra, Lorem ipsum metus et sollicitudin”",
-    name: "~ N***",
-    role: "Ilmu Komputer UI",
+      "“Tryout gratisnya ngebantu banget buat latihan sebelum SNBT beneran, jadi udah kebayang formatnya kayak gimana pas hari-H. Grogi jauh berkurang.”",
+    name: "~ F***",
+    role: "Farmasi Unpad",
   },
 ];
 

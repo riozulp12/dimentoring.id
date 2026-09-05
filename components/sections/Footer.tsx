@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import Logo from "../ui/Logo";
+import { PROGRAM_KATEGORI_LABEL, PROGRAM_KATEGORI_ORDER, PROGRAM_KATEGORI_SLUG } from "@/lib/shared/kelasLabels";
 
 interface SocialLink {
   name: string;
@@ -10,57 +11,68 @@ interface SocialLink {
   href: string;
 }
 
+// WhatsApp pakai wa.me dari nomor kontak yang sama dengan bagian "Kontak" di
+// bawah (082225982026) — bukan angka baru, cuma diformat ulang jadi link.
 const SOCIAL_LINKS: SocialLink[] = [
-  {
-    name: "Facebook",
-    icon: "/icons/footer-facebook.svg",
-    width: 32,
-    height: 32,
-    href: "#",
-  },
   {
     name: "Instagram",
     icon: "/icons/footer-instagram.svg",
     width: 32,
     height: 32,
-    href: "#",
+    href: "https://www.instagram.com/dimentoring.id",
   },
   {
     name: "WhatsApp",
     icon: "/icons/footer-whatsapp.svg",
     width: 32,
     height: 32,
-    href: "#",
+    href: "https://wa.me/6282225982026",
   },
   {
     name: "TikTok",
     icon: "/icons/footer-tiktok.svg",
     width: 28,
     height: 32,
-    href: "#",
+    href: "https://www.tiktok.com/@dimentoring.id",
   },
   {
     name: "YouTube",
     icon: "/icons/footer-youtube.svg",
     width: 46,
     height: 32,
-    href: "#",
+    href: "https://www.youtube.com/@DimentoringBimbingKamuMasukPTN",
   },
 ];
 
-interface FooterColumn {
-  title: string;
-  links: string[];
+interface FooterLink {
+  label: string;
+  href: string;
 }
 
+interface FooterColumn {
+  title: string;
+  titleHref?: string;
+  links: FooterLink[];
+}
+
+// Kolom "Program" reuse PROGRAM_KATEGORI_ORDER/LABEL/SLUG yang sama dengan
+// dropdown "Program" Navbar (components/ui/Navbar.tsx) — supaya keduanya
+// selalu konsisten tanpa perlu disinkronkan manual dua tempat.
 const FOOTER_COLUMNS: FooterColumn[] = [
   {
     title: "Program",
-    links: ["DimenAcademy", "DimenTalk"],
+    titleHref: "/program",
+    links: PROGRAM_KATEGORI_ORDER.map((kategori) => ({
+      label: PROGRAM_KATEGORI_LABEL[kategori],
+      href: `/program/${PROGRAM_KATEGORI_SLUG[kategori]}`,
+    })),
   },
   {
     title: "Resource",
-    links: ["Artikel", "Tips & Trick", "FAQ", "Panduan Pendaftaran"],
+    links: [
+      { label: "FAQ", href: "/#faq" },
+      { label: "Panduan Pendaftaran", href: "/daftar" },
+    ],
   },
 ];
 
@@ -72,12 +84,6 @@ interface ContactItem {
 }
 
 const CONTACTS: ContactItem[] = [
-  {
-    icon: "/icons/footer-location.svg",
-    width: 24,
-    height: 24,
-    label: "Sleman, Yogyakarta",
-  },
   {
     icon: "/icons/footer-whatsapp.svg",
     width: 24,
@@ -105,6 +111,8 @@ export default function Footer() {
               <a
                 key={social.name}
                 href={social.href}
+                target="_blank"
+                rel="noopener noreferrer"
                 aria-label={social.name}
               >
                 <Image
@@ -122,17 +130,27 @@ export default function Footer() {
         <div className="flex w-full flex-col items-center gap-10 sm:flex-row sm:flex-wrap sm:items-start sm:justify-center sm:gap-12 lg:w-auto lg:items-start lg:justify-start lg:gap-[91px]">
           {FOOTER_COLUMNS.map((column) => (
             <div key={column.title} className="flex flex-col items-center gap-4 sm:items-start sm:gap-6">
-              <p className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black">
-                {column.title}
-              </p>
+              {column.titleHref ? (
+                <Link
+                  href={column.titleHref}
+                  className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black hover:text-[#081EEA]"
+                >
+                  {column.title}
+                </Link>
+              ) : (
+                <p className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black">
+                  {column.title}
+                </p>
+              )}
               <div className="flex flex-col items-center gap-3 sm:items-start sm:gap-[18px]">
                 {column.links.map((link) => (
-                  <p
-                    key={link}
-                    className="text-base leading-[1.5] tracking-[-0.36px] whitespace-nowrap text-black"
+                  <Link
+                    key={link.label}
+                    href={link.href}
+                    className="text-base leading-[1.5] tracking-[-0.36px] whitespace-nowrap text-black hover:text-[#081EEA]"
                   >
-                    {link}
-                  </p>
+                    {link.label}
+                  </Link>
                 ))}
               </div>
             </div>

@@ -42,8 +42,8 @@ interface NavItemConfig {
 const NAV_ITEMS: NavItemConfig[] = [
   { key: "home", label: "Home", href: "/" },
   { key: "cek-peluang", label: "Cek Peluang PTN", href: "/assessment" },
-  { key: "mentor", label: "Mentor", href: "/#mentor" },
   { key: "testimonial", label: "Testimonial", href: "/#testimonial" },
+  { key: "mentor", label: "Mentor", href: "/#mentor" },
   { key: "faq", label: "FAQ", href: "/#faq", activeColor: "#051185" },
 ];
 
@@ -54,8 +54,8 @@ const NAV_ITEMS: NavItemConfig[] = [
  * ada efek karena getElementById selalu null. */
 const SCROLL_SPY_SECTIONS: { id: string; key: NavItemKey }[] = [
   { id: "program", key: "program" },
-  { id: "mentor", key: "mentor" },
   { id: "testimonial", key: "testimonial" },
+  { id: "mentor", key: "mentor" },
   { id: "faq", key: "faq" },
 ];
 
@@ -254,7 +254,7 @@ export default function Navbar({
 
   const effectiveActiveItem = scrollActiveItem ?? activeItem;
 
-  const [homeItem, cekPeluangItem, mentorItem, testimonialItem, faqItem] = NAV_ITEMS;
+  const [homeItem, cekPeluangItem, testimonialItem, mentorItem, faqItem] = NAV_ITEMS;
 
   return (
     <>
@@ -281,12 +281,12 @@ export default function Navbar({
             <NavLink label={homeItem.label} href={homeItem.href} isActive={effectiveActiveItem === homeItem.key} />
             <ProgramDropdown isActive={effectiveActiveItem === "program"} />
             <NavLink label={cekPeluangItem.label} href={cekPeluangItem.href} isActive={effectiveActiveItem === cekPeluangItem.key} />
-            <NavLink label={mentorItem.label} href={mentorItem.href} isActive={effectiveActiveItem === mentorItem.key} />
             <NavLink
               label={testimonialItem.label}
               href={testimonialItem.href}
               isActive={effectiveActiveItem === testimonialItem.key}
             />
+            <NavLink label={mentorItem.label} href={mentorItem.href} isActive={effectiveActiveItem === mentorItem.key} />
             <NavLink
               label={faqItem.label}
               href={faqItem.href}
@@ -335,15 +335,15 @@ export default function Navbar({
                 onNavigate={() => setIsMenuOpen(false)}
               />
               <NavLink
-                label={mentorItem.label}
-                href={mentorItem.href}
-                isActive={effectiveActiveItem === mentorItem.key}
-                onNavigate={() => setIsMenuOpen(false)}
-              />
-              <NavLink
                 label={testimonialItem.label}
                 href={testimonialItem.href}
                 isActive={effectiveActiveItem === testimonialItem.key}
+                onNavigate={() => setIsMenuOpen(false)}
+              />
+              <NavLink
+                label={mentorItem.label}
+                href={mentorItem.href}
+                isActive={effectiveActiveItem === mentorItem.key}
                 onNavigate={() => setIsMenuOpen(false)}
               />
               <NavLink

@@ -84,3 +84,20 @@ body {
 .animate-dropdown-in {
   animation: dropdown-in 120ms ease-out;
 }
+
+/* MaskotLoading (components/ui/MaskotLoading.tsx) — loncat-loncat pelan,
+   cuma transform (GPU-accelerated), tidak ada layout thrash, jadi aman
+   dipakai berulang di banyak tempat sekaligus tanpa bikin lambat. */
+@keyframes mascot-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12%);
+  }
+}
+
+.animate-mascot-bounce {
+  animation: mascot-bounce 900ms ease-in-out infinite;
+}

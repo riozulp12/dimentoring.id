@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import Button from "@/components/ui/Button";
-import InputField from "@/components/ui/InputField";
 import Modal from "@/components/ui/Modal";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 export type Jalur = "snbp" | "snbt" | "mandiri";
 
@@ -23,6 +23,8 @@ interface KeketatanCheckResult {
   keketatanScore: number;
   keketatanLabel: string;
   tahunData: number;
+  kuotaTahunBerjalan: number;
+  jumlahPeminatTahunLalu: number;
 }
 
 const JALUR_OPTIONS: { value: Jalur; label: string }[] = [
@@ -33,6 +35,10 @@ const JALUR_OPTIONS: { value: Jalur; label: string }[] = [
 
 function formatScore(value: number): string {
   return value.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatCount(value: number): string {
+  return value.toLocaleString("id-ID");
 }
 
 /** Sama seperti pola warna di Hasil Assessment (PRD 7.4.3): merah=ketat, hijau=sedang, biru=longgar. */
@@ -134,18 +140,18 @@ export default function Prediction({ ptnJurusanOptions }: { ptnJurusanOptions: P
 
         <div className="flex w-full flex-col items-center gap-6 rounded-[20px] border border-[#CAC9C9] bg-white p-6 shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)] sm:rounded-[24px] sm:p-10 lg:gap-8 lg:rounded-[32px] lg:p-16">
           <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center sm:gap-8 lg:gap-16">
-            <InputField
-              type="dropdown"
+            <SearchableSelect
               placeholder={jalur ? "Pilih Universitas" : "Pilih Jalur dulu"}
+              searchPlaceholder="Cari universitas..."
               options={universitasOptions}
               value={universitas}
               disabled={!jalur}
               onChange={(e) => handleUniversitasChange(e.target.value)}
               className="flex-1 shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)]"
             />
-            <InputField
-              type="dropdown"
+            <SearchableSelect
               placeholder={universitas ? "Pilih Jurusan" : "Pilih Universitas dulu"}
+              searchPlaceholder="Cari jurusan..."
               options={jurusanOptions}
               value={ptnJurusanId}
               disabled={!universitas}
@@ -187,6 +193,17 @@ export default function Prediction({ ptnJurusanOptions }: { ptnJurusanOptions: P
               <p className={`text-2xl font-semibold tracking-[-0.02em] sm:text-3xl ${keketatanColorClass(result.keketatanLabel)}`}>
                 {formatScore(result.keketatanScore)}% - {result.keketatanLabel}
               </p>
+            </div>
+
+            <div className="flex w-full items-center justify-center gap-8 text-center">
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-sm text-[#7E7C7C]">Kuota Tahun Berjalan</p>
+                <p className="text-lg font-semibold text-black">{formatCount(result.kuotaTahunBerjalan)}</p>
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-sm text-[#7E7C7C]">Peminat Tahun Lalu</p>
+                <p className="text-lg font-semibold text-black">{formatCount(result.jumlahPeminatTahunLalu)}</p>
+              </div>
             </div>
 
             <p className="text-left text-sm text-[#7E7C7C]">

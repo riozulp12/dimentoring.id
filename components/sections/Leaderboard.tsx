@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import Button from "@/components/ui/Button";
 
 interface LeaderboardEntry {
@@ -24,9 +25,11 @@ export default function Leaderboard() {
           Kumpulkan poin dari referral & tryout, naik level, dan lihat
           posisimu di leaderboard teman & sekolah.
         </p>
-        <Button variant="secondary" size="sm" className="w-full sm:w-[220px]">
-          Lihat Leaderboard
-        </Button>
+        <Link href="/daftar" className="w-full sm:w-[220px]">
+          <Button variant="secondary" size="sm" className="w-full">
+            Lihat Leaderboard
+          </Button>
+        </Link>
       </div>
 
       <div className="flex w-full max-w-[420px] shrink-0 flex-col gap-4 sm:gap-6 lg:gap-8 min-[1440px]:max-w-[500px] min-[1920px]:max-w-[800px]">

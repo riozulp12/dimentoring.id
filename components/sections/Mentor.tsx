@@ -1,63 +1,77 @@
 import Image from "next/image";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
+import Avatar from "@/components/ui/Avatar";
+import type { LandingMentorItem } from "@/lib/landing/getLandingMentors";
 
-interface MentorItem {
-  name: string;
-  role: string;
-  portrait: ReactNode;
+interface MentorProps {
+  mentors: LandingMentorItem[];
 }
 
-function CoverPortrait({
-  src,
-  alt,
-}: {
-  src: string;
-  alt: string;
-}) {
-  return (
-    <div className="relative z-10 mt-8 h-[232px] w-[160px] overflow-hidden sm:h-[290px] sm:w-[200px] lg:h-[290px] lg:w-[200px]">
-      <Image src={src} alt={alt} fill className="object-cover object-top" />
-    </div>
-  );
-}
+const MIN_MENTORS_TO_SHOW = 3;
 
-function RotatedCoverPortrait({ src, alt }: { src: string; alt: string }) {
-  return (
-    <div className="relative z-10 mt-8 flex h-[232px] w-[160px] items-center justify-center overflow-hidden sm:h-[290px] sm:w-[200px] lg:h-[290px] lg:w-[200px]">
-      <div className="relative h-[160px] w-[232px] shrink-0 rotate-90 sm:h-[200px] sm:w-[290px] lg:h-[200px] lg:w-[290px]">
-        <Image src={src} alt={alt} fill className="object-cover object-center" />
-      </div>
-    </div>
-  );
-}
-
-const MENTORS: MentorItem[] = [
-  {
-    name: "Kak Anggun",
-    role: "Filsafat Univesitas Gajah Mada",
-    portrait: <CoverPortrait src="/mentors/mentor-anggun.png" alt="Kak Anggun" />,
-  },
-  {
-    name: "Kak Virdza",
-    role: "FEB Universitas Gajah Mada",
-    portrait: (
-      <RotatedCoverPortrait src="/mentors/mentor-virdza.png" alt="Kak Virdza" />
-    ),
-  },
-  {
-    name: "Kak Gia",
-    role: "FMIPA Univesitas Gajah Mada",
-    portrait: <CoverPortrait src="/mentors/mentor-gia.png" alt="Kak Gia" />,
-  },
-];
+// Bentuk organik "mengambang" di belakang foto — border-radius asimetris
+// (bukan lingkaran sempurna) supaya terasa dinamis. Warna REUSE 4 warna
+// brand yang sudah dipakai di landing page (biru utama Mentor/Program/dst,
+// + 3 warna aksen dari Prediction.tsx keketatan/peluang) — dirotasi per
+// card berdasarkan urutan mentor, bukan warna baru.
+const ORGANIC_SHAPE_COLORS = ["#081EEA", "#0CBA00", "#006ABD", "#E70A0A"];
+const ORGANIC_SHAPE_RADIUS = "50% 50% 48% 52% / 55% 52% 48% 45%";
 
 const MARQUEE_STYLE = {
   "--marquee-duration": "28s",
   "--marquee-distance": "-25%",
 } as CSSProperties;
 
-export default function Mentor() {
-  const loopMentors = [...MENTORS, ...MENTORS, ...MENTORS, ...MENTORS];
+function MentorCard({ mentor, color }: { mentor: LandingMentorItem; color: string }) {
+  const asalLine = [mentor.jurusan, mentor.asalPtn].filter(Boolean).join(" ");
+
+  return (
+    <div className="flex w-[220px] shrink-0 flex-col items-center gap-4 sm:w-[260px]">
+      <div className="relative h-[132px] w-[132px] shrink-0 sm:h-[160px] sm:w-[160px]">
+        <div
+          className="absolute inset-0 z-0"
+          style={{ background: color, borderRadius: ORGANIC_SHAPE_RADIUS }}
+          aria-hidden="true"
+        />
+        <div className="absolute inset-0 z-10 flex items-center justify-center">
+          <div className="rounded-full border-4 border-white shadow-[0_2px_10px_0px_rgba(0,0,0,0.15)]">
+            <Avatar avatarUrl={mentor.avatarUrl} nama={mentor.nama} size="xl" />
+          </div>
+        </div>
+        <div className="absolute right-1 bottom-1 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-[#081EEA] ring-2 ring-white sm:h-7 sm:w-7">
+          <Image
+            src="/icons/logo-icon-secondary.svg"
+            width={27}
+            height={40}
+            alt=""
+            className="h-3 w-auto sm:h-3.5"
+          />
+        </div>
+      </div>
+
+      <div className="flex w-full flex-col items-center gap-1.5 text-center">
+        <p className="w-full text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black">
+          {mentor.nama}
+        </p>
+        {asalLine && (
+          <p className="w-full text-sm leading-[1.5] tracking-[-0.36px] text-[#7E7C7C]">
+            {asalLine}
+          </p>
+        )}
+        {mentor.subtesUtama && (
+          <span className="inline-flex items-center rounded-full bg-[#F9FAFF] px-2.5 py-0.5 text-xs font-medium text-[#081EEA]">
+            {mentor.subtesUtama}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function Mentor({ mentors }: MentorProps) {
+  if (mentors.length < MIN_MENTORS_TO_SHOW) return null;
+
+  const loopMentors = [...mentors, ...mentors, ...mentors, ...mentors];
 
   return (
     <section
@@ -81,36 +95,11 @@ export default function Mentor() {
           style={MARQUEE_STYLE}
         >
           {loopMentors.map((mentor, index) => (
-            <div
-              key={`${mentor.name}-${index}`}
-              className="flex w-[260px] shrink-0 flex-col items-center sm:w-[320px] lg:w-[320px]"
-            >
-              <div className="relative z-0 flex w-[160px] flex-col items-center sm:w-[200px] lg:w-[200px]">
-                <Image
-                  src="/icons/mentor-badge-shape.svg"
-                  width={179}
-                  height={264}
-                  alt=""
-                  className="pointer-events-none absolute top-0 left-1/2 h-auto w-[125px] -translate-x-1/2 select-none sm:w-[156px] lg:w-[156px]"
-                />
-                {mentor.portrait}
-              </div>
-              <div className="relative z-10 -mt-6 flex w-full flex-col items-center gap-3 rounded-[20px] bg-[#081EEA] px-4 py-4 drop-shadow-[4px_4px_0px_black] sm:-mt-8 sm:gap-4 sm:px-5 lg:-mt-10 lg:gap-[19px] lg:px-6 lg:py-5">
-                <div className="flex w-full max-w-[382px] flex-col items-center gap-2 text-center text-white sm:gap-3 lg:gap-4">
-                  <p className="w-full text-lg leading-[1.5] font-semibold tracking-[-0.36px]">
-                    {mentor.name}
-                  </p>
-                  <p className="w-full text-base leading-[1.5] font-normal tracking-[-0.36px]">
-                    {mentor.role}
-                  </p>
-                </div>
-                <div className="flex w-full items-center gap-5">
-                  <span className="h-0 flex-1 border-t border-dashed border-[#F9F9F9]" />
-                  <span className="h-[18px] w-[18px] shrink-0 rounded-full bg-[#F9F9F9]" />
-                  <span className="h-0 flex-1 border-t border-dashed border-[#F9F9F9]" />
-                </div>
-              </div>
-            </div>
+            <MentorCard
+              key={`${mentor.id}-${index}`}
+              mentor={mentor}
+              color={ORGANIC_SHAPE_COLORS[index % mentors.length % ORGANIC_SHAPE_COLORS.length]}
+            />
           ))}
         </div>
       </div>

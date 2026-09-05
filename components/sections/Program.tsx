@@ -1,36 +1,52 @@
+import Link from "next/link";
 import Mascot, { type MascotVariant } from "@/components/ui/Mascot";
+import {
+  PROGRAM_KATEGORI_LABEL,
+  PROGRAM_KATEGORI_ORDER,
+  PROGRAM_KATEGORI_SLUG,
+  type ProgramKategori,
+} from "@/lib/shared/kelasLabels";
 
 export interface ProgramItem {
   title: string;
   description: string;
   mascot: MascotVariant;
+  href: string;
 }
 
-/** Teaser 4 program di landing page — dropdown "Program" Navbar sekarang
- * pakai PROGRAM_KATEGORI_ORDER (lib/shared/kelasLabels.ts) & link ke halaman
- * /program sungguhan (PRD 7.5.4), bukan lagi reuse array ini. */
-export const PROGRAMS: ProgramItem[] = [
-  {
-    title: "TKA",
+// Deskripsi + mascot per kategori — judul & urutan REUSE PROGRAM_KATEGORI_ORDER/
+// LABEL/SLUG yang sama dengan dropdown "Program" Navbar (components/ui/Navbar.tsx)
+// supaya kedua tempat selalu konsisten (kalau nanti nambah kategori baru, cukup
+// diubah di lib/shared/kelasLabels.ts, dua tempat ini otomatis ikut).
+const PROGRAM_META: Record<ProgramKategori, { description: string; mascot: MascotVariant }> = {
+  konsultasi: {
+    description: "Konsultasi 1-on-1 Rencana Studi & Pilihan PTN",
+    mascot: "Guidance",
+  },
+  tka: {
     description: "Kelas Mapel Wajib & Pilihan",
     mascot: "Teaching",
   },
-  {
-    title: "SNBT",
+  snbt: {
     description: "Kelas Intensif TPS & Literasi",
     mascot: "Happy",
   },
-  {
-    title: "Ujian Mandiri",
+  ujian_mandiri: {
     description: "Kelas Persiapan Jalur Mandiri PTN",
     mascot: "Plenger",
   },
-  {
-    title: "Mahasiswa",
-    description: "Pemberian Informasi Beasiswa, Internship dan Event Lainnya",
+  pendampingan_mahasiswa: {
+    description: "Pendampingan Beasiswa, Internship, dan Event Lainnya",
     mascot: "Happy Graduate",
   },
-];
+};
+
+export const PROGRAMS: ProgramItem[] = PROGRAM_KATEGORI_ORDER.map((kategori) => ({
+  title: PROGRAM_KATEGORI_LABEL[kategori],
+  description: PROGRAM_META[kategori].description,
+  mascot: PROGRAM_META[kategori].mascot,
+  href: `/program/${PROGRAM_KATEGORI_SLUG[kategori]}`,
+}));
 
 export default function Program() {
   return (
@@ -49,9 +65,10 @@ export default function Program() {
 
       <div className="flex w-[800px] max-w-full flex-col gap-4 sm:gap-6 lg:gap-8">
         {PROGRAMS.map((item) => (
-          <div
+          <Link
             key={item.title}
-            className="relative flex flex-col gap-2.5 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-3 shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)] sm:rounded-[24px] sm:px-6 sm:py-4 lg:rounded-[32px] lg:px-8"
+            href={item.href}
+            className="relative flex flex-col gap-2.5 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-3 shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)] transition-transform duration-150 hover:-translate-y-1 hover:shadow-[2px_4px_8px_0px_rgba(0,0,0,0.15)] sm:rounded-[24px] sm:px-6 sm:py-4 lg:rounded-[32px] lg:px-8"
           >
             <p className="max-w-[75%] text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-[#081EEA]">
               {item.title}
@@ -63,7 +80,7 @@ export default function Program() {
               variant={item.mascot}
               className="pointer-events-none absolute right-[-8px] bottom-0 h-14 w-auto select-none sm:h-20 lg:right-[-15px] lg:h-[100px]"
             />
-          </div>
+          </Link>
         ))}
       </div>
     </section>
