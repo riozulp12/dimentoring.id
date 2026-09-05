@@ -33,10 +33,10 @@ export function fieldTone(status: InputFieldStatus, disabled?: boolean) {
     return "bg-[#F9F9F9] border-[#AFAFAF] text-[#7E7C7C] cursor-not-allowed";
   }
   if (status === "error") {
-    return "bg-[#FFEBEB] border-[#E70A0A] text-[#E70A0A]";
+    return "bg-[#FFEBEB] border-[#E70A0A] text-[#E70A0A] focus-within:text-black";
   }
   if (status === "success") {
-    return "bg-white border-[#0CBA00] text-[#7E7C7C]";
+    return "bg-white border-[#0CBA00] text-[#7E7C7C] focus-within:text-black";
   }
   return "bg-white border-[#AFAFAF] text-[#7E7C7C] hover:border-[#081EEA] focus-within:border-black focus-within:text-black";
 }

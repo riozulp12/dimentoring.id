@@ -12,7 +12,7 @@ const FAQS: FaqItem[] = [
   {
     question: "Dimentoring cuma online?",
     answer:
-      "Dimentoring ga cuma online, kami juga tersedia untuk versi offline dengan mentor datang ke rumahmu, tetapi untuk saat ini Dimentoring offline baru tersedia untuk daerah Yogyakarta dan Kabupaten Banyumas dan sekitarnya.",
+      "Dimentoring ga cuma online, kami juga tersedia untuk versi offline dengan mentor datang ke rumahmu, tetapi untuk saat ini Dimentoring offline baru tersedia untuk daerah Yogyakarta dan sekitarnya.",
   },
   {
     question: "Hasil prediksi peluang dijamin akurat ga?",

@@ -48,7 +48,10 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
       items: [
         { icon: "referral", label: "Referral & Poin", href: "/referral" },
         { icon: "beasiswa", label: "Beasiswa & Event", href: "/beasiswa-event" },
-        { icon: "ai-mentor", label: "AI Mentor", href: "/ai-mentor" },
+        // AI Mentor sengaja disembunyikan dari sidebar — fitur belum pernah
+        // dibangun (belum ada spesifikasi PRD), entry ini dulu link mati ke
+        // /ai-mentor yang tidak punya halaman. Route/file TIDAK dihapus
+        // karena memang belum pernah ada, cuma entry menu ini yang ditahan.
       ],
     },
   ],
