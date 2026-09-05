@@ -27,3 +27,13 @@ export const JENJANG_OPTIONS = [
   { label: "D3", value: "D3" },
   { label: "D4", value: "D4" },
 ];
+
+export const RUMPUN_LABEL: Record<string, string> = {
+  saintek: "Saintek",
+  soshum: "Soshum",
+};
+
+export const RUMPUN_OPTIONS = [
+  { label: "Saintek", value: "saintek" },
+  { label: "Soshum", value: "soshum" },
+];

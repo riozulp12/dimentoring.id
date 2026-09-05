@@ -6,7 +6,7 @@ import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import PtnJurusanForm from "./PtnJurusanForm";
 import ImportCsvModal from "./ImportCsvModal";
-import { JALUR_LABEL, JALUR_OPTIONS, JENJANG_OPTIONS } from "@/lib/shared/ptnJurusanLabels";
+import { JALUR_LABEL, JALUR_OPTIONS, JENJANG_OPTIONS, RUMPUN_LABEL, RUMPUN_OPTIONS } from "@/lib/shared/ptnJurusanLabels";
 import type { PtnJurusanItem, ProvinsiOption } from "@/lib/admin/getKelolaAssessmentData";
 
 /**
@@ -42,6 +42,7 @@ export default function KelolaAssessmentClient({
   const [search, setSearch] = useState("");
   const [filterJalur, setFilterJalur] = useState("");
   const [filterJenjang, setFilterJenjang] = useState("");
+  const [filterRumpun, setFilterRumpun] = useState("");
 
   const filteredList = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -52,9 +53,10 @@ export default function KelolaAssessmentClient({
       }
       if (filterJalur && item.jalur !== filterJalur) return false;
       if (filterJenjang && item.jenjang !== filterJenjang) return false;
+      if (filterRumpun && item.rumpun !== filterRumpun) return false;
       return true;
     });
-  }, [ptnList, search, filterJalur, filterJenjang]);
+  }, [ptnList, search, filterJalur, filterJenjang, filterRumpun]);
 
   function openAddForm() {
     setEditingItem(null);
@@ -109,6 +111,16 @@ export default function KelolaAssessmentClient({
               options={JENJANG_OPTIONS}
             />
           </div>
+          <div className="w-full sm:w-40">
+            <InputField
+              type="dropdown"
+              size="md"
+              placeholder="Semua Rumpun"
+              value={filterRumpun}
+              onChange={(e) => setFilterRumpun(e.target.value)}
+              options={RUMPUN_OPTIONS}
+            />
+          </div>
         </div>
         <div className="flex gap-3">
           <Button type="button" variant="secondary" size="md" onClick={() => setImportOpen(true)}>
@@ -136,6 +148,7 @@ export default function KelolaAssessmentClient({
                 <th className="px-4 py-3 font-medium">Universitas</th>
                 <th className="px-4 py-3 font-medium">Jurusan</th>
                 <th className="px-4 py-3 font-medium">Jenjang</th>
+                <th className="px-4 py-3 font-medium">Rumpun</th>
                 <th className="px-4 py-3 font-medium">Provinsi</th>
                 <th className="px-4 py-3 font-medium">Kuota</th>
                 <th className="px-4 py-3 font-medium">Peminat</th>
@@ -154,6 +167,7 @@ export default function KelolaAssessmentClient({
                   <td className="px-4 py-3 text-black">{item.namaUniversitas}</td>
                   <td className="px-4 py-3 text-[#7E7C7C]">{item.namaJurusan}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">{item.jenjang}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">{RUMPUN_LABEL[item.rumpun] ?? item.rumpun}</td>
                   <td className="px-4 py-3 text-[#7E7C7C]">{item.provinsiNama}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">{item.kuotaTahunBerjalan}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">{item.jumlahPeminatTahunLalu}</td>

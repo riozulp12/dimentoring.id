@@ -10,6 +10,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 
 const VALID_JENJANG = ["S1", "D3", "D4"];
 const VALID_JALUR = ["snbp", "snbt", "mandiri"];
+const VALID_RUMPUN = ["saintek", "soshum"];
 const CURRENT_YEAR = new Date().getFullYear();
 
 export interface PtnJurusanInputBody {
@@ -20,6 +21,7 @@ export interface PtnJurusanInputBody {
   kuotaTahunBerjalan?: number | string;
   jumlahPeminatTahunLalu?: number | string;
   jalur?: string;
+  rumpun?: string;
   tahunData?: number | string;
   sumberData?: string;
   rataRataNilaiDiterima?: number | string | null;
@@ -33,6 +35,7 @@ export interface ValidatedPtnJurusanInput {
   kuota_tahun_berjalan: number;
   jumlah_peminat_tahun_lalu: number;
   jalur: string;
+  rumpun: string;
   tahun_data: number;
   sumber_data: string;
   rata_rata_nilai_diterima: number | null;
@@ -55,6 +58,10 @@ export async function validatePtnJurusanInput(body: PtnJurusanInputBody): Promis
 
   if (!body.jalur || !VALID_JALUR.includes(body.jalur)) {
     return { ok: false, error: "Jalur tidak valid (harus SNBP/SNBT/Mandiri)." };
+  }
+
+  if (!body.rumpun || !VALID_RUMPUN.includes(body.rumpun)) {
+    return { ok: false, error: "Rumpun tidak valid (harus Saintek/Soshum)." };
   }
 
   if (!body.provinsiId || typeof body.provinsiId !== "string") {
@@ -107,6 +114,7 @@ export async function validatePtnJurusanInput(body: PtnJurusanInputBody): Promis
       kuota_tahun_berjalan: kuota,
       jumlah_peminat_tahun_lalu: peminat,
       jalur: body.jalur,
+      rumpun: body.rumpun,
       tahun_data: tahunData,
       sumber_data: sumberData,
       rata_rata_nilai_diterima: rataRataNilaiDiterima,

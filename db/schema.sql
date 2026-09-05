@@ -293,6 +293,7 @@ CREATE INDEX idx_verification_tokens_user ON verification_tokens(user_id);
 -- ============================================================================
 
 CREATE TYPE jenjang_prodi AS ENUM ('D3', 'D4', 'S1');
+CREATE TYPE rumpun_jurusan AS ENUM ('saintek', 'soshum');
 
 CREATE TABLE ptn_jurusan (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -303,6 +304,7 @@ CREATE TABLE ptn_jurusan (
     kuota_tahun_berjalan INT NOT NULL,
     jumlah_peminat_tahun_lalu INT NOT NULL,
     jalur jalur_seleksi NOT NULL,
+    rumpun rumpun_jurusan NOT NULL,       -- Saintek/Soshum — Rekomendasi Jurusan wajib serumpun (PRD 7.4.3)
     sumber_data VARCHAR(100) NOT NULL,   -- 'snpmb.id' / 'input_manual_ptn'
     tahun_data INT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

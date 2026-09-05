@@ -89,7 +89,8 @@ export default function ImportCsvModal({ onClose }: { onClose: () => void }) {
       <h2 className="text-lg font-semibold text-black">Import dari CSV</h2>
       <p className="text-sm text-[#7E7C7C]">
         Kolom wajib: nama_universitas, nama_jurusan, jenjang, provinsi, kuota_tahun_berjalan,
-        jumlah_peminat_tahun_lalu, jalur, tahun_data. Opsional: sumber_data, rata_rata_nilai_diterima.
+        jumlah_peminat_tahun_lalu, jalur, rumpun (saintek/soshum), tahun_data. Opsional: sumber_data,
+        rata_rata_nilai_diterima.
       </p>
 
       <InputField type="file" size="md" accept=".csv,text/csv" onFilesSelected={handleFilesSelected} />

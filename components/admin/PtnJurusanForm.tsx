@@ -3,7 +3,7 @@
 import { useId, useState, type FormEvent } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
-import { JALUR_OPTIONS, JENJANG_OPTIONS } from "@/lib/shared/ptnJurusanLabels";
+import { JALUR_OPTIONS, JENJANG_OPTIONS, RUMPUN_OPTIONS } from "@/lib/shared/ptnJurusanLabels";
 import { calculateKeketatan } from "@/lib/assessment/calculatePeluang";
 import type { PtnJurusanItem, ProvinsiOption } from "@/lib/admin/getKelolaAssessmentData";
 
@@ -39,6 +39,7 @@ export default function PtnJurusanForm({
   const [kuota, setKuota] = useState(initialItem ? String(initialItem.kuotaTahunBerjalan) : "");
   const [peminat, setPeminat] = useState(initialItem ? String(initialItem.jumlahPeminatTahunLalu) : "");
   const [jalur, setJalur] = useState(initialItem?.jalur ?? "");
+  const [rumpun, setRumpun] = useState(initialItem?.rumpun ?? "");
   const [tahunData, setTahunData] = useState(initialItem ? String(initialItem.tahunData) : String(CURRENT_YEAR));
   const [sumberData, setSumberData] = useState(initialItem?.sumberData ?? "input_manual_admin");
   const [rataRata, setRataRata] = useState(
@@ -65,6 +66,7 @@ export default function PtnJurusanForm({
       kuotaTahunBerjalan: Number(kuota),
       jumlahPeminatTahunLalu: Number(peminat),
       jalur,
+      rumpun,
       tahunData: Number(tahunData),
       sumberData,
       rataRataNilaiDiterima: rataRata.trim() ? Number(rataRata) : undefined,
@@ -100,6 +102,7 @@ export default function PtnJurusanForm({
         keketatanScore: keketatan.score,
         keketatanLabel: keketatan.label,
         jalur,
+        rumpun,
         tahunData: Number(tahunData),
         sumberData,
         rataRataNilaiDiterima: rataRata.trim() ? Number(rataRata) : null,
@@ -206,17 +209,31 @@ export default function PtnJurusanForm({
         </p>
       ) : null}
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-black">Jalur</label>
-        <InputField
-          type="dropdown"
-          size="md"
-          placeholder="Pilih jalur"
-          required
-          value={jalur}
-          onChange={(e) => setJalur(e.target.value)}
-          options={JALUR_OPTIONS}
-        />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-black">Jalur</label>
+          <InputField
+            type="dropdown"
+            size="md"
+            placeholder="Pilih jalur"
+            required
+            value={jalur}
+            onChange={(e) => setJalur(e.target.value)}
+            options={JALUR_OPTIONS}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-black">Rumpun</label>
+          <InputField
+            type="dropdown"
+            size="md"
+            placeholder="Pilih rumpun"
+            required
+            value={rumpun}
+            onChange={(e) => setRumpun(e.target.value)}
+            options={RUMPUN_OPTIONS}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

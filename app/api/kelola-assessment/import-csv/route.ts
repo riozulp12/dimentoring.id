@@ -14,8 +14,8 @@ import { parseCsv } from "@/lib/admin/parseCsv";
  *
  * Kolom header CSV yang diharapkan (urutan bebas, header wajib ada persis):
  * nama_universitas, nama_jurusan, jenjang, provinsi, kuota_tahun_berjalan,
- * jumlah_peminat_tahun_lalu, jalur, tahun_data, sumber_data (opsional),
- * rata_rata_nilai_diterima (opsional).
+ * jumlah_peminat_tahun_lalu, jalur, rumpun (saintek/soshum), tahun_data,
+ * sumber_data (opsional), rata_rata_nilai_diterima (opsional).
  */
 
 function errorResponse(message: string, status: number) {
@@ -30,6 +30,7 @@ const REQUIRED_HEADERS = [
   "kuota_tahun_berjalan",
   "jumlah_peminat_tahun_lalu",
   "jalur",
+  "rumpun",
   "tahun_data",
 ];
 
@@ -105,6 +106,7 @@ export async function POST(request: NextRequest) {
       kuotaTahunBerjalan: get("kuota_tahun_berjalan"),
       jumlahPeminatTahunLalu: get("jumlah_peminat_tahun_lalu"),
       jalur: get("jalur").toLowerCase(),
+      rumpun: get("rumpun").toLowerCase(),
       tahunData: get("tahun_data"),
       sumberData: get("sumber_data") || "input_manual_admin",
       rataRataNilaiDiterima: get("rata_rata_nilai_diterima") || null,

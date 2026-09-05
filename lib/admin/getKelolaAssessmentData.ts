@@ -22,6 +22,7 @@ export interface PtnJurusanItem {
   keketatanScore: number;
   keketatanLabel: string;
   jalur: string;
+  rumpun: string;
   tahunData: number;
   sumberData: string;
   rataRataNilaiDiterima: number | null;
@@ -41,6 +42,7 @@ interface PtnJurusanRow {
   kuota_tahun_berjalan: number;
   jumlah_peminat_tahun_lalu: number;
   jalur: string;
+  rumpun: string;
   tahun_data: number;
   sumber_data: string;
   rata_rata_nilai_diterima: number | null;
@@ -58,7 +60,7 @@ export async function getPtnJurusanList(): Promise<PtnJurusanItem[]> {
     .from("ptn_jurusan")
     .select(
       `id, nama_universitas, nama_jurusan, jenjang, provinsi_id, kuota_tahun_berjalan,
-       jumlah_peminat_tahun_lalu, jalur, tahun_data, sumber_data, rata_rata_nilai_diterima,
+       jumlah_peminat_tahun_lalu, jalur, rumpun, tahun_data, sumber_data, rata_rata_nilai_diterima,
        provinsi:provinsi_id(nama)`,
     )
     .order("nama_universitas", { ascending: true })
@@ -85,6 +87,7 @@ export async function getPtnJurusanList(): Promise<PtnJurusanItem[]> {
       keketatanScore: keketatan.score,
       keketatanLabel: keketatan.label,
       jalur: row.jalur,
+      rumpun: row.rumpun,
       tahunData: row.tahun_data,
       sumberData: row.sumber_data,
       rataRataNilaiDiterima: row.rata_rata_nilai_diterima,
