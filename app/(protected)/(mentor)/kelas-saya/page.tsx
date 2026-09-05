@@ -46,8 +46,8 @@ export default async function KelasSayaMentorPage({
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
-            {kelasList.map((kelas) => (
-              <KelasSayaCard key={kelas.id} {...kelas} />
+            {kelasList.map((kelas, idx) => (
+              <KelasSayaCard key={kelas.id} index={idx} {...kelas} />
             ))}
           </div>
         )}

@@ -31,9 +31,18 @@ function EmptyBox({ text }: { text: string }) {
   );
 }
 
-export default function SiswaBinaanList({ groups }: { groups: SiswaBinaanGroup[] }) {
+export default function SiswaBinaanList({
+  groups,
+  initialKelasId = "",
+}: {
+  groups: SiswaBinaanGroup[];
+  /** Pre-filter dari ?kelasId= — dipakai tombol "Lihat Siswa" di Kelas Saya
+   * (components/mentor/LihatSiswaButton.tsx) supaya langsung terfilter ke
+   * kelas asal klik, bukan "Semua Kelas". */
+  initialKelasId?: string;
+}) {
   const [search, setSearch] = useState("");
-  const [kelasId, setKelasId] = useState("");
+  const [kelasId, setKelasId] = useState(initialKelasId);
 
   const totalSiswaAllKelas = useMemo(() => groups.reduce((sum, g) => sum + g.siswa.length, 0), [groups]);
   const isSearching = search.trim().length > 0;

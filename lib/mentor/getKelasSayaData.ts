@@ -16,6 +16,8 @@ export interface MentorKelasItem {
   id: string;
   nama: string;
   subtesNama: string | null;
+  programKategori: string;
+  tingkatKelas: string;
   tingkatKelasLabel: string;
   jadwal: string;
   jumlahSiswa: number;
@@ -55,7 +57,7 @@ export async function getMentorKelasSaya(userId: string): Promise<MentorKelasIte
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      "id, nama, tingkat_kelas, jadwal, kapasitas, link_meet, subtes:subtes_id(nama), enrollments(status_pembayaran)",
+      "id, nama, program_kategori, tingkat_kelas, jadwal, kapasitas, link_meet, subtes:subtes_id(nama), enrollments(status_pembayaran)",
     )
     .eq("mentor_id", userId);
 
@@ -67,6 +69,7 @@ export async function getMentorKelasSaya(userId: string): Promise<MentorKelasIte
   type Row = {
     id: string;
     nama: string;
+    program_kategori: string;
     tingkat_kelas: string;
     jadwal: unknown;
     kapasitas: number;
@@ -79,6 +82,8 @@ export async function getMentorKelasSaya(userId: string): Promise<MentorKelasIte
     id: row.id,
     nama: row.nama,
     subtesNama: firstNama(row.subtes),
+    programKategori: row.program_kategori,
+    tingkatKelas: row.tingkat_kelas,
     tingkatKelasLabel: TINGKAT_KELAS_LABEL[row.tingkat_kelas] ?? row.tingkat_kelas,
     jadwal: formatJadwal(row.jadwal),
     jumlahSiswa: (row.enrollments ?? []).filter((e) => e.status_pembayaran === "lunas").length,

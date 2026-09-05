@@ -68,7 +68,14 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
           ) : null}
 
           <div className="flex flex-col gap-2 border-t border-[#E3E3E3] pt-6">
-            {session?.role === "student" ? (
+            {kelas.sisaSlot <= 0 ? (
+              <>
+                <Button type="button" variant="primary" size="lg" className="w-full sm:w-auto" disabled>
+                  Daftar Kelas Ini
+                </Button>
+                <p className="text-sm text-[#7E7C7C]">Kelas ini sudah penuh, kuota sudah terisi semua.</p>
+              </>
+            ) : session?.role === "student" ? (
               <Link href={`/checkout/${kelas.id}`} className="w-full sm:w-auto">
                 <Button type="button" variant="primary" size="lg" className="w-full sm:w-auto">
                   Daftar Kelas Ini

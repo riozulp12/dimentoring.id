@@ -5,7 +5,9 @@ import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/
 import { supabaseServer } from "@/lib/supabase/server";
 import { getKelasSaya, getRekomendasiKelas } from "@/lib/siswa/getKelasSayaData";
 import PageTitle from "@/components/dashboard/PageTitle";
-import KelasCard from "@/components/siswa/KelasCard";
+import KelasSayaCard from "@/components/siswa/KelasSayaCard";
+import KelasCardFrame from "@/components/program/KelasCardFrame";
+import KelasCardMeta from "@/components/program/KelasCardMeta";
 
 /**
  * "Kelas Saya" — PRD Bagian 7.5 (Kelas Bimbingan). Dua section: kelas yang
@@ -70,8 +72,8 @@ export default async function KelasSayaPage({
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
-              {kelasSaya.map((kelas) => (
-                <KelasCard key={kelas.id} {...kelas} />
+              {kelasSaya.map((kelas, idx) => (
+                <KelasSayaCard key={kelas.id} index={idx} {...kelas} />
               ))}
             </div>
           )}
@@ -82,9 +84,25 @@ export default async function KelasSayaPage({
             <h2 className="text-xl font-semibold tracking-[-0.02em] text-black sm:text-2xl">
               Rekomendasi Kelas
             </h2>
+            {/* Kelas di sini BELUM dibeli — treatment jualan lengkap tetap
+                relevan, makanya reuse persis komponen yang sama dengan
+                /program (variant "jual" default di KelasCardVisual). */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
-              {rekomendasi.map((kelas) => (
-                <KelasCard key={kelas.id} {...kelas} />
+              {rekomendasi.map((item, idx) => (
+                <KelasCardFrame
+                  key={item.id}
+                  href={`/kelas/${item.id}`}
+                  namaKelas={item.nama}
+                  index={idx}
+                  diskonAktif={item.diskonAktif}
+                  sisaSlot={item.sisaSlot}
+                  kapasitas={item.kapasitas}
+                  programKategori={item.programKategori}
+                  tingkatKelas={item.tingkatKelas}
+                  subtesNama={item.subtesNama}
+                >
+                  <KelasCardMeta item={item} sessionRole={session.role} />
+                </KelasCardFrame>
               ))}
             </div>
           </section>

@@ -10,9 +10,9 @@ import SiswaBinaanList from "@/components/mentor/SiswaBinaanList";
 export default async function SiswaBinaanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; kelasId?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, kelasId } = await searchParams;
 
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
@@ -43,7 +43,7 @@ export default async function SiswaBinaanPage({
             <p className="text-base text-[#7E7C7C]">Belum ada kelas yang diampu</p>
           </div>
         ) : (
-          <SiswaBinaanList groups={groups} />
+          <SiswaBinaanList groups={groups} initialKelasId={kelasId ?? ""} />
         )}
       </div>
     </>
