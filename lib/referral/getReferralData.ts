@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { maskNama, type NamaJoin } from "@/lib/shared/maskNama";
 
 /**
  * Data layer Referral & Poin — PRD Bagian 7.1 & Bagian 13 (referrals,
@@ -41,24 +42,9 @@ export interface RewardHistoryItem {
   tanggal: string;
 }
 
-type NamaJoin = { nama: string; nama_panggilan: string | null };
-
 function firstOrNull<T>(value: T | T[] | null): T | null {
   if (!value) return null;
   return Array.isArray(value) ? (value[0] ?? null) : value;
-}
-
-/**
- * Alias privasi referee — pola sama seperti Leaderboard/Testimonial landing
- * page ("S***", "N***"): nama_panggilan kalau ada, kalau tidak huruf
- * pertama nama + "***". BR-12: default alias, bukan nama asli penuh.
- */
-function maskNama(referee: NamaJoin | null): string {
-  if (!referee) return "***";
-  if (referee.nama_panggilan && referee.nama_panggilan.trim()) return referee.nama_panggilan.trim();
-  const source = referee.nama.trim();
-  if (!source) return "***";
-  return `${source[0].toUpperCase()}***`;
 }
 
 export async function getReferralStats(userId: string): Promise<ReferralStats> {

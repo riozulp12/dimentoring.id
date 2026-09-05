@@ -8,24 +8,24 @@ interface LeaderboardEntry {
   points: number;
 }
 
-const LEADERBOARD: LeaderboardEntry[] = [
-  { medal: "/icons/leaderboard-medal-gold.svg", name: "S***", points: 805 },
-  { medal: "/icons/leaderboard-medal-silver.svg", name: "I***", points: 761 },
-  { medal: "/icons/leaderboard-medal-bronze.svg", name: "R**", points: 739 },
+const LEADERBOARD: (LeaderboardEntry & { rankLabel: string })[] = [
+  { medal: "/icons/leaderboard-medal-gold.svg", name: "S***", points: 805, rankLabel: "Juara 1" },
+  { medal: "/icons/leaderboard-medal-silver.svg", name: "I***", points: 761, rankLabel: "Juara 2" },
+  { medal: "/icons/leaderboard-medal-bronze.svg", name: "R**", points: 739, rankLabel: "Juara 3" },
 ];
 
 export default function Leaderboard() {
   return (
     <section className="flex w-full flex-col items-center gap-10 bg-[#081EEA] px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:flex-row lg:items-center lg:gap-10 lg:px-12 lg:py-16 min-[1440px]:gap-16 min-[1440px]:px-16 min-[1920px]:gap-[120px] min-[1920px]:px-[164px]">
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center sm:gap-5 lg:items-start lg:text-left">
-        <h4 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-white sm:text-xl">
+        <h2 className="text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-white sm:text-xl">
           Belajar Jadi Seru dengan Referral & Leaderboard
-        </h4>
+        </h2>
         <p className="text-base leading-[1.5] tracking-[-0.36px] text-white">
           Kumpulkan poin dari referral & tryout, naik level, dan lihat
           posisimu di leaderboard teman & sekolah.
         </p>
-        <Link href="/daftar" className="w-full sm:w-[220px]">
+        <Link href="/leaderboard" className="w-full sm:w-[220px]">
           <Button variant="secondary" size="sm" className="w-full">
             Lihat Leaderboard
           </Button>
@@ -43,7 +43,7 @@ export default function Leaderboard() {
                 src={entry.medal}
                 width={32}
                 height={56}
-                alt=""
+                alt={entry.rankLabel}
                 className="h-9 w-auto sm:h-12 lg:h-14"
               />
               <p className="text-lg leading-[1.5] font-medium tracking-[-0.36px] text-black">
