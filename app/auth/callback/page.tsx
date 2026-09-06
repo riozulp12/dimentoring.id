@@ -41,6 +41,35 @@ export default function AuthCallbackPage() {
     }
     hasRunRef.current = true;
 
+    // ===== DEBUG SEMENTARA — bug "code_verifier" hilang di PRODUCTION =====
+    // Log ini muncul di BROWSER DEVTOOLS CONSOLE, BUKAN Vercel Runtime Logs —
+    // exchangeCodeForSession() jalan di client component ini (bukan server).
+    // HAPUS seluruh blok ini setelah root cause ketemu.
+    try {
+      const debugAuthTokenKey = Object.keys(window.localStorage).find((k) => k.endsWith("-auth-token"));
+      const debugVerifierKey = debugAuthTokenKey ? `${debugAuthTokenKey}-code-verifier` : null;
+      const debugVerifier = debugVerifierKey ? window.localStorage.getItem(debugVerifierKey) : null;
+      const debugCallCount =
+        Number(window.sessionStorage.getItem("__debug_auth_callback_count") ?? "0") + 1;
+      window.sessionStorage.setItem("__debug_auth_callback_count", String(debugCallCount));
+
+      console.log("[DEBUG PROD] window.location.href:", window.location.href);
+      console.log("[DEBUG PROD] window.location.origin:", window.location.origin);
+      console.log("[DEBUG PROD] document.referrer:", document.referrer);
+      console.log("[DEBUG PROD] code dari URL:", new URLSearchParams(window.location.search).get("code"));
+      console.log("[DEBUG PROD] localStorage auth-token key:", debugAuthTokenKey);
+      console.log("[DEBUG PROD] code_verifier key dicek:", debugVerifierKey);
+      console.log("[DEBUG PROD] code_verifier ditemukan:", debugVerifier);
+      console.log(
+        "[DEBUG PROD] semua key localStorage berprefix sb-:",
+        Object.keys(window.localStorage).filter((k) => k.startsWith("sb-")),
+      );
+      console.log("[DEBUG PROD] Callback dipanggil ke-berapa kali (survive full reload via sessionStorage):", debugCallCount);
+    } catch (debugLogError) {
+      console.warn("[DEBUG PROD] Gagal membaca info debug:", debugLogError);
+    }
+    // ===== END DEBUG SEMENTARA =====
+
     async function run() {
       const supabase = getSupabaseBrowserClient();
 
@@ -49,6 +78,8 @@ export default function AuthCallbackPage() {
       );
 
       if (exchangeError || !data.session?.user.email) {
+        // DEBUG SEMENTARA — lihat pesan error persis dari Supabase. HAPUS setelah root cause ketemu.
+        console.error("[DEBUG PROD] exchangeCodeForSession gagal:", exchangeError);
         setError("Gagal login dengan Google. Coba lagi dari halaman Login.");
         return;
       }
