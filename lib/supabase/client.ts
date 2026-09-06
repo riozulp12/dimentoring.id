@@ -7,16 +7,21 @@
 // (signOut) — identitas aplikasi SELALU dari cookie session custom kita sendiri
 // (lib/auth/session.ts), bukan dari sesi Supabase Auth.
 //
-// PAKAI createBrowserClient dari @supabase/ssr (BUKAN createClient dari
-// @supabase/supabase-js langsung) — ini menyimpan code_verifier PKCE di COOKIE
-// first-party, bukan localStorage. Terbukti dari bug production: alur redirect
-// dimentoring.id -> accounts.google.com -> *.supabase.co -> dimentoring.id kena
-// proteksi anti-bounce-tracking browser modern yang membersihkan localStorage
-// origin asal setelah pola redirect lintas domain seperti ini (tidak kejadian di
-// localhost, makanya cuma muncul di production) — persis skenario yang membuat
-// exchangeCodeForSession() gagal dengan AuthPKCECodeVerifierMissingError.
-// createBrowserClient juga selalu memaksa flowType 'pkce' secara internal,
-// jadi tidak perlu di-set manual lagi di sini.
+// createBrowserClient dari @supabase/ssr (bukan createClient dari @supabase/supabase-js
+// langsung) — nyimpen code_verifier PKCE di cookie first-party, bukan localStorage.
+// Lebih tahan banting untuk skenario umum (mis. localStorage yang dibersihkan browser),
+// meski BUKAN ini akar masalah bug production "PKCE code verifier not found in storage"
+// yang sempat muncul (root cause aslinya ada di detectSessionInUrl, lihat di bawah).
+//
+// detectSessionInUrl: false WAJIB. Defaultnya true di GoTrueClient — begitu client ini
+// dibuat DAN URL saat itu punya `?code=...`, GoTrueClient._initialize() OTOMATIS
+// menjalankan exchange sendiri di background (menghabiskan code_verifier sekali-pakai),
+// SEBELUM app/auth/callback/page.tsx sempat manggil exchangeCodeForSession() secara
+// eksplisit. Manual call itu lalu selalu gagal "code verifier not found in storage"
+// karena verifier-nya sudah lebih dulu dipakai & dihapus oleh proses auto-detect ini —
+// balapan (race), sama sekali bukan soal localStorage vs cookie. Arsitektur project ini
+// sengaja full-manual (baca komentar app/auth/callback/page.tsx), jadi auto-detect ini
+// harus dimatikan.
 import { createBrowserClient } from "@supabase/ssr";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -29,7 +34,9 @@ export function getSupabaseBrowserClient() {
     throw new Error("getSupabaseBrowserClient() cuma boleh dipanggil di browser (client component).");
   }
   if (!browserClient) {
-    browserClient = createBrowserClient(supabaseUrl, supabaseAnonKey);
+    browserClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+      auth: { detectSessionInUrl: false },
+    });
   }
   return browserClient;
 }

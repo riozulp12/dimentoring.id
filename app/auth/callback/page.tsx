@@ -9,11 +9,13 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 /**
  * Halaman perantara OAuth Google (FR-1.14) — tujuan `redirectTo` dari
  * signInWithOAuth() di /daftar & /login (lib/supabase/client.ts). Alurnya:
- *   1. exchangeCodeForSession() DI BROWSER (bukan server) — code verifier PKCE
- *      disimpan lewat cookie first-party (getSupabaseBrowserClient() pakai
- *      createBrowserClient dari @supabase/ssr, BUKAN localStorage — localStorage
- *      terbukti kena bersihkan browser modern di alur redirect lintas domain
- *      dimentoring.id -> Google -> Supabase -> dimentoring.id).
+ *   1. exchangeCodeForSession() DI BROWSER (bukan server, manual) — code verifier
+ *      PKCE disimpan lewat cookie first-party (lib/supabase/client.ts pakai
+ *      createBrowserClient dari @supabase/ssr). detectSessionInUrl SENGAJA
+ *      dimatikan di client itu — kalau menyala, GoTrueClient otomatis
+ *      meng-exchange `code` di URL ini sendiri saat client dibuat, balapan
+ *      dengan panggilan manual di bawah dan menghabiskan code_verifier duluan
+ *      (AuthPKCECodeVerifierMissingError). Baca komentar lib/supabase/client.ts.
  *   2. Ambil email (sudah diverifikasi Google) dari sesi Supabase Auth itu.
  *   3. POST ke app/api/auth/google-callback/route.ts — di situ baru dicek/
  *      dibuat baris `public.users` & di-set session cookie custom kita.
