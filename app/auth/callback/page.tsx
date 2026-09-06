@@ -38,6 +38,29 @@ export default function AuthCallbackPage() {
   const hasRunRef = useRef(false);
 
   useEffect(() => {
+    // DEBUG SEMENTARA (ronde 3) — catat SETIAP invocation efek ini (bukan cuma
+    // yang lolos hasRunRef), plus kode yang dipakai, supaya kelihatan apakah
+    // /auth/callback benar-benar di-load lebih dari sekali dengan `code` yang
+    // SAMA PERSIS (bug "invalid flow state, no valid flow state found" dari
+    // server Supabase = code sudah pernah dipakai/expired). Pakai sessionStorage
+    // (bukan cuma hasRunRef) karena ini harus bertahan lintas FULL page reload,
+    // bukan cuma remount React. HAPUS seluruh blok ini setelah root cause ketemu.
+    try {
+      const debugCode = new URLSearchParams(window.location.search).get("code");
+      const debugLogKey = "__debug_auth_callback_invocations";
+      const debugLog = JSON.parse(window.sessionStorage.getItem(debugLogKey) ?? "[]") as Array<{
+        t: string;
+        code: string | null;
+        blockedByHasRunRef: boolean;
+      }>;
+      debugLog.push({ t: new Date().toISOString(), code: debugCode, blockedByHasRunRef: hasRunRef.current });
+      window.sessionStorage.setItem(debugLogKey, JSON.stringify(debugLog));
+      console.log(`[DEBUG PROD] effect invocation #${debugLog.length}:`, debugLog[debugLog.length - 1]);
+      console.log("[DEBUG PROD] riwayat semua invocation di tab ini:", debugLog);
+    } catch (debugLogError) {
+      console.warn("[DEBUG PROD] gagal mencatat log invocation:", debugLogError);
+    }
+
     if (hasRunRef.current) {
       console.warn(
         "[auth/callback] Duplicate exchangeCodeForSession() call diblokir (Strict Mode double-invoke di dev).",
@@ -48,6 +71,9 @@ export default function AuthCallbackPage() {
 
     async function run() {
       const supabase = getSupabaseBrowserClient();
+
+      // DEBUG SEMENTARA (ronde 3) — HAPUS setelah root cause ketemu.
+      console.log("[DEBUG PROD] memanggil exchangeCodeForSession() dengan href:", window.location.href, "pada", new Date().toISOString());
 
       const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(
         window.location.href,
