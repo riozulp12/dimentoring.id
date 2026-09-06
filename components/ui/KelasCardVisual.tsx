@@ -103,6 +103,12 @@ export interface KelasCardVisualProps {
   tingkatKelas: string;
   subtesNama?: string | null;
   className?: string;
+  /** "card" (default) — proporsi grid card seperti biasa (/program, Kelas
+   * Saya). "banner" — dipakai halaman detail kelas: bentuk lebih memanjang
+   * (persegi panjang, bukan mendekati persegi), maskot lebih kecil, dan jarak
+   * antar baris teks lebih longgar supaya nyaman dibaca sebagai banner
+   * full-width, bukan tile kecil. */
+  size?: "card" | "banner";
 }
 
 export default function KelasCardVisual({
@@ -118,7 +124,14 @@ export default function KelasCardVisual({
   tingkatKelas,
   subtesNama,
   className,
+  size = "card",
 }: KelasCardVisualProps) {
+  const isBanner = size === "banner";
+  const aspectClass = isBanner ? "aspect-[16/9] sm:aspect-[21/8]" : "aspect-[3/2]";
+  const mascotSizeClass = isBanner ? "h-[45%] sm:h-[50%]" : "h-[78%]";
+  const contentGapClass = isBanner ? "gap-3 sm:gap-4" : "gap-1.5 sm:gap-2";
+  const contentPaddingClass = isBanner ? "p-4 sm:p-6" : "p-2.5 sm:p-3";
+  const titleBlockGapClass = isBanner ? "gap-2 sm:gap-2.5" : "gap-1";
   // Digeser +1 dari index maskot supaya kombinasi maskot+warna tidak selalu
   // jatuh bersamaan tiap putaran (lihat instruksi Bagian 2 — maskotnya sendiri
   // sekarang fixed 1 pose, tapi pergeseran index tetap dipertahankan supaya
@@ -142,7 +155,7 @@ export default function KelasCardVisual({
 
   return (
     <div
-      className={["relative w-full aspect-[3/2] overflow-hidden rounded-t-[20px]", className].filter(Boolean).join(" ")}
+      className={["relative w-full overflow-hidden rounded-t-[20px]", aspectClass, className].filter(Boolean).join(" ")}
       style={{ backgroundImage: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})` }}
     >
       {/* Tekstur dekoratif samar — pola dot berulang, opacity rendah, cuma
@@ -178,7 +191,7 @@ export default function KelasCardVisual({
         variant={MASCOT_VARIANT}
         alt=""
         loading="eager"
-        className="pointer-events-none absolute -right-[2%] -bottom-[2%] h-[78%] w-auto select-none drop-shadow-[0_8px_16px_rgba(0,0,0,0.35)]"
+        className={`pointer-events-none absolute -right-[2%] -bottom-[2%] ${mascotSizeClass} w-auto select-none drop-shadow-[0_8px_16px_rgba(0,0,0,0.35)]`}
       />
 
       {/* Scrim bawah — jamin kontras teks putih di semua 5 kombinasi gradasi,
@@ -227,8 +240,8 @@ export default function KelasCardVisual({
 
       {/* Konten bawah: badge target kelas, judul besar, badge sub-kategori,
           lalu kotak CTA urgency (poin 5, 6, 8, 9). */}
-      <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1.5 p-2.5 sm:gap-2 sm:p-3">
-        <div className="flex w-[70%] flex-col gap-1 sm:w-[64%]">
+      <div className={`absolute inset-x-0 bottom-0 z-10 flex flex-col ${contentGapClass} ${contentPaddingClass}`}>
+        <div className={`flex w-[70%] flex-col ${titleBlockGapClass} sm:w-[64%]`}>
           <span className="inline-flex w-fit items-center rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm sm:text-[10px]">
             {targetLabel}
           </span>

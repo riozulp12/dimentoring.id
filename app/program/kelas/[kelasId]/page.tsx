@@ -117,13 +117,17 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
             programKategori={kelas.programKategori}
             tingkatKelas={kelas.tingkatKelas}
             subtesNama={kelas.subtesNama}
+            size="banner"
           />
 
           <div className="grid grid-cols-1 gap-8 p-5 sm:p-8 lg:grid-cols-[2fr_1fr] lg:gap-10">
             {/* KIRI — nama, harga, badge, deskripsi, mentor */}
             <div className="flex flex-col gap-5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                <h1 className="text-2xl font-bold tracking-[-0.02em] text-black sm:text-3xl">{kelas.nama}</h1>
+                <div className="flex flex-col gap-1">
+                  <h1 className="text-2xl font-bold tracking-[-0.02em] text-black sm:text-3xl">{kelas.nama}</h1>
+                  <p className="text-sm text-[#7E7C7C]">Jadwal Mulai: {kelas.jadwalDisplay}</p>
+                </div>
                 <p className="text-xl font-semibold whitespace-nowrap text-[#081EEA] sm:text-2xl">{formatRupiah(kelas.harga)}</p>
               </div>
 
