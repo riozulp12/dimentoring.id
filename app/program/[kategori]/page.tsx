@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getNavbarProps } from "@/lib/dashboard/getNavbarProps";
 import { getKelasByKategori } from "@/lib/dashboard/getProgramData";
-import { PROGRAM_KATEGORI_LABEL, programKategoriFromSlug } from "@/lib/shared/kelasLabels";
+import { PROGRAM_KATEGORI_LABEL, PROGRAM_KATEGORI_TAGLINE, programKategoriFromSlug } from "@/lib/shared/kelasLabels";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import KategoriFilterBar from "@/components/program/KategoriFilterBar";
@@ -46,6 +46,7 @@ export default async function ProgramKategoriPage({
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-black sm:text-3xl">
             {PROGRAM_KATEGORI_LABEL[kategori]}
           </h1>
+          <p className="max-w-[720px] text-base text-[#7E7C7C]">{PROGRAM_KATEGORI_TAGLINE[kategori]}</p>
         </div>
 
         <div className="mb-8 flex justify-end sm:mb-10">

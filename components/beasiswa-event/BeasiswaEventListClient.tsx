@@ -16,17 +16,20 @@ import type { KontenInfoListItem } from "@/lib/dashboard/getInfoBeasiswaEvent";
  * List + search + filter halaman publik /beasiswa-event (PRD Bagian 7/13,
  * konten_info) — data lengkap (termasuk yang sudah 'ditutup') sudah di-fetch
  * sekaligus di page.tsx (Server Component), search/filter murni client-side
- * (pola sama dengan ApprovalMentorClient.tsx: tab + InputField search).
+ * (pola sama dengan ApprovalMentorClient.tsx: tab + InputField search). SATU
+ * list/grid gabungan semua tipe (TIDAK dipisah section per tipe) — filter
+ * Tipe pakai dropdown (REUSE pola InputField type="dropdown" dari
+ * components/program/KategoriFilterBar.tsx), opsinya REUSE
+ * KONTEN_INFO_TIPE_LABEL supaya otomatis ikut kalau ada tipe baru lagi.
+ * Filter Tipe + search jalan BERSAMAAN (AND, lihat `filtered` di bawah).
  */
 
-type TipeFilter = "semua" | "beasiswa" | "internship" | "event";
+type TipeFilter = "semua" | "beasiswa" | "internship" | "webinar" | "workshop" | "event";
 type StatusFilter = "semua" | "aktif" | "ditutup";
 
-const TIPE_TABS: { key: TipeFilter; label: string }[] = [
-  { key: "semua", label: "Semua" },
-  { key: "beasiswa", label: "Beasiswa" },
-  { key: "internship", label: "Internship" },
-  { key: "event", label: "Event" },
+const TIPE_OPTIONS = [
+  { label: "Semua", value: "semua" },
+  ...Object.entries(KONTEN_INFO_TIPE_LABEL).map(([value, label]) => ({ label, value })),
 ];
 
 const STATUS_TABS: { key: StatusFilter; label: string }[] = [
@@ -65,22 +68,14 @@ export default function BeasiswaEventListClient({ items }: { items: KontenInfoLi
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex w-full gap-2 overflow-x-auto border-b border-[#E3E3E3]">
-          {TIPE_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setTipeFilter(tab.key)}
-              className={`shrink-0 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
-                tipeFilter === tab.key
-                  ? "border-b-2 border-[#081EEA] text-[#081EEA]"
-                  : "text-[#7E7C7C] hover:text-black"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <InputField
+          type="dropdown"
+          size="md"
+          value={tipeFilter}
+          onChange={(e) => setTipeFilter(e.target.value as TipeFilter)}
+          options={TIPE_OPTIONS}
+          className="sm:w-48"
+        />
 
         <div className="flex shrink-0 items-center gap-2">
           {STATUS_TABS.map((tab) => (

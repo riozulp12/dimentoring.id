@@ -21,14 +21,14 @@ import type { KontenInfoAdminItem } from "@/lib/admin/getKelolaKontenData";
  * hapus dengan konfirmasi dulu.
  */
 
-type TipeFilter = "semua" | "beasiswa" | "internship" | "event";
+type TipeFilter = "semua" | "beasiswa" | "internship" | "webinar" | "workshop" | "event";
 type StatusFilter = "semua" | "aktif" | "ditutup";
 
+// Tab tipe REUSE KONTEN_INFO_TIPE_LABEL (satu-satunya sumber daftar tipe)
+// supaya tab admin ini otomatis ikut nambah kalau tipe baru ditambahkan lagi.
 const TIPE_TABS: { key: TipeFilter; label: string }[] = [
   { key: "semua", label: "Semua" },
-  { key: "beasiswa", label: "Beasiswa" },
-  { key: "internship", label: "Internship" },
-  { key: "event", label: "Event" },
+  ...Object.entries(KONTEN_INFO_TIPE_LABEL).map(([key, label]) => ({ key: key as TipeFilter, label })),
 ];
 
 const STATUS_TABS: { key: StatusFilter; label: string }[] = [

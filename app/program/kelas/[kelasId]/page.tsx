@@ -17,9 +17,12 @@ import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
 import KelasCardVisual from "@/components/ui/KelasCardVisual";
 
-/** Detail publik 1 kelas (PRD 7.5.4) — redesain 2 kolom (kiri: info + mentor,
- * kanan: sidebar Materi), banner reuse KelasCardVisual. Tombol "Daftar
- * Sekarang" full-width di bawah, logic tujuan TETAP SAMA seperti sebelumnya:
+/** Detail publik 1 kelas (PRD 7.5.4) — TIGA card independen (masing-masing
+ * border+shadow+padding sendiri, dipisah gap yang jelas, bukan satu card besar
+ * dibagi kolom): Card 1 banner (KelasCardVisual full-bleed), Card 2 info kelas
+ * (kiri, lebih lebar) + Card 3 sidebar Materi (kanan, lebih sempit) berdampingan
+ * di desktop dan bertumpuk di mobile, lalu tombol "Daftar Sekarang" full-width
+ * TERPISAH di luar ketiga card. Logic tombol TETAP SAMA seperti sebelumnya:
  * belum login -> /login; sudah login sebagai Siswa -> /checkout/[kelasId];
  * sudah login sebagai role lain (Mentor/Admin) -> nonaktif (kelas cuma untuk
  * Siswa). List Mentor & Materi dibatasi gradient putih untuk visitor belum
@@ -34,6 +37,17 @@ function Badge({ children }: { children: ReactNode }) {
     <span className="inline-flex w-fit items-center rounded-full bg-[#F9FAFF] px-3 py-1 text-xs font-medium text-[#081EEA]">
       {children}
     </span>
+  );
+}
+
+function CalendarIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="3.5" y="5" width="17" height="15" rx="2" />
+      <line x1="3.5" y1="9.5" x2="20.5" y2="9.5" />
+      <line x1="8" y1="3" x2="8" y2="6.5" />
+      <line x1="16" y1="3" x2="16" y2="6.5" />
+    </svg>
   );
 }
 
@@ -107,26 +121,34 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
           &larr; {kelas.programKategoriLabel}
         </Link>
 
-        <div className="flex flex-col overflow-hidden rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)]">
-          <KelasCardVisual
-            namaKelas={kelas.nama}
-            index={0}
-            diskonAktif={kelas.diskonAktif}
-            sisaSlot={kelas.sisaSlot}
-            kapasitas={kelas.kapasitas}
-            programKategori={kelas.programKategori}
-            tingkatKelas={kelas.tingkatKelas}
-            subtesNama={kelas.subtesNama}
-            size="banner"
-          />
+        <div className="flex flex-col gap-5 sm:gap-6">
+          {/* CARD 1 — Banner, full-bleed, tanpa padding tambahan */}
+          <div className="overflow-hidden rounded-[20px] border-[0.8px] border-[#E3E3E3] shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)]">
+            <KelasCardVisual
+              namaKelas={kelas.nama}
+              index={0}
+              diskonAktif={kelas.diskonAktif}
+              sisaSlot={kelas.sisaSlot}
+              kapasitas={kelas.kapasitas}
+              programKategori={kelas.programKategori}
+              tingkatKelas={kelas.tingkatKelas}
+              subtesNama={kelas.subtesNama}
+              size="banner"
+            />
+          </div>
 
-          <div className="grid grid-cols-1 gap-8 p-5 sm:p-8 lg:grid-cols-[2fr_1fr] lg:gap-10">
-            {/* KIRI — nama, harga, badge, deskripsi, mentor */}
-            <div className="flex flex-col gap-5">
+          <div className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-[2fr_1fr]">
+            {/* CARD 2 — Info Kelas */}
+            <div className="flex flex-col gap-5 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white p-5 shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)] sm:p-8">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                   <h1 className="text-2xl font-bold tracking-[-0.02em] text-black sm:text-3xl">{kelas.nama}</h1>
-                  <p className="text-sm text-[#7E7C7C]">Jadwal Mulai: {kelas.jadwalDisplay}</p>
+                  {kelas.jadwalDisplay ? (
+                    <div className="flex items-center gap-1.5 text-sm text-[#7E7C7C]">
+                      <CalendarIcon aria-hidden className="h-4 w-4 shrink-0" />
+                      <span>{kelas.jadwalDisplay}</span>
+                    </div>
+                  ) : null}
                 </div>
                 <p className="text-xl font-semibold whitespace-nowrap text-[#081EEA] sm:text-2xl">{formatRupiah(kelas.harga)}</p>
               </div>
@@ -158,8 +180,8 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
               ) : null}
             </div>
 
-            {/* KANAN — sidebar Materi */}
-            <div className="flex flex-col gap-3 lg:border-l lg:border-[#E3E3E3] lg:pl-8">
+            {/* CARD 3 — Materi */}
+            <div className="flex flex-col gap-3 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white p-5 shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)] sm:p-8">
               <p className="text-sm text-[#7E7C7C]">Materi</p>
               {materi.length === 0 ? (
                 <p className="text-sm text-[#7E7C7C]">Materi untuk kelas ini akan segera tersedia.</p>
@@ -175,7 +197,8 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 border-t border-[#E3E3E3] px-5 py-5 sm:px-8">
+          {/* Tombol Daftar Sekarang — full-width, terpisah dari ketiga card */}
+          <div className="flex flex-col gap-2">
             {kelas.sisaSlot <= 0 ? (
               <>
                 <Button type="button" variant="primary" size="lg" className="w-full" disabled>

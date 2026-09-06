@@ -39,14 +39,14 @@ const GRADIENTS: GradientPair[] = [
 ];
 
 // "INTENSIF X" — redaksi PERSIS sesuai spesifikasi (BUKAN cuma uppercase dari
-// PROGRAM_KATEGORI_LABEL, mis. pendampingan_mahasiswa sengaja dipotong jadi
-// "PENDAMPINGAN" tanpa "MAHASISWA").
+// PROGRAM_KATEGORI_LABEL, mis. pendampingan_mahasiswa sengaja dipersingkat
+// jadi "BEASISWA & KARIER" tanpa "MAHASISWA" supaya muat di badge).
 const INTENSIF_LABEL: Record<string, string> = {
   konsultasi: "INTENSIF KONSULTASI",
   tka: "INTENSIF TKA",
   snbt: "INTENSIF SNBT",
   ujian_mandiri: "INTENSIF UJIAN MANDIRI",
-  pendampingan_mahasiswa: "INTENSIF PENDAMPINGAN",
+  pendampingan_mahasiswa: "INTENSIF BEASISWA & KARIER",
 };
 
 function truncateAtWord(text: string, maxLength: number): string {
@@ -127,11 +127,20 @@ export default function KelasCardVisual({
   size = "card",
 }: KelasCardVisualProps) {
   const isBanner = size === "banner";
-  const aspectClass = isBanner ? "aspect-[16/9] sm:aspect-[21/8]" : "aspect-[3/2]";
-  const mascotSizeClass = isBanner ? "h-[45%] sm:h-[50%]" : "h-[78%]";
-  const contentGapClass = isBanner ? "gap-3 sm:gap-4" : "gap-1.5 sm:gap-2";
-  const contentPaddingClass = isBanner ? "p-4 sm:p-6" : "p-2.5 sm:p-3";
-  const titleBlockGapClass = isBanner ? "gap-2 sm:gap-2.5" : "gap-1";
+  // Banner (halaman detail kelas): persegi panjang melebar & pendek — SATU
+  // rasio konsisten di semua breakpoint (bukan bertingkat per breakpoint
+  // seperti draf sebelumnya) supaya kependekannya konsisten mulai dari
+  // mobile, bukan cuma di desktop.
+  const aspectClass = isBanner ? "aspect-[21/9]" : "aspect-[3/2]";
+  // Maskot diturunkan ~35% dari ukuran banner draf sebelumnya (h-[45%]/[50%])
+  // supaya proporsional dengan banner yang sekarang jauh lebih pendek.
+  const mascotSizeClass = isBanner ? "h-[30%] sm:h-[33%]" : "h-[78%]";
+  const contentGapClass = isBanner ? "gap-4 sm:gap-5" : "gap-1.5 sm:gap-2";
+  const contentPaddingClass = isBanner ? "p-6 sm:p-8 lg:p-10" : "p-2.5 sm:p-3";
+  const titleBlockGapClass = isBanner ? "gap-2.5 sm:gap-3" : "gap-1";
+  const badgePaddingClass = isBanner ? "px-3 py-1 sm:px-4 sm:py-1.5" : "px-2 py-0.5";
+  const ctaPaddingClass = isBanner ? "px-4 py-3 sm:px-5 sm:py-3.5" : "px-2.5 py-1.5 sm:px-3 sm:py-2";
+  const ctaGapClass = isBanner ? "gap-2.5" : "gap-1.5";
   // Digeser +1 dari index maskot supaya kombinasi maskot+warna tidak selalu
   // jatuh bersamaan tiap putaran (lihat instruksi Bagian 2 — maskotnya sendiri
   // sekarang fixed 1 pose, tapi pergeseran index tetap dipertahankan supaya
@@ -242,13 +251,17 @@ export default function KelasCardVisual({
           lalu kotak CTA urgency (poin 5, 6, 8, 9). */}
       <div className={`absolute inset-x-0 bottom-0 z-10 flex flex-col ${contentGapClass} ${contentPaddingClass}`}>
         <div className={`flex w-[70%] flex-col ${titleBlockGapClass} sm:w-[64%]`}>
-          <span className="inline-flex w-fit items-center rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm sm:text-[10px]">
+          <span
+            className={`inline-flex w-fit items-center rounded-full bg-white/20 text-[9px] font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm sm:text-[10px] ${badgePaddingClass}`}
+          >
             {targetLabel}
           </span>
           <p className="line-clamp-2 text-lg leading-[1.1] font-extrabold tracking-tight text-white uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] sm:text-xl lg:text-2xl">
             {namaDisplay}
           </p>
-          <span className="inline-flex w-fit items-center rounded-full bg-[#EDE9FE] px-2 py-0.5 text-[9px] font-bold tracking-wide text-[#6D28D9] sm:text-[10px]">
+          <span
+            className={`inline-flex w-fit items-center rounded-full bg-[#EDE9FE] text-[9px] font-bold tracking-wide text-[#6D28D9] sm:text-[10px] ${badgePaddingClass}`}
+          >
             {intensifLabel}
           </span>
         </div>
@@ -259,7 +272,7 @@ export default function KelasCardVisual({
             relevan lagi), "diampu" = tidak ada (badge siswa sudah cukup, lihat
             atas). */}
         {isJual ? (
-          <div className="flex items-start gap-1.5 rounded-lg bg-[#FECDD3] px-2.5 py-1.5 shadow-[0_2px_6px_rgba(0,0,0,0.15)] sm:px-3 sm:py-2">
+          <div className={`flex items-start rounded-lg bg-[#FECDD3] shadow-[0_2px_6px_rgba(0,0,0,0.15)] ${ctaGapClass} ${ctaPaddingClass}`}>
             <svg aria-hidden viewBox="0 0 20 20" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#9F1239]" fill="currentColor">
               <path d="M10 1.5 1 17h18L10 1.5Zm0 5.4c.5 0 .9.4.9.9v4.1c0 .5-.4.9-.9.9s-.9-.4-.9-.9V7.8c0-.5.4-.9.9-.9Zm0 7.4a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" />
             </svg>

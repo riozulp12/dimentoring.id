@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME, verifySessionToken, type SessionRole } from "@/lib/auth/session";
 import { getNavbarProps } from "@/lib/dashboard/getNavbarProps";
 import { getProgramPreviewSections, type ProgramSection } from "@/lib/dashboard/getProgramData";
-import type { ProgramKategori } from "@/lib/shared/kelasLabels";
+import { PROGRAM_KATEGORI_TAGLINE } from "@/lib/shared/kelasLabels";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import KelasCardFrame from "@/components/program/KelasCardFrame";
@@ -20,19 +20,6 @@ import KelasCardMeta from "@/components/program/KelasCardMeta";
  * Visual maskot per card datang dari KelasCardFrame/KelasCardVisual
  * (rotasi per-index dalam section).
  */
-
-// Kalimat persuasif TETAP per kategori (PRD 7.5 poin 13) — bukan AI-generate,
-// jangan diganti jadi dynamic/random.
-const SECTION_TAGLINE: Record<ProgramKategori, string> = {
-  konsultasi:
-    "Bingung menentukan strategi belajar atau pilihan jurusan? Ngobrol langsung sama mentor berpengalaman yang paham perjalananmu.",
-  tka: "Kuasai tiap mata pelajaran TKA dengan pembahasan mendalam dan latihan soal yang terus diperbarui sesuai kisi-kisi terbaru.",
-  snbt: "Latih Tes Potensi Skolastik dan Literasimu bareng mentor yang sudah lolos SNBT dari PTN impian.",
-  ujian_mandiri:
-    "Setiap PTN punya karakter ujian mandiri sendiri — kami bantu kamu siapkan strategi yang paling pas buat kampus incaranmu.",
-  pendampingan_mahasiswa:
-    "Sudah keterima? Perjalanan belum selesai — dapatkan info beasiswa, internship, dan pendampingan sampai kamu benar-benar siap jadi mahasiswa.",
-};
 
 /** Satu-satunya struktur grid section program — dipakai SEMUA kategori supaya
  * ukuran card selalu konsisten (sama dengan app/program/[kategori]/page.tsx). */
@@ -103,7 +90,7 @@ export default async function ProgramPage() {
                   </div>
                   {/* Tanpa max-w — biar satu baris kalau lebar container cukup
                       (poin 13), wrap alami kalau memang tidak muat (mobile). */}
-                  <p className="text-sm text-[#7E7C7C] sm:text-base">{SECTION_TAGLINE[section.kategori]}</p>
+                  <p className="text-sm text-[#7E7C7C] sm:text-base">{PROGRAM_KATEGORI_TAGLINE[section.kategori]}</p>
                 </div>
                 <ProgramSectionGrid section={section} sessionRole={session?.role ?? null} />
               </section>

@@ -1,6 +1,5 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
-import { formatJadwal } from "@/lib/shared/formatJadwal";
 import {
   PROGRAM_KATEGORI_LABEL,
   PROGRAM_KATEGORI_ORDER,
@@ -290,7 +289,10 @@ export interface KelasDetailPublic {
   tingkatKelasLabel: string;
   deskripsi: string | null;
   harga: number;
-  jadwalDisplay: string;
+  /** null kalau kelas.jadwal kosong/belum diisi — halaman detail publik
+   * WAJIB sembunyikan baris jadwal sepenuhnya kalau null, bukan tampilkan
+   * placeholder semacam "Jadwal: -". */
+  jadwalDisplay: string | null;
   mentorNama: string | null;
   mentors: KelasMentorInfo[];
   kapasitas: number;
@@ -303,6 +305,45 @@ type MentorJoin = { id: string; nama: string; avatar_url: string | null } | { id
 function firstMentor(value: MentorJoin) {
   if (!value) return null;
   return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+interface JadwalEntryRaw {
+  hari?: unknown;
+  jam_mulai?: unknown;
+}
+
+/** Beda dari lib/shared/formatJadwal.ts (dipakai admin/mentor, punya fallback
+ * teks "Jadwal belum diatur") — versi ini KHUSUS baris jadwal di halaman
+ * detail kelas publik: kembalikan null kalau kosong (baris disembunyikan,
+ * bukan ditampilkan placeholder), dan kelompokkan hari yang jam-nya sama jadi
+ * satu baris (mis. "Senin & Rabu, 19:00 WIB") bukan diulang per-hari. */
+function formatJadwalRingkas(jadwal: unknown): string | null {
+  if (!jadwal) return null;
+  const entries = Array.isArray(jadwal) ? jadwal : [jadwal];
+
+  const slots: { hari: string; jam: string }[] = [];
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as JadwalEntryRaw;
+    const hari = typeof e.hari === "string" && e.hari.trim() ? e.hari.trim() : null;
+    const jam = typeof e.jam_mulai === "string" && e.jam_mulai.trim() ? e.jam_mulai.trim() : "";
+    if (hari) slots.push({ hari, jam });
+  }
+  if (slots.length === 0) return null;
+
+  const hariByJam = new Map<string, string[]>();
+  for (const slot of slots) {
+    const list = hariByJam.get(slot.jam) ?? [];
+    list.push(slot.hari);
+    hariByJam.set(slot.jam, list);
+  }
+
+  const parts = Array.from(hariByJam.entries()).map(([jam, hariList]) => {
+    const hariJoined = hariList.join(" & ");
+    return jam ? `${hariJoined}, ${jam} WIB` : hariJoined;
+  });
+
+  return parts.join(", ");
 }
 
 /** Detail publik 1 kelas (app/program/kelas/[kelasId]/page.tsx). */
@@ -372,7 +413,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     tingkatKelasLabel: TINGKAT_KELAS_LABEL[row.tingkat_kelas] ?? row.tingkat_kelas,
     deskripsi: row.deskripsi,
     harga: Number(row.harga),
-    jadwalDisplay: formatJadwal(row.jadwal),
+    jadwalDisplay: formatJadwalRingkas(row.jadwal),
     mentorNama: mentorRow?.nama ?? null,
     mentors: mentorRow ? [{ nama: mentorRow.nama, avatarUrl: mentorRow.avatar_url, asalPtn }] : [],
     kapasitas: row.kapasitas,

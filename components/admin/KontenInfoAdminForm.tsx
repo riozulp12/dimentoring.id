@@ -4,18 +4,17 @@ import { useState, type FormEvent } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
 import type { KontenInfoAdminItem } from "@/lib/admin/getKelolaKontenData";
+import { KONTEN_INFO_TIPE_LABEL } from "@/lib/shared/kontenInfoLabels";
 
 /**
- * Form Tambah/Edit Info Beasiswa/Internship/Event — SATU komponen dipakai
- * kedua mode (initialItem ada = edit, tidak ada = tambah), pola sama dengan
- * KelolaKelasForm.tsx. PRD Bagian 13 (konten_info).
+ * Form Tambah/Edit Info Beasiswa/Internship/Event/Webinar/Workshop — SATU
+ * komponen dipakai kedua mode (initialItem ada = edit, tidak ada = tambah),
+ * pola sama dengan KelolaKelasForm.tsx. PRD Bagian 13 (konten_info). Opsi
+ * Tipe REUSE KONTEN_INFO_TIPE_LABEL (satu-satunya sumber daftar tipe) supaya
+ * dropdown ini otomatis konsisten dengan badge & filter di halaman publik.
  */
 
-const TIPE_OPTIONS = [
-  { label: "Beasiswa", value: "beasiswa" },
-  { label: "Internship", value: "internship" },
-  { label: "Event", value: "event" },
-];
+const TIPE_OPTIONS = Object.entries(KONTEN_INFO_TIPE_LABEL).map(([value, label]) => ({ label, value }));
 
 const STATUS_OPTIONS = [
   { label: "Aktif", value: "aktif" },

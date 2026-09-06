@@ -37,7 +37,22 @@ export const PROGRAM_KATEGORI_LABEL: Record<ProgramKategori, string> = {
   tka: "TKA",
   snbt: "SNBT",
   ujian_mandiri: "Ujian Mandiri",
-  pendampingan_mahasiswa: "Pendampingan Mahasiswa",
+  pendampingan_mahasiswa: "Beasiswa & Karier Mahasiswa",
+};
+
+// Kalimat persuasif TETAP per kategori (PRD 7.5 poin 13) — bukan AI-generate,
+// jangan diganti jadi dynamic/random. SATU-SATUNYA sumber teks ini — dipakai
+// app/program/page.tsx (section utama) DAN app/program/[kategori]/page.tsx
+// (di bawah H1), supaya kedua halaman selalu konsisten.
+export const PROGRAM_KATEGORI_TAGLINE: Record<ProgramKategori, string> = {
+  konsultasi:
+    "Bingung menentukan strategi belajar atau pilihan jurusan? Ngobrol langsung sama mentor berpengalaman yang paham perjalananmu.",
+  tka: "Kuasai tiap mata pelajaran TKA dengan pembahasan mendalam dan latihan soal yang terus diperbarui sesuai kisi-kisi terbaru.",
+  snbt: "Latih Tes Potensi Skolastik dan Literasimu bareng mentor yang sudah lolos SNBT dari PTN impian.",
+  ujian_mandiri:
+    "Setiap PTN punya karakter ujian mandiri sendiri — kami bantu kamu siapkan strategi yang paling pas buat kampus incaranmu.",
+  pendampingan_mahasiswa:
+    "Sudah keterima? Perjalanan belum selesai — dapatkan info beasiswa, internship, dan pendampingan sampai kamu benar-benar siap jadi mahasiswa.",
 };
 
 /** Slug URL per kategori (dipakai /program/[kategori]) — beda dari value enum

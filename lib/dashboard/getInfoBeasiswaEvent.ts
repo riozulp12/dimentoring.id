@@ -53,7 +53,7 @@ export async function getKontenInfoList(): Promise<KontenInfoListItem[]> {
   const { data, error } = await supabaseServer
     .from("konten_info")
     .select("id, tipe, judul, deskripsi, deadline, status")
-    .in("tipe", ["beasiswa", "internship", "event"])
+    .in("tipe", ["beasiswa", "internship", "webinar", "workshop", "event"])
     .order("status", { ascending: true })
     .order("deadline", { ascending: true, nullsFirst: false });
 

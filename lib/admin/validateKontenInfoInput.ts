@@ -7,7 +7,7 @@
  * validasi awal di form juga.
  */
 
-const VALID_TIPE = ["beasiswa", "internship", "event"];
+const VALID_TIPE = ["beasiswa", "internship", "event", "webinar", "workshop"];
 const VALID_STATUS = ["aktif", "ditutup"];
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
