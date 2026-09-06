@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.17.1",
+    "@supabase/ssr": "^0.12.6",
     "@supabase/supabase-js": "^2.112.2",
     "midtrans-client": "^1.4.3",
     "next": "16.2.11",

@@ -10,7 +10,10 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
  * Halaman perantara OAuth Google (FR-1.14) — tujuan `redirectTo` dari
  * signInWithOAuth() di /daftar & /login (lib/supabase/client.ts). Alurnya:
  *   1. exchangeCodeForSession() DI BROWSER (bukan server) — code verifier PKCE
- *      cuma ada di localStorage browser yang sama yang memulai signInWithOAuth.
+ *      disimpan lewat cookie first-party (getSupabaseBrowserClient() pakai
+ *      createBrowserClient dari @supabase/ssr, BUKAN localStorage — localStorage
+ *      terbukti kena bersihkan browser modern di alur redirect lintas domain
+ *      dimentoring.id -> Google -> Supabase -> dimentoring.id).
  *   2. Ambil email (sudah diverifikasi Google) dari sesi Supabase Auth itu.
  *   3. POST ke app/api/auth/google-callback/route.ts — di situ baru dicek/
  *      dibuat baris `public.users` & di-set session cookie custom kita.
@@ -22,9 +25,9 @@ export default function AuthCallbackPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   // Guard terhadap React Strict Mode yang me-mount efek ini 2x di development.
-  // exchangeCodeForSession() memakai PKCE code_verifier sekali-pakai (dihapus dari
-  // localStorage setelah dipakai) — kalau effect ini jalan dua kali, panggilan kedua
-  // akan gagal dengan "both auth code and code verifier should be non-empty".
+  // exchangeCodeForSession() memakai PKCE code_verifier sekali-pakai (dihapus
+  // setelah dipakai) — kalau effect ini jalan dua kali, panggilan kedua akan
+  // gagal dengan "both auth code and code verifier should be non-empty".
   // Sengaja TIDAK pakai pola cleanup `cancelled` di sini: cleanup sintetis dari
   // Strict Mode akan jalan di antara kedua invocation, sehingga bisa menandai
   // panggilan PERTAMA (yang sukses) sebagai "cancelled" dan diam-diam membatalkan

@@ -6,27 +6,30 @@
 // custom kita). Begitu email Google didapat, sesi Supabase Auth ini langsung dibuang
 // (signOut) — identitas aplikasi SELALU dari cookie session custom kita sendiri
 // (lib/auth/session.ts), bukan dari sesi Supabase Auth.
-import { createClient } from "@supabase/supabase-js";
+//
+// PAKAI createBrowserClient dari @supabase/ssr (BUKAN createClient dari
+// @supabase/supabase-js langsung) — ini menyimpan code_verifier PKCE di COOKIE
+// first-party, bukan localStorage. Terbukti dari bug production: alur redirect
+// dimentoring.id -> accounts.google.com -> *.supabase.co -> dimentoring.id kena
+// proteksi anti-bounce-tracking browser modern yang membersihkan localStorage
+// origin asal setelah pola redirect lintas domain seperti ini (tidak kejadian di
+// localhost, makanya cuma muncul di production) — persis skenario yang membuat
+// exchangeCodeForSession() gagal dengan AuthPKCECodeVerifierMissingError.
+// createBrowserClient juga selalu memaksa flowType 'pkce' secara internal,
+// jadi tidak perlu di-set manual lagi di sini.
+import { createBrowserClient } from "@supabase/ssr";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-let browserClient: ReturnType<typeof createClient> | null = null;
+let browserClient: ReturnType<typeof createBrowserClient> | null = null;
 
 export function getSupabaseBrowserClient() {
   if (typeof window === "undefined") {
     throw new Error("getSupabaseBrowserClient() cuma boleh dipanggil di browser (client component).");
   }
   if (!browserClient) {
-    // flowType WAJIB 'pkce' eksplisit — default library adalah 'implicit' (lihat
-    // DEFAULT_AUTH_OPTIONS di @supabase/supabase-js), yang bikin Google/Supabase
-    // balikin access_token/refresh_token mentah di URL hash, bukan `?code=`.
-    // app/auth/callback/page.tsx memanggil exchangeCodeForSession() yang MEMBUTUHKAN
-    // `code` + code_verifier PKCE — tanpa baris ini, exchange itu selalu gagal
-    // dengan "both auth code and code verifier should be non-empty".
-    browserClient = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { flowType: "pkce" },
-    });
+    browserClient = createBrowserClient(supabaseUrl, supabaseAnonKey);
   }
   return browserClient;
 }
