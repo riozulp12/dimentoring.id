@@ -49,6 +49,9 @@ export default function AuthCallbackPage() {
       );
 
       if (exchangeError || !data.session?.user.email) {
+        // DEBUG SEMENTARA (ronde 2) — fix flowType:'pkce' sudah bikin `code` muncul
+        // di URL, tapi masih gagal; perlu lihat alasan PERSIS exchange ini gagal.
+        console.error("[DEBUG PROD] exchangeCodeForSession gagal. error:", exchangeError, "data:", data);
         setError("Gagal login dengan Google. Coba lagi dari halaman Login.");
         return;
       }
@@ -74,7 +77,10 @@ export default function AuthCallbackPage() {
           body: JSON.stringify({ email, nama, pendingAssessmentId, utmSource, utmCampaign }),
         });
         json = await response.json();
-      } catch {
+        // DEBUG SEMENTARA (ronde 2) — HAPUS setelah root cause ronde 2 ketemu.
+        console.log("[DEBUG PROD] POST /api/auth/google-callback status:", response.status, "body:", json);
+      } catch (postError) {
+        console.error("[DEBUG PROD] POST /api/auth/google-callback lempar exception:", postError);
         await supabase.auth.signOut();
         setError("Gagal terhubung ke server. Periksa koneksi internet kamu.");
         return;
