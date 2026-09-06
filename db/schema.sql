@@ -29,7 +29,10 @@ CREATE TYPE tryout_kategori AS ENUM ('tka', 'snbt', 'mandiri');
 CREATE TYPE tryout_akses AS ENUM ('free', 'premium');
 CREATE TYPE payment_item_type AS ENUM ('kelas', 'tryout', 'lainnya');
 CREATE TYPE payment_status AS ENUM ('menunggu', 'berhasil', 'gagal', 'refunded');
-CREATE TYPE konten_info_tipe AS ENUM ('beasiswa', 'internship', 'event');
+CREATE TYPE konten_info_tipe AS ENUM ('beasiswa', 'internship', 'event', 'webinar', 'workshop');
+-- 'event' tetap jadi kategori umum/"lainnya" (BR baru) — kalau Admin input 
+-- sesuatu yang bukan Beasiswa/Internship/Webinar/Workshop spesifik, pakai 
+-- 'event', tampil ke publik sebagai label "Event" generik.
 CREATE TYPE konten_info_status AS ENUM ('aktif', 'ditutup');
 CREATE TYPE interaksi_konten_jenis AS ENUM ('disimpan', 'tertarik');
 CREATE TYPE soal_ai_kesulitan AS ENUM ('mudah', 'sedang', 'hots');
@@ -95,6 +98,7 @@ CREATE TABLE users (
     utm_campaign VARCHAR(150),                     -- BARU: nama campaign spesifik, buat cross-reference ke iklan_campaign
     referral_click_count INT NOT NULL DEFAULT 0,  -- jumlah klik link referral (FR-R3)
     avatar_url TEXT,
+    avatar_transparent_url TEXT,  -- versi background dihapus (remove.bg), khusus section Mentor landing page
     notif_email BOOLEAN NOT NULL DEFAULT true,
     notif_wa BOOLEAN NOT NULL DEFAULT true,
     permintaan_hapus_akun BOOLEAN NOT NULL DEFAULT false,
@@ -124,10 +128,10 @@ CREATE TABLE notifikasi (
 CREATE INDEX idx_notifikasi_user ON notifikasi(user_id, dibaca);
 
 -- ============================================================================
--- INTEGRASI PARTNER EKSTERNAL (BELUM FINAL — kerjasama agensoal.com
--- masih dinegosiasikan). Tabel ini SENGAJA dipisah dengan prefix jelas
--- supaya gampang di-DROP TABLE utuh kalau kesepakatan batal, tanpa
--- menyentuh tabel inti lainnya.
+-- INTEGRASI PARTNER EKSTERNAL — kerjasama agensoal.com SUDAH DISEPAKATI
+-- (per Agustus 2026). Tabel ini tetap dipisah dengan prefix jelas untuk
+-- kerapian modular, TAPI sekarang sudah boleh dibangun penuh (bukan lagi
+-- sekadar kerangka/stub menunggu kepastian).
 -- ============================================================================
 
 CREATE TABLE sso_token_eksternal (
@@ -221,6 +225,45 @@ CREATE TABLE iklan_campaign (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Kerjasama agensoal.com SUDAH DISEPAKATI (bukan lagi "belum final") —
+-- mentor Dimentoring bisa buat soal di dashboard bimbel Agensoal,
+-- direward poin di Dimentoring begitu soal itu published di sana.
+
+-- Pemetaan akun: satu mentor Dimentoring = satu identitas di Agensoal.
+-- WAJIB ada supaya webhook publish soal bisa tahu "ini poinnya milik siapa".
+CREATE TABLE mentor_agensoal_mapping (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    agensoal_identifier TEXT NOT NULL UNIQUE,  -- ID/email mentor ini di sistem Agensoal
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Konfigurasi poin per soal — singleton row, Admin bisa ubah lewat Table
+-- Editor tanpa redeploy (pola sama dengan honor_persentase_config dkk).
+-- Dibedakan per tingkat kesulitan karena HOTS wajar dapat lebih besar.
+CREATE TABLE mentor_soal_reward_config (
+    id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    poin_per_soal_mudah INT NOT NULL DEFAULT 10,
+    poin_per_soal_sedang INT NOT NULL DEFAULT 15,
+    poin_per_soal_hots INT NOT NULL DEFAULT 25,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO mentor_soal_reward_config (id, poin_per_soal_mudah, poin_per_soal_sedang, poin_per_soal_hots)
+VALUES (1, 10, 15, 25);
+
+-- Log tiap reward yang diberikan — kunci UNIQUE di agensoal_soal_id
+-- mencegah reward ganda kalau webhook yang sama terkirim berkali-kali
+-- (idempotency, prinsip sama dengan payments.gateway_reference).
+CREATE TABLE mentor_soal_reward_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    agensoal_soal_id TEXT NOT NULL UNIQUE,
+    tingkat_kesulitan VARCHAR(20),
+    poin_diberikan INT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Undangan Admin baru (BR-3) — Admin existing generate token sekali pakai,
 -- dikirim manual (WA/email) ke calon Admin. Beda dari Mentor: begitu submit,
 -- akun LANGSUNG aktif tanpa approval tambahan (generate undangan = approval).
@@ -293,25 +336,28 @@ CREATE INDEX idx_verification_tokens_user ON verification_tokens(user_id);
 -- ============================================================================
 
 CREATE TYPE jenjang_prodi AS ENUM ('D3', 'D4', 'S1');
-CREATE TYPE rumpun_jurusan AS ENUM ('saintek', 'soshum');
+
+CREATE TYPE rumpun_ilmu AS ENUM ('saintek', 'soshum');
 
 CREATE TABLE ptn_jurusan (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nama_universitas VARCHAR(255) NOT NULL,
     nama_jurusan VARCHAR(255) NOT NULL,
+    rumpun rumpun_ilmu NOT NULL,          -- BARU: dasar filter Rekomendasi Jurusan (harus 1 rumpun sama)
     jenjang jenjang_prodi NOT NULL,       -- S1/D3/D4 dianggap prodi berbeda (FR-3.9)
     provinsi_id UUID NOT NULL REFERENCES provinsi(id), -- lokasi PTN, wajib untuk validasi BR-28
     kuota_tahun_berjalan INT NOT NULL,
     jumlah_peminat_tahun_lalu INT NOT NULL,
     jalur jalur_seleksi NOT NULL,
-    rumpun rumpun_jurusan NOT NULL,       -- Saintek/Soshum — Rekomendasi Jurusan wajib serumpun (PRD 7.4.3)
     sumber_data VARCHAR(100) NOT NULL,   -- 'snpmb.id' / 'input_manual_ptn'
     tahun_data INT NOT NULL,
+    rata_rata_nilai_diterima DECIMAL(5,2), -- opsional, dari migrasi univ_major dulu, boleh diisi manual juga
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (nama_universitas, nama_jurusan, jenjang, jalur, tahun_data)
 );
 
 CREATE INDEX idx_ptn_jurusan_provinsi ON ptn_jurusan(provinsi_id);
+CREATE INDEX idx_ptn_jurusan_rumpun ON ptn_jurusan(rumpun);
 
 CREATE TABLE assessments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -377,6 +423,8 @@ CREATE TABLE kelas (
     deskripsi TEXT,                        -- manual atau AI-generated, tampil di detail kelas
     jadwal JSONB,                          -- array of {hari, jam} — mendukung lebih dari satu slot
     link_meet TEXT,                        -- link recurring statis per Kelas (bukan per siswa)
+    link_lynkid TEXT,                      -- SEMENTARA: link produk Lynk.id, dipakai selama Payment 
+                                            -- otomatis belum aktif (lihat BR pendaftaran manual)
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
