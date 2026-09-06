@@ -18,7 +18,15 @@ export function getSupabaseBrowserClient() {
     throw new Error("getSupabaseBrowserClient() cuma boleh dipanggil di browser (client component).");
   }
   if (!browserClient) {
-    browserClient = createClient(supabaseUrl, supabaseAnonKey);
+    // flowType WAJIB 'pkce' eksplisit — default library adalah 'implicit' (lihat
+    // DEFAULT_AUTH_OPTIONS di @supabase/supabase-js), yang bikin Google/Supabase
+    // balikin access_token/refresh_token mentah di URL hash, bukan `?code=`.
+    // app/auth/callback/page.tsx memanggil exchangeCodeForSession() yang MEMBUTUHKAN
+    // `code` + code_verifier PKCE — tanpa baris ini, exchange itu selalu gagal
+    // dengan "both auth code and code verifier should be non-empty".
+    browserClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { flowType: "pkce" },
+    });
   }
   return browserClient;
 }
