@@ -8,7 +8,7 @@ interface ValueItem {
 }
 
 const VALUES: ValueItem[] = [
-  { count: 100, label: "Siswa Hebat", mascot: "Happy Graduate" },
+  { count: 30, label: "Siswa Hebat", mascot: "Happy Graduate" },
   { count: 30, label: "Mentor Keren", mascot: "Happy" },
   { count: 5, label: "Event", mascot: "Listen" },
   { count: 7, label: "Program Akademik", mascot: "Happy1" },

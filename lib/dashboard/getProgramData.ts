@@ -272,6 +272,12 @@ export async function getKelasByKategori(
   );
 }
 
+export interface KelasMentorInfo {
+  nama: string;
+  avatarUrl: string | null;
+  asalPtn: string | null;
+}
+
 export interface KelasDetailPublic {
   id: string;
   nama: string;
@@ -286,8 +292,17 @@ export interface KelasDetailPublic {
   harga: number;
   jadwalDisplay: string;
   mentorNama: string | null;
+  mentors: KelasMentorInfo[];
   kapasitas: number;
   sisaSlot: number;
+  diskonAktif: DiskonAktif | null;
+}
+
+type MentorJoin = { id: string; nama: string; avatar_url: string | null } | { id: string; nama: string; avatar_url: string | null }[] | null;
+
+function firstMentor(value: MentorJoin) {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
 /** Detail publik 1 kelas (app/program/kelas/[kelasId]/page.tsx). */
@@ -297,7 +312,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     .select(
       `id, nama, program_kategori, tipe_kelas, tingkat_kelas, deskripsi, harga, jadwal, kapasitas,
        subtes:subtes_id(nama),
-       mentor:mentor_id(nama)`,
+       mentor:mentor_id(id, nama, avatar_url)`,
     )
     .eq("id", kelasId)
     .maybeSingle();
@@ -319,19 +334,31 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     jadwal: unknown;
     kapasitas: number;
     subtes: NamaJoin;
-    mentor: NamaJoin;
+    mentor: MentorJoin;
   };
   const row = data as unknown as Row;
+  const mentorRow = firstMentor(row.mentor);
 
-  const { count, error: countError } = await supabaseServer
-    .from("enrollments")
-    .select("id", { count: "exact", head: true })
-    .eq("kelas_id", kelasId)
-    .eq("status_pembayaran", "lunas");
+  const [{ count, error: countError }, diskonByKelas, profileResult] = await Promise.all([
+    supabaseServer
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("kelas_id", kelasId)
+      .eq("status_pembayaran", "lunas"),
+    getDiskonAktifByKelasId([kelasId]),
+    mentorRow
+      ? supabaseServer.from("mentor_profiles").select("asal_ptn").eq("user_id", mentorRow.id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
 
   if (countError) {
     console.error("[getKelasDetailPublic] query enrollments count failed:", countError);
   }
+  if (profileResult.error) {
+    console.error("[getKelasDetailPublic] query mentor_profiles failed:", profileResult.error);
+  }
+
+  const asalPtn = (profileResult.data as { asal_ptn: string } | null)?.asal_ptn ?? null;
 
   return {
     id: row.id,
@@ -346,8 +373,55 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     deskripsi: row.deskripsi,
     harga: Number(row.harga),
     jadwalDisplay: formatJadwal(row.jadwal),
-    mentorNama: firstNama(row.mentor),
+    mentorNama: mentorRow?.nama ?? null,
+    mentors: mentorRow ? [{ nama: mentorRow.nama, avatarUrl: mentorRow.avatar_url, asalPtn }] : [],
     kapasitas: row.kapasitas,
     sisaSlot: row.kapasitas - (count ?? 0),
+    diskonAktif: diskonByKelas.get(kelasId) ?? null,
   };
+}
+
+export type MateriTipePublic = "video" | "dokumen" | "rangkuman_teks";
+
+export interface MateriPublicItem {
+  id: string;
+  judul: string;
+  tipe: MateriTipePublic;
+  snippet: string;
+}
+
+function buildMateriSnippet(tipe: MateriTipePublic, konten: string | null): string {
+  if (tipe === "rangkuman_teks") {
+    const text = (konten ?? "").trim();
+    if (!text) return "Rangkuman materi belajar";
+    return text.length > 90 ? `${text.slice(0, 90).trimEnd()}…` : text;
+  }
+  return tipe === "video" ? "Tautan video pembelajaran" : "Tautan dokumen belajar";
+}
+
+/** Materi published untuk sidebar "Materi" di detail kelas publik (PRD 7.5.1
+ * — cuma status published yang boleh tampil ke siswa, materi draft AI belum
+ * direview tetap tersembunyi). */
+export async function getMateriPublicByKelasId(kelasId: string): Promise<MateriPublicItem[]> {
+  const { data, error } = await supabaseServer
+    .from("materi")
+    .select("id, judul, tipe, konten")
+    .eq("kelas_id", kelasId)
+    .eq("status", "published")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("[getMateriPublicByKelasId] query failed:", error);
+    return [];
+  }
+
+  return (data ?? []).map((r) => {
+    const tipe = r.tipe as MateriTipePublic;
+    return {
+      id: r.id as string,
+      judul: r.judul as string,
+      tipe,
+      snippet: buildMateriSnippet(tipe, r.konten as string | null),
+    };
+  });
 }

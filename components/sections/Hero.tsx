@@ -37,7 +37,7 @@ export default function Hero() {
               <br />
               <span className="text-[#081EEA]">Belajar</span> yang Berbeda
             </h1>
-            <p className="line-clamp-3 w-full max-w-[540px] text-base leading-[1.5] tracking-[-0.36px] text-black">
+            <p className="line-clamp-3 w-full max-w-[540px] text-left text-base leading-[1.5] tracking-[-0.36px] text-black sm:text-center lg:text-left">
               Mulai dari awal menyusun strategi, mempersiapkan menghadapi SNBT
               dan Ujian Mandiri sampai dengan masuk ke perkuliahan,
               Dimentoring hadir sebagai mentor dalam setiap langkahmu
@@ -83,10 +83,10 @@ export default function Hero() {
             </div>
             <div className="flex flex-col items-center gap-2 lg:items-start">
               <p className="text-lg font-medium leading-[1.5] tracking-[-0.36px] text-black">
-                100+ Siswa
+                30+ Siswa
               </p>
               <p className="w-full max-w-[382px] text-center text-base leading-[1.5] tracking-[-0.36px] text-black lg:text-left">
-                Lebih dari 100 siswa telah belajar dengan kami dan mendapatkan
+                Lebih dari 30 siswa telah belajar dengan kami dan mendapatkan
                 PTN impiannya
               </p>
             </div>
@@ -98,7 +98,7 @@ export default function Hero() {
           width={716}
           height={790}
           alt="Ilustrasi siswa belajar dan dibimbing mentor Dimentoring menuju PTN impian"
-          className="h-auto w-full min-w-0 max-w-[360px] sm:max-w-[480px] md:max-w-[620px] lg:max-w-none lg:flex-1"
+          className="h-auto w-full min-w-0 max-w-[230px] sm:max-w-[480px] md:max-w-[620px] lg:max-w-none lg:flex-1"
           priority
         />
       </div>
