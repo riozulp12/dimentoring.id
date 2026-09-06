@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
@@ -400,14 +401,12 @@ export default function ProfilClient({
       <Card>
         <div className="flex items-center gap-4">
           <div className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#d9d9d9]">
-            {avatarPreview || profil.avatarUrl ? (
-              // Preview lokal (blob:) tidak didukung next/image, jadi pakai <img> biasa di sini saja.
+            {avatarPreview ? (
+              // Preview lokal (blob:) tidak didukung next/image, jadi pakai <img> biasa khusus untuk preview ini.
               // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarPreview ?? profil.avatarUrl ?? undefined}
-                alt={profil.nama}
-                className="size-full object-cover"
-              />
+              <img src={avatarPreview} alt={profil.nama} className="size-full object-cover" />
+            ) : profil.avatarUrl ? (
+              <Image src={profil.avatarUrl} alt={profil.nama} fill className="object-cover" sizes="80px" />
             ) : (
               <span className="flex size-full items-center justify-center bg-[#081EEA] text-2xl font-bold text-white">
                 {profil.nama.trim().charAt(0).toUpperCase() || "?"}
