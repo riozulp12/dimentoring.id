@@ -38,7 +38,6 @@ export async function POST(request: NextRequest) {
 
   if (insertError) {
     console.error("[kelola-kelas POST] insert failed:", insertError);
-    console.error("[KELOLA-KELAS ERROR]", JSON.stringify(insertError, null, 2));
     return errorResponse("Gagal menyimpan kelas. Coba lagi nanti.", 500);
   }
 
