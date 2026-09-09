@@ -810,6 +810,7 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **GamifikasiProfile** — id, user_id, total_poin, level, badge_list, streak_counter.
 - **TryOutAttempt (diperluas)** — id, user_id, tryout_id, jawaban (json), **status_per_soal** (json/array — mapping nomor soal → `dikerjakan`/`belum`, dipakai untuk render Navigator Soal), skor, waktu_mulai, **waktu_tersisa_server** (source of truth untuk timer, di-update tiap interaksi), waktu_selesai, immutable_lock, pdf_export_url.
 - **Kelas, Enrollment, TryOut, Payment, KontenInfo, AIMentorLog, SoalAI, Badge, RewardCatalog** — tetap sesuai definisi v2.0 (tidak berubah pada revisi ini).
+- **LandingCampaign (baru)** — id, judul, link_tujuan, tanggal_mulai (nullable, null = aktif segera), tanggal_selesai (nullable, null = tanpa batas akhir otomatis), status (`aktif`/`nonaktif`), dibuat_oleh_id (Admin), dibuat_pada. Banner campaign landing page, fleksibel (tidak terikat ke KodePromo) — Admin kelola sendiri lewat tab "Banner Campaign" di Kelola Konten. Alur tampil bertahap di landing page: popup dulu (sekali per sesi), baru banner (kalau popup sudah ditutup) — keduanya TIDAK PERNAH tampil bersamaan, state disimpan `sessionStorage` (per tab/sesi, bukan per akun).
 
 ---
 

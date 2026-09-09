@@ -42,6 +42,38 @@ export async function getKontenInfoAdminList(): Promise<KontenInfoAdminItem[]> {
   }));
 }
 
+export interface LandingCampaignAdminItem {
+  id: string;
+  judul: string;
+  linkTujuan: string;
+  tanggalMulai: string | null;
+  tanggalSelesai: string | null;
+  status: string;
+}
+
+/** Tab "Banner Campaign" — SEMUA baris landing_campaign, terbaru dibuat
+ * duluan (PRD Bagian 13 landing_campaign — BARU). */
+export async function getLandingCampaignAdminList(): Promise<LandingCampaignAdminItem[]> {
+  const { data, error } = await supabaseServer
+    .from("landing_campaign")
+    .select("id, judul, link_tujuan, tanggal_mulai, tanggal_selesai, status, created_at")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getLandingCampaignAdminList] query failed:", JSON.stringify(error, null, 2));
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    judul: row.judul as string,
+    linkTujuan: row.link_tujuan as string,
+    tanggalMulai: row.tanggal_mulai as string | null,
+    tanggalSelesai: row.tanggal_selesai as string | null,
+    status: row.status as string,
+  }));
+}
+
 function extractNama(value: unknown): string | null {
   const row = Array.isArray(value) ? value[0] : value;
   return (row as { nama?: string } | null)?.nama ?? null;

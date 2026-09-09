@@ -264,6 +264,22 @@ CREATE TABLE mentor_soal_reward_log (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TYPE campaign_status AS ENUM ('aktif', 'nonaktif');
+
+-- Banner campaign di landing page — fleksibel, bisa umumkan apa saja yang
+-- bertujuan konversi (diskon, kelas baru, musim ujian, dst), tidak terikat
+-- ke kode_promo. Admin kelola sendiri tanpa perlu developer.
+CREATE TABLE landing_campaign (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    judul VARCHAR(150) NOT NULL,
+    link_tujuan TEXT NOT NULL,
+    tanggal_mulai DATE,           -- NULL = aktif segera setelah dibuat
+    tanggal_selesai DATE,         -- NULL = tidak ada batas akhir otomatis
+    status campaign_status NOT NULL DEFAULT 'aktif',
+    dibuat_oleh_id UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Undangan Admin baru (BR-3) — Admin existing generate token sekali pakai,
 -- dikirim manual (WA/email) ke calon Admin. Beda dari Mentor: begitu submit,
 -- akun LANGSUNG aktif tanpa approval tambahan (generate undangan = approval).

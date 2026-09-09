@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
-import Navbar from "@/components/ui/Navbar";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getNavbarProps } from "@/lib/dashboard/getNavbarProps";
+import { getActiveLandingCampaign } from "@/lib/landing/getActiveLandingCampaign";
+import CampaignChrome from "@/components/landing/CampaignChrome";
 import Hero from "@/components/sections/Hero";
 import Value from "@/components/sections/Value";
 import Prediction from "@/components/sections/Prediction";
@@ -52,7 +53,7 @@ export default async function Home() {
   // session, tapi session sendiri sudah siap tanpa query DB) — jalankan
   // barengan lewat Promise.all, bukan berurutan, supaya waktu tunggu
   // total = query paling lambat, bukan jumlah semuanya.
-  const [ptnJurusanOptions, navbarProps, mentors] = await Promise.all([
+  const [ptnJurusanOptions, navbarProps, mentors, campaign] = await Promise.all([
     // Widget Cek Keketatan (PRD 7.4.5/FR-3.11) — data publik, tidak butuh
     // login/session, murni dipakai buat isi 3 dropdown berjenjang di landing
     // page. Query di-paginate di getPtnJurusanOptions supaya tidak kena batas
@@ -61,6 +62,9 @@ export default async function Home() {
     getNavbarProps(session),
     // Section Mentor (PRD Bagian 4.3 #6) — hanya mentor active + avatar_url terisi.
     getLandingMentors(),
+    // Campaign aktif (PRD Bagian 13 landing_campaign — BARU) — null kalau
+    // tidak ada campaign valid, CampaignChrome otomatis tidak render apa pun.
+    getActiveLandingCampaign(),
   ]);
 
   return (
@@ -69,7 +73,7 @@ export default async function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
       />
-      <Navbar activeItem="home" {...navbarProps} />
+      <CampaignChrome campaign={campaign} activeItem="home" navbarProps={navbarProps} />
       <Hero />
       <Value />
       <Prediction ptnJurusanOptions={ptnJurusanOptions} />

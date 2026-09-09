@@ -25,6 +25,11 @@ export interface NavbarProps {
   referralLevel?: string | null;
   onLoginClick?: () => void;
   onRegisterClick?: () => void;
+  /** Geser Navbar (dan spacer-nya) turun sejumlah px ini — dipakai
+   * CampaignChrome (landing page) supaya CampaignBanner bisa "menempel di
+   * atas Navbar" (PRD Bagian 13 landing_campaign — BARU) tanpa menutupi
+   * Navbar. Default 0 (posisi normal, semua halaman lain). */
+  topOffsetPx?: number;
 }
 
 interface NavItemConfig {
@@ -195,6 +200,7 @@ export default function Navbar({
   referralLevel,
   onLoginClick,
   onRegisterClick,
+  topOffsetPx = 0,
 }: NavbarProps) {
   const router = useRouter();
   const handleLoginClick = onLoginClick ?? (() => router.push("/login"));
@@ -258,7 +264,10 @@ export default function Navbar({
 
   return (
     <>
-      <nav className="fixed inset-x-0 top-0 z-50 bg-white shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)]">
+      <nav
+        className="fixed inset-x-0 top-0 z-50 bg-white shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)]"
+        style={{ top: topOffsetPx }}
+      >
         <div
           ref={barRef}
           className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-3 px-5 py-4 sm:px-8 md:px-12 lg:flex-nowrap lg:gap-4 lg:px-20 lg:py-5 min-[1440px]:gap-16 min-[1440px]:py-8"
@@ -384,7 +393,7 @@ export default function Navbar({
           </div>
         ) : null}
       </nav>
-      <div style={{ height: spacerHeight }} aria-hidden="true" />
+      <div style={{ height: spacerHeight + topOffsetPx }} aria-hidden="true" />
     </>
   );
 }
