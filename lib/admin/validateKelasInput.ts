@@ -40,6 +40,7 @@ export interface KelasInputBody {
   harga?: number | string;
   jadwalEntries?: JadwalEntryInput[];
   linkMeet?: string;
+  linkLynkid?: string;
   deskripsi?: string;
 }
 
@@ -55,6 +56,9 @@ export interface ValidatedKelasInput {
   /** Array {hari, jam_mulai} — bisa lebih dari satu slot per minggu, null kalau belum diisi. */
   jadwal: { hari: string; jam_mulai: string }[] | null;
   link_meet: string | null;
+  /** SEMENTARA (PRD 7.5) — link produk Lynk.id, dipakai selama Payment
+   * otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
+  link_lynkid: string | null;
   deskripsi: string | null;
 }
 
@@ -166,6 +170,15 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
     linkMeet = trimmed;
   }
 
+  let linkLynkid: string | null = null;
+  if (typeof body.linkLynkid === "string" && body.linkLynkid.trim()) {
+    const trimmed = body.linkLynkid.trim();
+    if (!isValidUrl(trimmed)) {
+      return { ok: false, error: "Link Lynk.id harus berupa URL yang valid." };
+    }
+    linkLynkid = trimmed;
+  }
+
   const deskripsi = typeof body.deskripsi === "string" && body.deskripsi.trim() ? body.deskripsi.trim() : null;
 
   return {
@@ -181,6 +194,7 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
       harga,
       jadwal,
       link_meet: linkMeet,
+      link_lynkid: linkLynkid,
       deskripsi,
     },
   };

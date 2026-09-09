@@ -32,7 +32,12 @@ export default function KelasCardMeta({ item, sessionRole }: KelasCardMetaProps)
       </div>
       {item.deskripsi ? <p className="line-clamp-2 text-sm text-[#7E7C7C]">{item.deskripsi}</p> : null}
       <div className="mt-1">
-        <KelasDaftarButton kelasId={item.id} sisaSlot={item.sisaSlot} sessionRole={sessionRole} />
+        <KelasDaftarButton
+          kelasId={item.id}
+          sisaSlot={item.sisaSlot}
+          sessionRole={sessionRole}
+          linkLynkid={item.linkLynkid}
+        />
       </div>
     </>
   );

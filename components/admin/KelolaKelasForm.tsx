@@ -70,6 +70,8 @@ export default function KelolaKelasForm({
   const [jadwalEntries, setJadwalEntries] = useState<JadwalEntry[]>(initialKelas?.jadwalEntries ?? []);
   const [linkMeet, setLinkMeet] = useState(initialKelas?.linkMeet ?? "");
   const [linkMeetError, setLinkMeetError] = useState<string | null>(null);
+  const [linkLynkid, setLinkLynkid] = useState(initialKelas?.linkLynkid ?? "");
+  const [linkLynkidError, setLinkLynkidError] = useState<string | null>(null);
   const [deskripsi, setDeskripsi] = useState(initialKelas?.deskripsi ?? "");
   const [isGeneratingDeskripsi, setIsGeneratingDeskripsi] = useState(false);
   const [deskripsiError, setDeskripsiError] = useState<string | null>(null);
@@ -153,10 +155,17 @@ export default function KelolaKelasForm({
     event.preventDefault();
     setSubmitError(null);
     setLinkMeetError(null);
+    setLinkLynkidError(null);
 
     const trimmedLinkMeet = linkMeet.trim();
     if (trimmedLinkMeet && !isValidUrl(trimmedLinkMeet)) {
       setLinkMeetError("Isi dengan link yang valid (harus diawali http:// atau https://).");
+      return;
+    }
+
+    const trimmedLinkLynkid = linkLynkid.trim();
+    if (trimmedLinkLynkid && !isValidUrl(trimmedLinkLynkid)) {
+      setLinkLynkidError("Isi dengan link yang valid (harus diawali http:// atau https://).");
       return;
     }
 
@@ -174,6 +183,7 @@ export default function KelolaKelasForm({
       harga: Number(harga),
       jadwalEntries: completeJadwalEntries,
       linkMeet: trimmedLinkMeet || undefined,
+      linkLynkid: trimmedLinkLynkid || undefined,
       deskripsi: deskripsi.trim() || undefined,
     };
 
@@ -215,6 +225,7 @@ export default function KelolaKelasForm({
         jadwalEntries: completeJadwalEntries,
         jadwalDisplay,
         linkMeet: trimmedLinkMeet || null,
+        linkLynkid: trimmedLinkLynkid || null,
         deskripsi: deskripsi.trim() || null,
       });
       setIsSubmitting(false);
@@ -401,6 +412,25 @@ export default function KelolaKelasForm({
         />
         {linkMeetError ? <p className="text-sm text-[#E70A0A]">{linkMeetError}</p> : null}
         <p className="text-xs text-[#7E7C7C]">Bisa dikosongkan — mentor bisa isi sendiri nanti lewat halaman Kelas Saya.</p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-black">Link Lynk.id (Sementara)</label>
+        <InputField
+          type="text"
+          size="md"
+          status={linkLynkidError ? "error" : "default"}
+          value={linkLynkid}
+          onChange={(e) => {
+            setLinkLynkid(e.target.value);
+            setLinkLynkidError(null);
+          }}
+          placeholder="https://lynk.id/..."
+        />
+        {linkLynkidError ? <p className="text-sm text-[#E70A0A]">{linkLynkidError}</p> : null}
+        <p className="text-xs text-[#7E7C7C]">
+          Diisi selama Payment otomatis belum aktif — link produk Lynk.id untuk kelas ini. Kosongkan kalau belum ada.
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">

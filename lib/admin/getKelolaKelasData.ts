@@ -31,6 +31,9 @@ export interface KelasListItem {
    * sama dengan halaman Siswa/Mentor. */
   jadwalDisplay: string;
   linkMeet: string | null;
+  /** SEMENTARA (PRD 7.5) — link produk Lynk.id, dipakai selama Payment
+   * otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
+  linkLynkid: string | null;
   deskripsi: string | null;
 }
 
@@ -83,6 +86,7 @@ interface KelasRow {
   harga: number;
   jadwal: unknown;
   link_meet: string | null;
+  link_lynkid: string | null;
   deskripsi: string | null;
   subtes: NamaOnly | NamaOnly[] | null;
   mentor: NamaOnly | NamaOnly[] | null;
@@ -94,7 +98,7 @@ export async function getKelasList(): Promise<KelasListItem[]> {
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, subtes_id, mentor_id, kapasitas, harga, jadwal, link_meet, deskripsi,
+      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, subtes_id, mentor_id, kapasitas, harga, jadwal, link_meet, link_lynkid, deskripsi,
        subtes:subtes_id(nama),
        mentor:mentor_id(nama),
        enrollments(status_pembayaran)`,
@@ -127,6 +131,7 @@ export async function getKelasList(): Promise<KelasListItem[]> {
       jadwalEntries: extractJadwalEntries(row.jadwal),
       jadwalDisplay: formatJadwal(row.jadwal),
       linkMeet: row.link_meet,
+      linkLynkid: row.link_lynkid,
       deskripsi: row.deskripsi,
     };
   });

@@ -10,7 +10,7 @@ import {
 } from "@/lib/shared/kelasLabels";
 
 export const KELAS_CARD_SELECT =
-  "id, nama, tipe_kelas, harga, kapasitas, deskripsi, program_kategori, tingkat_kelas, subtes:subtes_id(nama), mentor:mentor_id(nama)";
+  "id, nama, tipe_kelas, harga, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, subtes:subtes_id(nama), mentor:mentor_id(nama)";
 
 /**
  * Data layer halaman publik /program (PRD Bagian 4.3 poin 5, 7.5.4) — 5
@@ -36,6 +36,9 @@ export interface KelasCardPreview {
   programKategori: string;
   tingkatKelas: string;
   subtesNama: string | null;
+  /** SEMENTARA (PRD 7.5) — link produk Lynk.id, dipakai selama Payment
+   * otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
+  linkLynkid: string | null;
 }
 
 export interface ProgramSection {
@@ -62,6 +65,7 @@ export interface KelasCardRow {
   deskripsi: string | null;
   program_kategori: string;
   tingkat_kelas: string;
+  link_lynkid: string | null;
   subtes: NamaJoin;
   mentor: NamaJoin;
 }
@@ -81,6 +85,7 @@ export function toCardPreview(row: KelasCardRow, diskonAktif: DiskonAktif | null
     programKategori: row.program_kategori,
     tingkatKelas: row.tingkat_kelas,
     subtesNama: firstNama(row.subtes),
+    linkLynkid: row.link_lynkid,
   };
 }
 
@@ -298,6 +303,9 @@ export interface KelasDetailPublic {
   kapasitas: number;
   sisaSlot: number;
   diskonAktif: DiskonAktif | null;
+  /** SEMENTARA (PRD 7.5) — link produk Lynk.id, dipakai selama Payment
+   * otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
+  linkLynkid: string | null;
 }
 
 type MentorJoin = { id: string; nama: string; avatar_url: string | null } | { id: string; nama: string; avatar_url: string | null }[] | null;
@@ -351,7 +359,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tipe_kelas, tingkat_kelas, deskripsi, harga, jadwal, kapasitas,
+      `id, nama, program_kategori, tipe_kelas, tingkat_kelas, deskripsi, harga, jadwal, kapasitas, link_lynkid,
        subtes:subtes_id(nama),
        mentor:mentor_id(id, nama, avatar_url)`,
     )
@@ -374,6 +382,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     harga: number;
     jadwal: unknown;
     kapasitas: number;
+    link_lynkid: string | null;
     subtes: NamaJoin;
     mentor: MentorJoin;
   };
@@ -419,6 +428,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     kapasitas: row.kapasitas,
     sisaSlot: row.kapasitas - (count ?? 0),
     diskonAktif: diskonByKelas.get(kelasId) ?? null,
+    linkLynkid: row.link_lynkid,
   };
 }
 
