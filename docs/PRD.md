@@ -803,6 +803,7 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **Sekolah** — id, nama, kota_id, **akreditasi**, **kuota_snbp**, **ranking_data** (jika tersedia) — sumber data untuk auto-fill input SNBP (BR-16).
 - **MentorProfile** — id, user_id, asal_ptn, semester, jurusan, **subtes_diampu** (array, hasil checklist onboarding), kelas_diampu (relasi ke Kelas). *(Status approval kini ada di `UserRole.status`, bukan field terpisah di sini, agar konsisten dengan role lain.)*
 - **VerificationToken (baru)** — id, user_id, token, channel (`wa`/`email`), expired_at, used_at.
+- **PasswordResetToken (baru)** — id, user_id, token, expired_at (30 menit sejak dibuat), used_at, dibuat_pada. Tabel TERPISAH dari VerificationToken sengaja (tujuan keamanan beda — verifikasi kepemilikan akun vs otorisasi ganti password). Dikirim ke email siswa lewat Resend (lib/email/kirimEmailResetPassword.ts); token lama yang belum dipakai otomatis di-invalidate begitu ada request baru.
 - **PTNJurusan** — id, nama_universitas, nama_jurusan, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu, jalur (SNBP/SNBT/Mandiri), sumber_data, tahun_data.
 - **Assessment** — id, user_id, jalur, input_data (json), ptn_tujuan, jurusan_tujuan, **keketatan_score** (formula publik), **peluang_score** (personal, terpisah dari keketatan), hasil_breakdown, dibuat_pada.
 - **Referral** — id, referrer_id, referee_id, kode_referral, status, tanggal_daftar, tanggal_konversi.

@@ -347,6 +347,23 @@ CREATE TABLE verification_tokens (
 
 CREATE INDEX idx_verification_tokens_user ON verification_tokens(user_id);
 
+-- Reset Password (Bagian 7.0.3 lanjutan) — TABEL TERPISAH dari
+-- verification_tokens sengaja: itu untuk verifikasi kepemilikan akun, ini
+-- untuk otorisasi ganti password, dua tujuan keamanan berbeda yang tidak
+-- boleh saling dipakai silang. Token tidak di-hash (konsisten dengan pola
+-- verification_tokens), single-use (used_at) & expired_at pendek (30 menit,
+-- lihat lib/auth/passwordResetToken.ts) sebagai mitigasi utamanya.
+CREATE TABLE password_reset_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    expired_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_password_reset_tokens_user ON password_reset_tokens(user_id);
+
 -- ============================================================================
 -- ASSESSMENT PREDIKSI PTN (Bagian 7.4 — Keketatan vs Peluang terpisah)
 -- ============================================================================
