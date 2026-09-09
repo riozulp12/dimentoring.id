@@ -72,12 +72,16 @@ export function calculateNilaiAkhir(
   return { nilaiAkhir, label: getNilaiAkhirLabel(nilaiAkhir) };
 }
 
-/** Label kualitatif Keketatan (PLACEHOLDER, perlu divalidasi tim akademik). */
+/** Skala label Keketatan — resmi (FR-3.2b, ditulis pertama kali di PRD Bagian
+ * 7.4.4, REVISI dari skala lama yang tidak pernah tercatat di PRD). SATU-
+ * SATUNYA tempat skala ini boleh didefinisikan — Assessment SNBP, Rekomendasi
+ * Jurusan, dan Widget Cek Keketatan landing page semuanya lewat
+ * calculateKeketatan (yang memanggil fungsi ini), jangan hardcode ulang. */
 export function getKeketatanLabel(keketatanScore: number): string {
-  if (keketatanScore > 15) return "Sangat Longgar";
-  if (keketatanScore >= 8) return "Longgar";
-  if (keketatanScore >= 4) return "Sedang";
-  if (keketatanScore >= 1.5) return "Ketat";
+  if (keketatanScore > 30) return "Sangat Longgar";
+  if (keketatanScore > 25) return "Longgar";
+  if (keketatanScore > 17) return "Sedang";
+  if (keketatanScore > 9) return "Ketat";
   return "Sangat Ketat";
 }
 

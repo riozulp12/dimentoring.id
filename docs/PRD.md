@@ -392,6 +392,7 @@ Catatan interpretatif/motivasional 2-4 kalimat, digenerate sekali oleh Gemini AP
 ### 7.4.4 Functional Requirements
 - FR-3.1: Input berbeda per jalur (SNBP: **maksimal 2 pilihan**, lihat 7.4.2; SNBT: 4 pilihan universitas + 4 pilihan jurusan wajib, skor try out internal opsional — **aturan SNBT TIDAK berubah, cuma SNBP**; Jalur Mandiri: pilihan universitas + jurusan per kampus tujuan).
 - FR-3.2: Output **dua metrik terpisah**: `keketatan_score` (formula publik, sama untuk semua siswa pada kombinasi PTN+jurusan+jenjang yang sama) dan `peluang_score` (personal, mempertimbangkan Nilai Akhir siswa).
+- FR-3.2b (baru — ditulis resmi pertama kali, skala ditetapkan Rio September 2026, REVISI dari skala lama yang tidak pernah tercatat di PRD): **Label kualitatif Keketatan**: 0-9% = "Sangat Ketat", 9,01-17% = "Ketat", 17,01-25% = "Sedang", 25,01-30% = "Longgar", >30% = "Sangat Longgar". Ini berlaku untuk SEMUA tempat yang menampilkan label Keketatan (Assessment penuh, Rekomendasi Jurusan, Widget Cek Keketatan landing page) — satu sumber kebenaran, jangan hardcode ulang di tempat berbeda-beda.
 - FR-3.3: Data sekolah (akreditasi, kuota, ranking — khusus SNBP) diambil dari entitas `Sekolah`, bukan input manual siswa.
 - FR-3.4: Hasil tersimpan di histori siswa, muncul di Dashboard.
 - FR-3.5: Rekomendasi jurusan, kelas, dan **paket tryout** muncul otomatis setelah hasil keluar (lihat section "Rekomendasi Paket Tryout" di 7.4.3).
