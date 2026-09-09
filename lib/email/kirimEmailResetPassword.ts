@@ -14,6 +14,17 @@ import { Resend } from "resend";
 
 const FROM_ADDRESS = "Dimentoring <noreply@dimentoring.id>";
 
+/**
+ * Base URL absolut untuk aset gambar di email (logo & maskot). Email client
+ * (Gmail, Outlook, dst) me-load gambar langsung dari internet, bukan dari
+ * build aplikasi — jadi WAJIB absolut, bukan path relatif seperti "/icons/...".
+ * Reuse file yang sama persis dengan yang dipakai Navbar (lihat components/ui/Logo.tsx)
+ * dan folder public/mascots — jangan ganti ke aset lain tanpa alasan kuat.
+ */
+const ASSET_BASE_URL = "https://dimentoring.id";
+const LOGO_URL = `${ASSET_BASE_URL}/icons/logo-full-primary.svg`;
+const MASCOT_URL = `${ASSET_BASE_URL}/mascots/mascot-guidance.png`;
+
 function buildResetPasswordHtml(nama: string, resetLink: string): string {
   return `
 <!doctype html>
@@ -25,7 +36,7 @@ function buildResetPasswordHtml(nama: string, resetLink: string): string {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:24px;border:1px solid #E3E3E3;padding:32px;">
             <tr>
               <td style="text-align:center;padding-bottom:8px;">
-                <span style="display:inline-block;background-color:#081EEA;color:#ffffff;font-size:18px;font-weight:600;padding:6px 16px;border-radius:12px;">Dimentoring</span>
+                <img src="${LOGO_URL}" width="150" height="40" alt="Dimentoring" style="display:inline-block;width:150px;height:40px;border:0;outline:none;text-decoration:none;" />
               </td>
             </tr>
             <tr>
@@ -42,6 +53,11 @@ function buildResetPasswordHtml(nama: string, resetLink: string): string {
                 <a href="${resetLink}" style="display:inline-block;background-color:#081EEA;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 32px;border-radius:18px;">
                   Reset Password
                 </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="text-align:center;padding-bottom:20px;">
+                <img src="${MASCOT_URL}" width="110" alt="" style="display:inline-block;width:110px;height:auto;border:0;outline:none;text-decoration:none;" />
               </td>
             </tr>
             <tr>
