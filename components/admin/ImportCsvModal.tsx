@@ -102,7 +102,7 @@ export default function ImportCsvModal({ onClose }: { onClose: () => void }) {
         <div className="flex flex-col gap-2 rounded-[16px] bg-[#F9FAFF] px-4 py-3">
           <p className="text-sm font-medium text-black">{summarize(result)}</p>
           {result.failed.length > 0 ? (
-            <div className="flex max-h-40 flex-col gap-1 overflow-y-auto text-xs text-[#7E7C7C]">
+            <div className="modal-content-scrollable flex max-h-40 flex-col gap-1 overflow-y-auto text-xs text-[#7E7C7C]">
               {result.failed.map((f, idx) => (
                 <p key={idx}>
                   Baris {f.row}: {f.reason}

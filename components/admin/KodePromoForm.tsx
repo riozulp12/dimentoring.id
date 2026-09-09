@@ -236,7 +236,7 @@ export default function KodePromoForm({
             {kelasOptions.length === 0 ? (
               <p className="text-xs text-[#E70A0A]">Belum ada data Kelas.</p>
             ) : (
-              <div className="flex max-h-48 flex-col gap-1.5 overflow-y-auto rounded-[12px] border border-[#E3E3E3] p-2.5">
+              <div className="modal-content-scrollable flex max-h-48 flex-col gap-1.5 overflow-y-auto rounded-[12px] border border-[#E3E3E3] p-2.5">
                 {kelasOptions.map((kelas) => (
                   <label
                     key={kelas.id}

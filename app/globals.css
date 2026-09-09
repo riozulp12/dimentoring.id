@@ -101,3 +101,16 @@ body {
 .animate-mascot-bounce {
   animation: mascot-bounce 900ms ease-in-out infinite;
 }
+
+/* Sembunyikan scrollbar visual di container scrollable dalam popup/modal
+   (components/ui/Modal.tsx & konten scrollable lain di dalamnya) — scroll
+   TETAP jalan normal lewat mouse/trackpad/keyboard, cuma garis scrollbar-nya
+   yang disembunyikan. Dipakai konsisten di SATU tempat (class ini), jangan
+   ditempel ulang manual per popup. */
+.modal-content-scrollable {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge lama */
+}
+.modal-content-scrollable::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge modern */
+}
