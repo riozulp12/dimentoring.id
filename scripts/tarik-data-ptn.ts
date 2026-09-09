@@ -5,8 +5,9 @@
  * app/api/kelola-assessment/import-csv/route.ts).
  *
  * SCRIPT INI TERPISAH DARI APLIKASI — dijalankan MANUAL dari terminal:
- *   npm run tarik-ptn              (PTN Jawa)
- *   npm run tarik-ptn:luar-jawa    (PTN luar Jawa)
+ *   npm run tarik-ptn                 (PTN Jawa)
+ *   npm run tarik-ptn:luar-jawa       (PTN luar Jawa)
+ *   npm run tarik-ptn:vokasi-ptkin    (PTN Vokasi & PTKIN)
  * BUKAN cron job, BUKAN dipanggil oleh aplikasi Dimentoring dengan cara apa pun.
  *
  * Kolom "rumpun" sengaja dikosongkan di CSV output — diisi manual oleh Admin
@@ -33,6 +34,9 @@ interface RegionConfig {
   sheetName: string;
   progressPath: string;
   outputCsvPath: string;
+  // true kalau Excel sumber punya kolom D "Kategori" (Vokasi/PTKIN) yang
+  // perlu ikut ditulis ke CSV sebagai kolom referensi Admin "kategori_ptn".
+  hasKategoriKolom?: boolean;
 }
 
 const REGIONS: Record<string, RegionConfig> = {
@@ -48,6 +52,13 @@ const REGIONS: Record<string, RegionConfig> = {
     progressPath: path.join(__dirname, "progress-ptn-luar-jawa.json"),
     outputCsvPath: path.join(__dirname, "hasil-tarik-ptn-luar-jawa.csv"),
   },
+  "vokasi-ptkin": {
+    excelPath: path.join(__dirname, "data", "Daftar_ID_PTN_Vokasi_PTKIN.xlsx"),
+    sheetName: "Daftar ID PTN Vokasi & PTKIN",
+    progressPath: path.join(__dirname, "progress-ptn-vokasi-ptkin.json"),
+    outputCsvPath: path.join(__dirname, "hasil-tarik-ptn-vokasi-ptkin.csv"),
+    hasKategoriKolom: true,
+  },
 };
 
 const regionArg = process.argv[2] ?? "jawa";
@@ -56,7 +67,13 @@ if (!region) {
   console.error(`Region "${regionArg}" tidak dikenal. Pilihan: ${Object.keys(REGIONS).join(", ")}`);
   process.exit(1);
 }
-const { excelPath: EXCEL_PATH, sheetName: SHEET_NAME, progressPath: PROGRESS_PATH, outputCsvPath: OUTPUT_CSV_PATH } = region;
+const {
+  excelPath: EXCEL_PATH,
+  sheetName: SHEET_NAME,
+  progressPath: PROGRESS_PATH,
+  outputCsvPath: OUTPUT_CSV_PATH,
+  hasKategoriKolom: HAS_KATEGORI_KOLOM,
+} = region;
 
 const BATCH_SIZE = 5;
 const DELAY_MIN_MS = 3000;
@@ -64,7 +81,10 @@ const DELAY_MAX_MS = 4000;
 const TAHUN_DATA = 2026;
 const SUMBER_DATA = "sidatagrun_snpmb_resmi_2026";
 
-const CSV_HEADER = [
+// "kategori_ptn" cuma referensi Admin (asal Vokasi/PTKIN dari Excel sumber),
+// BUKAN kolom skema ptn_jurusan — hanya ditambahkan untuk region yang punya
+// kolom Kategori di Excel sumbernya (lihat hasKategoriKolom di REGIONS).
+const CSV_HEADER_BASE = [
   "nama_universitas",
   "nama_jurusan",
   "rumpun",
@@ -77,6 +97,7 @@ const CSV_HEADER = [
   "rata_rata_nilai_diterima",
   "sumber_data",
 ] as const;
+const CSV_HEADER = HAS_KATEGORI_KOLOM ? [...CSV_HEADER_BASE, "kategori_ptn"] : [...CSV_HEADER_BASE];
 
 type Jalur = "snbp" | "snbt";
 type CsvRow = (string | number)[];
@@ -86,6 +107,9 @@ interface PtnEntry {
   namaUniversitas: string;
   provinsi: string;
   urlSnbp: string;
+  // Cuma terisi untuk region dengan hasKategoriKolom (lihat REGIONS) — nilai
+  // "vokasi" | "ptkin" dari kolom D Excel, referensi Admin, bukan skema DB.
+  kategoriPtn?: string;
 }
 
 interface Progress {
@@ -129,15 +153,24 @@ async function loadPtnList(): Promise<PtnEntry[]> {
     throw new Error(`Sheet "${SHEET_NAME}" tidak ditemukan di ${EXCEL_PATH}`);
   }
 
+  // Kolom D beda arti antar sumber: file lama (Jawa/Luar Jawa) kolom D = URL
+  // SNBP; file Vokasi/PTKIN menyisipkan kolom "Kategori" di D dan geser URL
+  // ke E — HAS_KATEGORI_KOLOM menentukan indeks kolom mana yang dipakai.
+  const urlColIndex = HAS_KATEGORI_KOLOM ? 5 : 4;
+
   const entries: PtnEntry[] = [];
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber === 1) return; // header
     const id = String(row.getCell(1).text ?? "").trim();
     const namaUniversitas = String(row.getCell(2).text ?? "").trim();
     const provinsi = String(row.getCell(3).text ?? "").trim();
-    const urlSnbp = String(row.getCell(4).text ?? "").trim();
+    const urlSnbp = String(row.getCell(urlColIndex).text ?? "").trim();
     if (!id || !urlSnbp) return;
-    entries.push({ id, namaUniversitas, provinsi, urlSnbp });
+    const entry: PtnEntry = { id, namaUniversitas, provinsi, urlSnbp };
+    if (HAS_KATEGORI_KOLOM) {
+      entry.kategoriPtn = String(row.getCell(4).text ?? "").trim().toLowerCase();
+    }
+    entries.push(entry);
   });
   return entries;
 }
@@ -260,7 +293,7 @@ async function fetchAndParseJalur(entry: PtnEntry, url: string, jalur: Jalur): P
       continue;
     }
 
-    outRows.push([
+    const rowOut: CsvRow = [
       entry.namaUniversitas,
       row.nama,
       "", // rumpun - diisi manual Admin lewat dropdown Excel
@@ -272,7 +305,11 @@ async function fetchAndParseJalur(entry: PtnEntry, url: string, jalur: Jalur): P
       TAHUN_DATA,
       "", // rata_rata_nilai_diterima - tidak tersedia dari sumber ini
       SUMBER_DATA,
-    ]);
+    ];
+    if (HAS_KATEGORI_KOLOM) {
+      rowOut.push(entry.kategoriPtn ?? "");
+    }
+    outRows.push(rowOut);
   }
 
   console.log(
