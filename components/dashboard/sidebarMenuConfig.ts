@@ -89,7 +89,7 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
       group: "Bisnis",
       items: [
         { icon: "beasiswa", label: "Kelola Konten", href: "/kelola-konten" },
-        { icon: "referral", label: "Payment", href: "/payment" },
+        { icon: "referral", label: "Riwayat Transaksi", href: "/riwayat-transaksi" },
         { icon: "promo", label: "Kode Promo", href: "/kode-promo" },
         { icon: "analytics", label: "Analytics", href: "/analytics" },
       ],
