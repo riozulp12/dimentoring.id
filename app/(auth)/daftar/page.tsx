@@ -6,7 +6,9 @@ import Link from "next/link";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import Mascot from "@/components/ui/Mascot";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { signInWithGoogleIdToken } from "@/lib/auth/signInWithGoogleIdToken";
 
 /**
  * Register — SEKARANG cuma 1 langkah (PRD Bagian 7.0.2 DIREVISI TOTAL, Agustus
@@ -95,33 +97,27 @@ function RegisterPageInner() {
     }
   }
 
-  async function handleGoogleRegister() {
+  // Alur ID token (GoogleSignInButton + signInWithGoogleIdToken) — TIDAK ADA
+  // redirect ke Google/auth/callback di jalur ini, jadi pendingAssessmentId &
+  // UTM tinggal dikirim langsung dari state yang sudah ada di komponen ini,
+  // tidak perlu dititipkan lewat query string redirectTo seperti alur lama.
+  async function handleGoogleCredential(idToken: string) {
     setSubmitError(null);
     setIsGoogleLoading(true);
-    try {
-      const supabase = getSupabaseBrowserClient();
-      const redirectTo = new URL("/auth/callback", window.location.origin);
-      if (pendingAssessmentId) {
-        redirectTo.searchParams.set("pending_assessment", pendingAssessmentId);
-      }
-      // Teruskan UTM lewat redirectTo — begitu balik dari Google, query string
-      // /daftar yang asli sudah hilang, jadi harus dibawa manual sampai ke
-      // /auth/callback supaya masih bisa dipakai saat POST ke google-callback.
-      if (utmSource) redirectTo.searchParams.set("utm_source", utmSource);
-      if (utmCampaign) redirectTo.searchParams.set("utm_campaign", utmCampaign);
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: redirectTo.toString() },
-      });
-      if (error) {
-        setSubmitError("Gagal membuka login Google. Coba lagi nanti.");
-        setIsGoogleLoading(false);
-      }
-      // Sukses: browser langsung di-redirect ke Google, tidak ada kode lanjutan di sini.
-    } catch {
-      setSubmitError("Gagal membuka login Google. Coba lagi nanti.");
+    const supabase = getSupabaseBrowserClient();
+    const result = await signInWithGoogleIdToken({
+      supabase,
+      idToken,
+      pendingAssessmentId,
+      utmSource,
+      utmCampaign,
+    });
+    if (!result.success || !result.redirectTo) {
+      setSubmitError(result.error ?? "Gagal login dengan Google. Coba lagi nanti.");
       setIsGoogleLoading(false);
+      return;
     }
+    router.push(result.redirectTo);
   }
 
   return (
@@ -247,17 +243,16 @@ function RegisterPageInner() {
               <div className="h-px flex-1 bg-[#E3E3E3]" />
             </div>
 
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              className="flex w-full items-center justify-center gap-2"
-              onClick={handleGoogleRegister}
+            <GoogleSignInButton
+              text="signup_with"
+              onCredential={handleGoogleCredential}
               disabled={isSubmitting || isGoogleLoading}
-            >
-              <img src="/icons/login-google.svg" alt="" className="h-5 w-5" />
-              {isGoogleLoading ? "Membuka Google..." : "Daftar dengan Google"}
-            </Button>
+            />
+            {isGoogleLoading ? (
+              <p className="w-full text-center text-xs leading-[1.5] tracking-[-0.24px] text-[#7E7C7C] sm:text-sm">
+                Memproses login Google...
+              </p>
+            ) : null}
 
             <p className="flex w-full flex-wrap items-center justify-center gap-1.5 text-center text-xs leading-[1.5] tracking-[-0.24px] sm:text-sm sm:tracking-[-0.28px]">
               <span className="text-black">Sudah Punya Akun?</span>

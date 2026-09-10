@@ -6,7 +6,9 @@ import Link from "next/link";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import Mascot from "@/components/ui/Mascot";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { signInWithGoogleIdToken } from "@/lib/auth/signInWithGoogleIdToken";
 
 function LoginPageInner() {
   const router = useRouter();
@@ -70,31 +72,26 @@ function LoginPageInner() {
     }
   }
 
-  // REUSE konfigurasi OAuth yang sama dengan /daftar (lib/supabase/client.ts,
-  // app/auth/callback/page.tsx) — cuma tombolnya beda halaman. Behavior akhirnya
-  // SAMA persis (lihat app/api/auth/google-callback/route.ts): email belum ada
-  // -> dibuatkan akun baru (register implisit), bukan pesan error.
-  async function handleGoogleLogin() {
+  // REUSE endpoint yang sama dengan /daftar (app/api/auth/google-callback/route.ts)
+  // — cuma tombolnya beda halaman. Behavior akhirnya SAMA persis: email belum ada
+  // -> dibuatkan akun baru (register implisit), bukan pesan error. Alur ID token
+  // (GoogleSignInButton + signInWithGoogleIdToken) — TIDAK ADA redirect ke
+  // /auth/callback di jalur ini, lihat lib/auth/signInWithGoogleIdToken.ts.
+  async function handleGoogleCredential(idToken: string) {
     setSubmitError(null);
     setIsGoogleLoading(true);
-    try {
-      const supabase = getSupabaseBrowserClient();
-      const redirectTo = new URL("/auth/callback", window.location.origin);
-      if (pendingAssessmentId) {
-        redirectTo.searchParams.set("pending_assessment", pendingAssessmentId);
-      }
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: redirectTo.toString() },
-      });
-      if (error) {
-        setSubmitError("Gagal membuka login Google. Coba lagi nanti.");
-        setIsGoogleLoading(false);
-      }
-    } catch {
-      setSubmitError("Gagal membuka login Google. Coba lagi nanti.");
+    const supabase = getSupabaseBrowserClient();
+    const result = await signInWithGoogleIdToken({
+      supabase,
+      idToken,
+      pendingAssessmentId: pendingAssessmentId || undefined,
+    });
+    if (!result.success || !result.redirectTo) {
+      setSubmitError(result.error ?? "Gagal login dengan Google. Coba lagi nanti.");
       setIsGoogleLoading(false);
+      return;
     }
+    router.push(result.redirectTo);
   }
 
   return (
@@ -224,17 +221,16 @@ function LoginPageInner() {
                 <div className="h-px flex-1 bg-[#E3E3E3]" />
               </div>
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                className="flex w-full items-center justify-center gap-2"
-                onClick={handleGoogleLogin}
+              <GoogleSignInButton
+                text="signin_with"
+                onCredential={handleGoogleCredential}
                 disabled={isSubmitting || isGoogleLoading}
-              >
-                <img src="/icons/login-google.svg" alt="" className="h-5 w-5" />
-                {isGoogleLoading ? "Membuka Google..." : "Login dengan Google"}
-              </Button>
+              />
+              {isGoogleLoading ? (
+                <p className="w-full text-center text-xs leading-[1.5] tracking-[-0.24px] text-[#7E7C7C] sm:text-sm">
+                  Memproses login Google...
+                </p>
+              ) : null}
             </div>
 
             <div className="flex w-full flex-wrap items-center justify-center gap-1.5 text-center text-sm leading-[1.5] tracking-[-0.28px]">
