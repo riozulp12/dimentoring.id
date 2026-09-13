@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { kirimEmailMentorSiswaBaru } from "@/lib/email/kirimEmailMentorSiswaBaru";
 
 /**
  * Helper INSERT notifikasi — dipanggil dari route yang memicu kejadian nyata
@@ -96,6 +97,60 @@ export async function notifyPembayaranBerhasil(userId: string, kelasId: string, 
       link_tujuan: `/kelas/${kelasId}`,
     },
   ]);
+}
+
+/**
+ * 2f: Siswa Baru Daftar (Payment Berhasil) — notif bell + email ke SEMUA
+ * mentor yang terkait kelas itu lewat kelas_mentor (PRD Bagian 7.5, Bagian 13
+ * kelas_mentor — BARU). Dipanggil dari app/api/payment/webhook/route.ts
+ * SETELAH enrollments di-upsert 'lunas'. TANPA nama siswa (privasi anak,
+ * PRD Bagian 8 Data & Privasi) — cukup info kelas & jadwal.
+ */
+export async function notifyMentorsSiswaBaruDaftar(kelasId: string, kelasNama: string, jadwalDisplay: string | null) {
+  const { data: mentorRows, error } = await supabaseServer
+    .from("kelas_mentor")
+    .select("users:mentor_id(id, nama, email)")
+    .eq("kelas_id", kelasId);
+
+  if (error) {
+    console.error("[notifikasi] query kelas_mentor (siswa_baru) failed:", error);
+    return;
+  }
+
+  type MentorUserJoin = { id: string; nama: string; email: string } | { id: string; nama: string; email: string }[] | null;
+  const mentors = ((mentorRows ?? []) as unknown as { users: MentorUserJoin }[])
+    .map((row) => (Array.isArray(row.users) ? (row.users[0] ?? null) : row.users))
+    .filter((u): u is { id: string; nama: string; email: string } => Boolean(u));
+
+  if (mentors.length === 0) return;
+
+  const jadwalText = jadwalDisplay ?? "Belum diatur";
+  const pesan = `Siswa baru mendaftar di kelas ${kelasNama}! Jadwal: ${jadwalText}`;
+
+  await insertNotifikasi(
+    mentors.map((mentor) => ({
+      user_id: mentor.id,
+      tipe: "sistem",
+      judul: "Siswa baru mendaftar",
+      pesan,
+      link_tujuan: `/kelas-saya/${kelasId}`,
+    })),
+  );
+
+  await Promise.all(
+    mentors.map((mentor) =>
+      kirimEmailMentorSiswaBaru({
+        email: mentor.email,
+        namaMentor: mentor.nama,
+        kelasNama,
+        jadwalDisplay: jadwalText,
+      }).then((result) => {
+        if (!result.success) {
+          console.error("[notifikasi] kirim email siswa_baru gagal untuk", mentor.email, ":", result.error);
+        }
+      }),
+    ),
+  );
 }
 
 /**

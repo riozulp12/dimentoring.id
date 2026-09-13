@@ -8,6 +8,7 @@ import {
   TIPE_KELAS_LABEL,
   type ProgramKategori,
 } from "@/lib/shared/kelasLabels";
+import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
 
 export const KELAS_CARD_SELECT =
   "id, nama, tipe_kelas, harga, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, subtes:subtes_id(nama), mentor:mentor_id(nama)";
@@ -308,60 +309,15 @@ export interface KelasDetailPublic {
   linkLynkid: string | null;
 }
 
-type MentorJoin = { id: string; nama: string; avatar_url: string | null } | { id: string; nama: string; avatar_url: string | null }[] | null;
-
-function firstMentor(value: MentorJoin) {
-  if (!value) return null;
-  return Array.isArray(value) ? (value[0] ?? null) : value;
-}
-
-interface JadwalEntryRaw {
-  hari?: unknown;
-  jam_mulai?: unknown;
-}
-
-/** Beda dari lib/shared/formatJadwal.ts (dipakai admin/mentor, punya fallback
- * teks "Jadwal belum diatur") — versi ini KHUSUS baris jadwal di halaman
- * detail kelas publik: kembalikan null kalau kosong (baris disembunyikan,
- * bukan ditampilkan placeholder), dan kelompokkan hari yang jam-nya sama jadi
- * satu baris (mis. "Senin & Rabu, 19:00 WIB") bukan diulang per-hari. */
-function formatJadwalRingkas(jadwal: unknown): string | null {
-  if (!jadwal) return null;
-  const entries = Array.isArray(jadwal) ? jadwal : [jadwal];
-
-  const slots: { hari: string; jam: string }[] = [];
-  for (const entry of entries) {
-    if (!entry || typeof entry !== "object") continue;
-    const e = entry as JadwalEntryRaw;
-    const hari = typeof e.hari === "string" && e.hari.trim() ? e.hari.trim() : null;
-    const jam = typeof e.jam_mulai === "string" && e.jam_mulai.trim() ? e.jam_mulai.trim() : "";
-    if (hari) slots.push({ hari, jam });
-  }
-  if (slots.length === 0) return null;
-
-  const hariByJam = new Map<string, string[]>();
-  for (const slot of slots) {
-    const list = hariByJam.get(slot.jam) ?? [];
-    list.push(slot.hari);
-    hariByJam.set(slot.jam, list);
-  }
-
-  const parts = Array.from(hariByJam.entries()).map(([jam, hariList]) => {
-    const hariJoined = hariList.join(" & ");
-    return jam ? `${hariJoined}, ${jam} WIB` : hariJoined;
-  });
-
-  return parts.join(", ");
-}
-
-/** Detail publik 1 kelas (app/program/kelas/[kelasId]/page.tsx). */
+/** Detail publik 1 kelas (app/program/kelas/[kelasId]/page.tsx). Mentor
+ * bersumber dari kelas_mentor (many-to-many) — bisa lebih dari satu mentor
+ * per kelas, lihat CLAUDE.md/PRD Bagian 13 (kelas_mentor). */
 export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetailPublic | null> {
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
       `id, nama, program_kategori, tipe_kelas, tingkat_kelas, deskripsi, harga, jadwal, kapasitas, link_lynkid,
-       subtes:subtes_id(nama),
-       mentor:mentor_id(id, nama, avatar_url)`,
+       subtes:subtes_id(nama)`,
     )
     .eq("id", kelasId)
     .maybeSingle();
@@ -384,31 +340,40 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     kapasitas: number;
     link_lynkid: string | null;
     subtes: NamaJoin;
-    mentor: MentorJoin;
   };
   const row = data as unknown as Row;
-  const mentorRow = firstMentor(row.mentor);
 
-  const [{ count, error: countError }, diskonByKelas, profileResult] = await Promise.all([
+  type MentorRelRow = {
+    users: { id: string; nama: string; avatar_url: string | null; mentor_profiles: { asal_ptn: string | null } | { asal_ptn: string | null }[] | null } | null;
+  };
+
+  const [{ count, error: countError }, diskonByKelas, mentorRelResult] = await Promise.all([
     supabaseServer
       .from("enrollments")
       .select("id", { count: "exact", head: true })
       .eq("kelas_id", kelasId)
       .eq("status_pembayaran", "lunas"),
     getDiskonAktifByKelasId([kelasId]),
-    mentorRow
-      ? supabaseServer.from("mentor_profiles").select("asal_ptn").eq("user_id", mentorRow.id).maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
+    supabaseServer
+      .from("kelas_mentor")
+      .select("users:mentor_id(id, nama, avatar_url, mentor_profiles(asal_ptn))")
+      .eq("kelas_id", kelasId),
   ]);
 
   if (countError) {
     console.error("[getKelasDetailPublic] query enrollments count failed:", countError);
   }
-  if (profileResult.error) {
-    console.error("[getKelasDetailPublic] query mentor_profiles failed:", profileResult.error);
+  if (mentorRelResult.error) {
+    console.error("[getKelasDetailPublic] query kelas_mentor failed:", mentorRelResult.error);
   }
 
-  const asalPtn = (profileResult.data as { asal_ptn: string } | null)?.asal_ptn ?? null;
+  const mentors: KelasMentorInfo[] = ((mentorRelResult.data ?? []) as unknown as MentorRelRow[])
+    .map((rel) => rel.users)
+    .filter((u): u is NonNullable<MentorRelRow["users"]> => u !== null)
+    .map((u) => {
+      const profile = Array.isArray(u.mentor_profiles) ? (u.mentor_profiles[0] ?? null) : u.mentor_profiles;
+      return { nama: u.nama, avatarUrl: u.avatar_url, asalPtn: profile?.asal_ptn ?? null };
+    });
 
   return {
     id: row.id,
@@ -423,8 +388,8 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     deskripsi: row.deskripsi,
     harga: Number(row.harga),
     jadwalDisplay: formatJadwalRingkas(row.jadwal),
-    mentorNama: mentorRow?.nama ?? null,
-    mentors: mentorRow ? [{ nama: mentorRow.nama, avatarUrl: mentorRow.avatar_url, asalPtn }] : [],
+    mentorNama: mentors[0]?.nama ?? null,
+    mentors,
     kapasitas: row.kapasitas,
     sisaSlot: row.kapasitas - (count ?? 0),
     diskonAktif: diskonByKelas.get(kelasId) ?? null,

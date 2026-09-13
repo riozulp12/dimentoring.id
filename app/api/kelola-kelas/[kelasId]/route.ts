@@ -49,11 +49,30 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return errorResponse(result.error, 400);
   }
 
-  const { error: updateError } = await supabaseServer.from("kelas").update(result.data).eq("id", kelasId);
+  const { mentor_ids: mentorIds, ...kelasData } = result.data;
+
+  const { error: updateError } = await supabaseServer.from("kelas").update(kelasData).eq("id", kelasId);
 
   if (updateError) {
     console.error("[kelola-kelas PATCH] update failed:", updateError);
     return errorResponse("Gagal menyimpan perubahan. Coba lagi nanti.", 500);
+  }
+
+  // Replace penuh (bukan tambah terus-menerus) — hapus baris lama dulu,
+  // baru insert pilihan baru.
+  const { error: mentorDeleteError } = await supabaseServer.from("kelas_mentor").delete().eq("kelas_id", kelasId);
+  if (mentorDeleteError) {
+    console.error("[kelola-kelas PATCH] delete kelas_mentor failed:", mentorDeleteError);
+    return errorResponse("Kelas tersimpan, tapi gagal memperbarui mentor. Coba lagi.", 500);
+  }
+  if (mentorIds.length > 0) {
+    const { error: mentorInsertError } = await supabaseServer
+      .from("kelas_mentor")
+      .insert(mentorIds.map((mentorId) => ({ kelas_id: kelasId, mentor_id: mentorId })));
+    if (mentorInsertError) {
+      console.error("[kelola-kelas PATCH] insert kelas_mentor failed:", mentorInsertError);
+      return errorResponse("Kelas tersimpan, tapi gagal memperbarui mentor. Coba lagi.", 500);
+    }
   }
 
   return NextResponse.json({ success: true });

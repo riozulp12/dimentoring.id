@@ -30,15 +30,27 @@ export async function POST(request: NextRequest) {
     return errorResponse(result.error, 400);
   }
 
+  const { mentor_ids: mentorIds, ...kelasData } = result.data;
+
   const { data, error: insertError } = await supabaseServer
     .from("kelas")
-    .insert(result.data)
+    .insert(kelasData)
     .select("id")
     .single();
 
   if (insertError) {
     console.error("[kelola-kelas POST] insert failed:", insertError);
     return errorResponse("Gagal menyimpan kelas. Coba lagi nanti.", 500);
+  }
+
+  if (mentorIds.length > 0) {
+    const { error: mentorInsertError } = await supabaseServer
+      .from("kelas_mentor")
+      .insert(mentorIds.map((mentorId) => ({ kelas_id: data.id, mentor_id: mentorId })));
+    if (mentorInsertError) {
+      console.error("[kelola-kelas POST] insert kelas_mentor failed:", mentorInsertError);
+      return errorResponse("Kelas tersimpan, tapi gagal menyimpan mentor. Coba edit kelas untuk atur ulang mentor.", 500);
+    }
   }
 
   return NextResponse.json({ success: true, id: data.id }, { status: 201 });

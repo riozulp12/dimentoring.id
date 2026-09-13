@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { verifyWebhookSignature } from "@/lib/payment/verifyWebhookSignature";
 import { convertReferralOnPayment } from "@/lib/referral/convertReferralOnPayment";
-import { notifyPembayaranBerhasil } from "@/lib/notifikasi/notify";
+import { notifyPembayaranBerhasil, notifyMentorsSiswaBaruDaftar } from "@/lib/notifikasi/notify";
+import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
 
 /**
  * Webhook notifikasi Midtrans — PRD Bagian 8 BR-19 ("status pembayaran hanya
@@ -135,8 +136,10 @@ export async function POST(request: NextRequest) {
     await convertReferralOnPayment(payment.user_id as string, payment.id as string);
 
     if (payment.item_type === "kelas") {
-      const { data: kelas } = await supabaseServer.from("kelas").select("nama").eq("id", kelasId).maybeSingle();
-      await notifyPembayaranBerhasil(payment.user_id as string, kelasId, (kelas?.nama as string) ?? "kamu");
+      const { data: kelas } = await supabaseServer.from("kelas").select("nama, jadwal").eq("id", kelasId).maybeSingle();
+      const kelasNama = (kelas?.nama as string) ?? "kamu";
+      await notifyPembayaranBerhasil(payment.user_id as string, kelasId, kelasNama);
+      await notifyMentorsSiswaBaruDaftar(kelasId, kelasNama, formatJadwalRingkas(kelas?.jadwal));
     }
 
     return NextResponse.json({ success: true });

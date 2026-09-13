@@ -71,7 +71,10 @@ CREATE TABLE sekolah (
 CREATE TABLE subtes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nama VARCHAR(100) NOT NULL,          -- mis. 'Penalaran Matematika', 'Literasi B. Inggris'
-    kategori subtes_kategori NOT NULL
+    kategori subtes_kategori NOT NULL,
+    mapel_dasar VARCHAR(100)             -- BARU: pengelompokan mapel serumpun (mis. 'Bahasa Indonesia',
+                                          -- 'Bahasa Inggris', 'Matematika') — dipakai untuk cocokkan mentor
+                                          -- lintas varian subtes yang serumpun (Literasi vs biasa vs Lanjut)
 );
 
 -- ============================================================================
@@ -325,7 +328,11 @@ CREATE TABLE mentor_profiles (
     user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     asal_ptn VARCHAR(255) NOT NULL,
     semester INT NOT NULL,
-    jurusan VARCHAR(255) NOT NULL
+    jurusan VARCHAR(255) NOT NULL,
+    foto_landing_url TEXT,                        -- BARU: foto PNG (background sudah 
+                                                    -- dihapus manual) khusus untuk section 
+                                                    -- Mentor di landing page, diupload Admin
+    tampil_di_landing BOOLEAN NOT NULL DEFAULT false  -- BARU: Admin yang kontrol siapa tampil
 );
 
 CREATE TABLE mentor_subtes_diampu (
@@ -346,23 +353,6 @@ CREATE TABLE verification_tokens (
 );
 
 CREATE INDEX idx_verification_tokens_user ON verification_tokens(user_id);
-
--- Reset Password (Bagian 7.0.3 lanjutan) — TABEL TERPISAH dari
--- verification_tokens sengaja: itu untuk verifikasi kepemilikan akun, ini
--- untuk otorisasi ganti password, dua tujuan keamanan berbeda yang tidak
--- boleh saling dipakai silang. Token tidak di-hash (konsisten dengan pola
--- verification_tokens), single-use (used_at) & expired_at pendek (30 menit,
--- lihat lib/auth/passwordResetToken.ts) sebagai mitigasi utamanya.
-CREATE TABLE password_reset_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token TEXT NOT NULL UNIQUE,
-    expired_at TIMESTAMPTZ NOT NULL,
-    used_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_password_reset_tokens_user ON password_reset_tokens(user_id);
 
 -- ============================================================================
 -- ASSESSMENT PREDIKSI PTN (Bagian 7.4 — Keketatan vs Peluang terpisah)
@@ -450,7 +440,8 @@ CREATE TABLE kelas (
     tingkat_kelas tingkat_kelas NOT NULL,
     tipe_kelas kelas_tipe NOT NULL DEFAULT 'grouping',  -- dasar hitung persentase honor mentor
     subtes_id UUID REFERENCES subtes(id),  -- DIREVISI: nullable — Konsultasi/Pendampingan Mahasiswa tidak selalu terikat mapel
-    mentor_id UUID REFERENCES users(id),   -- FK ke users yg role_type='mentor' aktif
+    mentor_id UUID REFERENCES users(id),   -- DEPRECATED, dipertahankan untuk kompatibilitas lama — 
+                                            -- mentor sekarang dikelola lewat kelas_mentor (many-to-many)
     kapasitas INT NOT NULL,
     harga DECIMAL(12,2) NOT NULL DEFAULT 0,
     deskripsi TEXT,                        -- manual atau AI-generated, tampil di detail kelas
@@ -463,6 +454,30 @@ CREATE TABLE kelas (
 
 CREATE INDEX idx_kelas_mentor ON kelas(mentor_id);
 CREATE INDEX idx_kelas_program ON kelas(program_kategori);
+
+-- Relasi banyak-ke-banyak: satu kelas bisa punya banyak mentor, satu mentor
+-- bisa mengampu banyak kelas. Menggantikan kelas.mentor_id (tunggal) sebagai
+-- sumber data utama untuk section "Mentor Kelas Ini" dan notifikasi checkout.
+CREATE TABLE kelas_mentor (
+    kelas_id UUID NOT NULL REFERENCES kelas(id) ON DELETE CASCADE,
+    mentor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (kelas_id, mentor_id)
+);
+
+CREATE INDEX idx_kelas_mentor_kelas ON kelas_mentor(kelas_id);
+CREATE INDEX idx_kelas_mentor_mentor ON kelas_mentor(mentor_id);
+
+-- Relasi banyak-ke-banyak: satu kelas bisa mencakup beberapa subtes sekaligus
+-- (paket bundling, mis. "Paket TKA Saintek" = Matematika+Fisika+Kimia+Biologi).
+-- Menggantikan kelas.subtes_id (tunggal, nullable) sebagai sumber utama.
+CREATE TABLE kelas_subtes (
+    kelas_id UUID NOT NULL REFERENCES kelas(id) ON DELETE CASCADE,
+    subtes_id UUID NOT NULL REFERENCES subtes(id) ON DELETE CASCADE,
+    PRIMARY KEY (kelas_id, subtes_id)
+);
+
+CREATE INDEX idx_kelas_subtes_kelas ON kelas_subtes(kelas_id);
+CREATE INDEX idx_kelas_subtes_subtes ON kelas_subtes(subtes_id);
 
 -- Konfigurasi persentase honor per tipe kelas — tabel terpisah (bukan hardcode
 -- di query) supaya Admin bisa ubah angkanya lewat Table Editor tanpa perlu

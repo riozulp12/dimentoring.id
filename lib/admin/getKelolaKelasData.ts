@@ -20,8 +20,12 @@ export interface KelasListItem {
   tipeKelas: string;
   subtesId: string | null;
   subtesNama: string;
+  /** DEPRECATED, dipertahankan untuk kompatibilitas lama — mentor pertama
+   * yang dipilih. Sumber utama sekarang mentorIds/mentorNamaList (kelas_mentor). */
   mentorId: string | null;
   mentorNama: string | null;
+  mentorIds: string[];
+  mentorNamaList: string[];
   kapasitas: number;
   jumlahSiswa: number;
   harga: number;
@@ -40,12 +44,18 @@ export interface KelasListItem {
 export interface SubtesOption {
   id: string;
   nama: string;
+  /** Pengelompokan mapel serumpun (subtes.mapel_dasar) — null kalau subtes ini
+   * belum dikelompokkan. Dipakai untuk cocokkan Mentor lintas varian subtes
+   * yang serumpun (mis. Literasi vs biasa), bukan cuma subtes_id persis sama. */
+  mapelDasar: string | null;
 }
 
 export interface MentorOption {
   id: string;
   nama: string;
   subtesIds: string[];
+  /** mapel_dasar (unik, tanpa null) dari semua subtes yang diampu mentor ini. */
+  mapelDasarList: string[];
 }
 
 type NamaOnly = { nama: string };
@@ -81,7 +91,6 @@ interface KelasRow {
   tingkat_kelas: string;
   tipe_kelas: string;
   subtes_id: string | null;
-  mentor_id: string | null;
   kapasitas: number;
   harga: number;
   jadwal: unknown;
@@ -89,18 +98,19 @@ interface KelasRow {
   link_lynkid: string | null;
   deskripsi: string | null;
   subtes: NamaOnly | NamaOnly[] | null;
-  mentor: NamaOnly | NamaOnly[] | null;
+  kelas_mentor: { mentor_id: string; users: NamaOnly | NamaOnly[] | null }[] | null;
   enrollments: { status_pembayaran: string }[] | null;
 }
 
-/** List semua kelas — dipakai halaman Kelola Kelas. */
+/** List semua kelas — dipakai halaman Kelola Kelas. Mentor bersumber dari
+ * kelas_mentor (many-to-many, bisa lebih dari satu mentor per kelas). */
 export async function getKelasList(): Promise<KelasListItem[]> {
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, subtes_id, mentor_id, kapasitas, harga, jadwal, link_meet, link_lynkid, deskripsi,
+      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, subtes_id, kapasitas, harga, jadwal, link_meet, link_lynkid, deskripsi,
        subtes:subtes_id(nama),
-       mentor:mentor_id(nama),
+       kelas_mentor(mentor_id, users:mentor_id(nama)),
        enrollments(status_pembayaran)`,
     )
     .order("created_at", { ascending: false });
@@ -112,7 +122,10 @@ export async function getKelasList(): Promise<KelasListItem[]> {
 
   return ((data ?? []) as unknown as KelasRow[]).map((row) => {
     const subtes = firstOrNull(row.subtes);
-    const mentor = firstOrNull(row.mentor);
+    const mentors = (row.kelas_mentor ?? []).map((rel) => ({
+      id: rel.mentor_id,
+      nama: firstOrNull(rel.users)?.nama ?? "-",
+    }));
     const jumlahSiswa = (row.enrollments ?? []).filter((e) => e.status_pembayaran === "lunas").length;
 
     return {
@@ -123,8 +136,10 @@ export async function getKelasList(): Promise<KelasListItem[]> {
       tipeKelas: row.tipe_kelas,
       subtesId: row.subtes_id,
       subtesNama: subtes?.nama ?? "-",
-      mentorId: row.mentor_id,
-      mentorNama: mentor?.nama ?? null,
+      mentorId: mentors[0]?.id ?? null,
+      mentorNama: mentors[0]?.nama ?? null,
+      mentorIds: mentors.map((m) => m.id),
+      mentorNamaList: mentors.map((m) => m.nama),
       kapasitas: row.kapasitas,
       jumlahSiswa,
       harga: Number(row.harga),
@@ -139,35 +154,51 @@ export async function getKelasList(): Promise<KelasListItem[]> {
 
 /** Opsi dropdown Subtes — semua subtes yang ada. */
 export async function getSubtesOptions(): Promise<SubtesOption[]> {
-  const { data, error } = await supabaseServer.from("subtes").select("id, nama").order("nama", { ascending: true });
+  const { data, error } = await supabaseServer
+    .from("subtes")
+    .select("id, nama, mapel_dasar")
+    .order("nama", { ascending: true });
 
   if (error) {
     console.error("[getSubtesOptions] query failed:", error);
     return [];
   }
-  return (data ?? []).map((row) => ({ id: row.id as string, nama: row.nama as string }));
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    nama: row.nama as string,
+    mapelDasar: (row.mapel_dasar as string | null) ?? null,
+  }));
+}
+
+interface DiampuRow {
+  subtes_id: string;
+  subtes: { mapel_dasar: string | null } | { mapel_dasar: string | null }[] | null;
 }
 
 interface MentorSubtesRow {
   user_id: string;
   users: {
     nama: string;
-    mentor_profiles: { mentor_subtes_diampu: { subtes_id: string }[] | null } | { mentor_subtes_diampu: { subtes_id: string }[] | null }[] | null;
+    mentor_profiles: { mentor_subtes_diampu: DiampuRow[] | null } | { mentor_subtes_diampu: DiampuRow[] | null }[] | null;
   } | {
     nama: string;
-    mentor_profiles: { mentor_subtes_diampu: { subtes_id: string }[] | null } | { mentor_subtes_diampu: { subtes_id: string }[] | null }[] | null;
+    mentor_profiles: { mentor_subtes_diampu: DiampuRow[] | null } | { mentor_subtes_diampu: DiampuRow[] | null }[] | null;
   }[] | null;
 }
 
 /**
  * Opsi dropdown Mentor — HANYA mentor role_type='mentor' status='active',
- * masing-masing dilengkapi daftar subtesIds yang diampunya. Filter "subtes
- * cocok" dilakukan di client (dinamis, tanpa round-trip tiap ganti pilihan).
+ * masing-masing dilengkapi daftar subtesIds & mapelDasarList yang diampunya.
+ * Filter "cocok" dilakukan di client (dinamis, tanpa round-trip tiap ganti
+ * pilihan) — cocokkan lewat mapel_dasar (mapel serumpun), bukan cuma
+ * subtes_id persis sama, lihat CLAUDE.md/PRD Bagian 13 (subtes.mapel_dasar).
  */
 export async function getActiveMentorsWithSubtes(): Promise<MentorOption[]> {
   const { data, error } = await supabaseServer
     .from("user_roles")
-    .select("user_id, users:user_id(nama, mentor_profiles(mentor_subtes_diampu(subtes_id)))")
+    .select(
+      "user_id, users:user_id(nama, mentor_profiles(mentor_subtes_diampu(subtes_id, subtes:subtes_id(mapel_dasar))))",
+    )
     .eq("role_type", "mentor")
     .eq("status", "active");
 
@@ -181,8 +212,16 @@ export async function getActiveMentorsWithSubtes(): Promise<MentorOption[]> {
       const user = firstOrNull(row.users);
       if (!user) return null;
       const profile = firstOrNull(user.mentor_profiles);
-      const subtesIds = (profile?.mentor_subtes_diampu ?? []).map((r) => r.subtes_id);
-      return { id: row.user_id, nama: user.nama, subtesIds };
+      const diampu = profile?.mentor_subtes_diampu ?? [];
+      const subtesIds = diampu.map((r) => r.subtes_id);
+      const mapelDasarList = Array.from(
+        new Set(
+          diampu
+            .map((r) => firstOrNull(r.subtes)?.mapel_dasar ?? null)
+            .filter((m): m is string => Boolean(m)),
+        ),
+      );
+      return { id: row.user_id, nama: user.nama, subtesIds, mapelDasarList };
     })
     .filter((m): m is MentorOption => m !== null)
     .sort((a, b) => a.nama.localeCompare(b.nama));

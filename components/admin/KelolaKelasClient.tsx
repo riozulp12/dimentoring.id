@@ -130,7 +130,9 @@ export default function KelolaKelasClient({
                     {TIPE_KELAS_LABEL[kelas.tipeKelas] ?? kelas.tipeKelas}
                   </td>
                   <td className="px-4 py-3 text-[#7E7C7C]">{kelas.subtesNama}</td>
-                  <td className="px-4 py-3 text-[#7E7C7C]">{kelas.mentorNama ?? "Belum ada mentor"}</td>
+                  <td className="px-4 py-3 text-[#7E7C7C]">
+                    {kelas.mentorNamaList.length > 0 ? kelas.mentorNamaList.join(", ") : "Belum ada mentor"}
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">
                     {kelas.jumlahSiswa}/{kelas.kapasitas}
                   </td>
@@ -168,7 +170,9 @@ export default function KelolaKelasClient({
               </div>
               <div>
                 <p className="text-[#7E7C7C]">Mentor</p>
-                <p className="text-black">{detailKelas.mentorNama ?? "Belum ada mentor"}</p>
+                <p className="text-black">
+                  {detailKelas.mentorNamaList.length > 0 ? detailKelas.mentorNamaList.join(", ") : "Belum ada mentor"}
+                </p>
               </div>
               <div>
                 <p className="text-[#7E7C7C]">Siswa Terdaftar</p>

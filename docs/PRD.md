@@ -93,7 +93,7 @@ Tidak ada kompetitor besar yang eksplisit menjanjikan **pendampingan berlanjut p
 | 3 | Prediction (Keketatan) | ✅ Ada, dengan keterangan sumber data snpmb. **Cek disclaimer sudah ada di halaman Assessment itu sendiri** (dikonfirmasi via desain Assessment SNBP) — bagus. |
 | 4 | Why (Kenapa Dimentoring) | ✅ 4 kartu termasuk "Berlanjut Sampai Kuliah" — diferensiasi utama sudah eksplisit |
 | 5 | Program & Class | ✅ TKA/SNBT/Mandiri/Mahasiswa |
-| 6 | Mentor | ✅ Carousel mentor — **direvisi September 2026**: bukan lagi otomatis dari semua mentor `active` + avatar, sekarang kurasi manual Admin lewat `tampil_di_landing`/`foto_landing_url` (Bagian 13). Maks 9 kartu ditampilkan (acak tiap refresh kalau kandidat >9), section disembunyikan total kalau belum ada satupun mentor yang di-tampilkan. |
+| 6 | Mentor | ✅ Carousel mentor |
 | 7 | Testimonial | ⚠️ Masih placeholder Lorem Ipsum — **wajib diganti konten asli sebelum development lanjut** |
 | 8 | Leaderboard/Referral teaser | ✅ Poin & leaderboard dengan nama disamarkan |
 | 9 | FAQ | ✅ Ada |
@@ -801,9 +801,8 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **User** — id, nama, email, no_wa, password_hash, **status_verifikasi_akun** (`Unverified`/`Verified` — status akun keseluruhan, terpisah dari status per-role), sub_status (Student: `calon_mahasiswa`/`mahasiswa`), sekolah_id (relasi ke `Sekolah`, khusus Student), kota_id, provinsi_id, nama_panggilan, consent_leaderboard_lokasi, opt_out_leaderboard, **mapel_tersulit** (array, khusus Student), dibuat_pada. *(Field `role` tunggal DIHAPUS dari User — digantikan `UserRole` di bawah, agar satu akun bisa memegang lebih dari satu role.)*
 - **UserRole (baru)** — id, user_id, role_type (`Student`/`Mentor`/`Admin`), status (`Active`/`Pending`/`Rejected`), dibuat_pada, **sumber_pengajuan** (`register_publik`/`upgrade_dari_akun_existing`). Satu `user_id` dapat memiliki lebih dari satu baris dengan status `Active` sekaligus — dasar teknis fitur Role Switcher (FR-1.12) tanpa duplikasi akun.
 - **Sekolah** — id, nama, kota_id, **akreditasi**, **kuota_snbp**, **ranking_data** (jika tersedia) — sumber data untuk auto-fill input SNBP (BR-16).
-- **MentorProfile** — id, user_id, asal_ptn, semester, jurusan, **subtes_diampu** (array, hasil checklist onboarding), kelas_diampu (relasi ke Kelas). *(Status approval kini ada di `UserRole.status`, bukan field terpisah di sini, agar konsisten dengan role lain.)* **foto_landing_url** (BARU, nullable — foto PNG background transparan khusus section Mentor landing page, diupload manual oleh Admin lewat halaman Manajemen Mentor, BUKAN avatar_url yang dipakai di seluruh aplikasi lain) dan **tampil_di_landing** (BARU, boolean, default false — Admin yang eksplisit memilih mentor mana yang tampil di landing page; section Mentor hanya menampilkan baris dengan `tampil_di_landing=true` DAN `foto_landing_url` terisi).
+- **MentorProfile** — id, user_id, asal_ptn, semester, jurusan, **subtes_diampu** (array, hasil checklist onboarding), kelas_diampu (relasi ke Kelas). *(Status approval kini ada di `UserRole.status`, bukan field terpisah di sini, agar konsisten dengan role lain.)*
 - **VerificationToken (baru)** — id, user_id, token, channel (`wa`/`email`), expired_at, used_at.
-- **PasswordResetToken (baru)** — id, user_id, token, expired_at (30 menit sejak dibuat), used_at, dibuat_pada. Tabel TERPISAH dari VerificationToken sengaja (tujuan keamanan beda — verifikasi kepemilikan akun vs otorisasi ganti password). Dikirim ke email siswa lewat Resend (lib/email/kirimEmailResetPassword.ts); token lama yang belum dipakai otomatis di-invalidate begitu ada request baru.
 - **PTNJurusan** — id, nama_universitas, nama_jurusan, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu, jalur (SNBP/SNBT/Mandiri), sumber_data, tahun_data.
 - **Assessment** — id, user_id, jalur, input_data (json), ptn_tujuan, jurusan_tujuan, **keketatan_score** (formula publik), **peluang_score** (personal, terpisah dari keketatan), hasil_breakdown, dibuat_pada.
 - **Referral** — id, referrer_id, referee_id, kode_referral, status, tanggal_daftar, tanggal_konversi.
@@ -811,7 +810,6 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **GamifikasiProfile** — id, user_id, total_poin, level, badge_list, streak_counter.
 - **TryOutAttempt (diperluas)** — id, user_id, tryout_id, jawaban (json), **status_per_soal** (json/array — mapping nomor soal → `dikerjakan`/`belum`, dipakai untuk render Navigator Soal), skor, waktu_mulai, **waktu_tersisa_server** (source of truth untuk timer, di-update tiap interaksi), waktu_selesai, immutable_lock, pdf_export_url.
 - **Kelas, Enrollment, TryOut, Payment, KontenInfo, AIMentorLog, SoalAI, Badge, RewardCatalog** — tetap sesuai definisi v2.0 (tidak berubah pada revisi ini).
-- **LandingCampaign (baru)** — id, judul, link_tujuan, tanggal_mulai (nullable, null = aktif segera), tanggal_selesai (nullable, null = tanpa batas akhir otomatis), status (`aktif`/`nonaktif`), dibuat_oleh_id (Admin), dibuat_pada. Banner campaign landing page, fleksibel (tidak terikat ke KodePromo) — Admin kelola sendiri lewat tab "Banner Campaign" di Kelola Konten. Alur tampil bertahap di landing page: popup dulu (sekali per sesi), baru banner (kalau popup sudah ditutup) — keduanya TIDAK PERNAH tampil bersamaan, state disimpan `sessionStorage` (per tab/sesi, bukan per akun).
 
 ---
 
@@ -871,7 +869,17 @@ Sesuai v2.0, ditambah:
 
 ---
 
-# BAGIAN 19 — ROADMAP KONSOLIDASI
+# BAGIAN 18B — INTEGRASI AGENSOAL (SSO)
+
+**Status:** Implementasi kode selesai (server-side), MENUNGGU aktivasi fitur "Seamless SSO" dari sisi Agensoal untuk akun bimbel Dimentoring.
+
+- **Mekanisme**: JWT HS256 dibuat server-side di `app/api/agensoal/sso-redirect/route.ts`, ditandatangani pakai `AGENSOAL_SSO_SECRET` (env var, server-only, JANGAN prefix `NEXT_PUBLIC_`). Payload: `email`, `name` (diambil dari sesi login server, BUKAN dari input/query param — cegah pemalsuan identitas), `redirectUrl`, `iat`, `exp` (berlaku 120 detik), `jti` (unik per token).
+- **Alur**: User klik Try Out → `app/tryout/page.tsx` redirect ke `/api/agensoal/sso-redirect` → route ini generate token, redirect ke `https://tryout.dimentoring.id/auth/sso?token=...` → Agensoal verifikasi signature pakai secret yang sama, auto-login siswa.
+- **Keputusan arsitektur**: Tombol/CTA Try Out di landing page dan sidebar TIDAK diubah link-nya langsung (tetap ke `/tryout`) karena CTA itu juga diakses pengunjung anonim — logic redirect SSO disentralkan di `app/tryout/page.tsx` saja, satu titik perubahan kalau nanti perlu direvisi.
+- **Blocker saat ini**: Agensoal menolak token dengan alasan "Seamless SSO belum diaktifkan untuk akun bimbel Dimentoring" — ini toggle di sisi mereka, bukan bug di kode Dimentoring. Perlu konfirmasi dari tim Agensoal: (1) aktifkan fitur ini untuk akun Dimentoring, (2) pastikan `AGENSOAL_SSO_SECRET` yang mereka pakai untuk verifikasi PERSIS sama dengan yang ada di `.env.local`/Vercel Dimentoring.
+- **Belum terjawab**: konfigurasi MCP Server yang diberikan Agensoal menunjuk ke `tryout.dimentoring.id/api/mcp` (domain Dimentoring sendiri, bukan server Agensoal) — janggal, sudah ditanyakan balik ke tim Agensoal, belum ada jawaban.
+
+
 
 **Fase 1 (sebelum TKA 2026):** Register/Login/Onboarding (progressive profiling), Dashboard, Assessment Prediksi PTN (SNBP sebagai referensi, SNBT & Mandiri menyusul pola sama), Payment, Kelas Bimbingan, Tryout TKA & SNBT (Free+Premium), Riwayat Tryout+PDF, Referral dasar, Approval Mentor, AI Mentor terbatas (opsional).
 

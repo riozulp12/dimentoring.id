@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
 import type { JadwalEntry, KelasListItem, MentorOption, SubtesOption } from "@/lib/admin/getKelolaKelasData";
@@ -64,7 +64,7 @@ export default function KelolaKelasForm({
   const [tingkatKelas, setTingkatKelas] = useState(initialKelas?.tingkatKelas ?? "");
   const [tipeKelas, setTipeKelas] = useState(initialKelas?.tipeKelas ?? "");
   const [subtesId, setSubtesId] = useState(initialKelas?.subtesId ?? "");
-  const [mentorId, setMentorId] = useState(initialKelas?.mentorId ?? "");
+  const [mentorIds, setMentorIds] = useState<string[]>(initialKelas?.mentorIds ?? []);
   const [kapasitas, setKapasitas] = useState(initialKelas ? String(initialKelas.kapasitas) : "");
   const [harga, setHarga] = useState(initialKelas ? String(initialKelas.harga) : "");
   const [jadwalEntries, setJadwalEntries] = useState<JadwalEntry[]>(initialKelas?.jadwalEntries ?? []);
@@ -90,9 +90,22 @@ export default function KelolaKelasForm({
     [subtesOptions],
   );
 
+  // Cocokkan mentor lewat mapel_dasar (mapel serumpun, mis. Literasi B.
+  // Indonesia <-> B. Indonesia) kalau Subtes yang dipilih punya mapel_dasar;
+  // fallback ke subtes_id persis sama kalau subtes itu belum dikelompokkan
+  // (mapel_dasar NULL) — lihat CLAUDE.md/PRD Bagian 13 (subtes.mapel_dasar).
+  const mentorCocokSubtes = useCallback(
+    (mentor: MentorOption, targetSubtesId: string): boolean => {
+      const targetMapelDasar = subtesOptions.find((s) => s.id === targetSubtesId)?.mapelDasar ?? null;
+      if (targetMapelDasar) return mentor.mapelDasarList.includes(targetMapelDasar);
+      return mentor.subtesIds.includes(targetSubtesId);
+    },
+    [subtesOptions],
+  );
+
   const filteredMentors = useMemo(
-    () => (subtesId ? mentorOptions.filter((m) => m.subtesIds.includes(subtesId)) : mentorOptions),
-    [mentorOptions, subtesId],
+    () => (subtesId ? mentorOptions.filter((m) => mentorCocokSubtes(m, subtesId)) : mentorOptions),
+    [mentorOptions, subtesId, mentorCocokSubtes],
   );
 
   function handleSubtesChange(value: string) {
@@ -100,9 +113,20 @@ export default function KelolaKelasForm({
     // Cuma clear mentor yang udah dipilih kalau subtes BARU diisi dan mentor
     // itu ternyata tidak mengampunya — mengosongkan subtes (value === "")
     // tidak perlu clear mentor, karena tanpa subtes semua mentor aktif valid.
-    if (value && mentorId && !mentorOptions.find((m) => m.id === mentorId)?.subtesIds.includes(value)) {
-      setMentorId("");
+    if (value) {
+      setMentorIds((prev) =>
+        prev.filter((id) => {
+          const mentor = mentorOptions.find((m) => m.id === id);
+          return mentor ? mentorCocokSubtes(mentor, value) : false;
+        }),
+      );
     }
+  }
+
+  function toggleMentor(mentorIdValue: string) {
+    setMentorIds((prev) =>
+      prev.includes(mentorIdValue) ? prev.filter((id) => id !== mentorIdValue) : [...prev, mentorIdValue],
+    );
   }
 
   function addJadwalEntry() {
@@ -178,7 +202,7 @@ export default function KelolaKelasForm({
       tingkatKelas,
       tipeKelas,
       subtesId: subtesId || null,
-      mentorId: mentorId || null,
+      mentorIds,
       kapasitas: Number(kapasitas),
       harga: Number(harga),
       jadwalEntries: completeJadwalEntries,
@@ -203,7 +227,9 @@ export default function KelolaKelasForm({
       }
 
       const subtesNama = subtesOptions.find((s) => s.id === subtesId)?.nama ?? "-";
-      const mentorNama = mentorOptions.find((m) => m.id === mentorId)?.nama ?? null;
+      const mentorNamaList = mentorIds
+        .map((id) => mentorOptions.find((m) => m.id === id)?.nama)
+        .filter((nama): nama is string => Boolean(nama));
       const jadwalDisplay =
         completeJadwalEntries.length > 0
           ? completeJadwalEntries.map((e) => `${e.hari}, ${e.jamMulai} WIB`).join(" & ")
@@ -217,8 +243,10 @@ export default function KelolaKelasForm({
         tipeKelas,
         subtesId: subtesId || null,
         subtesNama,
-        mentorId: mentorId || null,
-        mentorNama,
+        mentorId: mentorIds[0] ?? null,
+        mentorNama: mentorNamaList[0] ?? null,
+        mentorIds,
+        mentorNamaList,
         kapasitas: Number(kapasitas),
         jumlahSiswa: initialKelas?.jumlahSiswa ?? 0,
         harga: Number(harga),
@@ -307,20 +335,29 @@ export default function KelolaKelasForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-black">Mentor</label>
-        <InputField
-          type="dropdown"
-          size="md"
-          placeholder="Belum ada mentor"
-          value={mentorId}
-          onChange={(e) => setMentorId(e.target.value)}
-          options={filteredMentors.map((m) => ({ label: m.nama, value: m.id }))}
-        />
+        <label className="text-sm font-medium text-black">Mentor (bisa pilih lebih dari satu)</label>
         {filteredMentors.length === 0 ? (
           <p className="text-sm text-[#7E7C7C]">
             {subtesId ? "Belum ada mentor aktif yang mengampu subtes ini." : "Belum ada mentor aktif."}
           </p>
-        ) : null}
+        ) : (
+          <div className="modal-content-scrollable flex max-h-48 flex-col gap-1.5 overflow-y-auto rounded-[12px] border border-[#AFAFAF] p-2.5">
+            {filteredMentors.map((mentor) => (
+              <label
+                key={mentor.id}
+                className="flex items-center gap-2 rounded-[8px] px-1.5 py-1 text-sm text-black hover:bg-gray-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={mentorIds.includes(mentor.id)}
+                  onChange={() => toggleMentor(mentor.id)}
+                  className="size-4 accent-[#081EEA]"
+                />
+                {mentor.nama}
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
