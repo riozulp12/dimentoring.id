@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import type { CSSProperties } from "react";
-import Avatar from "@/components/ui/Avatar";
 import type { LandingMentorItem } from "@/lib/landing/getLandingMentors";
 import { useMarqueeClone } from "@/lib/hooks/useMarqueeClone";
 
@@ -10,46 +9,31 @@ interface MentorProps {
   mentors: LandingMentorItem[];
 }
 
-const MIN_MENTORS_TO_SHOW = 3;
-
-// Bentuk organik "mengambang" di belakang foto — border-radius asimetris
-// (bukan lingkaran sempurna) supaya terasa dinamis. Warna REUSE 4 warna
-// brand yang sudah dipakai di landing page (biru utama Mentor/Program/dst,
-// + 3 warna aksen dari Prediction.tsx keketatan/peluang) — dirotasi per
-// card berdasarkan urutan mentor, bukan warna baru.
-const ORGANIC_SHAPE_COLORS = ["#081EEA", "#0CBA00", "#006ABD", "#E70A0A"];
-const ORGANIC_SHAPE_RADIUS = "50% 50% 48% 52% / 55% 52% 48% 45%";
+// Background SERAGAM untuk semua card (BUKAN rotasi warna per-index seperti
+// KelasCardVisual) — foto PNG (background sudah dihapus) mentor menonjol di
+// atasnya, terinspirasi Habitutor (lihat PRD Bagian 4.1). Warna SAMA PERSIS
+// dengan preview di Admin (components/admin/MentorLandingFotoSection.tsx)
+// supaya konsisten dari upload sampai tampil di landing page.
+const CARD_BG_CLASS = "bg-[#F3F5FF]";
 
 const MARQUEE_STYLE = {
   "--marquee-duration": "28s",
   "--marquee-distance": "-25%",
 } as CSSProperties;
 
-function MentorCard({ mentor, color }: { mentor: LandingMentorItem; color: string }) {
+function MentorCard({ mentor }: { mentor: LandingMentorItem }) {
   const asalLine = [mentor.jurusan, mentor.asalPtn].filter(Boolean).join(" ");
 
   return (
-    <div className="flex w-[220px] shrink-0 flex-col items-center gap-4 sm:w-[260px]">
-      <div className="relative h-[132px] w-[132px] shrink-0 sm:h-[160px] sm:w-[160px]">
-        <div
-          className="absolute inset-0 z-0"
-          style={{ background: color, borderRadius: ORGANIC_SHAPE_RADIUS }}
-          aria-hidden="true"
+    <div className="flex w-[220px] shrink-0 flex-col items-center gap-3 sm:w-[260px]">
+      <div className={`relative h-[260px] w-full overflow-hidden rounded-[20px] ${CARD_BG_CLASS} sm:h-[300px]`}>
+        <Image
+          src={mentor.fotoLandingUrl}
+          alt={mentor.nama}
+          fill
+          className="object-contain object-bottom drop-shadow-[0_8px_16px_rgba(0,0,0,0.15)]"
+          sizes="(max-width: 640px) 220px, 260px"
         />
-        <div className="absolute inset-0 z-10 flex items-center justify-center">
-          <div className="rounded-full border-4 border-white shadow-[0_2px_10px_0px_rgba(0,0,0,0.15)]">
-            <Avatar avatarUrl={mentor.avatarUrl} nama={mentor.nama} size="xl" />
-          </div>
-        </div>
-        <div className="absolute right-1 bottom-1 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-[#081EEA] ring-2 ring-white sm:h-7 sm:w-7">
-          <Image
-            src="/icons/logo-icon-secondary.svg"
-            width={27}
-            height={40}
-            alt=""
-            className="h-3 w-auto sm:h-3.5"
-          />
-        </div>
       </div>
 
       <div className="flex w-full flex-col items-center gap-1.5 text-center">
@@ -77,7 +61,10 @@ export default function Mentor({ mentors }: MentorProps) {
   // sebelum early return manapun (aturan Hooks — harus unconditional).
   const trackRef = useMarqueeClone<HTMLDivElement>(4);
 
-  if (mentors.length < MIN_MENTORS_TO_SHOW) return null;
+  // Section disembunyikan TOTAL kalau belum ada satupun mentor yang
+  // di-tampilkan Admin (tampil_di_landing=true) — bukan threshold minimum
+  // seperti sebelumnya (PRD Bagian 4.3 #6, direvisi September 2026).
+  if (mentors.length === 0) return null;
 
   return (
     <section
@@ -101,12 +88,8 @@ export default function Mentor({ mentors }: MentorProps) {
           className="animate-marquee flex w-max items-center gap-6 sm:gap-8 lg:gap-10"
           style={MARQUEE_STYLE}
         >
-          {mentors.map((mentor, index) => (
-            <MentorCard
-              key={mentor.id}
-              mentor={mentor}
-              color={ORGANIC_SHAPE_COLORS[index % ORGANIC_SHAPE_COLORS.length]}
-            />
+          {mentors.map((mentor) => (
+            <MentorCard key={mentor.id} mentor={mentor} />
           ))}
         </div>
       </div>

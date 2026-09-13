@@ -4,6 +4,8 @@ import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/
 import { getMentorDetail } from "@/lib/admin/getApprovalMentorData";
 import PageTitle from "@/components/dashboard/PageTitle";
 import MentorDetailStatusSection from "@/components/admin/MentorDetailStatusSection";
+import MentorLandingFotoSection from "@/components/admin/MentorLandingFotoSection";
+import MentorProfileFotoSection from "@/components/admin/MentorProfileFotoSection";
 
 /**
  * Detail Mentor (Admin) — PRD Bagian 5, Bagian 8 BR-2, Bagian 13 (users,
@@ -107,6 +109,15 @@ export default async function MentorDetailPage({
             )}
           </div>
         </div>
+
+        <MentorProfileFotoSection nama={mentor.nama} avatarUrl={mentor.avatarUrl} />
+
+        <MentorLandingFotoSection
+          mentorUserId={mentor.mentorUserId}
+          nama={mentor.nama}
+          initialFotoUrl={mentor.fotoLandingUrl}
+          initialTampilDiLanding={mentor.tampilDiLanding}
+        />
 
         <div className="rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-5 sm:px-8 sm:py-6">
           <h2 className="text-lg font-semibold tracking-[-0.02em] text-black sm:text-xl">Ringkasan</h2>

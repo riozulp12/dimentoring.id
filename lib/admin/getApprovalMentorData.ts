@@ -38,6 +38,11 @@ interface MentorProfileJoin {
   mentor_subtes_diampu: { subtes: NamaOnly | NamaOnly[] | null }[] | null;
 }
 
+interface MentorProfileDetailJoin extends MentorProfileJoin {
+  foto_landing_url: string | null;
+  tampil_di_landing: boolean;
+}
+
 interface UserJoin {
   nama: string;
   email: string;
@@ -263,6 +268,11 @@ export interface MentorDetail extends ApprovalMentorItem {
   kelasDiampu: MentorDetailKelasItem[];
   /** COUNT DISTINCT enrollments.user_id (lunas) lintas semua kelasDiampu. */
   totalSiswaBinaan: number;
+  /** PRD Bagian 13 (BARU) — foto PNG background transparan untuk section Mentor landing page. */
+  fotoLandingUrl: string | null;
+  tampilDiLanding: boolean;
+  /** users.avatar_url — foto profil asli mentor (Google/upload manual), BEDA dari fotoLandingUrl. */
+  avatarUrl: string | null;
 }
 
 /** Detail satu pengajuan/akun Mentor (halaman /approval-mentor/[mentorId]) — mentorId di sini = user_roles.id, sama identifier dengan yang dipakai app/api/approval-mentor/route.ts. */
@@ -273,9 +283,9 @@ export async function getMentorDetail(userRoleId: string): Promise<MentorDetail 
       `id, created_at, tanggal_review, alasan_tolak, status,
        direview_oleh:direview_oleh_id(nama),
        user:user_id(
-         id, nama, email, no_wa,
+         id, nama, email, no_wa, avatar_url,
          mentor_profiles(
-           asal_ptn, semester, jurusan,
+           asal_ptn, semester, jurusan, foto_landing_url, tampil_di_landing,
            mentor_subtes_diampu(subtes:subtes_id(nama))
          )
        )`,
@@ -290,8 +300,26 @@ export async function getMentorDetail(userRoleId: string): Promise<MentorDetail 
   }
   if (!data) return null;
 
-  const row = data as unknown as Row & { status: ApprovalMentorStatus };
-  const user = firstOrNull(row.user) as unknown as (UserJoin & { id: string }) | null;
+  interface DetailUserJoin {
+    id: string;
+    nama: string;
+    email: string;
+    no_wa: string;
+    avatar_url: string | null;
+    mentor_profiles: MentorProfileDetailJoin | MentorProfileDetailJoin[] | null;
+  }
+  interface DetailRow {
+    id: string;
+    created_at: string;
+    tanggal_review: string | null;
+    alasan_tolak: string | null;
+    status: ApprovalMentorStatus;
+    direview_oleh: NamaOnly | NamaOnly[] | null;
+    user: DetailUserJoin | DetailUserJoin[] | null;
+  }
+
+  const row = data as unknown as DetailRow;
+  const user = firstOrNull(row.user);
   if (!user) return null;
 
   const profile = firstOrNull(user.mentor_profiles);
@@ -336,5 +364,8 @@ export async function getMentorDetail(userRoleId: string): Promise<MentorDetail 
     mentorUserId: user.id,
     kelasDiampu,
     totalSiswaBinaan: siswaBinaanIds.size,
+    fotoLandingUrl: profile?.foto_landing_url ?? null,
+    tampilDiLanding: profile?.tampil_di_landing ?? false,
+    avatarUrl: user.avatar_url,
   };
 }
