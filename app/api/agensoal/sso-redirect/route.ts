@@ -64,6 +64,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/tryout?error=sso_unavailable", request.url));
   }
 
-  const ssoUrl = getSSOUrl({ email: user.email, name: user.nama });
+  // redirectUrl seharusnya path DI DALAM platform Agensoal sendiri (bukan
+  // Dimentoring) yang dituju setelah SSO berhasil. TIDAK ADA dokumentasi
+  // publik Agensoal soal parameter ini. "/dashboard/paket" dipilih karena itu
+  // tujuan menu "Mulai Belajar" & tombol "Jelajahi Paket" di portal mereka
+  // sendiri (katalog paket tryout) — tapi SUDAH DIUJI LANGSUNG (baik path
+  // relatif maupun URL absolut penuh) dan SSO Agensoal tetap selalu mendarat
+  // di "/dashboard" (Beranda), bukan ke value ini. Kesimpulan: redirectUrl
+  // kemungkinan belum diimplementasikan/di-support di endpoint SSO mereka
+  // saat ini, BUKAN masalah format di sisi kita. WAJIB konfirmasi ke tim
+  // Agensoal sebelum dianggap "fitur ini seharusnya sudah jalan" — value di
+  // bawah tetap dikirim (best-effort, tidak mustahil mereka baru aktifkan
+  // dukungannya nanti) tapi jangan asumsikan user benar-benar mendarat di
+  // sana sampai dikonfirmasi.
+  const ssoUrl = getSSOUrl({ email: user.email, name: user.nama, redirectUrl: "/dashboard/paket" });
   return NextResponse.redirect(ssoUrl);
 }
