@@ -20,6 +20,16 @@ function formatRupiah(value: number): string {
   return `Rp${Math.round(value).toLocaleString("id-ID")}`;
 }
 
+/** "Matematika: Budi, Fisika: Siti" kalau kelas ini punya pairing eksplisit
+ * (kelas_subtes_mentor); fallback ke daftar mentor generik (kelas_mentor)
+ * untuk kelas tanpa subtes tertentu (Konsultasi/Pendampingan Mahasiswa). */
+function formatMentorDisplay(kelas: KelasListItem): string {
+  if (kelas.subtesMentorPairs.length > 0) {
+    return kelas.subtesMentorPairs.map((p) => `${p.subtesNama}: ${p.mentorNama}`).join(", ");
+  }
+  return kelas.mentorNamaList.length > 0 ? kelas.mentorNamaList.join(", ") : "Belum ada mentor";
+}
+
 export default function KelolaKelasClient({
   initialKelasList,
   subtesOptions,
@@ -130,9 +140,7 @@ export default function KelolaKelasClient({
                     {TIPE_KELAS_LABEL[kelas.tipeKelas] ?? kelas.tipeKelas}
                   </td>
                   <td className="px-4 py-3 text-[#7E7C7C]">{kelas.subtesNama}</td>
-                  <td className="px-4 py-3 text-[#7E7C7C]">
-                    {kelas.mentorNamaList.length > 0 ? kelas.mentorNamaList.join(", ") : "Belum ada mentor"}
-                  </td>
+                  <td className="px-4 py-3 text-[#7E7C7C]">{formatMentorDisplay(kelas)}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">
                     {kelas.jumlahSiswa}/{kelas.kapasitas}
                   </td>
@@ -170,9 +178,7 @@ export default function KelolaKelasClient({
               </div>
               <div>
                 <p className="text-[#7E7C7C]">Mentor</p>
-                <p className="text-black">
-                  {detailKelas.mentorNamaList.length > 0 ? detailKelas.mentorNamaList.join(", ") : "Belum ada mentor"}
-                </p>
+                <p className="text-black">{formatMentorDisplay(detailKelas)}</p>
               </div>
               <div>
                 <p className="text-[#7E7C7C]">Siswa Terdaftar</p>

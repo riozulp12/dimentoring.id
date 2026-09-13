@@ -49,7 +49,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return errorResponse(result.error, 400);
   }
 
-  const { mentor_ids: mentorIds, ...kelasData } = result.data;
+  const { mentor_ids: mentorIds, subtes_ids: subtesIds, subtes_mentor_pairs: subtesMentorPairs, ...kelasData } =
+    result.data;
 
   const { error: updateError } = await supabaseServer.from("kelas").update(kelasData).eq("id", kelasId);
 
@@ -59,7 +60,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   // Replace penuh (bukan tambah terus-menerus) — hapus baris lama dulu,
-  // baru insert pilihan baru.
+  // baru insert pilihan baru. Urutan: kelas_subtes_mentor dulu (paling
+  // spesifik) baru kelas_mentor/kelas_subtes (daftar datar).
   const { error: mentorDeleteError } = await supabaseServer.from("kelas_mentor").delete().eq("kelas_id", kelasId);
   if (mentorDeleteError) {
     console.error("[kelola-kelas PATCH] delete kelas_mentor failed:", mentorDeleteError);
@@ -72,6 +74,43 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (mentorInsertError) {
       console.error("[kelola-kelas PATCH] insert kelas_mentor failed:", mentorInsertError);
       return errorResponse("Kelas tersimpan, tapi gagal memperbarui mentor. Coba lagi.", 500);
+    }
+  }
+
+  const { error: subtesDeleteError } = await supabaseServer.from("kelas_subtes").delete().eq("kelas_id", kelasId);
+  if (subtesDeleteError) {
+    console.error("[kelola-kelas PATCH] delete kelas_subtes failed:", subtesDeleteError);
+    return errorResponse("Kelas tersimpan, tapi gagal memperbarui subtes. Coba lagi.", 500);
+  }
+  if (subtesIds.length > 0) {
+    const { error: subtesInsertError } = await supabaseServer
+      .from("kelas_subtes")
+      .insert(subtesIds.map((subtesId) => ({ kelas_id: kelasId, subtes_id: subtesId })));
+    if (subtesInsertError) {
+      console.error("[kelola-kelas PATCH] insert kelas_subtes failed:", subtesInsertError);
+      return errorResponse("Kelas tersimpan, tapi gagal memperbarui subtes. Coba lagi.", 500);
+    }
+  }
+
+  const { error: pairDeleteError } = await supabaseServer
+    .from("kelas_subtes_mentor")
+    .delete()
+    .eq("kelas_id", kelasId);
+  if (pairDeleteError) {
+    console.error("[kelola-kelas PATCH] delete kelas_subtes_mentor failed:", pairDeleteError);
+    return errorResponse("Kelas tersimpan, tapi gagal memperbarui pasangan Subtes-Mentor. Coba lagi.", 500);
+  }
+  if (subtesMentorPairs.length > 0) {
+    const { error: pairInsertError } = await supabaseServer.from("kelas_subtes_mentor").insert(
+      subtesMentorPairs.map((pair) => ({
+        kelas_id: kelasId,
+        subtes_id: pair.subtes_id,
+        mentor_id: pair.mentor_id,
+      })),
+    );
+    if (pairInsertError) {
+      console.error("[kelola-kelas PATCH] insert kelas_subtes_mentor failed:", pairInsertError);
+      return errorResponse("Kelas tersimpan, tapi gagal memperbarui pasangan Subtes-Mentor. Coba lagi.", 500);
     }
   }
 

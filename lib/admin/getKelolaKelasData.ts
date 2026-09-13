@@ -12,6 +12,14 @@ export interface JadwalEntry {
   jamMulai: string;
 }
 
+/** Satu pasangan Subtes-Mentor eksplisit dalam kelas paket (kelas_subtes_mentor). */
+export interface SubtesMentorPair {
+  subtesId: string;
+  subtesNama: string;
+  mentorId: string;
+  mentorNama: string;
+}
+
 export interface KelasListItem {
   id: string;
   nama: string;
@@ -19,6 +27,7 @@ export interface KelasListItem {
   tingkatKelas: string;
   tipeKelas: string;
   subtesId: string | null;
+  /** Nama semua Subtes kelas ini digabung koma (kelas_subtes) — "-" kalau tidak ada. */
   subtesNama: string;
   /** DEPRECATED, dipertahankan untuk kompatibilitas lama — mentor pertama
    * yang dipilih. Sumber utama sekarang mentorIds/mentorNamaList (kelas_mentor). */
@@ -26,6 +35,10 @@ export interface KelasListItem {
   mentorNama: string | null;
   mentorIds: string[];
   mentorNamaList: string[];
+  /** Pasangan eksplisit Subtes-Mentor (kelas_subtes_mentor) — kosong kalau kelas
+   * ini tidak terikat subtes tertentu (mis. Konsultasi/Pendampingan Mahasiswa),
+   * pakai mentorIds/mentorNamaList generik sebagai gantinya. */
+  subtesMentorPairs: SubtesMentorPair[];
   kapasitas: number;
   jumlahSiswa: number;
   harga: number;
@@ -98,19 +111,31 @@ interface KelasRow {
   link_lynkid: string | null;
   deskripsi: string | null;
   subtes: NamaOnly | NamaOnly[] | null;
+  kelas_subtes: { subtes_id: string; subtes: NamaOnly | NamaOnly[] | null }[] | null;
   kelas_mentor: { mentor_id: string; users: NamaOnly | NamaOnly[] | null }[] | null;
+  kelas_subtes_mentor:
+    | {
+        subtes_id: string;
+        mentor_id: string;
+        subtes: NamaOnly | NamaOnly[] | null;
+        users: NamaOnly | NamaOnly[] | null;
+      }[]
+    | null;
   enrollments: { status_pembayaran: string }[] | null;
 }
 
 /** List semua kelas — dipakai halaman Kelola Kelas. Mentor bersumber dari
- * kelas_mentor (many-to-many, bisa lebih dari satu mentor per kelas). */
+ * kelas_mentor (many-to-many, bisa lebih dari satu mentor per kelas); pasangan
+ * Subtes-Mentor eksplisit bersumber dari kelas_subtes_mentor. */
 export async function getKelasList(): Promise<KelasListItem[]> {
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
       `id, nama, program_kategori, tingkat_kelas, tipe_kelas, subtes_id, kapasitas, harga, jadwal, link_meet, link_lynkid, deskripsi,
        subtes:subtes_id(nama),
+       kelas_subtes(subtes_id, subtes:subtes_id(nama)),
        kelas_mentor(mentor_id, users:mentor_id(nama)),
+       kelas_subtes_mentor(subtes_id, mentor_id, subtes:subtes_id(nama), users:mentor_id(nama)),
        enrollments(status_pembayaran)`,
     )
     .order("created_at", { ascending: false });
@@ -121,12 +146,29 @@ export async function getKelasList(): Promise<KelasListItem[]> {
   }
 
   return ((data ?? []) as unknown as KelasRow[]).map((row) => {
-    const subtes = firstOrNull(row.subtes);
+    const legacySubtes = firstOrNull(row.subtes);
     const mentors = (row.kelas_mentor ?? []).map((rel) => ({
       id: rel.mentor_id,
       nama: firstOrNull(rel.users)?.nama ?? "-",
     }));
+    const subtesList = (row.kelas_subtes ?? []).map((rel) => ({
+      id: rel.subtes_id,
+      nama: firstOrNull(rel.subtes)?.nama ?? "-",
+    }));
+    const subtesMentorPairs: SubtesMentorPair[] = (row.kelas_subtes_mentor ?? []).map((rel) => ({
+      subtesId: rel.subtes_id,
+      subtesNama: firstOrNull(rel.subtes)?.nama ?? "-",
+      mentorId: rel.mentor_id,
+      mentorNama: firstOrNull(rel.users)?.nama ?? "-",
+    }));
     const jumlahSiswa = (row.enrollments ?? []).filter((e) => e.status_pembayaran === "lunas").length;
+
+    // subtesNama tampilan: utamakan kelas_subtes (bisa lebih dari satu), fallback
+    // ke kelas.subtes_id lama kalau kelas ini belum pernah disentuh form baru.
+    const subtesNama =
+      subtesList.length > 0
+        ? subtesList.map((s) => s.nama).join(", ")
+        : (legacySubtes?.nama ?? "-");
 
     return {
       id: row.id,
@@ -135,11 +177,12 @@ export async function getKelasList(): Promise<KelasListItem[]> {
       tingkatKelas: row.tingkat_kelas,
       tipeKelas: row.tipe_kelas,
       subtesId: row.subtes_id,
-      subtesNama: subtes?.nama ?? "-",
+      subtesNama,
       mentorId: mentors[0]?.id ?? null,
       mentorNama: mentors[0]?.nama ?? null,
       mentorIds: mentors.map((m) => m.id),
       mentorNamaList: mentors.map((m) => m.nama),
+      subtesMentorPairs,
       kapasitas: row.kapasitas,
       jumlahSiswa,
       harga: Number(row.harga),
@@ -152,11 +195,14 @@ export async function getKelasList(): Promise<KelasListItem[]> {
   });
 }
 
-/** Opsi dropdown Subtes — semua subtes yang ada. */
+/** Opsi dropdown/checklist Subtes — cuma yang ditawarkan=true (subtes elektif
+ * langka seperti Antropologi/Bahasa Arab/Bahasa Jepang belum ditawarkan
+ * sebagai kelas bimbingan, lihat CLAUDE.md/PRD Bagian 13 subtes.ditawarkan). */
 export async function getSubtesOptions(): Promise<SubtesOption[]> {
   const { data, error } = await supabaseServer
     .from("subtes")
     .select("id, nama, mapel_dasar")
+    .eq("ditawarkan", true)
     .order("nama", { ascending: true });
 
   if (error) {

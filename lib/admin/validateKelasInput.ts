@@ -29,13 +29,23 @@ export interface JadwalEntryInput {
   jamMulai?: string;
 }
 
+export interface SubtesMentorPairInput {
+  subtesId?: string;
+  mentorId?: string;
+}
+
 export interface KelasInputBody {
   nama?: string;
   programKategori?: string;
   tingkatKelas?: string;
   tipeKelas?: string;
-  subtesId?: string | null;
-  /** Multi-select — boleh lebih dari satu mentor per kelas (kelas_mentor). */
+  /** Pasangan Subtes-Mentor eksplisit (kelas_subtes_mentor) — satu mentor per
+   * Subtes terpilih. Kosongkan (array kosong) untuk kelas tanpa subtes
+   * tertentu (mis. Konsultasi/Pendampingan Mahasiswa), lalu pakai mentorIds. */
+  subtesMentorPairs?: SubtesMentorPairInput[];
+  /** Mentor generik TANPA subtes tertentu — CUMA dipakai kalau subtesMentorPairs
+   * kosong (kelas Konsultasi/Pendampingan Mahasiswa). Diabaikan kalau
+   * subtesMentorPairs terisi. */
   mentorIds?: string[];
   kapasitas?: number | string;
   harga?: number | string;
@@ -45,17 +55,29 @@ export interface KelasInputBody {
   deskripsi?: string;
 }
 
+export interface ValidatedSubtesMentorPair {
+  subtes_id: string;
+  mentor_id: string;
+}
+
 export interface ValidatedKelasInput {
   nama: string;
   program_kategori: string;
   tingkat_kelas: string;
   tipe_kelas: string;
+  /** DEPRECATED, dipertahankan untuk kompatibilitas lama — diisi Subtes
+   * PERTAMA dari subtesMentorPairs. Sumber utama tetap kelas_subtes. */
   subtes_id: string | null;
   /** DEPRECATED, dipertahankan untuk kompatibilitas lama — diisi mentor
-   * PERTAMA yang dipilih. Sumber utama tetap kelas_mentor (mentorIds). */
+   * PERTAMA yang dipilih. Sumber utama tetap kelas_mentor (mentor_ids). */
   mentor_id: string | null;
-  /** Dipakai caller (route POST/PATCH) untuk replace penuh baris kelas_mentor. */
+  /** Dipakai caller (route POST/PATCH) untuk replace penuh baris kelas_mentor —
+   * union semua mentor dari subtes_mentor_pairs + mentor_ids generik. */
   mentor_ids: string[];
+  /** Dipakai caller untuk replace penuh baris kelas_subtes. */
+  subtes_ids: string[];
+  /** Dipakai caller untuk replace penuh baris kelas_subtes_mentor. */
+  subtes_mentor_pairs: ValidatedSubtesMentorPair[];
   kapasitas: number;
   harga: number;
   /** Array {hari, jam_mulai} — bisa lebih dari satu slot per minggu, null kalau belum diisi. */
@@ -85,24 +107,6 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
     return { ok: false, error: "Tipe kelas tidak valid." };
   }
 
-  // Subtes OPSIONAL (PRD 7.5.4) — Konsultasi & Pendampingan Mahasiswa tidak
-  // selalu terikat mapel. Kalau diisi, tetap divalidasi eksis di DB.
-  const subtesId = typeof body.subtesId === "string" && body.subtesId ? body.subtesId : null;
-  let subtesMapelDasar: string | null = null;
-  if (subtesId) {
-    const { data: subtes, error: subtesError } = await supabaseServer
-      .from("subtes")
-      .select("id, mapel_dasar")
-      .eq("id", subtesId)
-      .maybeSingle();
-    if (subtesError) {
-      console.error("[validateKelasInput] query subtes failed:", subtesError);
-      return { ok: false, error: "Gagal memvalidasi subtes. Coba lagi nanti." };
-    }
-    if (!subtes) return { ok: false, error: "Subtes tidak ditemukan." };
-    subtesMapelDasar = subtes.mapel_dasar;
-  }
-
   const kapasitas = Number(body.kapasitas);
   if (!Number.isInteger(kapasitas) || kapasitas <= 0) {
     return { ok: false, error: "Kapasitas harus angka bulat lebih dari 0." };
@@ -113,11 +117,34 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
     return { ok: false, error: "Harga tidak valid." };
   }
 
-  const mentorIds = Array.isArray(body.mentorIds)
-    ? Array.from(new Set(body.mentorIds.filter((id): id is string => typeof id === "string" && id.length > 0)))
-    : [];
+  // Cross-check "mentor mengampu subtes ini" — cocok lewat mapel_dasar (mapel
+  // serumpun) kalau subtes ini sudah dikelompokkan; fallback ke subtes_id
+  // persis sama kalau belum (mapel_dasar NULL). Harus SAMA dengan logic filter
+  // di client (KelolaKelasForm.tsx) supaya tidak saling menolak.
+  async function mentorCocokSubtes(candidateMentorId: string, subtesMapelDasar: string | null, targetSubtesId: string) {
+    const { data: profile, error: profileError } = await supabaseServer
+      .from("mentor_profiles")
+      .select("mentor_subtes_diampu(subtes_id, subtes:subtes_id(mapel_dasar))")
+      .eq("user_id", candidateMentorId)
+      .maybeSingle();
+    if (profileError) {
+      console.error("[validateKelasInput] query mentor_profiles failed:", profileError);
+      return { ok: false as const, error: "Gagal memvalidasi subtes mentor. Coba lagi nanti." };
+    }
+    const diampu = (profile?.mentor_subtes_diampu ?? []) as {
+      subtes_id: string;
+      subtes: { mapel_dasar: string | null } | { mapel_dasar: string | null }[] | null;
+    }[];
+    const cocok = subtesMapelDasar
+      ? diampu.some((r) => {
+          const s = Array.isArray(r.subtes) ? (r.subtes[0] ?? null) : r.subtes;
+          return s?.mapel_dasar === subtesMapelDasar;
+        })
+      : diampu.some((r) => r.subtes_id === targetSubtesId);
+    return { ok: true as const, cocok };
+  }
 
-  for (const candidateMentorId of mentorIds) {
+  async function validateMentorAktif(candidateMentorId: string) {
     const { data: mentorRole, error: mentorRoleError } = await supabaseServer
       .from("user_roles")
       .select("user_id")
@@ -127,46 +154,80 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
       .maybeSingle();
     if (mentorRoleError) {
       console.error("[validateKelasInput] query mentor role failed:", mentorRoleError);
-      return { ok: false, error: "Gagal memvalidasi mentor. Coba lagi nanti." };
+      return { ok: false as const, error: "Gagal memvalidasi mentor. Coba lagi nanti." };
     }
     if (!mentorRole) {
-      return { ok: false, error: "Salah satu mentor yang dipilih tidak ditemukan atau belum aktif." };
+      return { ok: false as const, error: "Salah satu mentor yang dipilih tidak ditemukan atau belum aktif." };
+    }
+    return { ok: true as const };
+  }
+
+  // subtesMentorPairs = satu Mentor per Subtes terpilih (kelas_subtes_mentor).
+  // Kosong = kelas tanpa subtes tertentu (Konsultasi/Pendampingan Mahasiswa),
+  // pakai mentorIds generik sebagai gantinya (behavior lama, tanpa cross-check
+  // subtes karena memang tidak ada subtes untuk dicocokkan).
+  const rawPairs = Array.isArray(body.subtesMentorPairs) ? body.subtesMentorPairs : [];
+  const cleanedPairs: { subtesId: string; mentorId: string }[] = [];
+  const seenSubtesIds = new Set<string>();
+  for (const pair of rawPairs) {
+    const pairSubtesId = typeof pair?.subtesId === "string" ? pair.subtesId : "";
+    const pairMentorId = typeof pair?.mentorId === "string" ? pair.mentorId : "";
+    if (!pairSubtesId || !pairMentorId) {
+      return { ok: false, error: "Tiap Subtes yang dipilih wajib dipasangkan dengan satu Mentor." };
+    }
+    if (seenSubtesIds.has(pairSubtesId)) {
+      return { ok: false, error: "Satu Subtes tidak boleh muncul lebih dari sekali." };
+    }
+    seenSubtesIds.add(pairSubtesId);
+    cleanedPairs.push({ subtesId: pairSubtesId, mentorId: pairMentorId });
+  }
+
+  const subtesMentorPairs: ValidatedSubtesMentorPair[] = [];
+  for (const pair of cleanedPairs) {
+    const { data: subtes, error: subtesError } = await supabaseServer
+      .from("subtes")
+      .select("id, mapel_dasar")
+      .eq("id", pair.subtesId)
+      .maybeSingle();
+    if (subtesError) {
+      console.error("[validateKelasInput] query subtes failed:", subtesError);
+      return { ok: false, error: "Gagal memvalidasi subtes. Coba lagi nanti." };
+    }
+    if (!subtes) return { ok: false, error: "Salah satu Subtes yang dipilih tidak ditemukan." };
+
+    const aktifCheck = await validateMentorAktif(pair.mentorId);
+    if (!aktifCheck.ok) return { ok: false, error: aktifCheck.error };
+
+    const cocokCheck = await mentorCocokSubtes(pair.mentorId, subtes.mapel_dasar, pair.subtesId);
+    if (!cocokCheck.ok) return { ok: false, error: cocokCheck.error };
+    if (!cocokCheck.cocok) {
+      return { ok: false, error: "Salah satu Mentor yang dipasangkan tidak mengampu Subtes tersebut." };
     }
 
-    // Cross-check "mentor mengampu subtes ini" cuma relevan kalau Subtes
-    // diisi — kelas tanpa subtes (Konsultasi/Pendampingan Mahasiswa) bisa
-    // diampu mentor mana pun yang aktif. Cocok lewat mapel_dasar (mapel
-    // serumpun) kalau subtes ini sudah dikelompokkan; fallback ke subtes_id
-    // persis sama kalau belum (mapel_dasar NULL) — harus SAMA dengan logic
-    // filter di client (KelolaKelasForm.tsx) supaya tidak saling menolak.
-    if (subtesId) {
-      const { data: profile, error: profileError } = await supabaseServer
-        .from("mentor_profiles")
-        .select("mentor_subtes_diampu(subtes_id, subtes:subtes_id(mapel_dasar))")
-        .eq("user_id", candidateMentorId)
-        .maybeSingle();
-      if (profileError) {
-        console.error("[validateKelasInput] query mentor_profiles failed:", profileError);
-        return { ok: false, error: "Gagal memvalidasi subtes mentor. Coba lagi nanti." };
-      }
-      const diampu = (profile?.mentor_subtes_diampu ?? []) as {
-        subtes_id: string;
-        subtes: { mapel_dasar: string | null } | { mapel_dasar: string | null }[] | null;
-      }[];
-      const cocok = subtesMapelDasar
-        ? diampu.some((r) => {
-            const s = Array.isArray(r.subtes) ? (r.subtes[0] ?? null) : r.subtes;
-            return s?.mapel_dasar === subtesMapelDasar;
-          })
-        : diampu.some((r) => r.subtes_id === subtesId);
-      if (!cocok) {
-        return { ok: false, error: "Salah satu mentor yang dipilih tidak mengampu subtes yang dipilih." };
-      }
+    subtesMentorPairs.push({ subtes_id: pair.subtesId, mentor_id: pair.mentorId });
+  }
+
+  const subtesIds = subtesMentorPairs.map((p) => p.subtes_id);
+
+  // mentorIds generik — CUMA dipakai/divalidasi kalau tidak ada subtesMentorPairs
+  // (kelas tanpa subtes tertentu). Kalau subtesMentorPairs terisi, field ini
+  // diabaikan total (mentor sudah eksplisit lewat pairing).
+  let generalMentorIds: string[] = [];
+  if (subtesMentorPairs.length === 0) {
+    generalMentorIds = Array.isArray(body.mentorIds)
+      ? Array.from(new Set(body.mentorIds.filter((id): id is string => typeof id === "string" && id.length > 0)))
+      : [];
+    for (const candidateMentorId of generalMentorIds) {
+      const aktifCheck = await validateMentorAktif(candidateMentorId);
+      if (!aktifCheck.ok) return { ok: false, error: aktifCheck.error };
     }
   }
 
-  // kelas.mentor_id (kolom lama, DEPRECATED) diisi mentor PERTAMA yang dipilih
-  // demi kompatibilitas kode lama — kelas_mentor tetap sumber utama.
+  // kelas.subtes_id & kelas.mentor_id (kolom lama, DEPRECATED) diisi entri
+  // PERTAMA demi kompatibilitas kode lama — kelas_subtes/kelas_mentor tetap
+  // sumber utama.
+  const subtesId = subtesIds[0] ?? null;
+  const mentorIds = Array.from(new Set([...subtesMentorPairs.map((p) => p.mentor_id), ...generalMentorIds]));
   const mentorId = mentorIds[0] ?? null;
 
   let jadwal: { hari: string; jam_mulai: string }[] | null = null;
@@ -216,6 +277,8 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
       subtes_id: subtesId,
       mentor_id: mentorId,
       mentor_ids: mentorIds,
+      subtes_ids: subtesIds,
+      subtes_mentor_pairs: subtesMentorPairs,
       kapasitas,
       harga,
       jadwal,

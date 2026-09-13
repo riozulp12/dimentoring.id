@@ -810,6 +810,9 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **GamifikasiProfile** — id, user_id, total_poin, level, badge_list, streak_counter.
 - **TryOutAttempt (diperluas)** — id, user_id, tryout_id, jawaban (json), **status_per_soal** (json/array — mapping nomor soal → `dikerjakan`/`belum`, dipakai untuk render Navigator Soal), skor, waktu_mulai, **waktu_tersisa_server** (source of truth untuk timer, di-update tiap interaksi), waktu_selesai, immutable_lock, pdf_export_url.
 - **Kelas, Enrollment, TryOut, Payment, KontenInfo, AIMentorLog, SoalAI, Badge, RewardCatalog** — tetap sesuai definisi v2.0 (tidak berubah pada revisi ini).
+- **KelasSubtesMentor (baru)** — kelas_id, subtes_id, mentor_id. Pasangan eksplisit "di Kelas ini, Subtes X diajar Mentor Y" untuk kelas paket (kelas_subtes > 1 baris) — beda dari `kelas_mentor` yang cuma daftar mentor datar tanpa hubungan ke subtes tertentu. Sumber utama notifikasi siswa baru (cuma mentor subtes yang dipilih siswa yang dapat notifikasi).
+- **EnrollmentSubtes (baru)** — enrollment_id, subtes_id. Pilihan siswa dari pool `kelas_subtes` saat checkout kelas paket, maksimal 3 subtes per siswa. Diisi SETELAH payment berhasil (bukan saat checkout). Dasar filter Materi yang tampil ke siswa itu — materi dari subtes yang tidak dipilih tidak ditampilkan.
+- **PaymentSubtesPilihan (baru)** — payment_id, subtes_id. Penampung sementara pilihan subtes siswa selagi payment masih `menunggu` (enrollment belum ada) — dipindahkan ke `EnrollmentSubtes` oleh webhook payment begitu status jadi `berhasil`, tidak pernah dibaca ulang setelahnya.
 
 ---
 

@@ -30,7 +30,8 @@ export async function POST(request: NextRequest) {
     return errorResponse(result.error, 400);
   }
 
-  const { mentor_ids: mentorIds, ...kelasData } = result.data;
+  const { mentor_ids: mentorIds, subtes_ids: subtesIds, subtes_mentor_pairs: subtesMentorPairs, ...kelasData } =
+    result.data;
 
   const { data, error: insertError } = await supabaseServer
     .from("kelas")
@@ -50,6 +51,33 @@ export async function POST(request: NextRequest) {
     if (mentorInsertError) {
       console.error("[kelola-kelas POST] insert kelas_mentor failed:", mentorInsertError);
       return errorResponse("Kelas tersimpan, tapi gagal menyimpan mentor. Coba edit kelas untuk atur ulang mentor.", 500);
+    }
+  }
+
+  if (subtesIds.length > 0) {
+    const { error: subtesInsertError } = await supabaseServer
+      .from("kelas_subtes")
+      .insert(subtesIds.map((subtesId) => ({ kelas_id: data.id, subtes_id: subtesId })));
+    if (subtesInsertError) {
+      console.error("[kelola-kelas POST] insert kelas_subtes failed:", subtesInsertError);
+      return errorResponse("Kelas tersimpan, tapi gagal menyimpan subtes. Coba edit kelas untuk atur ulang subtes.", 500);
+    }
+  }
+
+  if (subtesMentorPairs.length > 0) {
+    const { error: pairInsertError } = await supabaseServer.from("kelas_subtes_mentor").insert(
+      subtesMentorPairs.map((pair) => ({
+        kelas_id: data.id,
+        subtes_id: pair.subtes_id,
+        mentor_id: pair.mentor_id,
+      })),
+    );
+    if (pairInsertError) {
+      console.error("[kelola-kelas POST] insert kelas_subtes_mentor failed:", pairInsertError);
+      return errorResponse(
+        "Kelas tersimpan, tapi gagal menyimpan pasangan Subtes-Mentor. Coba edit kelas untuk atur ulang.",
+        500,
+      );
     }
   }
 

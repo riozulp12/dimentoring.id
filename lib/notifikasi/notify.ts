@@ -100,27 +100,61 @@ export async function notifyPembayaranBerhasil(userId: string, kelasId: string, 
 }
 
 /**
- * 2f: Siswa Baru Daftar (Payment Berhasil) — notif bell + email ke SEMUA
- * mentor yang terkait kelas itu lewat kelas_mentor (PRD Bagian 7.5, Bagian 13
- * kelas_mentor — BARU). Dipanggil dari app/api/payment/webhook/route.ts
- * SETELAH enrollments di-upsert 'lunas'. TANPA nama siswa (privasi anak,
- * PRD Bagian 8 Data & Privasi) — cukup info kelas & jadwal.
+ * 2f: Siswa Baru Daftar (Payment Berhasil) — notif bell + email ke mentor
+ * yang RELEVAN (PRD Bagian 7.5, Bagian 13 kelas_subtes_mentor — BARU).
+ * Dipanggil dari app/api/payment/webhook/route.ts SETELAH enrollments
+ * di-upsert 'lunas' & enrollment_subtes diisi. TANPA nama siswa (privasi
+ * anak, PRD Bagian 8 Data & Privasi) — cukup info kelas & jadwal.
+ *
+ * `subtesIds` = pilihan siswa ini (enrollment_subtes) untuk kelas paket —
+ * kalau terisi, CUMA mentor yang dipasangkan ke subtes yang DIPILIH siswa
+ * (kelas_subtes_mentor) yang dapat notifikasi, bukan semua mentor kelas ini.
+ * Kalau kosong (kelas tanpa subtes tertentu, mis. Konsultasi/Pendampingan
+ * Mahasiswa), fallback ke kelas_mentor (daftar mentor generik, behavior lama).
  */
-export async function notifyMentorsSiswaBaruDaftar(kelasId: string, kelasNama: string, jadwalDisplay: string | null) {
-  const { data: mentorRows, error } = await supabaseServer
-    .from("kelas_mentor")
-    .select("users:mentor_id(id, nama, email)")
-    .eq("kelas_id", kelasId);
-
-  if (error) {
-    console.error("[notifikasi] query kelas_mentor (siswa_baru) failed:", error);
-    return;
-  }
-
+export async function notifyMentorsSiswaBaruDaftar(
+  kelasId: string,
+  kelasNama: string,
+  jadwalDisplay: string | null,
+  subtesIds: string[] = [],
+) {
   type MentorUserJoin = { id: string; nama: string; email: string } | { id: string; nama: string; email: string }[] | null;
-  const mentors = ((mentorRows ?? []) as unknown as { users: MentorUserJoin }[])
-    .map((row) => (Array.isArray(row.users) ? (row.users[0] ?? null) : row.users))
-    .filter((u): u is { id: string; nama: string; email: string } => Boolean(u));
+
+  let mentors: { id: string; nama: string; email: string }[];
+
+  if (subtesIds.length > 0) {
+    const { data: pairRows, error } = await supabaseServer
+      .from("kelas_subtes_mentor")
+      .select("users:mentor_id(id, nama, email)")
+      .eq("kelas_id", kelasId)
+      .in("subtes_id", subtesIds);
+
+    if (error) {
+      console.error("[notifikasi] query kelas_subtes_mentor (siswa_baru) failed:", error);
+      return;
+    }
+
+    const byId = new Map<string, { id: string; nama: string; email: string }>();
+    ((pairRows ?? []) as unknown as { users: MentorUserJoin }[])
+      .map((row) => (Array.isArray(row.users) ? (row.users[0] ?? null) : row.users))
+      .filter((u): u is { id: string; nama: string; email: string } => Boolean(u))
+      .forEach((u) => byId.set(u.id, u));
+    mentors = Array.from(byId.values());
+  } else {
+    const { data: mentorRows, error } = await supabaseServer
+      .from("kelas_mentor")
+      .select("users:mentor_id(id, nama, email)")
+      .eq("kelas_id", kelasId);
+
+    if (error) {
+      console.error("[notifikasi] query kelas_mentor (siswa_baru) failed:", error);
+      return;
+    }
+
+    mentors = ((mentorRows ?? []) as unknown as { users: MentorUserJoin }[])
+      .map((row) => (Array.isArray(row.users) ? (row.users[0] ?? null) : row.users))
+      .filter((u): u is { id: string; nama: string; email: string } => Boolean(u));
+  }
 
   if (mentors.length === 0) return;
 

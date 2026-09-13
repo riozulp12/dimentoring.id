@@ -100,16 +100,41 @@ export async function POST(request: NextRequest) {
     }
 
     const kelasId = payment.item_id as string;
+    let enrollmentSubtesIds: string[] = [];
 
     if (payment.item_type === "kelas") {
-      const { error: enrollmentError } = await supabaseServer
+      const { data: enrollment, error: enrollmentError } = await supabaseServer
         .from("enrollments")
         .upsert(
           { user_id: payment.user_id, kelas_id: kelasId, status_pembayaran: "lunas" },
           { onConflict: "user_id,kelas_id" },
-        );
+        )
+        .select("id")
+        .single();
       if (enrollmentError) {
         console.error("[payment/webhook] upsert enrollments failed:", enrollmentError);
+      }
+
+      // Pindahkan pilihan Subtes dari payment_subtes_pilihan (ditampung saat
+      // checkout, lihat app/api/payment/create/route.ts) ke enrollment_subtes
+      // sekarang enrollment sudah pasti ada — dasar filter Materi (Kelas Saya)
+      // & notifikasi mentor di bawah (cuma mentor subtes yang dipilih siswa).
+      if (enrollment?.id) {
+        const { data: pilihan, error: pilihanError } = await supabaseServer
+          .from("payment_subtes_pilihan")
+          .select("subtes_id")
+          .eq("payment_id", payment.id);
+        if (pilihanError) {
+          console.error("[payment/webhook] query payment_subtes_pilihan failed:", pilihanError);
+        } else if (pilihan && pilihan.length > 0) {
+          enrollmentSubtesIds = pilihan.map((row) => row.subtes_id as string);
+          const { error: enrollmentSubtesError } = await supabaseServer
+            .from("enrollment_subtes")
+            .insert(enrollmentSubtesIds.map((subtesId) => ({ enrollment_id: enrollment.id, subtes_id: subtesId })));
+          if (enrollmentSubtesError) {
+            console.error("[payment/webhook] insert enrollment_subtes failed:", enrollmentSubtesError);
+          }
+        }
       }
     }
 
@@ -139,7 +164,7 @@ export async function POST(request: NextRequest) {
       const { data: kelas } = await supabaseServer.from("kelas").select("nama, jadwal").eq("id", kelasId).maybeSingle();
       const kelasNama = (kelas?.nama as string) ?? "kamu";
       await notifyPembayaranBerhasil(payment.user_id as string, kelasId, kelasNama);
-      await notifyMentorsSiswaBaruDaftar(kelasId, kelasNama, formatJadwalRingkas(kelas?.jadwal));
+      await notifyMentorsSiswaBaruDaftar(kelasId, kelasNama, formatJadwalRingkas(kelas?.jadwal), enrollmentSubtesIds);
     }
 
     return NextResponse.json({ success: true });

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
-import { getKelasForCheckout, isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
+import { getKelasForCheckout, getKelasSubtesOptions, isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
 import PageTitle from "@/components/dashboard/PageTitle";
 import CheckoutForm from "@/components/siswa/CheckoutForm";
 
@@ -43,6 +43,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
 
   const snapClientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY ?? "";
   const isProduction = process.env.MIDTRANS_IS_PRODUCTION === "true";
+  const subtesOptions = await getKelasSubtesOptions(kelasId);
 
   return (
     <>
@@ -58,6 +59,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
           harga={kelas.harga}
           snapClientKey={snapClientKey}
           isProduction={isProduction}
+          subtesOptions={subtesOptions}
         />
       </div>
     </>

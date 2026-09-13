@@ -479,6 +479,31 @@ CREATE TABLE kelas_subtes (
 CREATE INDEX idx_kelas_subtes_kelas ON kelas_subtes(kelas_id);
 CREATE INDEX idx_kelas_subtes_subtes ON kelas_subtes(subtes_id);
 
+-- Pasangan Mentor-Subtes DALAM satu kelas paket (BARU) — beda dari kelas_mentor
+-- (yang cuma daftar datar), ini eksplisit: "di kelas ini, Subtes X diajar Mentor Y".
+-- Jadi sumber utama untuk notifikasi checkout & tampilan "siapa ngajar apa".
+CREATE TABLE kelas_subtes_mentor (
+    kelas_id UUID NOT NULL REFERENCES kelas(id) ON DELETE CASCADE,
+    subtes_id UUID NOT NULL REFERENCES subtes(id) ON DELETE CASCADE,
+    mentor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (kelas_id, subtes_id, mentor_id)
+);
+
+CREATE INDEX idx_ksm_kelas ON kelas_subtes_mentor(kelas_id);
+CREATE INDEX idx_ksm_subtes ON kelas_subtes_mentor(subtes_id);
+CREATE INDEX idx_ksm_mentor ON kelas_subtes_mentor(mentor_id);
+
+-- Pilihan SISWA saat checkout (BARU) — dari pool subtes yang tersedia di kelas 
+-- (kelas_subtes), siswa pilih maksimal 3 untuk dirinya sendiri. Beda siswa, 
+-- beda kelas yang sama, bisa pilih subtes berbeda-beda.
+CREATE TABLE enrollment_subtes (
+    enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
+    subtes_id UUID NOT NULL REFERENCES subtes(id) ON DELETE CASCADE,
+    PRIMARY KEY (enrollment_id, subtes_id)
+);
+
+CREATE INDEX idx_enrollment_subtes_enrollment ON enrollment_subtes(enrollment_id);
+
 -- Konfigurasi persentase honor per tipe kelas — tabel terpisah (bukan hardcode
 -- di query) supaya Admin bisa ubah angkanya lewat Table Editor tanpa perlu
 -- developer redeploy kode. Persentase berlaku dari HARGA KELAS, bukan flat
@@ -703,6 +728,18 @@ CREATE TABLE payments (
 CREATE UNIQUE INDEX idx_payments_gateway_ref ON payments(gateway_reference)
     WHERE gateway_reference IS NOT NULL;  -- cegah webhook diproses ganda
 CREATE INDEX idx_payments_user ON payments(user_id);
+
+-- Pilihan Subtes siswa yang MASIH MENUNGGU pembayaran (BARU) — enrollments
+-- baru dibuat di webhook Payment SETELAH sukses, jadi pilihan subtes checkout
+-- ditampung di sini dulu (per payment) sampai webhook memindahkannya ke
+-- enrollment_subtes.
+CREATE TABLE payment_subtes_pilihan (
+    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+    subtes_id UUID NOT NULL REFERENCES subtes(id) ON DELETE CASCADE,
+    PRIMARY KEY (payment_id, subtes_id)
+);
+
+CREATE INDEX idx_payment_subtes_pilihan_payment ON payment_subtes_pilihan(payment_id);
 
 -- ============================================================================
 -- KONTEN BEASISWA / INTERNSHIP / EVENT (Bagian 7 — FR-7.x)

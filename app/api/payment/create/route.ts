@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
-import { getKelasForCheckout, isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
+import { getKelasForCheckout, getKelasSubtesOptions, isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
 import { validatePromoCode } from "@/lib/payment/validatePromoCode";
 import { generateOrderId } from "@/lib/payment/generateOrderId";
 import { snap } from "@/lib/payment/midtransSnap";
@@ -16,7 +16,14 @@ import { snap } from "@/lib/payment/midtransSnap";
 interface CreatePaymentBody {
   kelasId?: string;
   kodePromo?: string;
+  /** Pilihan Subtes siswa untuk kelas paket (kelas_subtes > 1) — WAJIB 1-3
+   * kalau kelas ini paket, diabaikan sepenuhnya kalau bukan (server yang
+   * menentukan pool aslinya lewat kelas_subtes, bukan percaya array ini
+   * mentah-mentah). */
+  subtesIds?: string[];
 }
+
+const MAX_SUBTES_PILIHAN = 3;
 
 function errorResponse(message: string, status: number) {
   return NextResponse.json({ success: false, error: message }, { status });
@@ -52,6 +59,25 @@ export async function POST(request: NextRequest) {
 
   if (await isKelasSudahLunas(session.userId, kelasId)) {
     return errorResponse("Kamu sudah terdaftar di kelas ini.", 409);
+  }
+
+  // Pool Subtes ASLI dari server (kelas_subtes) — JANGAN pernah percaya
+  // subtesIds dari body kalau bukan bagian dari pool ini (client bisa
+  // memanipulasi devtools/curl, sama prinsipnya dengan harga di atas).
+  const subtesPool = await getKelasSubtesOptions(kelasId);
+  const subtesPoolIds = new Set(subtesPool.map((s) => s.id));
+  let resolvedSubtesIds: string[] = [];
+  if (subtesPool.length > 1) {
+    const requested = Array.isArray(body.subtesIds)
+      ? Array.from(new Set(body.subtesIds.filter((id): id is string => typeof id === "string" && subtesPoolIds.has(id))))
+      : [];
+    if (requested.length < 1 || requested.length > MAX_SUBTES_PILIHAN) {
+      return errorResponse(`Pilih minimal 1, maksimal ${MAX_SUBTES_PILIHAN} subtes.`, 400);
+    }
+    resolvedSubtesIds = requested;
+  } else {
+    // Kelas tunggal/tanpa subtes — otomatis, tidak minta siswa pilih apa pun.
+    resolvedSubtesIds = subtesPool.map((s) => s.id);
   }
 
   let kodePromoId: string | null = null;
@@ -114,6 +140,20 @@ export async function POST(request: NextRequest) {
   if (!paymentId || !orderId) {
     console.error("[payment/create] gagal generate order_id unik setelah beberapa percobaan.");
     return errorResponse("Gagal membuat transaksi pembayaran. Coba lagi nanti.", 500);
+  }
+
+  // Tampung pilihan Subtes di sini dulu (enrollments belum ada — baru dibuat
+  // webhook kalau payment sukses) — dipindahkan ke enrollment_subtes oleh
+  // webhook, lihat app/api/payment/webhook/route.ts.
+  if (resolvedSubtesIds.length > 0) {
+    const { error: pilihanInsertError } = await supabaseServer
+      .from("payment_subtes_pilihan")
+      .insert(resolvedSubtesIds.map((subtesId) => ({ payment_id: paymentId, subtes_id: subtesId })));
+    if (pilihanInsertError) {
+      console.error("[payment/create] insert payment_subtes_pilihan failed:", pilihanInsertError);
+      await supabaseServer.from("payments").update({ status: "gagal" }).eq("id", paymentId);
+      return errorResponse("Gagal menyimpan pilihan subtes. Coba lagi nanti.", 500);
+    }
   }
 
   try {

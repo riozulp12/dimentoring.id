@@ -76,9 +76,16 @@ export default function MateriList({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-col gap-1.5">
-                  <span className="inline-flex w-fit items-center rounded-full bg-[#F9FAFF] px-2.5 py-0.5 text-xs font-medium text-[#081EEA]">
-                    {TIPE_LABEL[item.tipe]}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex w-fit items-center rounded-full bg-[#F9FAFF] px-2.5 py-0.5 text-xs font-medium text-[#081EEA]">
+                      {TIPE_LABEL[item.tipe]}
+                    </span>
+                    {item.subtesNama ? (
+                      <span className="inline-flex w-fit items-center rounded-full bg-[#F4F4F4] px-2.5 py-0.5 text-xs font-medium text-[#7E7C7C]">
+                        {item.subtesNama}
+                      </span>
+                    ) : null}
+                  </div>
 
                   {isLink ? (
                     <a

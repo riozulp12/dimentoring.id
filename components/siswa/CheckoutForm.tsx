@@ -39,27 +39,50 @@ interface AppliedPromo {
   total: number;
 }
 
+export interface CheckoutSubtesOption {
+  id: string;
+  nama: string;
+}
+
+const MAX_SUBTES_PILIHAN = 3;
+
 export default function CheckoutForm({
   kelasId,
   harga,
   snapClientKey,
   isProduction,
+  subtesOptions,
 }: {
   kelasId: string;
   harga: number;
   snapClientKey: string;
   isProduction: boolean;
+  /** Pool Subtes kelas ini (kelas_subtes) — checklist cuma tampil kalau > 1
+   * (kelas paket). Kalau <= 1, dikirim otomatis tanpa perlu siswa memilih. */
+  subtesOptions: CheckoutSubtesOption[];
 }) {
   const router = useRouter();
+  const isPaket = subtesOptions.length > 1;
   const [kodePromoInput, setKodePromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [isApplying, setIsApplying] = useState(false);
+  const [selectedSubtesIds, setSelectedSubtesIds] = useState<string[]>([]);
+  const [subtesError, setSubtesError] = useState<string | null>(null);
 
   const [payError, setPayError] = useState<string | null>(null);
   const [isPaying, setIsPaying] = useState(false);
 
   const total = appliedPromo ? appliedPromo.total : harga;
+
+  function toggleSubtes(subtesId: string) {
+    setSubtesError(null);
+    setSelectedSubtesIds((prev) => {
+      if (prev.includes(subtesId)) return prev.filter((id) => id !== subtesId);
+      if (prev.length >= MAX_SUBTES_PILIHAN) return prev;
+      return [...prev, subtesId];
+    });
+  }
 
   async function handleTerapkan() {
     setApplyError(null);
@@ -98,13 +121,24 @@ export default function CheckoutForm({
 
   async function handleBayar() {
     setPayError(null);
+    setSubtesError(null);
+
+    if (isPaket && (selectedSubtesIds.length < 1 || selectedSubtesIds.length > MAX_SUBTES_PILIHAN)) {
+      setSubtesError(`Pilih minimal 1, maksimal ${MAX_SUBTES_PILIHAN} subtes dulu.`);
+      return;
+    }
+
     setIsPaying(true);
 
     try {
       const response = await fetch("/api/payment/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kelasId, kodePromo: appliedPromo?.kode }),
+        body: JSON.stringify({
+          kelasId,
+          kodePromo: appliedPromo?.kode,
+          subtesIds: isPaket ? selectedSubtesIds : undefined,
+        }),
       });
       const json = await response.json();
       if (!response.ok || !json.success) {
@@ -155,6 +189,40 @@ export default function CheckoutForm({
         data-client-key={snapClientKey}
         strategy="afterInteractive"
       />
+
+      {isPaket ? (
+        <div className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Pilih Subtes</h2>
+            <p className="text-sm text-[#7E7C7C]">
+              Kelas ini paket — pilih minimal 1, maksimal {MAX_SUBTES_PILIHAN} subtes yang mau kamu ikuti (
+              {selectedSubtesIds.length}/{MAX_SUBTES_PILIHAN} dipilih).
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {subtesOptions.map((subtes) => {
+              const checked = selectedSubtesIds.includes(subtes.id);
+              const disabled = !checked && selectedSubtesIds.length >= MAX_SUBTES_PILIHAN;
+              return (
+                <label
+                  key={subtes.id}
+                  className={`flex items-center gap-2 rounded-[8px] px-1.5 py-1 text-sm text-black ${disabled ? "opacity-50" : "hover:bg-gray-50"}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={disabled}
+                    onChange={() => toggleSubtes(subtes.id)}
+                    className="size-4 accent-[#081EEA]"
+                  />
+                  {subtes.nama}
+                </label>
+              );
+            })}
+          </div>
+          {subtesError ? <p className="text-sm text-[#E70A0A]">{subtesError}</p> : null}
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-6 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
         <div className="flex flex-col gap-1">

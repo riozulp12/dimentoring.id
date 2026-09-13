@@ -25,6 +25,9 @@ export interface MateriItem {
   tipe: MateriTipe;
   konten: string;
   selesai: boolean;
+  /** Nama Subtes materi ini (materi.subtes_id) — null kalau materi umum,
+   * tidak terikat subtes tertentu. */
+  subtesNama: string | null;
 }
 
 export interface MateriPreviewItem {
@@ -99,11 +102,19 @@ export async function getEnrollmentStatus(
   };
 }
 
-/** Dipakai kalau siswa sudah lunas — seluruh materi published + status "selesai" per-user. */
+/**
+ * Dipakai kalau siswa sudah lunas — seluruh materi published + status
+ * "selesai" per-user, DIFILTER cuma materi dari Subtes yang dipilih siswa
+ * ini di enrollment_subtes (kelas paket) — materi umum (subtes_id NULL)
+ * selalu tampil untuk semua siswa terlepas dari pilihannya. Kalau siswa ini
+ * TIDAK punya baris enrollment_subtes sama sekali (kelas tanpa subtes
+ * tertentu, mis. Konsultasi/Pendampingan Mahasiswa, atau kelas lama sebelum
+ * fitur paket ada), tidak ada filter yang diterapkan — tampilkan semua.
+ */
 export async function getMateriFull(kelasId: string, userId: string): Promise<MateriItem[]> {
   const { data: materiRows, error } = await supabaseServer
     .from("materi")
-    .select("id, judul, tipe, konten")
+    .select("id, judul, tipe, konten, subtes_id, subtes:subtes_id(nama)")
     .eq("kelas_id", kelasId)
     .eq("status", "published")
     .order("created_at", { ascending: true });
@@ -115,6 +126,29 @@ export async function getMateriFull(kelasId: string, userId: string): Promise<Ma
 
   const rows = materiRows ?? [];
   if (rows.length === 0) return [];
+
+  const { data: enrollmentRow, error: enrollmentError } = await supabaseServer
+    .from("enrollments")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("kelas_id", kelasId)
+    .maybeSingle();
+  if (enrollmentError) {
+    console.error("[getMateriFull] query enrollments failed:", enrollmentError);
+  }
+
+  let pilihanSubtesIds: Set<string> | null = null;
+  if (enrollmentRow?.id) {
+    const { data: subtesRows, error: subtesError } = await supabaseServer
+      .from("enrollment_subtes")
+      .select("subtes_id")
+      .eq("enrollment_id", enrollmentRow.id);
+    if (subtesError) {
+      console.error("[getMateriFull] query enrollment_subtes failed:", subtesError);
+    } else if (subtesRows && subtesRows.length > 0) {
+      pilihanSubtesIds = new Set(subtesRows.map((r) => r.subtes_id as string));
+    }
+  }
 
   const { data: progressRows, error: progressError } = await supabaseServer
     .from("materi_progress")
@@ -131,13 +165,18 @@ export async function getMateriFull(kelasId: string, userId: string): Promise<Ma
 
   const selesaiMap = new Map((progressRows ?? []).map((r) => [r.materi_id as string, r.selesai as boolean]));
 
-  return rows.map((r) => ({
-    id: r.id as string,
-    judul: r.judul as string,
-    tipe: r.tipe as MateriTipe,
-    konten: r.konten as string,
-    selesai: selesaiMap.get(r.id as string) ?? false,
-  }));
+  type Row = { id: string; judul: string; tipe: string; konten: string; subtes_id: string | null; subtes: NamaJoin };
+
+  return (rows as unknown as Row[])
+    .filter((r) => !pilihanSubtesIds || !r.subtes_id || pilihanSubtesIds.has(r.subtes_id))
+    .map((r) => ({
+      id: r.id,
+      judul: r.judul,
+      tipe: r.tipe as MateriTipe,
+      konten: r.konten,
+      selesai: selesaiMap.get(r.id) ?? false,
+      subtesNama: firstNama(r.subtes),
+    }));
 }
 
 /** Dipakai kalau siswa BELUM lunas/daftar — cuma judul + tipe, maksimal 3 item. */
