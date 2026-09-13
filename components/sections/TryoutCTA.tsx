@@ -4,9 +4,9 @@ import Button from "@/components/ui/Button";
 /**
  * Section ajakan Try Out — PRD Bagian 4.3. CTA mengarah ke /tryout (route
  * internal, lihat app/tryout/page.tsx) BUKAN langsung ke domain partner
- * manapun — kerjasama agensoal belum final, jadi copy publik sengaja tidak
- * menyebut nama partner. Kalau nanti keputusan integrasi final, yang perlu
- * diubah cuma app/tryout/page.tsx, bukan link di sini.
+ * manapun — copy publik sengaja tidak menyebut nama partner Agensoal.
+ * app/tryout/page.tsx meneruskan ke /api/agensoal/sso-redirect (SSO); link di
+ * sini tidak perlu diubah walau target akhirnya sudah pindah domain.
  */
 export default function TryoutCTA() {
   return (
