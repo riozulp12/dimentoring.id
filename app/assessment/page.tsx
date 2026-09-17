@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
-import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getNavbarProps } from "@/lib/dashboard/getNavbarProps";
+import { getPtnJurusanOptions } from "@/lib/landing/getPtnJurusanOptions";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import AssessmentSNBPForm, { type PtnJurusanOption } from "./AssessmentSNBPForm";
@@ -40,31 +40,33 @@ export default async function AssessmentPage() {
     );
   }
 
-  const { data: ptnJurusanRows, error: ptnJurusanError } = await supabaseServer
-    .from("ptn_jurusan")
-    .select("id, nama_universitas, nama_jurusan, jenjang, tahun_data")
-    .eq("jalur", "snbp")
-    .order("nama_universitas", { ascending: true })
-    .order("nama_jurusan", { ascending: true })
-    .order("jenjang", { ascending: true });
+  // Sumber data sama dengan Widget Cek Keketatan landing page — sudah
+  // di-paginate lewat .range() supaya tidak kena batas default 1000 baris
+  // PostgREST (ptn_jurusan 7700+ baris). Query lama di sini langsung
+  // .select() tanpa .range() sehingga diam-diam terpotong di baris ke-1000,
+  // dan hasilnya didominasi batch import terbaru (PTKIN/Politeknik Vokasi).
+  const allPtnJurusanOptions = await getPtnJurusanOptions();
+  const snbpRows = allPtnJurusanOptions
+    .filter((row) => row.jalur === "snbp")
+    .sort(
+      (a, b) =>
+        a.namaUniversitas.localeCompare(b.namaUniversitas) ||
+        a.namaJurusan.localeCompare(b.namaJurusan) ||
+        a.jenjang.localeCompare(b.jenjang),
+    );
 
-  if (ptnJurusanError) {
-    console.error("[assessment/page] query ptn_jurusan failed:", ptnJurusanError);
-  }
-
-  const options: PtnJurusanOption[] = (ptnJurusanRows ?? []).map((row) => ({
-    id: row.id as string,
-    universitas: row.nama_universitas as string,
-    jurusan: row.nama_jurusan as string,
-    jenjang: row.jenjang as string,
+  const options: PtnJurusanOption[] = snbpRows.map((row) => ({
+    id: row.id,
+    universitas: row.namaUniversitas,
+    jurusan: row.namaJurusan,
+    jenjang: row.jenjang,
   }));
 
   // Disclaimer (BR-4/FR-3.6) wajib menampilkan tahun data — ptn_jurusan.tahun_data
   // per-baris, jadi dipakai tahun TERBARU di antara seluruh data SNBP sebagai
   // representasi tunggal di banner sebelum siswa memilih prodi manapun.
-  const tahunData = (ptnJurusanRows ?? []).reduce<number | null>((latest, row) => {
-    const tahun = row.tahun_data as number;
-    return latest === null || tahun > latest ? tahun : latest;
+  const tahunData = snbpRows.reduce<number | null>((latest, row) => {
+    return latest === null || row.tahunData > latest ? row.tahunData : latest;
   }, null);
 
   return (
