@@ -8,6 +8,7 @@ import {
   notifyMentorOfflineSiswaBaruDaftar,
 } from "@/lib/notifikasi/notify";
 import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
+import { generateSesiKelasUntukEnrollment } from "@/lib/absensi/generateSesiKelas";
 
 /**
  * Webhook notifikasi Midtrans — PRD Bagian 8 BR-19 ("status pembayaran hanya
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
 
     const kelasId = payment.item_id as string;
     let enrollmentSubtesIds: string[] = [];
+    let enrollmentId: string | null = null;
 
     if (payment.item_type === "kelas") {
       const { data: enrollment, error: enrollmentError } = await supabaseServer
@@ -127,6 +129,7 @@ export async function POST(request: NextRequest) {
       if (enrollmentError) {
         console.error("[payment/webhook] upsert enrollments failed:", enrollmentError);
       }
+      enrollmentId = (enrollment?.id as string | undefined) ?? null;
 
       // Pindahkan pilihan Subtes dari payment_subtes_pilihan (ditampung saat
       // checkout, lihat app/api/payment/create/route.ts) ke enrollment_subtes
@@ -176,11 +179,18 @@ export async function POST(request: NextRequest) {
     if (payment.item_type === "kelas") {
       const { data: kelas } = await supabaseServer
         .from("kelas")
-        .select("nama, jadwal, mode_pembelajaran")
+        .select("nama, jadwal, mode_pembelajaran, jumlah_sesi")
         .eq("id", kelasId)
         .maybeSingle();
       const kelasNama = (kelas?.nama as string) ?? "kamu";
       const jadwalDisplay = formatJadwalRingkas(kelas?.jadwal);
+
+      // Absensi (PRD 7.5.5) — generate baris sesi_kelas 1..jumlah_sesi begitu
+      // enrollment 'lunas' pasti ada, sebelum notifikasi apa pun dikirim.
+      if (enrollmentId && kelas?.jumlah_sesi) {
+        await generateSesiKelasUntukEnrollment(enrollmentId, kelas.jumlah_sesi as number);
+      }
+
       await notifyPembayaranBerhasil(payment.user_id as string, kelasId, kelasNama);
 
       // Offline: notif HANYA ke mentor_offline_id yang dipilih siswa saat

@@ -90,23 +90,65 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
 export async function getEnrollmentStatus(
   userId: string,
   kelasId: string,
-): Promise<{ statusPembayaran: "menunggu" | "lunas" | "batal" | null; progresPersen: number }> {
+): Promise<{
+  enrollmentId: string | null;
+  statusPembayaran: "menunggu" | "lunas" | "batal" | null;
+  progresPersen: number;
+}> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("status_pembayaran, progres_persen")
+    .select("id, status_pembayaran, progres_persen")
     .eq("user_id", userId)
     .eq("kelas_id", kelasId)
     .maybeSingle();
 
   if (error) {
     console.error("[getEnrollmentStatus] query failed:", error);
-    return { statusPembayaran: null, progresPersen: 0 };
+    return { enrollmentId: null, statusPembayaran: null, progresPersen: 0 };
   }
-  if (!data) return { statusPembayaran: null, progresPersen: 0 };
+  if (!data) return { enrollmentId: null, statusPembayaran: null, progresPersen: 0 };
 
   return {
+    enrollmentId: data.id as string,
     statusPembayaran: data.status_pembayaran as "menunggu" | "lunas" | "batal",
     progresPersen: data.progres_persen as number,
+  };
+}
+
+export interface SesiPending {
+  id: string;
+  nomorSesi: number;
+}
+
+export interface SesiKehadiran {
+  /** COUNT sesi_kelas WHERE dikonfirmasi_mentor=true AND status_siswa != 'disangkal' (BR-34/FR-A4). */
+  validCount: number;
+  /** Sesi paling awal yang ditandai mentor tapi BELUM direspons siswa — null
+   * kalau tidak ada yang menunggu konfirmasi. */
+  pending: SesiPending | null;
+}
+
+/** Absensi (PRD 7.5.5) — dasar progress "X dari Y sesi" + prompt konfirmasi
+ * di halaman Detail Kelas Siswa. */
+export async function getSesiKehadiran(enrollmentId: string): Promise<SesiKehadiran> {
+  const { data, error } = await supabaseServer
+    .from("sesi_kelas")
+    .select("id, nomor_sesi, dikonfirmasi_mentor, status_siswa")
+    .eq("enrollment_id", enrollmentId)
+    .order("nomor_sesi", { ascending: true });
+
+  if (error) {
+    console.error("[getSesiKehadiran] query failed:", error);
+    return { validCount: 0, pending: null };
+  }
+
+  const rows = (data ?? []) as { id: string; nomor_sesi: number; dikonfirmasi_mentor: boolean; status_siswa: string }[];
+  const validCount = rows.filter((r) => r.dikonfirmasi_mentor && r.status_siswa !== "disangkal").length;
+  const pendingRow = rows.find((r) => r.dikonfirmasi_mentor && r.status_siswa === "belum");
+
+  return {
+    validCount,
+    pending: pendingRow ? { id: pendingRow.id, nomorSesi: pendingRow.nomor_sesi } : null,
   };
 }
 

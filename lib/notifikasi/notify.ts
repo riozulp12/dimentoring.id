@@ -295,3 +295,58 @@ export async function notifyMentorsKontenMenungguReview(subtesId: string | null)
 
   await insertNotifikasi(rows);
 }
+
+/**
+ * 2h: Mentor Menandai Sesi Selesai (Absensi, PRD 7.5.5) — notif bell ke
+ * SISWA ybs (bukan email, cukup ringan) begitu mentor checklist "Sudah
+ * Mengajar" untuk satu sesi. Dipanggil dari app/api/mentor/sesi/route.ts
+ * tepat setelah sesi_kelas.dikonfirmasi_mentor diupdate jadi true.
+ */
+export async function notifySesiDitandaiMentor(
+  siswaUserId: string,
+  kelasId: string,
+  kelasNama: string,
+  nomorSesi: number,
+) {
+  await insertNotifikasi([
+    {
+      user_id: siswaUserId,
+      tipe: "sistem",
+      judul: `Mentor menandai sesi ke-${nomorSesi} sudah selesai`,
+      pesan: `Konfirmasi kehadiran sesi ke-${nomorSesi} kelas ${kelasNama} ya.`,
+      link_tujuan: `/kelas/${kelasId}`,
+    },
+  ]);
+}
+
+/**
+ * 2i: Siswa Menyangkal Sesi (Absensi, PRD 7.5.5, BR-34) — notif bell ke
+ * SEMUA Admin aktif, dasar antrian "Sesi Perlu Ditinjau". Dipanggil dari
+ * app/api/siswa/sesi/route.ts tepat setelah sesi_kelas.status_siswa diupdate
+ * jadi 'disangkal' dan perlu_review_admin jadi true.
+ */
+export async function notifyAdminSesiDisangkal(kelasNama: string, nomorSesi: number) {
+  const { data: adminRows, error } = await supabaseServer
+    .from("user_roles")
+    .select("user_id")
+    .eq("role_type", "admin")
+    .eq("status", "active");
+
+  if (error) {
+    console.error("[notifikasi] query user_roles (sesi_disangkal) failed:", error);
+    return;
+  }
+  if (!adminRows || adminRows.length === 0) return;
+
+  const pesan = `Sesi ke-${nomorSesi} kelas ${kelasNama} disangkal siswa, perlu ditinjau.`;
+
+  await insertNotifikasi(
+    adminRows.map((row) => ({
+      user_id: row.user_id as string,
+      tipe: "sistem",
+      judul: "Sesi disangkal siswa, perlu ditinjau",
+      pesan,
+      link_tujuan: "/sesi-review",
+    })),
+  );
+}

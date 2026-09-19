@@ -81,6 +81,7 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
         { icon: "tryout", label: "Manajemen Mentor", href: "/approval-mentor" },
         { icon: "ai-mentor", label: "Manajemen Siswa", href: "/manajemen-siswa" },
         { icon: "kelas", label: "Kelola Kelas", href: "/kelola-kelas" },
+        { icon: "kelas", label: "Sesi Perlu Ditinjau", href: "/sesi-review" },
         { icon: "assessment", label: "Kelola Assessment", href: "/kelola-assessment" },
         { icon: "setting", label: "Undang Admin", href: "/undang-admin" },
       ],

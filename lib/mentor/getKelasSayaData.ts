@@ -33,6 +33,7 @@ export interface MentorKelasDetail {
   tingkatKelasLabel: string;
   jumlahSiswa: number;
   linkMeet: string | null;
+  jumlahSesi: number;
 }
 
 export interface MentorMateriItem {
@@ -97,7 +98,7 @@ export async function getMentorKelasDetail(kelasId: string): Promise<MentorKelas
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      "id, nama, mentor_id, tingkat_kelas, link_meet, subtes:subtes_id(nama), enrollments(status_pembayaran)",
+      "id, nama, mentor_id, tingkat_kelas, link_meet, jumlah_sesi, subtes:subtes_id(nama), enrollments(status_pembayaran)",
     )
     .eq("id", kelasId)
     .maybeSingle();
@@ -114,6 +115,7 @@ export async function getMentorKelasDetail(kelasId: string): Promise<MentorKelas
     mentor_id: string | null;
     tingkat_kelas: string;
     link_meet: string | null;
+    jumlah_sesi: number;
     subtes: NamaJoin;
     enrollments: { status_pembayaran: string }[] | null;
   };
@@ -127,7 +129,84 @@ export async function getMentorKelasDetail(kelasId: string): Promise<MentorKelas
     tingkatKelasLabel: TINGKAT_KELAS_LABEL[row.tingkat_kelas] ?? row.tingkat_kelas,
     jumlahSiswa: (row.enrollments ?? []).filter((e) => e.status_pembayaran === "lunas").length,
     linkMeet: row.link_meet,
+    jumlahSesi: row.jumlah_sesi,
   };
+}
+
+export interface SesiSiswaItem {
+  enrollmentId: string;
+  userId: string;
+  nama: string;
+  avatarUrl: string | null;
+  sesiValidCount: number;
+  /** Nomor sesi paling kecil yang BELUM ditandai mentor — null kalau semua
+   * sesi (1..jumlahSesi) sudah ditandai (tombol "Tandai Selesai" disembunyikan). */
+  sesiBerikutnya: number | null;
+}
+
+type UserJoin = { id: string; nama: string; avatar_url: string | null } | { id: string; nama: string; avatar_url: string | null }[] | null;
+
+function firstUser(value: UserJoin): { id: string; nama: string; avatar_url: string | null } | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+/**
+ * Progress sesi (Absensi, PRD 7.5.5) per siswa lunas di kelas ini — dasar
+ * tombol "Tandai Sesi Hari Ini Selesai" & progress "Sesi X dari Y" di halaman
+ * Kelas Saya (Mentor). `sesiValidCount` = COUNT sesi_kelas WHERE
+ * dikonfirmasi_mentor=true AND status_siswa != 'disangkal' (BR-34/FR-A4) —
+ * sesi yang masih disangkal & menunggu review Admin TIDAK dihitung progress.
+ */
+export async function getSesiSiswaByKelasId(kelasId: string): Promise<SesiSiswaItem[]> {
+  const { data: enrollmentRows, error: enrollmentError } = await supabaseServer
+    .from("enrollments")
+    .select("id, users:user_id(id, nama, avatar_url)")
+    .eq("kelas_id", kelasId)
+    .eq("status_pembayaran", "lunas");
+
+  if (enrollmentError) {
+    console.error("[getSesiSiswaByKelasId] query enrollments failed:", enrollmentError);
+    return [];
+  }
+  if (!enrollmentRows || enrollmentRows.length === 0) return [];
+
+  const enrollmentIds = enrollmentRows.map((r) => r.id as string);
+  const { data: sesiRows, error: sesiError } = await supabaseServer
+    .from("sesi_kelas")
+    .select("enrollment_id, nomor_sesi, dikonfirmasi_mentor, status_siswa")
+    .in("enrollment_id", enrollmentIds)
+    .order("nomor_sesi", { ascending: true });
+
+  if (sesiError) {
+    console.error("[getSesiSiswaByKelasId] query sesi_kelas failed:", sesiError);
+  }
+
+  type SesiRow = { enrollment_id: string; nomor_sesi: number; dikonfirmasi_mentor: boolean; status_siswa: string };
+  const sesiByEnrollment = new Map<string, SesiRow[]>();
+  for (const row of (sesiRows ?? []) as unknown as SesiRow[]) {
+    const list = sesiByEnrollment.get(row.enrollment_id) ?? [];
+    list.push(row);
+    sesiByEnrollment.set(row.enrollment_id, list);
+  }
+
+  return (enrollmentRows as unknown as { id: string; users: UserJoin }[])
+    .map((row) => {
+      const user = firstUser(row.users);
+      if (!user) return null;
+      const sesiList = sesiByEnrollment.get(row.id) ?? [];
+      const sesiValidCount = sesiList.filter((s) => s.dikonfirmasi_mentor && s.status_siswa !== "disangkal").length;
+      const sesiBerikutnya = sesiList.find((s) => !s.dikonfirmasi_mentor)?.nomor_sesi ?? null;
+      return {
+        enrollmentId: row.id,
+        userId: user.id,
+        nama: user.nama,
+        avatarUrl: user.avatar_url,
+        sesiValidCount,
+        sesiBerikutnya,
+      };
+    })
+    .filter((item): item is SesiSiswaItem => item !== null);
 }
 
 /** List materi SEMUA status (beda dari halaman Siswa yang cuma tampilkan published). */

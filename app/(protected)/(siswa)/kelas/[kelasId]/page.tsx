@@ -7,11 +7,13 @@ import {
   getKelasDetail,
   getMateriFull,
   getMateriPreview,
+  getSesiKehadiran,
   type MateriTipe,
 } from "@/lib/siswa/getKelasDetail";
 import PageTitle from "@/components/dashboard/PageTitle";
 import MateriList from "@/components/siswa/MateriList";
 import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
+import SesiKehadiranSection from "@/components/siswa/SesiKehadiranSection";
 
 /**
  * Detail Kelas — PRD Bagian 7.5.1. Guard akses: cuma siswa dengan enrollment
@@ -60,6 +62,8 @@ export default async function KelasDetailPage({
 
   const enrollment = await getEnrollmentStatus(session.userId, kelasId);
   const isLunas = enrollment.statusPembayaran === "lunas";
+  const sesiKehadiran =
+    isLunas && enrollment.enrollmentId ? await getSesiKehadiran(enrollment.enrollmentId) : null;
 
   return (
     <>
@@ -109,6 +113,14 @@ export default async function KelasDetailPage({
             )
           ) : null}
         </div>
+
+        {isLunas && sesiKehadiran ? (
+          <SesiKehadiranSection
+            sesiId={sesiKehadiran.pending}
+            jumlahSesi={kelas.jumlahSesi}
+            initialValidCount={sesiKehadiran.validCount}
+          />
+        ) : null}
 
         {isLunas ? (
           <FullMateriSection kelasId={kelasId} userId={session.userId} progresPersen={enrollment.progresPersen} />

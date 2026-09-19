@@ -3,9 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
-import { getMentorKelasDetail, getMentorMateriList } from "@/lib/mentor/getKelasSayaData";
+import { getMentorKelasDetail, getMentorMateriList, getSesiSiswaByKelasId } from "@/lib/mentor/getKelasSayaData";
 import PageTitle from "@/components/dashboard/PageTitle";
 import LinkMeetForm from "@/components/mentor/LinkMeetForm";
+import SesiSiswaList from "@/components/mentor/SesiSiswaList";
 
 /**
  * Detail Kelas (Mentor) — PRD Bagian 7.5.1. GUARD: kelas.mentor_id harus sama
@@ -60,7 +61,10 @@ export default async function KelasSayaDetailMentorPage({
     redirect(`/kelas-saya?error=${encodeURIComponent("Kelas tidak ditemukan atau bukan kelas yang kamu ampu.")}`);
   }
 
-  const materiList = await getMentorMateriList(kelasId);
+  const [materiList, sesiSiswa] = await Promise.all([
+    getMentorMateriList(kelasId),
+    getSesiSiswaByKelasId(kelasId),
+  ]);
 
   return (
     <>
@@ -83,6 +87,11 @@ export default async function KelasSayaDetailMentorPage({
           <p className="text-sm text-[#7E7C7C] sm:text-base">{kelas.jumlahSiswa} siswa terdaftar</p>
 
           <LinkMeetForm kelasId={kelas.id} initialLinkMeet={kelas.linkMeet} />
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Absensi Sesi</h2>
+          <SesiSiswaList items={sesiSiswa} jumlahSesi={kelas.jumlahSesi} />
         </div>
 
         <div className="flex items-center justify-between gap-3">
