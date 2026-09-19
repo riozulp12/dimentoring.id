@@ -28,6 +28,7 @@ export interface KelasSayaItem {
   programKategori: string;
   tingkatKelas: string;
   subtesNama: string | null;
+  modePembelajaran: string;
 }
 
 type MentorJoin = { nama: string } | { nama: string }[] | null;
@@ -51,7 +52,7 @@ export async function getKelasSaya(userId: string): Promise<KelasSayaItem[]> {
   const { data, error } = await supabaseServer
     .from("enrollments")
     .select(
-      "progres_persen, kelas:kelas_id(id, nama, jadwal, program_kategori, tingkat_kelas, subtes:subtes_id(nama), mentor:mentor_id(nama))",
+      "progres_persen, kelas:kelas_id(id, nama, jadwal, program_kategori, tingkat_kelas, mode_pembelajaran, subtes:subtes_id(nama), mentor:mentor_id(nama))",
     )
     .eq("user_id", userId)
     .eq("status_pembayaran", "lunas");
@@ -67,6 +68,7 @@ export async function getKelasSaya(userId: string): Promise<KelasSayaItem[]> {
     jadwal: unknown;
     program_kategori: string;
     tingkat_kelas: string;
+    mode_pembelajaran: string;
     subtes: SubtesJoin;
     mentor: MentorJoin;
   };
@@ -85,6 +87,7 @@ export async function getKelasSaya(userId: string): Promise<KelasSayaItem[]> {
         programKategori: kelas.program_kategori,
         tingkatKelas: kelas.tingkat_kelas,
         subtesNama: resolveSubtesNama(kelas.subtes),
+        modePembelajaran: kelas.mode_pembelajaran,
       };
     })
     .filter((item): item is KelasSayaItem => item !== null);

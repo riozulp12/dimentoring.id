@@ -1,5 +1,6 @@
 import Link from "next/link";
 import KelasCardVisual from "@/components/ui/KelasCardVisual";
+import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 import type { KelasSayaItem } from "@/lib/siswa/getKelasSayaData";
 
 /**
@@ -25,6 +26,7 @@ export default function KelasSayaCard({
   programKategori,
   tingkatKelas,
   subtesNama,
+  modePembelajaran,
   index,
 }: KelasSayaCardProps) {
   return (
@@ -43,6 +45,7 @@ export default function KelasSayaCard({
       />
 
       <div className="flex min-w-0 flex-col gap-1.5 p-4">
+        <ModePembelajaranBadge modePembelajaran={modePembelajaran} />
         <p className="text-base leading-[1.5] font-semibold tracking-[-0.36px] text-black">{nama}</p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#7E7C7C]">
           {mentorNama ? <span>Mentor: {mentorNama}</span> : null}

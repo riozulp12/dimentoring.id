@@ -16,6 +16,7 @@ import Footer from "@/components/sections/Footer";
 import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
 import KelasCardVisual from "@/components/ui/KelasCardVisual";
+import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 
 /** Detail publik 1 kelas (PRD 7.5.4) — TIGA card independen (masing-masing
  * border+shadow+padding sendiri, dipisah gap yang jelas, bukan satu card besar
@@ -161,9 +162,11 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                <ModePembelajaranBadge modePembelajaran={kelas.modePembelajaran} />
                 <Badge>{kelas.tipeKelasLabel}</Badge>
                 {kelas.subtesNama ? <Badge>{kelas.subtesNama}</Badge> : null}
                 <Badge>{kelas.tingkatKelasLabel}</Badge>
+                <span className="text-sm text-[#7E7C7C]">{kelas.jumlahSesi} sesi</span>
               </div>
 
               {kelas.deskripsi ? (

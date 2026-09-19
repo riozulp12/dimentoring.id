@@ -11,6 +11,7 @@ import {
 } from "@/lib/siswa/getKelasDetail";
 import PageTitle from "@/components/dashboard/PageTitle";
 import MateriList from "@/components/siswa/MateriList";
+import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 
 /**
  * Detail Kelas — PRD Bagian 7.5.1. Guard akses: cuma siswa dengan enrollment
@@ -74,9 +75,13 @@ export default async function KelasDetailPage({
             <h1 className="text-2xl font-semibold tracking-[-0.02em] text-black">{kelas.nama}</h1>
             {kelas.subtesNama ? <p className="text-sm text-[#7E7C7C]">{kelas.subtesNama}</p> : null}
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <ModePembelajaranBadge modePembelajaran={kelas.modePembelajaran} />
+          </div>
           <div className="flex flex-col gap-1 text-sm text-[#7E7C7C] sm:text-base">
             <p>{kelas.mentorNama ? `Mentor: ${kelas.mentorNama}` : "Mentor belum ditentukan"}</p>
             <p>{kelas.jadwal}</p>
+            <p>Jumlah Sesi: {kelas.jumlahSesi} sesi</p>
           </div>
 
           {kelas.deskripsi ? <p className="text-sm text-black sm:text-base">{kelas.deskripsi}</p> : null}

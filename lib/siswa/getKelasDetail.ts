@@ -17,6 +17,8 @@ export interface KelasDetailData {
   linkMeet: string | null;
   subtesNama: string | null;
   deskripsi: string | null;
+  modePembelajaran: string;
+  jumlahSesi: number;
 }
 
 export interface MateriItem {
@@ -47,7 +49,9 @@ function firstNama(value: NamaJoin): string | null {
 export async function getKelasDetail(kelasId: string): Promise<KelasDetailData | null> {
   const { data, error } = await supabaseServer
     .from("kelas")
-    .select("id, nama, jadwal, link_meet, deskripsi, mentor:mentor_id(nama), subtes:subtes_id(nama)")
+    .select(
+      "id, nama, jadwal, link_meet, deskripsi, mode_pembelajaran, jumlah_sesi, mentor:mentor_id(nama), subtes:subtes_id(nama)",
+    )
     .eq("id", kelasId)
     .maybeSingle();
 
@@ -63,6 +67,8 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
     jadwal: unknown;
     link_meet: string | null;
     deskripsi: string | null;
+    mode_pembelajaran: string;
+    jumlah_sesi: number;
     mentor: NamaJoin;
     subtes: NamaJoin;
   };
@@ -76,6 +82,8 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
     linkMeet: row.link_meet,
     subtesNama: firstNama(row.subtes),
     deskripsi: row.deskripsi,
+    modePembelajaran: row.mode_pembelajaran,
+    jumlahSesi: row.jumlah_sesi,
   };
 }
 

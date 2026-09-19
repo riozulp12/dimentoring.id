@@ -6,12 +6,13 @@ import {
   PROGRAM_KATEGORI_SLUG,
   TINGKAT_KELAS_LABEL,
   TIPE_KELAS_LABEL,
+  MODE_PEMBELAJARAN_LABEL,
   type ProgramKategori,
 } from "@/lib/shared/kelasLabels";
 import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
 
 export const KELAS_CARD_SELECT =
-  "id, nama, tipe_kelas, harga, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, subtes:subtes_id(nama), mentor:mentor_id(nama)";
+  "id, nama, tipe_kelas, mode_pembelajaran, harga, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, subtes:subtes_id(nama), mentor:mentor_id(nama)";
 
 /**
  * Data layer halaman publik /program (PRD Bagian 4.3 poin 5, 7.5.4) — 5
@@ -28,6 +29,8 @@ export interface KelasCardPreview {
   nama: string;
   tipeKelas: string;
   tipeKelasLabel: string;
+  modePembelajaran: string;
+  modePembelajaranLabel: string;
   harga: number;
   mentorNama: string | null;
   diskonAktif: DiskonAktif | null;
@@ -61,6 +64,7 @@ export interface KelasCardRow {
   id: string;
   nama: string;
   tipe_kelas: string;
+  mode_pembelajaran: string;
   harga: number;
   kapasitas: number;
   deskripsi: string | null;
@@ -77,6 +81,8 @@ export function toCardPreview(row: KelasCardRow, diskonAktif: DiskonAktif | null
     nama: row.nama,
     tipeKelas: row.tipe_kelas,
     tipeKelasLabel: TIPE_KELAS_LABEL[row.tipe_kelas] ?? row.tipe_kelas,
+    modePembelajaran: row.mode_pembelajaran,
+    modePembelajaranLabel: MODE_PEMBELAJARAN_LABEL[row.mode_pembelajaran] ?? row.mode_pembelajaran,
     harga: Number(row.harga),
     mentorNama: firstNama(row.mentor),
     diskonAktif,
@@ -291,6 +297,9 @@ export interface KelasDetailPublic {
   subtesNama: string | null;
   tipeKelas: string;
   tipeKelasLabel: string;
+  modePembelajaran: string;
+  modePembelajaranLabel: string;
+  jumlahSesi: number;
   tingkatKelas: string;
   tingkatKelasLabel: string;
   deskripsi: string | null;
@@ -316,7 +325,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tipe_kelas, tingkat_kelas, deskripsi, harga, jadwal, kapasitas, link_lynkid,
+      `id, nama, program_kategori, tipe_kelas, mode_pembelajaran, jumlah_sesi, tingkat_kelas, deskripsi, harga, jadwal, kapasitas, link_lynkid,
        subtes:subtes_id(nama)`,
     )
     .eq("id", kelasId)
@@ -333,6 +342,8 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     nama: string;
     program_kategori: ProgramKategori;
     tipe_kelas: string;
+    mode_pembelajaran: string;
+    jumlah_sesi: number;
     tingkat_kelas: string;
     deskripsi: string | null;
     harga: number;
@@ -383,6 +394,9 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     subtesNama: firstNama(row.subtes),
     tipeKelas: row.tipe_kelas,
     tipeKelasLabel: TIPE_KELAS_LABEL[row.tipe_kelas] ?? row.tipe_kelas,
+    modePembelajaran: row.mode_pembelajaran,
+    modePembelajaranLabel: MODE_PEMBELAJARAN_LABEL[row.mode_pembelajaran] ?? row.mode_pembelajaran,
+    jumlahSesi: row.jumlah_sesi,
     tingkatKelas: row.tingkat_kelas,
     tingkatKelasLabel: TINGKAT_KELAS_LABEL[row.tingkat_kelas] ?? row.tingkat_kelas,
     deskripsi: row.deskripsi,

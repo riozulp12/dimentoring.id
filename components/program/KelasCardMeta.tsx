@@ -1,6 +1,7 @@
 import type { KelasCardPreview } from "@/lib/dashboard/getProgramData";
 import type { SessionRole } from "@/lib/auth/session";
 import KelasDaftarButton from "./KelasDaftarButton";
+import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 
 /**
  * Konten card Kelas publik di BAWAH KelasCardVisual (PRD 7.5 poin 10) — badge
@@ -22,9 +23,12 @@ export interface KelasCardMetaProps {
 export default function KelasCardMeta({ item, sessionRole }: KelasCardMetaProps) {
   return (
     <>
-      <span className="inline-flex w-fit items-center rounded-full bg-[#F9FAFF] px-2.5 py-0.5 text-xs font-medium text-[#081EEA]">
-        {item.tipeKelasLabel}
-      </span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex w-fit items-center rounded-full bg-[#F9FAFF] px-2.5 py-0.5 text-xs font-medium text-[#081EEA]">
+          {item.tipeKelasLabel}
+        </span>
+        <ModePembelajaranBadge modePembelajaran={item.modePembelajaran} />
+      </div>
       <p className="text-base leading-[1.5] font-semibold tracking-[-0.36px] text-black">{item.nama}</p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#7E7C7C]">
         <span className="font-medium text-black">{formatRupiah(item.harga)}</span>
