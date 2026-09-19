@@ -26,6 +26,8 @@ export interface KelasListItem {
   programKategori: string;
   tingkatKelas: string;
   tipeKelas: string;
+  modePembelajaran: string;
+  jumlahSesi: number;
   subtesId: string | null;
   /** Nama semua Subtes kelas ini digabung koma (kelas_subtes) — "-" kalau tidak ada. */
   subtesNama: string;
@@ -103,6 +105,8 @@ interface KelasRow {
   program_kategori: string;
   tingkat_kelas: string;
   tipe_kelas: string;
+  mode_pembelajaran: string;
+  jumlah_sesi: number;
   subtes_id: string | null;
   kapasitas: number;
   harga: number;
@@ -131,7 +135,7 @@ export async function getKelasList(): Promise<KelasListItem[]> {
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, subtes_id, kapasitas, harga, jadwal, link_meet, link_lynkid, deskripsi,
+      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, mode_pembelajaran, jumlah_sesi, subtes_id, kapasitas, harga, jadwal, link_meet, link_lynkid, deskripsi,
        subtes:subtes_id(nama),
        kelas_subtes(subtes_id, subtes:subtes_id(nama)),
        kelas_mentor(mentor_id, users:mentor_id(nama)),
@@ -176,6 +180,8 @@ export async function getKelasList(): Promise<KelasListItem[]> {
       programKategori: row.program_kategori,
       tingkatKelas: row.tingkat_kelas,
       tipeKelas: row.tipe_kelas,
+      modePembelajaran: row.mode_pembelajaran,
+      jumlahSesi: row.jumlah_sesi,
       subtesId: row.subtes_id,
       subtesNama,
       mentorId: mentors[0]?.id ?? null,

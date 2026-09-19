@@ -12,7 +12,8 @@
 
 - **v1.0**: PRD awal berdasarkan requirement dasar 3 role x 10 fitur.
 - **v2.0**: Penambahan Sistem Referral, Gamifikasi, penajaman Assessment per jalur, Tryout Free/Premium + AI Pembuat Soal, strategi Landing Page berbasis analisis kompetitor, strategi UX Product Psychology.
-- **v3.0 (dokumen ini)**: Konsolidasi v1+v2 jadi **satu dokumen tunggal** (sebelumnya sebagian requirement Register/Login masih "menumpang" di file v1, sekarang digabung penuh ke satu tempat). Merevisi seluruh dokumen berdasarkan **desain Figma final** yang sudah dibuat: Landing Page, Login, alur Register/Onboarding 3-role (progressive profiling), dan halaman Assessment + Hasil Assessment SNBP. Business Rule Mentor diubah dari "invite-only" menjadi "self-register + approval Admin" sesuai keputusan bisnis terbaru.
+- **v3.0**: Konsolidasi v1+v2 jadi **satu dokumen tunggal** (sebelumnya sebagian requirement Register/Login masih "menumpang" di file v1, sekarang digabung penuh ke satu tempat). Merevisi seluruh dokumen berdasarkan **desain Figma final** yang sudah dibuat: Landing Page, Login, alur Register/Onboarding 3-role (progressive profiling), dan halaman Assessment + Hasil Assessment SNBP. Business Rule Mentor diubah dari "invite-only" menjadi "self-register + approval Admin" sesuai keputusan bisnis terbaru.
+- **v3.1 (dokumen ini, September 2026)**: Menambahkan header Bagian 19 (Roadmap & Fase) yang sebelumnya hilang meski sudah dirujuk di Bagian 20. Menambahkan spesifikasi fitur baru yang sudah diputuskan tapi belum tercatat: Mode Pembelajaran Online/Offline & auto-matching mentor berbasis jarak (7.5.4), Absensi Sesi konfirmasi dua arah (7.5.5), Kurasi Foto Mentor untuk Landing Page (7.5.6), Landing Campaign popup→banner (7.5.7), beserta entitas data model dan business rule terkait (Bagian 13, BR-32/34/35). Menegaskan proteksi tabel `PaymentSubtesPilihan` dari migration yang tidak direview.
 
 ---
 
@@ -474,6 +475,54 @@ Field `materi.konten` (TEXT) menampung ketiganya tanpa perlu skema berbeda — t
 - FR-M3: Halaman "review konten" (lihat 7.7 revisi) menampilkan antrian gabungan Materi AI + Soal AI yang berstatus `draft`, dengan aksi Setujui/Tolak per item.
 - FR-M4 (baru): Form upload materi manual (jenis Video/Dokumen) wajib validasi input berupa URL yang valid (format link), bukan sekadar teks bebas — mencegah mentor salah isi.
 
+### 7.5.4 Mode Pembelajaran: Online vs Offline & Auto-Matching Mentor Berdasarkan Jarak — **BARU**
+
+**Tujuan:** Mengakomodasi kelas tatap muka langsung (mentor datang ke lokasi siswa), yang sudah lama berjalan di operasional Dimentoring sebelum ada platform, tanpa mengubah cara kerja kelas online yang sudah dibangun.
+
+- Setiap Kelas punya `mode_pembelajaran` (`online`/`offline`), ditentukan Admin saat membuat kelas.
+- **Jumlah sesi berbeda per mode**: Online = 10 sesi/bulan (default), Offline = 8 sesi/bulan (khusus wilayah tertentu, contoh Yogyakarta saat ini). Nilai ini **dikonfigurasi Admin per kelas/campaign** (field `kelas.jumlah_sesi`), bukan hardcode — supaya bisa disesuaikan kalau ada campaign baru dengan jumlah sesi berbeda.
+- Mentor menandai kesediaan mengajar offline lewat `mentor_profiles.bisa_offline` (boolean) beserta lokasi tetapnya (`lokasi_lat`, `lokasi_lng`).
+- Saat siswa mendaftar kelas offline, sistem menyimpan lokasi siswa (`enrollments.lokasi_siswa_lat`, `lokasi_siswa_lng`) dan **otomatis menghitung jarak** ke semua mentor `bisa_offline=true` yang mengampu subtes terkait, memakai **formula Haversine** (jarak garis lurus, tanpa API berbayar seperti Google Distance Matrix — cukup akurat untuk kebutuhan rekomendasi awal). Mentor terdekat disarankan ke Admin untuk konfirmasi penugasan; mentor final tersimpan di `enrollments.mentor_offline_id`.
+- **Functional Requirements:**
+  - FR-K1: Admin dapat memilih `mode_pembelajaran` saat membuat/mengedit Kelas, dengan `jumlah_sesi` yang bisa diubah manual per kelas.
+  - FR-K2: Sistem menghitung dan menampilkan daftar mentor terdekat (urut jarak) ke Admin saat kelas offline butuh penugasan mentor, berdasarkan lokasi siswa vs lokasi mentor yang `bisa_offline=true` dan mengampu subtes yang sesuai.
+  - FR-K3: Field lokasi (siswa & mentor) diminta secara eksplisit dengan consent (konsisten dengan BR-23 data anak) — hanya diminta untuk kelas offline, tidak untuk kelas online.
+
+### 7.5.5 Absensi Kehadiran Mengajar — Konfirmasi Dua Arah — **BARU**
+
+**Tujuan:** Memastikan sesi yang dibayar siswa benar-benar terlaksana, tanpa bergantung pada klaim sepihak mentor.
+
+- Setiap sesi kelas (per enrollment, bernomor urut 1..N sesuai `kelas.jumlah_sesi`) dicatat di entitas `SesiKelas` (lihat Bagian 13).
+- **Mentor** menandai sesi selesai diajar (checklist "Sudah Mengajar", bukan upload bukti — dipilih karena lebih ringan secara UX dan konsisten dengan tingkat kepercayaan yang sudah diberikan ke mentor ter-approve).
+- **Siswa** kemudian mengonfirmasi balik: `Dikonfirmasi` (sesi memang terjadi) atau `Disangkal` (sesi diklaim mentor tapi menurut siswa tidak terjadi) — inilah yang membuat mekanisme ini **dua arah**, bukan checklist sepihak.
+- Sesi yang disangkal siswa otomatis ditandai `perlu_review_admin=true` untuk ditindaklanjuti manual (mis. cross-check dengan mentor, koreksi data).
+- **Functional Requirements:**
+  - FR-A1: Mentor melihat daftar sesi per siswa binaan di dashboard-nya, dan bisa checklist sesi yang sudah diajarkan (dengan tanggal aktual).
+  - FR-A2: Siswa menerima notifikasi/lihat di dashboard-nya untuk mengonfirmasi setiap sesi yang ditandai mentor, dengan pilihan Konfirmasi/Sangkal.
+  - FR-A3: Admin punya halaman "Sesi Perlu Review" yang menampilkan seluruh sesi berstatus `disangkal`, untuk investigasi manual.
+  - FR-A4: Progress kehadiran (mis. "6 dari 10 sesi terlaksana") ditampilkan ke siswa dan mentor di dashboard masing-masing.
+
+### 7.5.6 Kurasi Foto Mentor untuk Landing Page — **BARU**
+
+**Tujuan:** Landing page menampilkan carousel mentor (Bagian 4.3, section 6) dengan foto berkualitas baik, terpisah dari foto profil biasa yang mentor unggah sendiri (kualitas/pose bervariasi).
+
+- Admin punya akses melihat & mengunduh foto profil seluruh mentor (`mentor_profiles`) untuk keperluan kurasi manual.
+- Admin mengunggah foto terpilih khusus untuk landing page (`mentor_profiles.foto_landing_url`) dan menandai mentor mana yang ditampilkan (`mentor_profiles.tampil_di_landing`, boolean) — terpisah dari foto profil dashboard mentor itu sendiri.
+- **Functional Requirements:**
+  - FR-L1: Admin punya halaman kelola mentor dengan aksi "Unggah Foto Landing" dan toggle "Tampilkan di Landing Page" per mentor.
+  - FR-L2: Carousel mentor di landing page (Bagian 4.3) hanya menampilkan mentor dengan `tampil_di_landing=true`, memakai `foto_landing_url` (fallback ke foto profil biasa kalau `foto_landing_url` belum diisi).
+
+### 7.5.7 Landing Campaign (Popup → Banner) — **BARU**
+
+**Tujuan:** Mekanisme campaign bertahap di landing page — muncul sebagai popup/modal saat pertama kali dibuka (menarik perhatian), lalu berubah jadi banner ringkas (tidak mengganggu) setelah interaksi awal atau pada kunjungan berikutnya.
+
+- Admin membuat/mengelola campaign (`landing_campaign`): judul, isi, gambar, periode tayang (`tanggal_mulai`, `tanggal_selesai`), dan status (`draft`/`aktif`/`nonaktif`).
+- Hanya campaign berstatus `aktif` dan dalam periode tayang yang muncul ke pengunjung.
+- **Functional Requirements:**
+  - FR-C1: Admin dapat membuat, mengedit, dan mengubah status campaign lewat halaman Admin, termasuk mengatur periode tayang.
+  - FR-C2: Campaign tampil sebagai popup pada kunjungan pertama (per sesi browser), lalu bertransisi menjadi banner (mis. sticky di bagian atas/bawah halaman) untuk sisa sesi/kunjungan berikutnya — tidak menampilkan popup berulang setiap kali halaman dibuka.
+  - FR-C3: Hanya satu campaign aktif yang ditampilkan pada satu waktu (kalau ada lebih dari satu campaign `aktif` dengan periode tumpang tindih, Admin harus memastikan hanya satu yang benar-benar `aktif` — tidak ada logic prioritas otomatis di Fase 1 ini).
+
 ---
 
 ## 7.6 Sistem Tryout (Free & Premium)
@@ -572,6 +621,11 @@ Diimplementasikan konsisten di: Empty state, Loading, Achievement/Badge, **AI Me
 ### Payment
 - **BR-19**: Perubahan status pembayaran hanya dari payment gateway (webhook) atau override manual Admin dengan log audit.
 - **BR-20**: Kebijakan refund ditetapkan terpisah Admin; sistem menyediakan status "Refunded" dengan field alasan.
+- **BR-32 (baru, September 2026)**: Tabel `PaymentSubtesPilihan` (Bagian 13) tidak boleh dihapus, direname, atau diubah strukturnya lewat migration apa pun tanpa review manual eksplisit — tabel ini adalah dependency aktif alur checkout online. Migration yang menyentuh skema Payment wajib direview manual sebelum merge/deploy, sesuai aturan proyek di `CLAUDE.md`.
+
+### Kelas Offline & Absensi
+- **BR-34 (baru, September 2026)**: Absensi sesi kelas wajib konfirmasi dua arah (mentor checklist + siswa konfirmasi/sangkal, lihat 7.5.5) — tidak ada sesi yang dianggap terlaksana hanya dari klaim sepihak mentor. Sesi yang disangkal siswa wajib masuk antrian review Admin, tidak otomatis dianggap tidak sah maupun sah.
+- **BR-35 (baru, September 2026)**: Jumlah sesi per kelas (`kelas.jumlah_sesi`) bersifat konfigurasi per kelas/campaign oleh Admin, bukan konstanta tetap di kode — default 10 (online) / 8 (offline) hanya nilai awal saat kelas dibuat.
 
 ### AI Mentor
 - **BR-21**: AI Mentor tidak memberi kepastian hasil seleksi atau menggantikan keputusan mentor manusia untuk hal berisiko tinggi — wajib eskalasi.
@@ -812,7 +866,12 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **Kelas, Enrollment, TryOut, Payment, KontenInfo, AIMentorLog, SoalAI, Badge, RewardCatalog** — tetap sesuai definisi v2.0 (tidak berubah pada revisi ini).
 - **KelasSubtesMentor (baru)** — kelas_id, subtes_id, mentor_id. Pasangan eksplisit "di Kelas ini, Subtes X diajar Mentor Y" untuk kelas paket (kelas_subtes > 1 baris) — beda dari `kelas_mentor` yang cuma daftar mentor datar tanpa hubungan ke subtes tertentu. Sumber utama notifikasi siswa baru (cuma mentor subtes yang dipilih siswa yang dapat notifikasi).
 - **EnrollmentSubtes (baru)** — enrollment_id, subtes_id. Pilihan siswa dari pool `kelas_subtes` saat checkout kelas paket, maksimal 3 subtes per siswa. Diisi SETELAH payment berhasil (bukan saat checkout). Dasar filter Materi yang tampil ke siswa itu — materi dari subtes yang tidak dipilih tidak ditampilkan.
-- **PaymentSubtesPilihan (baru)** — payment_id, subtes_id. Penampung sementara pilihan subtes siswa selagi payment masih `menunggu` (enrollment belum ada) — dipindahkan ke `EnrollmentSubtes` oleh webhook payment begitu status jadi `berhasil`, tidak pernah dibaca ulang setelahnya.
+- **PaymentSubtesPilihan (baru)** — payment_id, subtes_id. Penampung sementara pilihan subtes siswa selagi payment masih `menunggu` (enrollment belum ada) — dipindahkan ke `EnrollmentSubtes` oleh webhook payment begitu status jadi `berhasil`, tidak pernah dibaca ulang setelahnya. **PENTING: tabel ini masih dipakai aktif oleh alur checkout online (`app/api/payment/create` dan `app/api/payment/webhook`) — jangan dihapus/diubah strukturnya tanpa review manual eksplisit, sesuai aturan Payment di CLAUDE.md.**
+- **Kelas (diperluas, September 2026)** — tambahan field: **mode_pembelajaran** (`online`/`offline`, default `online`), **jumlah_sesi** (INT, default 10 — bisa diubah Admin per kelas/campaign, lihat 7.5.4).
+- **MentorProfile (diperluas, September 2026)** — tambahan field: **bisa_offline** (boolean, kesediaan mengajar tatap muka), **lokasi_lat**/**lokasi_lng** (lokasi tetap mentor, dipakai matching jarak), **foto_landing_url** (foto kurasi Admin untuk carousel landing page, lihat 7.5.6), **tampil_di_landing** (boolean).
+- **Enrollment (diperluas, September 2026)** — tambahan field: **lokasi_siswa_lat**/**lokasi_siswa_lng** (khusus kelas offline), **mentor_offline_id** (relasi ke User/mentor yang ditugaskan mengajar tatap muka, hasil auto-matching jarak Haversine, lihat 7.5.4).
+- **SesiKelas (baru, September 2026)** — id, enrollment_id, nomor_sesi (urut 1..N sesuai `kelas.jumlah_sesi`), tanggal_dilaksanakan, **dikonfirmasi_mentor** (boolean, checklist mentor), dikonfirmasi_mentor_pada, **status_siswa** (`belum`/`dikonfirmasi`/`disangkal` — konfirmasi balik siswa), dikonfirmasi_siswa_pada, **perlu_review_admin** (boolean, otomatis `true` kalau siswa menyangkal). Basis fitur absensi dua arah (7.5.5).
+- **LandingCampaign (baru, September 2026)** — id, judul, isi, gambar_url, **status** (`draft`/`aktif`/`nonaktif`), tanggal_mulai, tanggal_selesai, dibuat_pada. Basis fitur popup→banner di landing page (7.5.7).
 
 ---
 
@@ -882,7 +941,11 @@ Sesuai v2.0, ditambah:
 - **Blocker saat ini**: Agensoal menolak token dengan alasan "Seamless SSO belum diaktifkan untuk akun bimbel Dimentoring" — ini toggle di sisi mereka, bukan bug di kode Dimentoring. Perlu konfirmasi dari tim Agensoal: (1) aktifkan fitur ini untuk akun Dimentoring, (2) pastikan `AGENSOAL_SSO_SECRET` yang mereka pakai untuk verifikasi PERSIS sama dengan yang ada di `.env.local`/Vercel Dimentoring.
 - **Belum terjawab**: konfigurasi MCP Server yang diberikan Agensoal menunjuk ke `tryout.dimentoring.id/api/mcp` (domain Dimentoring sendiri, bukan server Agensoal) — janggal, sudah ditanyakan balik ke tim Agensoal, belum ada jawaban.
 
+---
 
+# BAGIAN 19 — ROADMAP & FASE PENGEMBANGAN
+
+*(Catatan revisi: header bagian ini sebelumnya hilang meski isinya sudah ada dan dirujuk oleh Bagian 20 — "Prioritaskan sesuai Bagian 19". Ditambahkan kembali di v3.1, isi tidak diubah.)*
 
 **Fase 1 (sebelum TKA 2026):** Register/Login/Onboarding (progressive profiling), Dashboard, Assessment Prediksi PTN (SNBP sebagai referensi, SNBT & Mandiri menyusul pola sama), Payment, Kelas Bimbingan, Tryout TKA & SNBT (Free+Premium), Riwayat Tryout+PDF, Referral dasar, Approval Mentor, AI Mentor terbatas (opsional).
 

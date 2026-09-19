@@ -11,12 +11,13 @@ export interface KelasCheckoutData {
   id: string;
   nama: string;
   harga: number;
+  modePembelajaran: "online" | "offline";
 }
 
 export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckoutData | null> {
   const { data, error } = await supabaseServer
     .from("kelas")
-    .select("id, nama, harga")
+    .select("id, nama, harga, mode_pembelajaran")
     .eq("id", kelasId)
     .maybeSingle();
 
@@ -26,7 +27,12 @@ export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckou
   }
   if (!data) return null;
 
-  return { id: data.id as string, nama: data.nama as string, harga: Number(data.harga) };
+  return {
+    id: data.id as string,
+    nama: data.nama as string,
+    harga: Number(data.harga),
+    modePembelajaran: (data.mode_pembelajaran as "online" | "offline") ?? "online",
+  };
 }
 
 export interface KelasSubtesOption {

@@ -13,6 +13,7 @@ const VALID_TINGKAT_KELAS = ["kelas_10", "kelas_11", "kelas_12", "gap_year"];
 const VALID_TIPE_KELAS = ["private", "semi_private", "grouping"];
 const VALID_HARI = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
 const VALID_PROGRAM_KATEGORI: readonly string[] = PROGRAM_KATEGORI_ORDER;
+const VALID_MODE_PEMBELAJARAN = ["online", "offline"];
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 function isValidUrl(value: string): boolean {
@@ -39,13 +40,25 @@ export interface KelasInputBody {
   programKategori?: string;
   tingkatKelas?: string;
   tipeKelas?: string;
+  /** BARU — 'online' (default) atau 'offline' (mentor tatap muka, otomatis
+   * di-assign berdasar jarak terdekat saat checkout, bukan ditentukan di muka). */
+  modePembelajaran?: string;
+  /** BARU — default OTOMATIS 10 (online)/8 (offline) diisi di client, TETAP
+   * bisa diubah manual Admin (jangan di-lock di sini). */
+  jumlahSesi?: number | string;
+  /** WAJIB kalau modePembelajaran='offline' — SATU Subtes (bukan paket, belum
+   * perlu multi-subtes untuk offline), TANPA mentor (mentor ditentukan
+   * otomatis nanti saat checkout). subtesMentorPairs/mentorIds diabaikan
+   * total kalau field ini terisi. */
+  offlineSubtesId?: string;
   /** Pasangan Subtes-Mentor eksplisit (kelas_subtes_mentor) — satu mentor per
    * Subtes terpilih. Kosongkan (array kosong) untuk kelas tanpa subtes
-   * tertentu (mis. Konsultasi/Pendampingan Mahasiswa), lalu pakai mentorIds. */
+   * tertentu (mis. Konsultasi/Pendampingan Mahasiswa), lalu pakai mentorIds.
+   * CUMA relevan untuk modePembelajaran='online'. */
   subtesMentorPairs?: SubtesMentorPairInput[];
   /** Mentor generik TANPA subtes tertentu — CUMA dipakai kalau subtesMentorPairs
    * kosong (kelas Konsultasi/Pendampingan Mahasiswa). Diabaikan kalau
-   * subtesMentorPairs terisi. */
+   * subtesMentorPairs terisi atau modePembelajaran='offline'. */
   mentorIds?: string[];
   kapasitas?: number | string;
   harga?: number | string;
@@ -65,6 +78,8 @@ export interface ValidatedKelasInput {
   program_kategori: string;
   tingkat_kelas: string;
   tipe_kelas: string;
+  mode_pembelajaran: string;
+  jumlah_sesi: number;
   /** DEPRECATED, dipertahankan untuk kompatibilitas lama — diisi Subtes
    * PERTAMA dari subtesMentorPairs. Sumber utama tetap kelas_subtes. */
   subtes_id: string | null;
@@ -105,6 +120,16 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
   }
   if (!body.tipeKelas || !VALID_TIPE_KELAS.includes(body.tipeKelas)) {
     return { ok: false, error: "Tipe kelas tidak valid." };
+  }
+
+  const modePembelajaran = body.modePembelajaran ?? "online";
+  if (!VALID_MODE_PEMBELAJARAN.includes(modePembelajaran)) {
+    return { ok: false, error: "Mode Pembelajaran tidak valid." };
+  }
+
+  const jumlahSesi = Number(body.jumlahSesi);
+  if (!Number.isInteger(jumlahSesi) || jumlahSesi <= 0) {
+    return { ok: false, error: "Jumlah Sesi harus angka bulat lebih dari 0." };
   }
 
   const kapasitas = Number(body.kapasitas);
@@ -162,64 +187,90 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
     return { ok: true as const };
   }
 
-  // subtesMentorPairs = satu Mentor per Subtes terpilih (kelas_subtes_mentor).
-  // Kosong = kelas tanpa subtes tertentu (Konsultasi/Pendampingan Mahasiswa),
-  // pakai mentorIds generik sebagai gantinya (behavior lama, tanpa cross-check
-  // subtes karena memang tidak ada subtes untuk dicocokkan).
-  const rawPairs = Array.isArray(body.subtesMentorPairs) ? body.subtesMentorPairs : [];
-  const cleanedPairs: { subtesId: string; mentorId: string }[] = [];
-  const seenSubtesIds = new Set<string>();
-  for (const pair of rawPairs) {
-    const pairSubtesId = typeof pair?.subtesId === "string" ? pair.subtesId : "";
-    const pairMentorId = typeof pair?.mentorId === "string" ? pair.mentorId : "";
-    if (!pairSubtesId || !pairMentorId) {
-      return { ok: false, error: "Tiap Subtes yang dipilih wajib dipasangkan dengan satu Mentor." };
-    }
-    if (seenSubtesIds.has(pairSubtesId)) {
-      return { ok: false, error: "Satu Subtes tidak boleh muncul lebih dari sekali." };
-    }
-    seenSubtesIds.add(pairSubtesId);
-    cleanedPairs.push({ subtesId: pairSubtesId, mentorId: pairMentorId });
-  }
-
   const subtesMentorPairs: ValidatedSubtesMentorPair[] = [];
-  for (const pair of cleanedPairs) {
+  let subtesIds: string[] = [];
+  let generalMentorIds: string[] = [];
+
+  if (modePembelajaran === "offline") {
+    // Offline: TIDAK ada pairing Mentor di muka (mentor otomatis di-assign
+    // berdasar jarak terdekat waktu checkout, lihat
+    // lib/payment/getOfflineMentorOptions.ts) — subtesMentorPairs/mentorIds
+    // dari body diabaikan total. Subtes tetap WAJIB satu (belum perlu paket
+    // multi-subtes untuk offline).
+    const offlineSubtesId = typeof body.offlineSubtesId === "string" ? body.offlineSubtesId : "";
+    if (!offlineSubtesId) {
+      return { ok: false, error: "Pilih Subtes untuk kelas offline ini." };
+    }
     const { data: subtes, error: subtesError } = await supabaseServer
       .from("subtes")
-      .select("id, mapel_dasar")
-      .eq("id", pair.subtesId)
+      .select("id")
+      .eq("id", offlineSubtesId)
       .maybeSingle();
     if (subtesError) {
-      console.error("[validateKelasInput] query subtes failed:", subtesError);
+      console.error("[validateKelasInput] query subtes (offline) failed:", subtesError);
       return { ok: false, error: "Gagal memvalidasi subtes. Coba lagi nanti." };
     }
-    if (!subtes) return { ok: false, error: "Salah satu Subtes yang dipilih tidak ditemukan." };
-
-    const aktifCheck = await validateMentorAktif(pair.mentorId);
-    if (!aktifCheck.ok) return { ok: false, error: aktifCheck.error };
-
-    const cocokCheck = await mentorCocokSubtes(pair.mentorId, subtes.mapel_dasar, pair.subtesId);
-    if (!cocokCheck.ok) return { ok: false, error: cocokCheck.error };
-    if (!cocokCheck.cocok) {
-      return { ok: false, error: "Salah satu Mentor yang dipasangkan tidak mengampu Subtes tersebut." };
+    if (!subtes) return { ok: false, error: "Subtes yang dipilih tidak ditemukan." };
+    subtesIds = [offlineSubtesId];
+  } else {
+    // Online: subtesMentorPairs = satu Mentor per Subtes terpilih
+    // (kelas_subtes_mentor). Kosong = kelas tanpa subtes tertentu
+    // (Konsultasi/Pendampingan Mahasiswa), pakai mentorIds generik sebagai
+    // gantinya (behavior lama, tanpa cross-check subtes karena memang tidak
+    // ada subtes untuk dicocokkan).
+    const rawPairs = Array.isArray(body.subtesMentorPairs) ? body.subtesMentorPairs : [];
+    const cleanedPairs: { subtesId: string; mentorId: string }[] = [];
+    const seenSubtesIds = new Set<string>();
+    for (const pair of rawPairs) {
+      const pairSubtesId = typeof pair?.subtesId === "string" ? pair.subtesId : "";
+      const pairMentorId = typeof pair?.mentorId === "string" ? pair.mentorId : "";
+      if (!pairSubtesId || !pairMentorId) {
+        return { ok: false, error: "Tiap Subtes yang dipilih wajib dipasangkan dengan satu Mentor." };
+      }
+      if (seenSubtesIds.has(pairSubtesId)) {
+        return { ok: false, error: "Satu Subtes tidak boleh muncul lebih dari sekali." };
+      }
+      seenSubtesIds.add(pairSubtesId);
+      cleanedPairs.push({ subtesId: pairSubtesId, mentorId: pairMentorId });
     }
 
-    subtesMentorPairs.push({ subtes_id: pair.subtesId, mentor_id: pair.mentorId });
-  }
+    for (const pair of cleanedPairs) {
+      const { data: subtes, error: subtesError } = await supabaseServer
+        .from("subtes")
+        .select("id, mapel_dasar")
+        .eq("id", pair.subtesId)
+        .maybeSingle();
+      if (subtesError) {
+        console.error("[validateKelasInput] query subtes failed:", subtesError);
+        return { ok: false, error: "Gagal memvalidasi subtes. Coba lagi nanti." };
+      }
+      if (!subtes) return { ok: false, error: "Salah satu Subtes yang dipilih tidak ditemukan." };
 
-  const subtesIds = subtesMentorPairs.map((p) => p.subtes_id);
-
-  // mentorIds generik — CUMA dipakai/divalidasi kalau tidak ada subtesMentorPairs
-  // (kelas tanpa subtes tertentu). Kalau subtesMentorPairs terisi, field ini
-  // diabaikan total (mentor sudah eksplisit lewat pairing).
-  let generalMentorIds: string[] = [];
-  if (subtesMentorPairs.length === 0) {
-    generalMentorIds = Array.isArray(body.mentorIds)
-      ? Array.from(new Set(body.mentorIds.filter((id): id is string => typeof id === "string" && id.length > 0)))
-      : [];
-    for (const candidateMentorId of generalMentorIds) {
-      const aktifCheck = await validateMentorAktif(candidateMentorId);
+      const aktifCheck = await validateMentorAktif(pair.mentorId);
       if (!aktifCheck.ok) return { ok: false, error: aktifCheck.error };
+
+      const cocokCheck = await mentorCocokSubtes(pair.mentorId, subtes.mapel_dasar, pair.subtesId);
+      if (!cocokCheck.ok) return { ok: false, error: cocokCheck.error };
+      if (!cocokCheck.cocok) {
+        return { ok: false, error: "Salah satu Mentor yang dipasangkan tidak mengampu Subtes tersebut." };
+      }
+
+      subtesMentorPairs.push({ subtes_id: pair.subtesId, mentor_id: pair.mentorId });
+    }
+
+    subtesIds = subtesMentorPairs.map((p) => p.subtes_id);
+
+    // mentorIds generik — CUMA dipakai/divalidasi kalau tidak ada subtesMentorPairs
+    // (kelas tanpa subtes tertentu). Kalau subtesMentorPairs terisi, field ini
+    // diabaikan total (mentor sudah eksplisit lewat pairing).
+    if (subtesMentorPairs.length === 0) {
+      generalMentorIds = Array.isArray(body.mentorIds)
+        ? Array.from(new Set(body.mentorIds.filter((id): id is string => typeof id === "string" && id.length > 0)))
+        : [];
+      for (const candidateMentorId of generalMentorIds) {
+        const aktifCheck = await validateMentorAktif(candidateMentorId);
+        if (!aktifCheck.ok) return { ok: false, error: aktifCheck.error };
+      }
     }
   }
 
@@ -274,6 +325,8 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
       program_kategori: body.programKategori,
       tingkat_kelas: body.tingkatKelas,
       tipe_kelas: body.tipeKelas,
+      mode_pembelajaran: modePembelajaran,
+      jumlah_sesi: jumlahSesi,
       subtes_id: subtesId,
       mentor_id: mentorId,
       mentor_ids: mentorIds,

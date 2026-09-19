@@ -2,7 +2,7 @@
 
 import Script from "next/script";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
 import MaskotLoading from "@/components/ui/MaskotLoading";
@@ -44,7 +44,18 @@ export interface CheckoutSubtesOption {
   nama: string;
 }
 
+interface OfflineMentorOption {
+  mentorId: string;
+  nama: string;
+  asalPtn: string;
+  jarakKm: number;
+}
+
 const MAX_SUBTES_PILIHAN = 3;
+
+function formatJarak(km: number): string {
+  return `${km.toLocaleString("id-ID", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} km`;
+}
 
 export default function CheckoutForm({
   kelasId,
@@ -52,6 +63,7 @@ export default function CheckoutForm({
   snapClientKey,
   isProduction,
   subtesOptions,
+  modePembelajaran,
 }: {
   kelasId: string;
   harga: number;
@@ -60,15 +72,92 @@ export default function CheckoutForm({
   /** Pool Subtes kelas ini (kelas_subtes) — checklist cuma tampil kalau > 1
    * (kelas paket). Kalau <= 1, dikirim otomatis tanpa perlu siswa memilih. */
   subtesOptions: CheckoutSubtesOption[];
+  /** Kelas tatap muka (offline) minta izin lokasi & tampilkan mentor terdekat
+   * untuk dipilih siswa — beda alurnya dari kelas online biasa. */
+  modePembelajaran: "online" | "offline";
 }) {
   const router = useRouter();
-  const isPaket = subtesOptions.length > 1;
+  const isOffline = modePembelajaran === "offline";
+  const isPaket = !isOffline && subtesOptions.length > 1;
   const [kodePromoInput, setKodePromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [isApplying, setIsApplying] = useState(false);
   const [selectedSubtesIds, setSelectedSubtesIds] = useState<string[]>([]);
   const [subtesError, setSubtesError] = useState<string | null>(null);
+
+  // ---- Kelas Offline: lokasi siswa + pilihan Mentor terdekat ----
+  const [geoStatus, setGeoStatus] = useState<"idle" | "requesting" | "granted" | "denied" | "error">(() => {
+    if (!isOffline) return "idle";
+    return typeof navigator !== "undefined" && "geolocation" in navigator ? "requesting" : "error";
+  });
+  const [studentLat, setStudentLat] = useState<number | null>(null);
+  const [studentLng, setStudentLng] = useState<number | null>(null);
+  const [offlineMentors, setOfflineMentors] = useState<OfflineMentorOption[] | null>(null);
+  const [isLoadingMentors, setIsLoadingMentors] = useState(false);
+  const [mentorsError, setMentorsError] = useState<string | null>(null);
+  const [selectedMentorId, setSelectedMentorId] = useState<string | null>(null);
+
+  async function fetchOfflineMentors(lat: number, lng: number) {
+    setIsLoadingMentors(true);
+    setMentorsError(null);
+    try {
+      const response = await fetch("/api/payment/offline-mentors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kelasId, lat, lng }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.success) {
+        setMentorsError(json.error ?? "Gagal memuat daftar mentor. Coba lagi nanti.");
+        setOfflineMentors(null);
+        return;
+      }
+      setOfflineMentors(json.mentors as OfflineMentorOption[]);
+    } catch {
+      setMentorsError("Gagal terhubung ke server. Periksa koneksi internet kamu.");
+      setOfflineMentors(null);
+    } finally {
+      setIsLoadingMentors(false);
+    }
+  }
+
+  function startGeolocation() {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setStudentLat(lat);
+        setStudentLng(lng);
+        setGeoStatus("granted");
+        fetchOfflineMentors(lat, lng);
+      },
+      () => setGeoStatus("denied"),
+      { enableHighAccuracy: false, timeout: 15000 },
+    );
+  }
+
+  // Tombol "Coba Lagi" (setelah izin ditolak/error) — beda dari mount effect
+  // di bawah, di sini boleh setState synchronous karena dipicu klik user,
+  // bukan dari body efek.
+  function requestLokasi() {
+    if (!("geolocation" in navigator)) {
+      setGeoStatus("error");
+      return;
+    }
+    setGeoStatus("requesting");
+    startGeolocation();
+  }
+
+  useEffect(() => {
+    // geoStatus awal sudah "requesting" (lihat lazy initializer di atas) kalau
+    // kelas ini offline & browser dukung geolocation — effect ini cuma perlu
+    // MEMULAI request-nya, tanpa setState synchronous di body efek sendiri.
+    if (isOffline && typeof navigator !== "undefined" && "geolocation" in navigator) {
+      startGeolocation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOffline]);
 
   const [payError, setPayError] = useState<string | null>(null);
   const [isPaying, setIsPaying] = useState(false);
@@ -128,6 +217,17 @@ export default function CheckoutForm({
       return;
     }
 
+    if (isOffline) {
+      if (studentLat === null || studentLng === null) {
+        setPayError("Izinkan akses lokasi dulu supaya kami bisa carikan mentor terdekat.");
+        return;
+      }
+      if (!selectedMentorId) {
+        setPayError("Pilih mentor tatap muka dulu sebelum bayar.");
+        return;
+      }
+    }
+
     setIsPaying(true);
 
     try {
@@ -138,6 +238,9 @@ export default function CheckoutForm({
           kelasId,
           kodePromo: appliedPromo?.kode,
           subtesIds: isPaket ? selectedSubtesIds : undefined,
+          mentorOfflineId: isOffline ? selectedMentorId : undefined,
+          lokasiSiswaLat: isOffline ? studentLat : undefined,
+          lokasiSiswaLng: isOffline ? studentLng : undefined,
         }),
       });
       const json = await response.json();
@@ -189,6 +292,75 @@ export default function CheckoutForm({
         data-client-key={snapClientKey}
         strategy="afterInteractive"
       />
+
+      {isOffline ? (
+        <div className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Pilih Mentor Tatap Muka</h2>
+            <p className="text-sm text-[#7E7C7C]">
+              Kelas ini tatap muka (offline) — mentor akan datang ke lokasimu. Pilih salah satu mentor terdekat.
+            </p>
+          </div>
+
+          {geoStatus === "idle" || geoStatus === "requesting" ? (
+            <p className="text-sm text-[#7E7C7C]">Meminta izin lokasi dari browser kamu...</p>
+          ) : null}
+
+          {geoStatus === "denied" || geoStatus === "error" ? (
+            <div className="flex flex-col gap-2 rounded-[16px] bg-[#FFEBEB] px-4 py-3">
+              <p className="text-sm text-[#E70A0A]">
+                Kami butuh akses lokasi untuk mencarikan mentor tatap muka terdekat. Izinkan akses lokasi di
+                browser kamu, lalu coba lagi.
+              </p>
+              <Button type="button" variant="secondary" size="sm" className="w-fit" onClick={requestLokasi}>
+                Coba Lagi
+              </Button>
+            </div>
+          ) : null}
+
+          {geoStatus === "granted" && isLoadingMentors ? (
+            <p className="text-sm text-[#7E7C7C]">Mencari mentor terdekat...</p>
+          ) : null}
+
+          {mentorsError ? <p className="text-sm text-[#E70A0A]">{mentorsError}</p> : null}
+
+          {geoStatus === "granted" && !isLoadingMentors && offlineMentors ? (
+            offlineMentors.length === 0 ? (
+              <p className="rounded-[16px] bg-[#FFEBEB] px-4 py-3 text-sm text-[#E70A0A]">
+                Belum ada mentor tatap muka tersedia untuk mapel ini di area kamu.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {offlineMentors.map((mentor) => (
+                  <label
+                    key={mentor.mentorId}
+                    className={`flex items-center justify-between gap-3 rounded-[12px] border px-3 py-2.5 text-sm ${
+                      selectedMentorId === mentor.mentorId
+                        ? "border-[#081EEA] bg-[#F5F6FF]"
+                        : "border-[#E3E3E3] hover:bg-gray-50"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="mentorOffline"
+                        checked={selectedMentorId === mentor.mentorId}
+                        onChange={() => setSelectedMentorId(mentor.mentorId)}
+                        className="size-4 accent-[#081EEA]"
+                      />
+                      <span className="flex flex-col">
+                        <span className="font-medium text-black">{mentor.nama}</span>
+                        <span className="text-xs text-[#7E7C7C]">{mentor.asalPtn}</span>
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-sm font-medium text-[#081EEA]">{formatJarak(mentor.jarakKm)}</span>
+                  </label>
+                ))}
+              </div>
+            )
+          ) : null}
+        </div>
+      ) : null}
 
       {isPaket ? (
         <div className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
@@ -288,7 +460,13 @@ export default function CheckoutForm({
 
         {payError ? <p className="text-sm text-[#E70A0A]">{payError}</p> : null}
 
-        <Button variant="primary" size="xl" onClick={handleBayar} disabled={isPaying} className="w-full">
+        <Button
+          variant="primary"
+          size="xl"
+          onClick={handleBayar}
+          disabled={isPaying || (isOffline && (!offlineMentors || offlineMentors.length === 0 || !selectedMentorId))}
+          className="w-full"
+        >
           {isPaying ? (
             <span className="flex items-center justify-center gap-2">
               <MaskotLoading size="sm" />

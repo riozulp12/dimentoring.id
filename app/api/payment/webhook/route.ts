@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { verifyWebhookSignature } from "@/lib/payment/verifyWebhookSignature";
 import { convertReferralOnPayment } from "@/lib/referral/convertReferralOnPayment";
-import { notifyPembayaranBerhasil, notifyMentorsSiswaBaruDaftar } from "@/lib/notifikasi/notify";
+import {
+  notifyPembayaranBerhasil,
+  notifyMentorsSiswaBaruDaftar,
+  notifyMentorOfflineSiswaBaruDaftar,
+} from "@/lib/notifikasi/notify";
 import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
 
 /**
@@ -48,7 +52,9 @@ export async function POST(request: NextRequest) {
 
   const { data: payment, error: paymentError } = await supabaseServer
     .from("payments")
-    .select("id, user_id, item_type, item_id, kode_promo_id, gateway_reference, status")
+    .select(
+      "id, user_id, item_type, item_id, kode_promo_id, gateway_reference, status, mentor_offline_id, lokasi_siswa_lat, lokasi_siswa_lng",
+    )
     .eq("order_id", orderId)
     .maybeSingle();
 
@@ -106,7 +112,14 @@ export async function POST(request: NextRequest) {
       const { data: enrollment, error: enrollmentError } = await supabaseServer
         .from("enrollments")
         .upsert(
-          { user_id: payment.user_id, kelas_id: kelasId, status_pembayaran: "lunas" },
+          {
+            user_id: payment.user_id,
+            kelas_id: kelasId,
+            status_pembayaran: "lunas",
+            mentor_offline_id: payment.mentor_offline_id,
+            lokasi_siswa_lat: payment.lokasi_siswa_lat,
+            lokasi_siswa_lng: payment.lokasi_siswa_lng,
+          },
           { onConflict: "user_id,kelas_id" },
         )
         .select("id")
@@ -161,10 +174,32 @@ export async function POST(request: NextRequest) {
     await convertReferralOnPayment(payment.user_id as string, payment.id as string);
 
     if (payment.item_type === "kelas") {
-      const { data: kelas } = await supabaseServer.from("kelas").select("nama, jadwal").eq("id", kelasId).maybeSingle();
+      const { data: kelas } = await supabaseServer
+        .from("kelas")
+        .select("nama, jadwal, mode_pembelajaran")
+        .eq("id", kelasId)
+        .maybeSingle();
       const kelasNama = (kelas?.nama as string) ?? "kamu";
+      const jadwalDisplay = formatJadwalRingkas(kelas?.jadwal);
       await notifyPembayaranBerhasil(payment.user_id as string, kelasId, kelasNama);
-      await notifyMentorsSiswaBaruDaftar(kelasId, kelasNama, formatJadwalRingkas(kelas?.jadwal), enrollmentSubtesIds);
+
+      // Offline: notif HANYA ke mentor_offline_id yang dipilih siswa saat
+      // checkout (BUKAN semua mentor kelas ini) — kelas offline memang tidak
+      // punya kelas_subtes_mentor/kelas_mentor sama sekali (lihat
+      // lib/admin/validateKelasInput.ts), jadi notifyMentorsSiswaBaruDaftar
+      // (online) tidak relevan di sini.
+      if (kelas?.mode_pembelajaran === "offline") {
+        if (payment.mentor_offline_id) {
+          await notifyMentorOfflineSiswaBaruDaftar(
+            payment.mentor_offline_id as string,
+            kelasId,
+            kelasNama,
+            jadwalDisplay,
+          );
+        }
+      } else {
+        await notifyMentorsSiswaBaruDaftar(kelasId, kelasNama, jadwalDisplay, enrollmentSubtesIds);
+      }
     }
 
     return NextResponse.json({ success: true });

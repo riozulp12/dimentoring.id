@@ -36,6 +36,8 @@ export interface ProfilData {
   mentorJurusan: string | null;
   mentorSubtesDiampu: string[];
   mentorStatus: MentorRoleStatus;
+  /** BARU — toggle "Bersedia Mengajar Tatap Muka (Offline)" di profil mentor. */
+  mentorBisaOffline: boolean;
 }
 
 interface SubtesJoinRow {
@@ -83,12 +85,13 @@ export async function getProfilData(userId: string, role: SessionRole): Promise<
   let mentorJurusan: string | null = null;
   let mentorSubtesDiampu: string[] = [];
   let mentorStatus: MentorRoleStatus = null;
+  let mentorBisaOffline = false;
 
   if (role === "mentor") {
     const [profileRes, roleRes] = await Promise.all([
       supabaseServer
         .from("mentor_profiles")
-        .select("asal_ptn, semester, jurusan, mentor_subtes_diampu(subtes:subtes_id(nama))")
+        .select("asal_ptn, semester, jurusan, bisa_offline, mentor_subtes_diampu(subtes:subtes_id(nama))")
         .eq("user_id", userId)
         .maybeSingle(),
       supabaseServer
@@ -109,6 +112,7 @@ export async function getProfilData(userId: string, role: SessionRole): Promise<
       mentorSubtesDiampu = extractSubtesNama(
         profileRes.data.mentor_subtes_diampu as SubtesJoinRow[] | null,
       );
+      mentorBisaOffline = Boolean(profileRes.data.bisa_offline);
     }
     mentorStatus = (roleRes.data?.status as MentorRoleStatus) ?? null;
   }
@@ -132,6 +136,7 @@ export async function getProfilData(userId: string, role: SessionRole): Promise<
     mentorJurusan,
     mentorSubtesDiampu,
     mentorStatus,
+    mentorBisaOffline,
   };
 }
 

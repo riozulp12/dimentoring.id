@@ -7,6 +7,7 @@ import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import ChecklistGrid from "@/components/ui/ChecklistGrid";
+import Toggle from "@/components/ui/Toggle";
 import type { ProfilData, ProvinsiOption } from "@/lib/profil/getProfilData";
 
 /** Halaman Profil — SATU komponen, kontennya menyesuaikan role sesi yang
@@ -151,6 +152,66 @@ export default function ProfilClient({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ---- Toggle "Bersedia Mengajar Tatap Muka (Offline)" (khusus Mentor) ----
+  // Terpisah dari form Edit Profil (Simpan) — langsung tersimpan begitu
+  // toggle diklik, sama pola dengan toggle di halaman Pengaturan. Menyalakan
+  // toggle WAJIB minta izin lokasi browser dulu (butuh lokasi buat matching
+  // jarak) — kalau ditolak, toggle TIDAK bisa dinyalakan.
+  const [bisaOffline, setBisaOffline] = useState(profil.mentorBisaOffline);
+  const [isTogglingOffline, setIsTogglingOffline] = useState(false);
+  const [offlineToggleError, setOfflineToggleError] = useState<string | null>(null);
+
+  async function patchBisaOffline(next: boolean, lat?: number, lng?: number) {
+    setIsTogglingOffline(true);
+    setOfflineToggleError(null);
+    try {
+      const response = await fetch("/api/profil/bersedia-offline", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bisaOffline: next, lat, lng }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.success) {
+        setOfflineToggleError(json.error ?? "Gagal menyimpan. Coba lagi nanti.");
+        return;
+      }
+      setBisaOffline(next);
+    } catch {
+      setOfflineToggleError("Gagal terhubung ke server.");
+    } finally {
+      setIsTogglingOffline(false);
+    }
+  }
+
+  function handleToggleBisaOffline() {
+    setOfflineToggleError(null);
+
+    if (bisaOffline) {
+      // Matikan tidak butuh lokasi — langsung PATCH.
+      patchBisaOffline(false);
+      return;
+    }
+
+    if (!("geolocation" in navigator)) {
+      setOfflineToggleError("Browser kamu tidak mendukung akses lokasi.");
+      return;
+    }
+
+    setIsTogglingOffline(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        patchBisaOffline(true, position.coords.latitude, position.coords.longitude);
+      },
+      () => {
+        setIsTogglingOffline(false);
+        setOfflineToggleError(
+          "Izin lokasi ditolak. Kami butuh lokasi kamu untuk mencocokkan siswa offline yang jaraknya terdekat — nyalakan izin lokasi di browser lalu coba lagi.",
+        );
+      },
+      { enableHighAccuracy: false, timeout: 15000 },
+    );
+  }
 
   function enterEdit() {
     setForm(toFormState(profil));
@@ -390,6 +451,22 @@ export default function ProfilClient({
               <InfoRow label="Jurusan" value={profil.mentorJurusan || "-"} />
             </div>
             <InfoRow label="Subtes yang Diampu" value={<ChipList items={profil.mentorSubtesDiampu} />} />
+
+            <div className="flex items-start justify-between gap-4 border-t border-[#E3E3E3] pt-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-black sm:text-base">Bersedia Mengajar Tatap Muka (Offline)</span>
+                <span className="text-xs text-[#7E7C7C] sm:text-sm">
+                  Kalau aktif, kamu bisa di-assign otomatis ke siswa kelas offline berdasar jarak lokasimu.
+                </span>
+              </div>
+              <Toggle
+                checked={bisaOffline}
+                onChange={handleToggleBisaOffline}
+                disabled={isTogglingOffline}
+                label="Bersedia Mengajar Tatap Muka (Offline)"
+              />
+            </div>
+            {offlineToggleError ? <p className="text-sm text-[#E70A0A]">{offlineToggleError}</p> : null}
           </Card>
         ) : null}
       </div>
@@ -539,6 +616,22 @@ export default function ProfilClient({
             <label className="text-sm font-medium text-black">Subtes yang Diampu</label>
             <ChecklistGrid options={subtesOptions} selected={form.subtesDiampu} onToggle={toggleSubtes} />
           </div>
+
+          <div className="flex items-start justify-between gap-4 border-t border-[#E3E3E3] pt-4">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium text-black sm:text-base">Bersedia Mengajar Tatap Muka (Offline)</span>
+              <span className="text-xs text-[#7E7C7C] sm:text-sm">
+                Kalau aktif, kamu bisa di-assign otomatis ke siswa kelas offline berdasar jarak lokasimu.
+              </span>
+            </div>
+            <Toggle
+              checked={bisaOffline}
+              onChange={handleToggleBisaOffline}
+              disabled={isTogglingOffline}
+              label="Bersedia Mengajar Tatap Muka (Offline)"
+            />
+          </div>
+          {offlineToggleError ? <p className="text-sm text-[#E70A0A]">{offlineToggleError}</p> : null}
         </Card>
       ) : null}
 

@@ -60,6 +60,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
           snapClientKey={snapClientKey}
           isProduction={isProduction}
           subtesOptions={subtesOptions}
+          modePembelajaran={kelas.modePembelajaran}
         />
       </div>
     </>

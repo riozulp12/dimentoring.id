@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getKelasForCheckout, getKelasSubtesOptions, isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
+import { getOfflineMentorOptions } from "@/lib/payment/getOfflineMentorOptions";
 import { validatePromoCode } from "@/lib/payment/validatePromoCode";
 import { generateOrderId } from "@/lib/payment/generateOrderId";
 import { snap } from "@/lib/payment/midtransSnap";
@@ -21,6 +22,14 @@ interface CreatePaymentBody {
    * menentukan pool aslinya lewat kelas_subtes, bukan percaya array ini
    * mentah-mentah). */
   subtesIds?: string[];
+  /** WAJIB kalau kelas.mode_pembelajaran='offline' — mentor pilihan siswa dari
+   * daftar /api/payment/offline-mentors, DIVALIDASI ULANG di sini (server
+   * tidak percaya mentorOfflineId mentah dari client, sama prinsipnya dengan
+   * subtesIds/harga). lokasiSiswaLat/Lng dari navigator.geolocation browser
+   * siswa, ditampung di payments dulu sampai webhook pindahkan ke enrollments. */
+  mentorOfflineId?: string;
+  lokasiSiswaLat?: number;
+  lokasiSiswaLng?: number;
 }
 
 const MAX_SUBTES_PILIHAN = 3;
@@ -80,6 +89,40 @@ export async function POST(request: NextRequest) {
     resolvedSubtesIds = subtesPool.map((s) => s.id);
   }
 
+  // Kelas offline: mentor TIDAK ditentukan di muka waktu bikin kelas —
+  // otomatis di-assign berdasar jarak terdekat, tapi siswa yang pilih dari
+  // daftar (bukan dipaksa otomatis yang paling dekat). Validasi ulang di sini
+  // (bukan cuma percaya /api/payment/offline-mentors yang dipanggil sebelumnya)
+  // supaya mentorId yang tersimpan benar-benar qualified.
+  let mentorOfflineId: string | null = null;
+  let lokasiSiswaLat: number | null = null;
+  let lokasiSiswaLng: number | null = null;
+  if (kelas.modePembelajaran === "offline") {
+    const lat = Number(body.lokasiSiswaLat);
+    const lng = Number(body.lokasiSiswaLng);
+    if (!body.mentorOfflineId || typeof body.mentorOfflineId !== "string") {
+      return errorResponse("Pilih mentor tatap muka dulu sebelum checkout.", 400);
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return errorResponse("Lokasi kamu tidak valid. Izinkan akses lokasi lalu coba lagi.", 400);
+    }
+    const subtesIdForMatching = subtesPool[0]?.id;
+    if (!subtesIdForMatching) {
+      return errorResponse("Kelas ini belum punya Subtes yang diatur. Hubungi Admin.", 400);
+    }
+    const qualifiedMentors = await getOfflineMentorOptions(subtesIdForMatching, lat, lng);
+    const isQualified = qualifiedMentors.some((m) => m.mentorId === body.mentorOfflineId);
+    if (!isQualified) {
+      return errorResponse(
+        "Belum ada mentor tatap muka tersedia untuk mapel ini di area kamu, atau mentor yang dipilih sudah tidak tersedia.",
+        409,
+      );
+    }
+    mentorOfflineId = body.mentorOfflineId;
+    lokasiSiswaLat = lat;
+    lokasiSiswaLng = lng;
+  }
+
   let kodePromoId: string | null = null;
   let total = kelas.harga;
 
@@ -120,6 +163,9 @@ export async function POST(request: NextRequest) {
         status: "menunggu",
         kode_promo_id: kodePromoId,
         order_id: candidateOrderId,
+        mentor_offline_id: mentorOfflineId,
+        lokasi_siswa_lat: lokasiSiswaLat,
+        lokasi_siswa_lng: lokasiSiswaLng,
       })
       .select("id, order_id")
       .single();

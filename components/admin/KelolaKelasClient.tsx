@@ -4,7 +4,12 @@ import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import KelolaKelasForm from "./KelolaKelasForm";
-import { TINGKAT_KELAS_LABEL, TIPE_KELAS_LABEL, PROGRAM_KATEGORI_LABEL } from "@/lib/shared/kelasLabels";
+import {
+  TINGKAT_KELAS_LABEL,
+  TIPE_KELAS_LABEL,
+  PROGRAM_KATEGORI_LABEL,
+  MODE_PEMBELAJARAN_LABEL,
+} from "@/lib/shared/kelasLabels";
 import type { ProgramKategori } from "@/lib/shared/kelasLabels";
 import type { KelasListItem, MentorOption, SubtesOption } from "@/lib/admin/getKelolaKelasData";
 
@@ -24,6 +29,9 @@ function formatRupiah(value: number): string {
  * (kelas_subtes_mentor); fallback ke daftar mentor generik (kelas_mentor)
  * untuk kelas tanpa subtes tertentu (Konsultasi/Pendampingan Mahasiswa). */
 function formatMentorDisplay(kelas: KelasListItem): string {
+  if (kelas.modePembelajaran === "offline") {
+    return "Otomatis (jarak terdekat saat checkout)";
+  }
   if (kelas.subtesMentorPairs.length > 0) {
     return kelas.subtesMentorPairs.map((p) => `${p.subtesNama}: ${p.mentorNama}`).join(", ");
   }
@@ -116,6 +124,7 @@ export default function KelolaKelasClient({
                 <th className="px-4 py-3 font-medium">Kategori</th>
                 <th className="px-4 py-3 font-medium">Tingkat</th>
                 <th className="px-4 py-3 font-medium">Tipe</th>
+                <th className="px-4 py-3 font-medium">Mode</th>
                 <th className="px-4 py-3 font-medium">Subtes</th>
                 <th className="px-4 py-3 font-medium">Mentor</th>
                 <th className="px-4 py-3 font-medium">Siswa</th>
@@ -138,6 +147,9 @@ export default function KelolaKelasClient({
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">
                     {TIPE_KELAS_LABEL[kelas.tipeKelas] ?? kelas.tipeKelas}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">
+                    {MODE_PEMBELAJARAN_LABEL[kelas.modePembelajaran] ?? kelas.modePembelajaran}
                   </td>
                   <td className="px-4 py-3 text-[#7E7C7C]">{kelas.subtesNama}</td>
                   <td className="px-4 py-3 text-[#7E7C7C]">{formatMentorDisplay(kelas)}</td>
@@ -171,6 +183,16 @@ export default function KelolaKelasClient({
               <div>
                 <p className="text-[#7E7C7C]">Tipe Kelas</p>
                 <p className="text-black">{TIPE_KELAS_LABEL[detailKelas.tipeKelas] ?? detailKelas.tipeKelas}</p>
+              </div>
+              <div>
+                <p className="text-[#7E7C7C]">Mode Pembelajaran</p>
+                <p className="text-black">
+                  {MODE_PEMBELAJARAN_LABEL[detailKelas.modePembelajaran] ?? detailKelas.modePembelajaran}
+                </p>
+              </div>
+              <div>
+                <p className="text-[#7E7C7C]">Jumlah Sesi</p>
+                <p className="text-black">{detailKelas.jumlahSesi}</p>
               </div>
               <div>
                 <p className="text-[#7E7C7C]">Subtes</p>

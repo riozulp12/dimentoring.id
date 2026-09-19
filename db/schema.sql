@@ -504,6 +504,50 @@ CREATE TABLE enrollment_subtes (
 
 CREATE INDEX idx_enrollment_subtes_enrollment ON enrollment_subtes(enrollment_id);
 
+-- Mode Pembelajaran & Jumlah Sesi (BARU) — offline berarti mentor mendatangi 
+-- lokasi siswa, mentor dipilih otomatis berdasar jarak TERDEKAT saat checkout, 
+-- bukan ditentukan di muka waktu bikin kelas (beda dari online).
+CREATE TYPE mode_pembelajaran AS ENUM ('online', 'offline');
+
+ALTER TABLE kelas ADD COLUMN mode_pembelajaran mode_pembelajaran NOT NULL DEFAULT 'online';
+ALTER TABLE kelas ADD COLUMN jumlah_sesi INT NOT NULL DEFAULT 10; 
+-- Default diisi 10 (online) di kode aplikasi waktu bikin kelas baru; kalau 
+-- mode_pembelajaran='offline' dipilih, default form berubah jadi 8 — TETAP 
+-- BISA diubah manual oleh Admin (mis. untuk campaign khusus).
+
+-- Lokasi mentor (opsional, cuma perlu diisi kalau mentor bersedia ngajar 
+-- offline/tatap muka) — diambil dari GPS device (navigator.geolocation), 
+-- BUKAN geocoding alamat berbayar.
+ALTER TABLE mentor_profiles ADD COLUMN bisa_offline BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE mentor_profiles ADD COLUMN lokasi_lat DECIMAL(10,7);
+ALTER TABLE mentor_profiles ADD COLUMN lokasi_lng DECIMAL(10,7);
+
+-- Lokasi siswa & mentor yang di-assign OTOMATIS berdasar jarak, dicatat PER 
+-- ENROLLMENT (bukan per kelas) — karena beda siswa, beda lokasi, beda mentor 
+-- terdekat, meski beli kelas offline yang sama.
+ALTER TABLE enrollments ADD COLUMN lokasi_siswa_lat DECIMAL(10,7);
+ALTER TABLE enrollments ADD COLUMN lokasi_siswa_lng DECIMAL(10,7);
+ALTER TABLE enrollments ADD COLUMN mentor_offline_id UUID REFERENCES users(id);
+
+-- Absensi Sesi (BARU) — konfirmasi DUA ARAH: mentor klik "Selesai", siswa 
+-- konfirmasi terpisah. Cocok = valid otomatis. Tidak cocok = perlu_review_admin.
+CREATE TYPE status_konfirmasi_sesi AS ENUM ('belum', 'dikonfirmasi', 'disangkal');
+
+CREATE TABLE sesi_kelas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
+    nomor_sesi INT NOT NULL,
+    tanggal_dilaksanakan DATE,
+    dikonfirmasi_mentor BOOLEAN NOT NULL DEFAULT false,
+    dikonfirmasi_mentor_pada TIMESTAMPTZ,
+    status_siswa status_konfirmasi_sesi NOT NULL DEFAULT 'belum',
+    dikonfirmasi_siswa_pada TIMESTAMPTZ,
+    perlu_review_admin BOOLEAN NOT NULL DEFAULT false,
+    UNIQUE(enrollment_id, nomor_sesi)
+);
+
+CREATE INDEX idx_sesi_kelas_enrollment ON sesi_kelas(enrollment_id);
+
 -- Konfigurasi persentase honor per tipe kelas — tabel terpisah (bukan hardcode
 -- di query) supaya Admin bisa ubah angkanya lewat Table Editor tanpa perlu
 -- developer redeploy kode. Persentase berlaku dari HARGA KELAS, bukan flat
@@ -722,7 +766,13 @@ CREATE TABLE payments (
     gateway_reference TEXT,              -- id transaksi dari Midtrans/Xendit, utk idempotency webhook
     order_id TEXT UNIQUE,                -- ID yang KITA generate, dikirim ke Midtrans sebagai order_id
     tanggal_lunas TIMESTAMPTZ,           -- diisi saat status berubah jadi 'berhasil', dasar chart Sales
-    dibuat_pada TIMESTAMPTZ NOT NULL DEFAULT now()
+    dibuat_pada TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Mentor Offline (BARU) — kelas.mode_pembelajaran='offline' saja. Ditampung
+    -- di sini dulu (enrollments belum ada di titik checkout), dipindahkan
+    -- webhook ke kolom enrollments senama begitu enrollment dibuat.
+    mentor_offline_id UUID REFERENCES users(id),
+    lokasi_siswa_lat DECIMAL(10,7),
+    lokasi_siswa_lng DECIMAL(10,7)
 );
 
 CREATE UNIQUE INDEX idx_payments_gateway_ref ON payments(gateway_reference)

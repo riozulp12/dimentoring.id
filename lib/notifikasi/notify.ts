@@ -188,6 +188,56 @@ export async function notifyMentorsSiswaBaruDaftar(
 }
 
 /**
+ * 2g: Siswa Baru Daftar Kelas OFFLINE — notif bell + email HANYA ke satu
+ * mentor (mentor_offline_id) yang DIPILIH siswa saat checkout (matching
+ * jarak terdekat, lihat lib/payment/getOfflineMentorOptions.ts), REUSE
+ * template email yang sama dengan kelas online (kirimEmailMentorSiswaBaru).
+ * Dipanggil dari app/api/payment/webhook/route.ts SETELAH enrollments
+ * di-upsert 'lunas' untuk kelas mode_pembelajaran='offline'.
+ */
+export async function notifyMentorOfflineSiswaBaruDaftar(
+  mentorUserId: string,
+  kelasId: string,
+  kelasNama: string,
+  jadwalDisplay: string | null,
+) {
+  const { data: mentor, error } = await supabaseServer
+    .from("users")
+    .select("id, nama, email")
+    .eq("id", mentorUserId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[notifikasi] query users (mentor_offline) failed:", error);
+    return;
+  }
+  if (!mentor) return;
+
+  const jadwalText = jadwalDisplay ?? "Belum diatur";
+  const pesan = `Siswa baru mendaftar kelas tatap muka ${kelasNama}! Jadwal: ${jadwalText}`;
+
+  await insertNotifikasi([
+    {
+      user_id: mentor.id as string,
+      tipe: "sistem",
+      judul: "Siswa baru mendaftar",
+      pesan,
+      link_tujuan: `/kelas-saya/${kelasId}`,
+    },
+  ]);
+
+  const result = await kirimEmailMentorSiswaBaru({
+    email: mentor.email as string,
+    namaMentor: mentor.nama as string,
+    kelasNama,
+    jadwalDisplay: jadwalText,
+  });
+  if (!result.success) {
+    console.error("[notifikasi] kirim email mentor_offline gagal untuk", mentor.email, ":", result.error);
+  }
+}
+
+/**
  * 2c: Konten Menunggu Review — notif ke semua Mentor berstatus Active yang
  * Subtes yang Diampu-nya cocok dengan subtes_id konten baru (soal_ai/materi
  * yang baru masuk status 'draft'). Cuma Mentor Active yang relevan — Mentor

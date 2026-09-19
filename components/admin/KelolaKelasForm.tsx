@@ -4,7 +4,12 @@ import { useCallback, useState, type FormEvent } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
 import type { JadwalEntry, KelasListItem, MentorOption, SubtesOption } from "@/lib/admin/getKelolaKelasData";
-import { PROGRAM_KATEGORI_LABEL, PROGRAM_KATEGORI_ORDER } from "@/lib/shared/kelasLabels";
+import {
+  PROGRAM_KATEGORI_LABEL,
+  PROGRAM_KATEGORI_ORDER,
+  MODE_PEMBELAJARAN_LABEL,
+  JUMLAH_SESI_DEFAULT,
+} from "@/lib/shared/kelasLabels";
 
 /**
  * Form Tambah/Edit Kelas — SATU komponen dipakai kedua mode (initialKelas
@@ -34,6 +39,11 @@ const TIPE_KELAS_OPTIONS = [
   { label: "Private", value: "private" },
   { label: "Semi-Private", value: "semi_private" },
   { label: "Grouping", value: "grouping" },
+];
+
+const MODE_PEMBELAJARAN_OPTIONS = [
+  { label: MODE_PEMBELAJARAN_LABEL.online, value: "online" },
+  { label: MODE_PEMBELAJARAN_LABEL.offline, value: "offline" },
 ];
 
 const HARI_OPTIONS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"].map((h) => ({
@@ -67,6 +77,20 @@ export default function KelolaKelasForm({
   const [programKategori, setProgramKategori] = useState(initialKelas?.programKategori ?? "");
   const [tingkatKelas, setTingkatKelas] = useState(initialKelas?.tingkatKelas ?? "");
   const [tipeKelas, setTipeKelas] = useState(initialKelas?.tipeKelas ?? "");
+  const [modePembelajaran, setModePembelajaran] = useState(initialKelas?.modePembelajaran ?? "online");
+  const [jumlahSesi, setJumlahSesi] = useState(
+    initialKelas ? String(initialKelas.jumlahSesi) : String(JUMLAH_SESI_DEFAULT.online),
+  );
+  // Sekali Admin ubah manual, berhenti auto-switch default Jumlah Sesi tiap
+  // ganti Mode Pembelajaran (instruksi: "TETAP BISA diubah manual, jangan di-lock").
+  const [jumlahSesiTouched, setJumlahSesiTouched] = useState(false);
+  // Offline: SATU Subtes saja (tanpa pairing Mentor, mentor otomatis
+  // di-assign berdasar jarak terdekat waktu checkout) — prefill dari
+  // kelas.subtes_id lama kalau kelas ini memang offline (subtesMentorPairs
+  // pasti kosong untuk kelas offline).
+  const [offlineSubtesId, setOfflineSubtesId] = useState(
+    initialKelas?.modePembelajaran === "offline" ? (initialKelas?.subtesId ?? "") : "",
+  );
   const [selectedSubtesIds, setSelectedSubtesIds] = useState<string[]>(
     initialKelas?.subtesMentorPairs.map((p) => p.subtesId) ?? [],
   );
@@ -112,6 +136,13 @@ export default function KelolaKelasForm({
         .map((m) => ({ label: m.nama, value: m.id })),
     [mentorOptions, mentorCocokSubtes],
   );
+
+  function handleModePembelajaranChange(value: string) {
+    setModePembelajaran(value);
+    if (!jumlahSesiTouched) {
+      setJumlahSesi(String(JUMLAH_SESI_DEFAULT[value] ?? JUMLAH_SESI_DEFAULT.online));
+    }
+  }
 
   function toggleSubtes(subtesIdValue: string) {
     setSelectedSubtesIds((prev) =>
@@ -201,20 +232,30 @@ export default function KelolaKelasForm({
       return;
     }
 
-    // Tiap Subtes yang dicentang wajib punya pasangan Mentor — cek di sini
-    // dulu supaya errornya jelas per-baris, bukan cuma pesan generik dari API.
-    const missingMentorFor = selectedSubtesIds.find((id) => !subtesMentorMap[id]);
-    if (missingMentorFor) {
-      const subtesNamaMissing = subtesOptions.find((s) => s.id === missingMentorFor)?.nama ?? "Subtes ini";
-      setSubmitError(`Pilih Mentor untuk "${subtesNamaMissing}" sebelum menyimpan.`);
-      return;
+    if (modePembelajaran === "offline") {
+      if (!offlineSubtesId) {
+        setSubmitError("Pilih Subtes untuk kelas offline ini.");
+        return;
+      }
+    } else {
+      // Tiap Subtes yang dicentang wajib punya pasangan Mentor — cek di sini
+      // dulu supaya errornya jelas per-baris, bukan cuma pesan generik dari API.
+      const missingMentorFor = selectedSubtesIds.find((id) => !subtesMentorMap[id]);
+      if (missingMentorFor) {
+        const subtesNamaMissing = subtesOptions.find((s) => s.id === missingMentorFor)?.nama ?? "Subtes ini";
+        setSubmitError(`Pilih Mentor untuk "${subtesNamaMissing}" sebelum menyimpan.`);
+        return;
+      }
     }
 
     const completeJadwalEntries = jadwalEntries.filter((entry) => entry.hari && entry.jamMulai);
-    const subtesMentorPairs = selectedSubtesIds.map((subtesIdValue) => ({
-      subtesId: subtesIdValue,
-      mentorId: subtesMentorMap[subtesIdValue],
-    }));
+    const subtesMentorPairs =
+      modePembelajaran === "offline"
+        ? []
+        : selectedSubtesIds.map((subtesIdValue) => ({
+            subtesId: subtesIdValue,
+            mentorId: subtesMentorMap[subtesIdValue],
+          }));
 
     setIsSubmitting(true);
     const payload = {
@@ -222,8 +263,11 @@ export default function KelolaKelasForm({
       programKategori,
       tingkatKelas,
       tipeKelas,
+      modePembelajaran,
+      jumlahSesi: Number(jumlahSesi),
+      offlineSubtesId: modePembelajaran === "offline" ? offlineSubtesId : undefined,
       subtesMentorPairs,
-      mentorIds: generalMentorIds,
+      mentorIds: modePembelajaran === "offline" ? [] : generalMentorIds,
       kapasitas: Number(kapasitas),
       harga: Number(harga),
       jadwalEntries: completeJadwalEntries,
@@ -253,11 +297,17 @@ export default function KelolaKelasForm({
         mentorId: pair.mentorId,
         mentorNama: mentorOptions.find((m) => m.id === pair.mentorId)?.nama ?? "-",
       }));
+      const offlineSubtesNama = subtesOptions.find((s) => s.id === offlineSubtesId)?.nama ?? "-";
       const subtesNama =
-        resolvedSubtesMentorPairs.length > 0 ? resolvedSubtesMentorPairs.map((p) => p.subtesNama).join(", ") : "-";
-      const mentorIds = Array.from(
-        new Set([...resolvedSubtesMentorPairs.map((p) => p.mentorId), ...generalMentorIds]),
-      );
+        modePembelajaran === "offline"
+          ? offlineSubtesNama
+          : resolvedSubtesMentorPairs.length > 0
+            ? resolvedSubtesMentorPairs.map((p) => p.subtesNama).join(", ")
+            : "-";
+      const mentorIds =
+        modePembelajaran === "offline"
+          ? []
+          : Array.from(new Set([...resolvedSubtesMentorPairs.map((p) => p.mentorId), ...generalMentorIds]));
       const mentorNamaList = mentorIds
         .map((id) => mentorOptions.find((m) => m.id === id)?.nama)
         .filter((nama): nama is string => Boolean(nama));
@@ -272,7 +322,9 @@ export default function KelolaKelasForm({
         programKategori,
         tingkatKelas,
         tipeKelas,
-        subtesId: resolvedSubtesMentorPairs[0]?.subtesId ?? null,
+        modePembelajaran,
+        jumlahSesi: Number(jumlahSesi),
+        subtesId: modePembelajaran === "offline" ? offlineSubtesId : (resolvedSubtesMentorPairs[0]?.subtesId ?? null),
         subtesNama,
         mentorId: mentorIds[0] ?? null,
         mentorNama: mentorNamaList[0] ?? null,
@@ -351,88 +403,137 @@ export default function KelolaKelasForm({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-black">Subtes (bisa pilih lebih dari satu — paket)</label>
-        {subtesOptions.length === 0 ? (
-          <p className="text-sm text-[#7E7C7C]">Belum ada subtes yang ditawarkan.</p>
-        ) : (
-          <div className="modal-content-scrollable flex max-h-40 flex-col gap-1.5 overflow-y-auto rounded-[12px] border border-[#AFAFAF] p-2.5">
-            {subtesOptions.map((subtes) => (
-              <label
-                key={subtes.id}
-                className="flex items-center gap-2 rounded-[8px] px-1.5 py-1 text-sm text-black hover:bg-gray-50"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedSubtesIds.includes(subtes.id)}
-                  onChange={() => toggleSubtes(subtes.id)}
-                  className="size-4 accent-[#081EEA]"
-                />
-                {subtes.nama}
-              </label>
-            ))}
-          </div>
-        )}
-        <p className="text-xs text-[#7E7C7C]">
-          Boleh dikosongkan sama sekali khusus untuk kategori Konsultasi & Pendampingan Mahasiswa.
-        </p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-black">Mode Pembelajaran</label>
+          <InputField
+            type="dropdown"
+            size="md"
+            required
+            value={modePembelajaran}
+            onChange={(e) => handleModePembelajaranChange(e.target.value)}
+            options={MODE_PEMBELAJARAN_OPTIONS}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-black">Jumlah Sesi</label>
+          <InputField
+            type="text"
+            size="md"
+            inputMode="numeric"
+            required
+            value={jumlahSesi}
+            onChange={(e) => {
+              setJumlahSesi(e.target.value.replace(/[^0-9]/g, ""));
+              setJumlahSesiTouched(true);
+            }}
+          />
+        </div>
       </div>
 
-      {selectedSubtesIds.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-black">Mentor per Subtes</label>
-          <div className="flex flex-col gap-2">
-            {selectedSubtesIds.map((subtesIdValue) => {
-              const subtesNamaValue = subtesOptions.find((s) => s.id === subtesIdValue)?.nama ?? "-";
-              const options = mentorOptionsBySubtes(subtesIdValue);
-              return (
-                <div key={subtesIdValue} className="flex items-center gap-3">
-                  <span className="w-1/3 shrink-0 truncate text-sm text-black" title={subtesNamaValue}>
-                    {subtesNamaValue}
-                  </span>
-                  <div className="flex-1">
-                    {options.length === 0 ? (
-                      <p className="text-sm text-[#7E7C7C]">Belum ada mentor aktif yang mengampu subtes ini.</p>
-                    ) : (
-                      <InputField
-                        type="dropdown"
-                        size="md"
-                        placeholder="Pilih mentor"
-                        value={subtesMentorMap[subtesIdValue] ?? ""}
-                        onChange={(e) => setMentorForSubtes(subtesIdValue, e.target.value)}
-                        options={options}
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {modePembelajaran === "offline" ? (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-black">Subtes</label>
+          <InputField
+            type="dropdown"
+            size="md"
+            placeholder="Pilih subtes"
+            required
+            value={offlineSubtesId}
+            onChange={(e) => setOfflineSubtesId(e.target.value)}
+            options={subtesOptions.map((s) => ({ label: s.nama, value: s.id }))}
+          />
+          <p className="text-xs text-[#7E7C7C]">
+            Kelas offline belum mendukung paket multi-subtes. Mentor TIDAK dipilih di sini — otomatis
+            di-assign berdasar jarak terdekat ke siswa saat checkout.
+          </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-black">Mentor (bisa pilih lebih dari satu)</label>
-          {mentorOptions.length === 0 ? (
-            <p className="text-sm text-[#7E7C7C]">Belum ada mentor aktif.</p>
+        <>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-black">Subtes (bisa pilih lebih dari satu — paket)</label>
+            {subtesOptions.length === 0 ? (
+              <p className="text-sm text-[#7E7C7C]">Belum ada subtes yang ditawarkan.</p>
+            ) : (
+              <div className="modal-content-scrollable flex max-h-40 flex-col gap-1.5 overflow-y-auto rounded-[12px] border border-[#AFAFAF] p-2.5">
+                {subtesOptions.map((subtes) => (
+                  <label
+                    key={subtes.id}
+                    className="flex items-center gap-2 rounded-[8px] px-1.5 py-1 text-sm text-black hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedSubtesIds.includes(subtes.id)}
+                      onChange={() => toggleSubtes(subtes.id)}
+                      className="size-4 accent-[#081EEA]"
+                    />
+                    {subtes.nama}
+                  </label>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-[#7E7C7C]">
+              Boleh dikosongkan sama sekali khusus untuk kategori Konsultasi & Pendampingan Mahasiswa.
+            </p>
+          </div>
+
+          {selectedSubtesIds.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-black">Mentor per Subtes</label>
+              <div className="flex flex-col gap-2">
+                {selectedSubtesIds.map((subtesIdValue) => {
+                  const subtesNamaValue = subtesOptions.find((s) => s.id === subtesIdValue)?.nama ?? "-";
+                  const options = mentorOptionsBySubtes(subtesIdValue);
+                  return (
+                    <div key={subtesIdValue} className="flex items-center gap-3">
+                      <span className="w-1/3 shrink-0 truncate text-sm text-black" title={subtesNamaValue}>
+                        {subtesNamaValue}
+                      </span>
+                      <div className="flex-1">
+                        {options.length === 0 ? (
+                          <p className="text-sm text-[#7E7C7C]">Belum ada mentor aktif yang mengampu subtes ini.</p>
+                        ) : (
+                          <InputField
+                            type="dropdown"
+                            size="md"
+                            placeholder="Pilih mentor"
+                            value={subtesMentorMap[subtesIdValue] ?? ""}
+                            onChange={(e) => setMentorForSubtes(subtesIdValue, e.target.value)}
+                            options={options}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           ) : (
-            <div className="modal-content-scrollable flex max-h-48 flex-col gap-1.5 overflow-y-auto rounded-[12px] border border-[#AFAFAF] p-2.5">
-              {mentorOptions.map((mentor) => (
-                <label
-                  key={mentor.id}
-                  className="flex items-center gap-2 rounded-[8px] px-1.5 py-1 text-sm text-black hover:bg-gray-50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={generalMentorIds.includes(mentor.id)}
-                    onChange={() => toggleGeneralMentor(mentor.id)}
-                    className="size-4 accent-[#081EEA]"
-                  />
-                  {mentor.nama}
-                </label>
-              ))}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-black">Mentor (bisa pilih lebih dari satu)</label>
+              {mentorOptions.length === 0 ? (
+                <p className="text-sm text-[#7E7C7C]">Belum ada mentor aktif.</p>
+              ) : (
+                <div className="modal-content-scrollable flex max-h-48 flex-col gap-1.5 overflow-y-auto rounded-[12px] border border-[#AFAFAF] p-2.5">
+                  {mentorOptions.map((mentor) => (
+                    <label
+                      key={mentor.id}
+                      className="flex items-center gap-2 rounded-[8px] px-1.5 py-1 text-sm text-black hover:bg-gray-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={generalMentorIds.includes(mentor.id)}
+                        onChange={() => toggleGeneralMentor(mentor.id)}
+                        className="size-4 accent-[#081EEA]"
+                      />
+                      {mentor.nama}
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
 
       <div className="grid grid-cols-2 gap-3">

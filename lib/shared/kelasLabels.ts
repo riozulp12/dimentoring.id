@@ -20,6 +20,20 @@ export const TIPE_KELAS_LABEL: Record<string, string> = {
   grouping: "Grouping",
 };
 
+/** Mode Pembelajaran (BARU) — offline berarti mentor mendatangi lokasi siswa,
+ * mentor dipilih otomatis berdasar jarak terdekat saat checkout. */
+export const MODE_PEMBELAJARAN_LABEL: Record<string, string> = {
+  online: "Online",
+  offline: "Offline (Tatap Muka)",
+};
+
+/** Default Jumlah Sesi per Mode Pembelajaran — dipakai form Kelola Kelas
+ * waktu Admin ganti dropdown Mode, TETAP bisa diubah manual sesudahnya. */
+export const JUMLAH_SESI_DEFAULT: Record<string, number> = {
+  online: 10,
+  offline: 8,
+};
+
 /** Kategori bisnis kelas (PRD 7.5.4, halaman publik /program) — terpisah dari
  * Subtes/mapel. Urutan di sini JUGA urutan tampil section /program. */
 export const PROGRAM_KATEGORI_ORDER = [
