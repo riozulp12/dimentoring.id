@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import Mascot from "@/components/ui/Mascot";
 import MaskotLoading from "@/components/ui/MaskotLoading";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 import {
   JUARA_BERAPA_OPTIONS,
   TINGKAT_KEJUARAAN_OPTIONS,
@@ -418,11 +419,11 @@ export default function AssessmentSNBPForm({
                     >
                       Universitas
                     </label>
-                    <InputField
+                    <SearchableSelect
                       id="pilihan1-universitas"
-                      type="dropdown"
                       size="md"
                       placeholder="Pilih salah satu"
+                      searchPlaceholder="Cari universitas..."
                       options={universitasOptions}
                       value={pilihan1.universitas}
                       onChange={(e) => setPilihan1({ universitas: e.target.value, ptnJurusanId: "" })}
@@ -436,11 +437,11 @@ export default function AssessmentSNBPForm({
                     >
                       Jurusan
                     </label>
-                    <InputField
+                    <SearchableSelect
                       id="pilihan1-jurusan"
-                      type="dropdown"
                       size="md"
                       placeholder="Pilih salah satu"
+                      searchPlaceholder="Cari jurusan..."
                       options={jurusanOptionsFor(pilihan1.universitas)}
                       value={pilihan1.ptnJurusanId}
                       onChange={(e) => setPilihan1((prev) => ({ ...prev, ptnJurusanId: e.target.value }))}
@@ -464,11 +465,11 @@ export default function AssessmentSNBPForm({
                       >
                         Universitas
                       </label>
-                      <InputField
+                      <SearchableSelect
                         id="pilihan2-universitas"
-                        type="dropdown"
                         size="md"
                         placeholder="Pilih salah satu"
+                        searchPlaceholder="Cari universitas..."
                         options={universitasOptions}
                         value={pilihan2.universitas}
                         onChange={(e) => setPilihan2({ universitas: e.target.value, ptnJurusanId: "" })}
@@ -481,11 +482,11 @@ export default function AssessmentSNBPForm({
                       >
                         Jurusan
                       </label>
-                      <InputField
+                      <SearchableSelect
                         id="pilihan2-jurusan"
-                        type="dropdown"
                         size="md"
                         placeholder="Pilih salah satu"
+                        searchPlaceholder="Cari jurusan..."
                         options={jurusanOptionsFor(pilihan2.universitas)}
                         value={pilihan2.ptnJurusanId}
                         onChange={(e) => setPilihan2((prev) => ({ ...prev, ptnJurusanId: e.target.value }))}
