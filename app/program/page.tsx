@@ -25,7 +25,7 @@ import KelasCardMeta from "@/components/program/KelasCardMeta";
  * ukuran card selalu konsisten (sama dengan app/program/[kategori]/page.tsx). */
 function ProgramSectionGrid({ section, sessionRole }: { section: ProgramSection; sessionRole: SessionRole | null }) {
   return (
-    <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid w-full grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       {section.items.map((item, idx) => (
         <KelasCardFrame
           key={item.id}
@@ -38,8 +38,9 @@ function ProgramSectionGrid({ section, sessionRole }: { section: ProgramSection;
           programKategori={item.programKategori}
           tingkatKelas={item.tingkatKelas}
           subtesNama={item.subtesNama}
+          compact
         >
-          <KelasCardMeta item={item} sessionRole={sessionRole} />
+          <KelasCardMeta item={item} sessionRole={sessionRole} compact />
         </KelasCardFrame>
       ))}
     </div>

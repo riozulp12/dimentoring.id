@@ -7,6 +7,7 @@ import {
   createSessionToken,
   verifySessionToken,
 } from "@/lib/auth/session";
+import { subtesNamaCandidates } from "@/lib/shared/mapelSubtesOptions";
 
 /**
  * Lengkapi Profil API — "babak kedua" Register per PRD Bagian 7.0.2 DIREVISI
@@ -123,11 +124,17 @@ export async function POST(request: NextRequest) {
   const warnings: string[] = [];
 
   // ---- Resolusi nama mapel/subtes -> subtes.id (referensi tabel `subtes`) ----
+  // Label checklist onboarding memakai nama RESMI SNBT/TKA, sementara tabel
+  // master masih bisa menyimpan redaksi lama untuk 3 subtes (lihat
+  // lib/shared/mapelSubtesOptions.ts & db/rename_subtes_nama_resmi.sql) —
+  // jadi tiap label dicocokkan terhadap nama resmi DAN alias lamanya, supaya
+  // pilihan user tidak pernah hilang diam-diam.
   const namesToResolve = body.role === "siswa" ? mapelSulitNames : subtesDiampuNames;
+  const candidateNames = Array.from(new Set(namesToResolve.flatMap((name) => subtesNamaCandidates(name))));
   const { data: subtesRows, error: subtesError } = await supabaseServer
     .from("subtes")
     .select("id, nama")
-    .in("nama", namesToResolve);
+    .in("nama", candidateNames);
 
   if (subtesError) {
     return errorResponse("Gagal memuat referensi mapel/subtes.", 500);
@@ -135,7 +142,9 @@ export async function POST(request: NextRequest) {
 
   const resolvedSubtesIds = (subtesRows ?? []).map((row) => row.id as string);
   const resolvedNames = new Set((subtesRows ?? []).map((row) => (row.nama as string).toLowerCase()));
-  const unresolvedNames = namesToResolve.filter((name) => !resolvedNames.has(name.toLowerCase()));
+  const unresolvedNames = namesToResolve.filter(
+    (name) => !subtesNamaCandidates(name).some((candidate) => resolvedNames.has(candidate.toLowerCase())),
+  );
   if (unresolvedNames.length > 0) {
     warnings.push(
       `Beberapa pilihan tidak ditemukan di data master dan dilewati: ${unresolvedNames.join(", ")}.`,

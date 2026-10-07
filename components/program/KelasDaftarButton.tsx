@@ -29,12 +29,24 @@ export interface KelasDaftarButtonProps {
   sessionRole: SessionRole | null;
   /** SEMENTARA (PRD 7.5) — dipakai cuma kalau NEXT_PUBLIC_PENDAFTARAN_MANUAL aktif. */
   linkLynkid: string | null;
+  /** Card dirender 2 kolom di mobile (grid /program) — padding tombol
+   * dikecilkan & label panjang dipendekkan HANYA di breakpoint dasar supaya
+   * teks `whitespace-nowrap` tidak keluar dari card. Mulai `sm:` kembali
+   * normal, jadi tablet/desktop tidak berubah. */
+  compact?: boolean;
 }
 
-export default function KelasDaftarButton({ kelasId, sisaSlot, sessionRole, linkLynkid }: KelasDaftarButtonProps) {
+export default function KelasDaftarButton({
+  kelasId,
+  sisaSlot,
+  sessionRole,
+  linkLynkid,
+  compact = false,
+}: KelasDaftarButtonProps) {
   const router = useRouter();
   const isPenuh = sisaSlot <= 0;
   const isRoleLain = sessionRole !== null && sessionRole !== "student";
+  const buttonClass = compact ? "w-full px-3 sm:px-5" : "w-full";
 
   if (isPenuh) {
     return (
@@ -42,7 +54,7 @@ export default function KelasDaftarButton({ kelasId, sisaSlot, sessionRole, link
         type="button"
         variant="primary"
         size="sm"
-        className="w-full"
+        className={buttonClass}
         disabled
         onMouseDown={(event) => event.stopPropagation()}
       >
@@ -58,12 +70,19 @@ export default function KelasDaftarButton({ kelasId, sisaSlot, sessionRole, link
           type="button"
           variant="primary"
           size="sm"
-          className="w-full"
+          className={buttonClass}
           disabled
           onMouseDown={(event) => event.stopPropagation()}
           title="Link pendaftaran kelas ini belum diisi Admin"
         >
-          Link Pendaftaran Belum Tersedia
+          {compact ? (
+            <>
+              <span className="sm:hidden">Belum Tersedia</span>
+              <span className="hidden sm:inline">Link Pendaftaran Belum Tersedia</span>
+            </>
+          ) : (
+            "Link Pendaftaran Belum Tersedia"
+          )}
         </Button>
       );
     }
@@ -79,7 +98,7 @@ export default function KelasDaftarButton({ kelasId, sisaSlot, sessionRole, link
         type="button"
         variant="primary"
         size="sm"
-        className="w-full"
+        className={buttonClass}
         onClick={handleLynkidClick}
         onMouseDown={(event) => event.stopPropagation()}
       >
@@ -94,7 +113,14 @@ export default function KelasDaftarButton({ kelasId, sisaSlot, sessionRole, link
     event.preventDefault();
     event.stopPropagation();
     if (disabled) return;
-    router.push(sessionRole === "student" ? `/checkout/${kelasId}` : "/login");
+    if (sessionRole === "student") {
+      router.push(`/checkout/${kelasId}`);
+      return;
+    }
+    // Belum login — sama dengan tombol di halaman detail: `returnTo` dibawa ke
+    // Login supaya siswa mendarat balik di detail kelas ini setelah login
+    // (Mentor/Admin mengabaikannya, lihat app/(auth)/login/page.tsx).
+    router.push(`/login?returnTo=${encodeURIComponent(`/program/kelas/${kelasId}`)}`);
   }
 
   return (
@@ -102,7 +128,7 @@ export default function KelasDaftarButton({ kelasId, sisaSlot, sessionRole, link
       type="button"
       variant="primary"
       size="sm"
-      className="w-full"
+      className={buttonClass}
       disabled={disabled}
       onClick={handleClick}
       onMouseDown={(event) => event.stopPropagation()}

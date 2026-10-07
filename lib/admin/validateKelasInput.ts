@@ -62,6 +62,9 @@ export interface KelasInputBody {
   mentorIds?: string[];
   kapasitas?: number | string;
   harga?: number | string;
+  /** BARU — diskon yang melekat ke kelas, 0-100 (%). Opsional; kosong/undefined
+   * dianggap 0 (tanpa diskon). Lihat db/add_kelas_diskon.sql. */
+  diskonPersen?: number | string;
   jadwalEntries?: JadwalEntryInput[];
   linkMeet?: string;
   linkLynkid?: string;
@@ -95,11 +98,15 @@ export interface ValidatedKelasInput {
   subtes_mentor_pairs: ValidatedSubtesMentorPair[];
   kapasitas: number;
   harga: number;
+  /** 0-100 (%) — 0 berarti kelas ini tidak sedang diskon. */
+  diskon_persen: number;
   /** Array {hari, jam_mulai} — bisa lebih dari satu slot per minggu, null kalau belum diisi. */
   jadwal: { hari: string; jam_mulai: string }[] | null;
   link_meet: string | null;
-  /** SEMENTARA (PRD 7.5) — link produk Lynk.id, dipakai selama Payment
-   * otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
+  /** SEMENTARA (PRD 7.5) — link pendaftaran/checkout eksternal (TIDAK harus
+   * lynk.id; label UI-nya sekarang "Input Link Pendaftaran"). Nama kolom tetap
+   * `link_lynkid` supaya tidak perlu migration rename yang berisiko. Dipakai
+   * selama Payment otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
   link_lynkid: string | null;
   deskripsi: string | null;
 }
@@ -140,6 +147,14 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
   const harga = Number(body.harga);
   if (!Number.isFinite(harga) || harga < 0) {
     return { ok: false, error: "Harga tidak valid." };
+  }
+
+  // Diskon OPSIONAL — kosong/null/"" dianggap 0 (tanpa diskon), bukan error.
+  const diskonRaw = body.diskonPersen;
+  const diskonPersen =
+    diskonRaw === undefined || diskonRaw === null || diskonRaw === "" ? 0 : Number(diskonRaw);
+  if (!Number.isInteger(diskonPersen) || diskonPersen < 0 || diskonPersen > 100) {
+    return { ok: false, error: "Diskon harus angka bulat 0-100." };
   }
 
   // Cross-check "mentor mengampu subtes ini" — cocok lewat mapel_dasar (mapel
@@ -311,7 +326,7 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
   if (typeof body.linkLynkid === "string" && body.linkLynkid.trim()) {
     const trimmed = body.linkLynkid.trim();
     if (!isValidUrl(trimmed)) {
-      return { ok: false, error: "Link Lynk.id harus berupa URL yang valid." };
+      return { ok: false, error: "Link Pendaftaran harus berupa URL yang valid." };
     }
     linkLynkid = trimmed;
   }
@@ -334,6 +349,7 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
       subtes_mentor_pairs: subtesMentorPairs,
       kapasitas,
       harga,
+      diskon_persen: diskonPersen,
       jadwal,
       link_meet: linkMeet,
       link_lynkid: linkLynkid,

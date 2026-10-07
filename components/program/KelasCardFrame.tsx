@@ -21,6 +21,13 @@ export interface KelasCardFrameProps {
   programKategori: string;
   tingkatKelas: string;
   subtesNama: string | null;
+  /** Card dirender 2 kolom di breakpoint mobile (grid /program & /program/
+   * [kategori]) — padding card & tipografi banner dikecilkan HANYA di
+   * breakpoint dasar (<640px). Mulai `sm:` semuanya kembali ke ukuran
+   * normal, jadi tablet/desktop identik dengan sebelumnya. Grid lain yang
+   * masih 1 kolom di mobile (Kelas Saya, Rekomendasi Kelas) TIDAK mengirim
+   * prop ini, jadi tampilannya tidak berubah. */
+  compact?: boolean;
   className?: string;
   children: ReactNode;
 }
@@ -35,6 +42,7 @@ export default function KelasCardFrame({
   programKategori,
   tingkatKelas,
   subtesNama,
+  compact = false,
   className,
   children,
 }: KelasCardFrameProps) {
@@ -60,9 +68,12 @@ export default function KelasCardFrame({
         programKategori={programKategori}
         tingkatKelas={tingkatKelas}
         subtesNama={subtesNama}
+        compact={compact}
       />
 
-      <div className="flex min-w-0 flex-col gap-1.5 p-4">{children}</div>
+      <div className={`flex min-w-0 flex-col ${compact ? "gap-1 p-3 sm:gap-1.5 sm:p-4" : "gap-1.5 p-4"}`}>
+        {children}
+      </div>
     </Link>
   );
 }

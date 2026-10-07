@@ -158,7 +158,23 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
                     </div>
                   ) : null}
                 </div>
-                <p className="text-xl font-semibold whitespace-nowrap text-[#081EEA] sm:text-2xl">{formatRupiah(kelas.harga)}</p>
+                {/* Harga setelah diskon jadi fokus utama (bold, besar) kalau
+                    kelas.diskon_persen > 0; harga asli dicoret di atasnya.
+                    Tanpa diskon: tampilan lama, tidak berubah. */}
+                {kelas.diskonPersen > 0 ? (
+                  <div className="flex shrink-0 flex-col sm:items-end">
+                    <span className="text-sm whitespace-nowrap text-[#7E7C7C] line-through">
+                      {formatRupiah(kelas.harga)}
+                    </span>
+                    <span className="text-2xl font-bold whitespace-nowrap text-[#DC2626] sm:text-3xl">
+                      {formatRupiah(kelas.hargaSetelahDiskon)}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-xl font-semibold whitespace-nowrap text-[#081EEA] sm:text-2xl">
+                    {formatRupiah(kelas.harga)}
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -247,7 +263,12 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
                 <p className="text-center text-sm text-[#7E7C7C]">Pendaftaran kelas hanya untuk akun Siswa.</p>
               </>
             ) : (
-              <Link href="/login" className="w-full">
+              // Belum login — bawa `returnTo` ke halaman Login supaya setelah
+              // login SEBAGAI SISWA user mendarat balik di halaman kelas ini,
+              // bukan di dashboard. Mentor/Admin tetap ke dashboard
+              // masing-masing (param diabaikan di sana), lihat
+              // app/(auth)/login/page.tsx.
+              <Link href={`/login?returnTo=${encodeURIComponent(`/program/kelas/${kelas.id}`)}`} className="w-full">
                 <Button type="button" variant="primary" size="lg" className="w-full">
                   Daftar Sekarang
                 </Button>

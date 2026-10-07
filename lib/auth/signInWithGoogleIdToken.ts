@@ -29,6 +29,9 @@ interface SignInWithGoogleIdTokenResult {
   success: boolean;
   error?: string;
   redirectTo?: string;
+  /** Role aktif yang di-resolve server — dipakai halaman Login untuk
+   * memutuskan apakah param `returnTo` dihormati (cuma untuk siswa). */
+  role?: string;
 }
 
 export async function signInWithGoogleIdToken({
@@ -54,7 +57,7 @@ export async function signInWithGoogleIdToken({
     (data.session.user.user_metadata?.name as string | undefined) ??
     null;
 
-  let json: { success: boolean; error?: string; redirectTo?: string };
+  let json: { success: boolean; error?: string; redirectTo?: string; role?: string };
   try {
     const response = await fetch("/api/auth/google-callback", {
       method: "POST",
@@ -75,5 +78,5 @@ export async function signInWithGoogleIdToken({
     return { success: false, error: json.error ?? "Gagal login dengan Google. Coba lagi nanti." };
   }
 
-  return { success: true, redirectTo: json.redirectTo };
+  return { success: true, redirectTo: json.redirectTo, role: json.role };
 }

@@ -67,13 +67,16 @@ function round2(value: number): number {
 
 export async function POST(request: NextRequest) {
   console.log("=== SNBP ROUTE DIPANGGIL ===");
-  // ---- Auth OPSIONAL (BR-29): kalau ada session, role WAJIB student. Kalau
-  // tidak ada session, jalan sebagai trial anonim lewat cookie dm_trial_id. ----
+  // ---- Auth OPSIONAL (BR-29): tidak ada session -> jalan sebagai trial
+  // anonim lewat cookie dm_trial_id. Kalau ada session, SEMUA role boleh
+  // submit (revisi Oktober 2026 — guard "khusus akun Siswa" dihapus supaya
+  // Mentor & Admin bisa mencoba/mendemokan fitur ini). ----
   const session = verifySessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
-  if (session && session.role !== "student") {
-    return errorResponse("Assessment Prediksi SNBP khusus untuk akun Siswa.", 403);
-  }
   const userId = session?.userId ?? null;
+  // Aturan SNBP yang bergantung profil siswa (provinsi, BR-28) cuma relevan
+  // untuk pendaftar sungguhan — Mentor/Admin diperlakukan seperti anonim di
+  // titik itu, lihat blok validasi provinsi di bawah.
+  const isStudent = session?.role === "student";
 
   let trialId = userId ? null : (request.cookies.get(TRIAL_COOKIE_NAME)?.value ?? null);
   let trialCookieNeedsSet = false;
@@ -163,11 +166,12 @@ export async function POST(request: NextRequest) {
 
   // ---- Ambil Provinsi siswa secara OTOMATIS (BR-16/BR-28 DIREVISI) — langsung
   // dari users.provinsi_id (diisi di halaman Profil), BUKAN lagi diturunkan
-  // lewat sekolah->kota->provinsi. HANYA relevan kalau login — anonim belum
-  // punya profil sama sekali, jadi dilewati (7.4.1b). ----
+  // lewat sekolah->kota->provinsi. HANYA relevan kalau login SEBAGAI SISWA —
+  // anonim belum punya profil sama sekali (7.4.1b), dan Mentor/Admin tidak
+  // punya profil akademik siswa untuk divalidasi. ----
   let provinsiSiswa: { id: string; nama: string } | null = null;
 
-  if (userId) {
+  if (userId && isStudent) {
     const { data: userRow, error: userError } = await supabaseServer
       .from("users")
       .select("id, provinsi_id, provinsi:provinsi_id(id, nama)")
@@ -185,9 +189,10 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ---- FR-3.10/BR-28(b): kalau 2 pilihan DAN sudah login, minimal satu wajib
-  // satu provinsi dengan Profil siswa. Anonim: dilewati total (7.4.1b/BR-29). ----
-  if (userId && resolvedPilihan.length === 2) {
+  // ---- FR-3.10/BR-28(b): kalau 2 pilihan DAN login sebagai Siswa, minimal
+  // satu wajib satu provinsi dengan Profil siswa. Anonim & role non-Siswa:
+  // dilewati total (7.4.1b/BR-29). ----
+  if (userId && isStudent && resolvedPilihan.length === 2) {
     if (!provinsiSiswa) {
       return errorResponse(
         "Lengkapi Provinsi di halaman Profil dulu sebelum isi Assessment dengan 2 pilihan.",

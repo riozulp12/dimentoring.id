@@ -263,11 +263,14 @@ function MainResultCard({ data }: { data: AssessmentHasilData }) {
 }
 
 export default function AssessmentHasilAccordions({ data }: { data: AssessmentHasilData }) {
+  // Default TERBUKA semua (revisi Oktober 2026) — hasil assessment adalah
+  // tujuan utama halaman ini, jadi tidak ada yang perlu disembunyikan di balik
+  // klik. User tetap bisa menutup tiap section manual.
   const [openSections, setOpenSections] = useState({
-    rekomendasiJurusan: false,
-    rekomendasiKelas: false,
-    rekomendasiTryout: false,
-    note: false,
+    rekomendasiJurusan: true,
+    rekomendasiKelas: true,
+    rekomendasiTryout: true,
+    note: true,
   });
 
   function toggle(key: keyof typeof openSections) {

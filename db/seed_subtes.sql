@@ -5,9 +5,12 @@
 -- ini lewat exact-match nama. Tabel kosong = semua pilihan gagal resolve = error
 -- "tidak dikenali sistem" untuk semua user, baik siswa maupun mentor.
 --
--- Nama di kolom `nama` SENGAJA disamakan persis (termasuk kapitalisasi & singkatan
--- "B." untuk "Bahasa") dengan MAPEL_SULIT_OPTIONS & SUBTES_OPTIONS di
--- app/(auth)/daftar/page.tsx, supaya langsung match tanpa perlu ubah frontend.
+-- Nama di kolom `nama` SENGAJA disamakan persis dengan daftar opsi checklist
+-- onboarding di lib/shared/mapelSubtesOptions.ts, supaya langsung match tanpa
+-- perlu ubah frontend. Sejak Oktober 2026 redaksinya memakai nama RESMI SNBT
+-- ("Pemahaman Bacaan dan Menulis", "Literasi dalam Bahasa Indonesia/Inggris")
+-- -- untuk database yang sudah berisi redaksi lama, jalankan
+-- db/rename_subtes_nama_resmi.sql.
 --
 -- "Penalaran Matematika" dikategorikan `literasi` sesuai docs/PRD.md Bagian 7.5,
 -- yang menyebutnya sebagai bagian dari Tes Literasi (bukan kategori sendiri) --
@@ -42,12 +45,12 @@ FROM (VALUES
     -- TPS (Tes Potensi Skolastik)
     ('Penalaran Umum', 'tps'),
     ('Pengetahuan dan Pemahaman Umum', 'tps'),
-    ('Pemahaman Bacaan & Menulis', 'tps'),
+    ('Pemahaman Bacaan dan Menulis', 'tps'),
     ('Pengetahuan Kuantitatif', 'tps'),
 
     -- Literasi (termasuk Penalaran Matematika, lihat catatan di atas)
-    ('Literasi B. Indonesia', 'literasi'),
-    ('Literasi B. Inggris', 'literasi'),
+    ('Literasi dalam Bahasa Indonesia', 'literasi'),
+    ('Literasi dalam Bahasa Inggris', 'literasi'),
     ('Penalaran Matematika', 'literasi')
 ) AS v(nama, kategori)
 WHERE NOT EXISTS (

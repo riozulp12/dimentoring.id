@@ -12,6 +12,7 @@ import {
 } from "@/lib/shared/kelasLabels";
 import type { ProgramKategori } from "@/lib/shared/kelasLabels";
 import type { KelasListItem, MentorOption, SubtesOption } from "@/lib/admin/getKelolaKelasData";
+import { hitungHargaSetelahDiskon } from "@/lib/shared/kelasDiskon";
 
 /**
  * List + Detail (read-only, dengan tombol Edit/Hapus sejajar) + Tambah/Edit
@@ -210,7 +211,17 @@ export default function KelolaKelasClient({
               </div>
               <div>
                 <p className="text-[#7E7C7C]">Harga</p>
-                <p className="text-black">{formatRupiah(detailKelas.harga)}</p>
+                {detailKelas.diskonPersen > 0 ? (
+                  <p className="text-black">
+                    <span className="line-through text-[#7E7C7C]">{formatRupiah(detailKelas.harga)}</span>{" "}
+                    <span className="font-medium">
+                      {formatRupiah(hitungHargaSetelahDiskon(detailKelas.harga, detailKelas.diskonPersen))}
+                    </span>{" "}
+                    <span className="text-[#DC2626]">(-{detailKelas.diskonPersen}%)</span>
+                  </p>
+                ) : (
+                  <p className="text-black">{formatRupiah(detailKelas.harga)}</p>
+                )}
               </div>
               <div className="col-span-2">
                 <p className="text-[#7E7C7C]">Jadwal</p>

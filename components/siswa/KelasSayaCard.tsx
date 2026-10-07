@@ -20,7 +20,6 @@ export interface KelasSayaCardProps extends KelasSayaItem {
 export default function KelasSayaCard({
   id,
   nama,
-  mentorNama,
   jadwal,
   progresPersen,
   programKategori,
@@ -47,8 +46,10 @@ export default function KelasSayaCard({
       <div className="flex min-w-0 flex-col gap-1.5 p-4">
         <ModePembelajaranBadge modePembelajaran={modePembelajaran} />
         <p className="text-base leading-[1.5] font-semibold tracking-[-0.36px] text-black">{nama}</p>
+        {/* Info Mentor SENGAJA tidak ditampilkan di card (declutter, sama
+            dengan card /program) — nama mentor tetap tampil di halaman DETAIL
+            kelas (app/(protected)/(siswa)/kelas/[kelasId]/page.tsx). */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#7E7C7C]">
-          {mentorNama ? <span>Mentor: {mentorNama}</span> : null}
           <span>{jadwal}</span>
         </div>
         <span className="mt-1 inline-flex w-full items-center justify-center rounded-[18px] bg-[#081EEA] px-4 py-2 text-sm font-medium text-white">

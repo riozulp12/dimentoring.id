@@ -6,6 +6,7 @@ import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import Mascot from "@/components/ui/Mascot";
 import ChecklistGrid from "@/components/ui/ChecklistGrid";
+import { MAPEL_SUBTES_GROUPS } from "@/lib/shared/mapelSubtesOptions";
 
 /**
  * Wizard Profiling — PRD Bagian 7.0.2 DIREVISI TOTAL (Agustus 2026). Ini
@@ -63,37 +64,6 @@ const KELAS_OPTIONS = [
   { label: "Gap Year", value: "gap-year" },
 ];
 
-const MAPEL_SULIT_OPTIONS = [
-  "Matematika",
-  "Bahasa Inggris",
-  "Bahasa Indonesia",
-  "Kimia",
-  "Fisika",
-  "Biologi",
-  "Sejarah",
-  "Ekonomi",
-  "Geografi",
-  "Lainnya",
-];
-
-const SUBTES_OPTIONS = [
-  "Literasi B. Indonesia",
-  "Literasi B. Inggris",
-  "Penalaran Matematika",
-  "Penalaran Umum",
-  "Pemahaman Bacaan & Menulis",
-  "Pengetahuan Kuantitatif",
-  "Matematika",
-  "Fisika",
-  "Kimia",
-  "Biologi",
-  "Bahasa Indonesia",
-  "Bahasa Inggris",
-  "Sejarah",
-  "Ekonomi",
-  "Geografi",
-  "Lainnya",
-];
 
 const PTN_OPTIONS = [
   "Universitas Indonesia",
@@ -385,7 +355,7 @@ export default function LengkapiProfilClient() {
             {stepKey === "mapel" ? (
               <>
                 <ChecklistGrid
-                  options={MAPEL_SULIT_OPTIONS}
+                  groups={MAPEL_SUBTES_GROUPS}
                   selected={form.mapelSulit}
                   onToggle={(value) => toggleInList("mapelSulit", value)}
                 />
@@ -448,7 +418,7 @@ export default function LengkapiProfilClient() {
             {stepKey === "subtes" ? (
               <>
                 <ChecklistGrid
-                  options={SUBTES_OPTIONS}
+                  groups={MAPEL_SUBTES_GROUPS}
                   selected={form.subtesDiampu}
                   onToggle={(value) => toggleInList("subtesDiampu", value)}
                 />

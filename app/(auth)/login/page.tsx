@@ -9,6 +9,7 @@ import Mascot from "@/components/ui/Mascot";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { signInWithGoogleIdToken } from "@/lib/auth/signInWithGoogleIdToken";
+import { safeInternalPath } from "@/lib/auth/safeInternalPath";
 
 function LoginPageInner() {
   const router = useRouter();
@@ -21,7 +22,17 @@ function LoginPageInner() {
   // ke akun LAIN (bukan pending anonim) — arahkan balik ke halaman hasil itu
   // setelah login sukses, bukan ke Dashboard default. Hanya dipakai kalau TIDAK
   // ada pendingAssessmentId (linking anonim tetap prioritas, lihat handleSubmit).
+  // Berlaku untuk SEMUA role (Mentor/Admin juga bisa punya hasil Assessment
+  // sendiri sejak akses dibuka ke semua role).
   const redirectAfterLogin = searchParams.get("redirect");
+  // Alur "Daftar Sekarang" di halaman detail kelas saat user belum login
+  // (app/program/kelas/[kelasId]/page.tsx & components/program/KelasDaftarButton.tsx).
+  // SENGAJA param terpisah dari `redirect` di atas, karena aturannya beda:
+  // `returnTo` hanya dihormati kalau yang login ternyata SISWA. Mentor/Admin
+  // tetap mendarat di dashboard masing-masing — pendaftaran kelas memang cuma
+  // untuk akun Siswa, jadi mengembalikan mereka ke halaman kelas tidak ada
+  // gunanya. Keduanya divalidasi sebagai path internal (anti open-redirect).
+  const returnToAfterLogin = searchParams.get("returnTo");
   const noticeMessage = searchParams.get("message");
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
@@ -32,6 +43,21 @@ function LoginPageInner() {
   useEffect(() => {
     document.title = "Login | Dimentoring.id";
   }, []);
+
+  /** Tujuan akhir setelah login sukses. Urutan prioritas:
+   * 1. `pending_assessment` — linking assessment anonim ditangani server
+   *    (json.redirectTo sudah berisi halaman hasilnya), param lain diabaikan.
+   * 2. `returnTo` — HANYA kalau role-nya siswa (alur "Daftar Sekarang" kelas).
+   * 3. `redirect` — semua role (alur hasil Assessment, BR-5).
+   * 4. Dashboard default per role dari server. */
+  function resolvePostLoginTarget(role: string | undefined, serverRedirectTo: string): string {
+    if (pendingAssessmentId) return serverRedirectTo;
+    if (role === "student") {
+      const safeReturnTo = safeInternalPath(returnToAfterLogin);
+      if (safeReturnTo) return safeReturnTo;
+    }
+    return safeInternalPath(redirectAfterLogin) ?? serverRedirectTo;
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -59,13 +85,7 @@ function LoginPageInner() {
         return;
       }
 
-      // `redirect` (dari akses hasil Assessment milik akun lain, BR-5) hanya dipakai
-      // kalau tidak ada pending_assessment — linking anonim server-side tetap prioritas.
-      const safeRedirect =
-        !pendingAssessmentId && redirectAfterLogin?.startsWith("/") && !redirectAfterLogin.startsWith("//")
-          ? redirectAfterLogin
-          : null;
-      router.push(safeRedirect ?? json.redirectTo);
+      router.push(resolvePostLoginTarget(json.role, json.redirectTo));
     } catch {
       setSubmitError("Gagal terhubung ke server. Periksa koneksi internet kamu.");
       setIsSubmitting(false);
@@ -91,7 +111,7 @@ function LoginPageInner() {
       setIsGoogleLoading(false);
       return;
     }
-    router.push(result.redirectTo);
+    router.push(resolvePostLoginTarget(result.role, result.redirectTo));
   }
 
   return (

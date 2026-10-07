@@ -10,7 +10,8 @@ interface MentorProps {
 }
 
 // Background SERAGAM untuk semua card (BUKAN rotasi warna per-index seperti
-// KelasCardVisual) — foto PNG (background sudah dihapus) mentor menonjol di
+// KelasCardVisual) — foto PNG (background sudah dihapus manual oleh Admin
+// sebelum upload, bukan hasil background-removal otomatis) menonjol di
 // atasnya, terinspirasi Habitutor (lihat PRD Bagian 4.1). Warna SAMA PERSIS
 // dengan preview di Admin (components/admin/MentorLandingFotoSection.tsx)
 // supaya konsisten dari upload sampai tampil di landing page.
@@ -25,8 +26,24 @@ function MentorCard({ mentor }: { mentor: LandingMentorItem }) {
   const asalLine = [mentor.jurusan, mentor.asalPtn].filter(Boolean).join(" ");
 
   return (
-    <div className="flex w-[220px] shrink-0 flex-col items-center gap-3 sm:w-[260px]">
-      <div className={`relative h-[260px] w-full overflow-hidden rounded-[20px] ${CARD_BG_CLASS} sm:h-[300px]`}>
+    <div className="flex w-[220px] shrink-0 flex-col sm:w-[260px]">
+      {/* Blok foto — border-radius HANYA di sisi ATAS (rounded-t-[20px]);
+          bagian bawah dibiarkan rata supaya menyatu dengan card info yang
+          naik menutupinya. Tinggi & lebar FIXED (aspect ratio tetap) +
+          object-contain, jadi foto dengan resolusi/rasio berapa pun tidak
+          mengubah tinggi blok ini — efek overlap di bawah tidak pernah
+          bergeser. object-contain (bukan cover) dipertahankan karena foto
+          mentor di sini adalah PNG yang background-nya sudah dihapus manual
+          oleh Admin: cover akan memotong kepala/badan subjek pada foto yang
+          rasionya beda, sementara contain selalu menampilkan figur utuh.
+          object-bottom WAJIB disandingkan dengan object-contain: tanpa itu
+          Next/Image men-center foto secara vertikal, jadi foto yang lebih
+          pendek dari container (rasio beda) akan menyisakan ruang kosong DI
+          BAWAH figur — persis di titik overlap card info — dan efek overlap
+          jadi menimpa ruang kosong/background, bukan badan mentor.
+          object-bottom memaksa figur selalu menempel ke tepi bawah container
+          apa pun rasionya, jadi overlap konsisten mengenai badan mentor. */}
+      <div className={`relative h-[260px] w-full overflow-hidden rounded-t-[20px] ${CARD_BG_CLASS} sm:h-[300px]`}>
         <Image
           src={mentor.fotoLandingUrl}
           alt={mentor.nama}
@@ -36,7 +53,11 @@ function MentorCard({ mentor }: { mentor: LandingMentorItem }) {
         />
       </div>
 
-      <div className="flex w-full flex-col items-center gap-1.5 text-center">
+      {/* Card info — naik menutupi ±20px bagian bawah foto (negative margin,
+          bukan absolute, supaya tinggi card tetap ikut kontennya). `relative`
+          + z-10 wajib: tanpa itu blok foto di atas yang digambar belakangan
+          akan menimpa card ini. */}
+      <div className="relative z-10 -mt-5 flex w-full flex-col items-center gap-1.5 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-4 py-3 text-center shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)] sm:-mt-6 sm:px-5 sm:py-4">
         <p className="w-full text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black">
           {mentor.nama}
         </p>
@@ -85,7 +106,10 @@ export default function Mentor({ mentors }: MentorProps) {
       <div className="w-full overflow-hidden">
         <div
           ref={trackRef}
-          className="animate-marquee flex w-max items-center gap-6 sm:gap-8 lg:gap-10"
+          // items-start (bukan items-center): tinggi card info bisa beda antar
+          // mentor (asal PTN/subtes tidak selalu ada), dan dengan overlap foto
+          // ke card, yang WAJIB sejajar antar card adalah bagian ATAS foto.
+          className="animate-marquee flex w-max items-start gap-6 sm:gap-8 lg:gap-10"
           style={MARQUEE_STYLE}
         >
           {mentors.map((mentor) => (
