@@ -55,3 +55,6 @@ scripts/hasil-tarik-ptn-luar-jawa.csv
 scripts/progress-ptn-vokasi-ptkin.json
 scripts/hasil-tarik-ptn-vokasi-ptkin.csv
 scripts/hasil-tarik-ptn-vokasi-ptkin.csv.bak
+
+# backup lokal foto mentor (data pribadi) — jangan pernah di-commit
+scripts/mentor-photos-backup/
