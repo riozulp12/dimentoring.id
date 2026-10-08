@@ -1,6 +1,5 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import {
   getEnrollmentStatus,
@@ -14,6 +13,8 @@ import PageTitle from "@/components/dashboard/PageTitle";
 import MateriList from "@/components/siswa/MateriList";
 import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 import SesiKehadiranSection from "@/components/siswa/SesiKehadiranSection";
+import KelasDaftarButton from "@/components/program/KelasDaftarButton";
+import { getKelasDetailPublic } from "@/lib/dashboard/getProgramData";
 
 /**
  * Detail Kelas — PRD Bagian 7.5.1. Guard akses: cuma siswa dengan enrollment
@@ -158,7 +159,10 @@ async function FullMateriSection({
 }
 
 async function PreviewSection({ kelasId }: { kelasId: string }) {
-  const preview = await getMateriPreview(kelasId);
+  // Sisa slot & link pendaftaran diambil dari data detail publik yang SAMA
+  // dengan /program/kelas/[kelasId] — tombol daftar di bawah wajib mengikuti
+  // aturan yang sama (lib/shared/kelasDaftarTarget.ts), bukan langsung /checkout.
+  const [preview, kelasPublic] = await Promise.all([getMateriPreview(kelasId), getKelasDetailPublic(kelasId)]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -167,12 +171,18 @@ async function PreviewSection({ kelasId }: { kelasId: string }) {
           Kamu belum terdaftar di kelas ini. Daftar &amp; selesaikan pembayaran untuk membuka semua materi dan
           sesi live bareng mentor.
         </p>
-        <Link
-          href={`/checkout/${kelasId}`}
-          className="mx-auto inline-flex w-fit items-center justify-center rounded-[18px] bg-[#081EEA] px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 sm:text-base"
-        >
-          Daftar Kelas Ini
-        </Link>
+        {kelasPublic ? (
+          <div className="mx-auto flex w-full max-w-[360px] flex-col gap-2">
+            {/* Halaman ini cuma bisa dibuka role Siswa (guard di atas). */}
+            <KelasDaftarButton
+              kelasId={kelasId}
+              sisaSlot={kelasPublic.sisaSlot}
+              sessionRole="student"
+              linkLynkid={kelasPublic.linkLynkid}
+              variant="detail"
+            />
+          </div>
+        ) : null}
       </div>
 
       <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Cuplikan Materi</h2>

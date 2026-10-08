@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth/session";
 import { resolveSessionForUser } from "@/lib/auth/resolveSession";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
+import { writeReturnToCookie } from "@/lib/auth/returnToCookie";
 
 /**
  * Login API — PRD Bagian 7.0.1 (Login) & Bagian 7.0.6 (multi-role).
@@ -38,6 +39,9 @@ interface LoginRequestBody {
   // PRD Bagian 7.4.1b: id assessment anonim yang mau ditautkan ke akun ini,
   // dikirim frontend dari query param ?pending_assessment= di halaman Login.
   pendingAssessmentId?: string;
+  /** Path internal tujuan setelah onboarding (alur "Daftar Sekarang" kelas) —
+   * dititipkan ke cookie, lihat lib/auth/returnToCookie.ts. Divalidasi di sana. */
+  returnTo?: string;
 }
 
 function errorResponse(message: string, status: number, extra?: Record<string, unknown>) {
@@ -109,6 +113,11 @@ export async function POST(request: NextRequest) {
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   });
+  // Akun yang onboarding-nya belum selesai diarahkan ke /lengkapi-profil —
+  // titip returnTo supaya tidak hilang. Akun lama: tidak perlu (lihat google-callback).
+  if (resolved.role === "unassigned") {
+    writeReturnToCookie(response, body.returnTo);
+  }
 
   return response;
 }

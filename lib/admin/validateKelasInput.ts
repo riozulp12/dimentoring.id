@@ -105,8 +105,9 @@ export interface ValidatedKelasInput {
   link_meet: string | null;
   /** SEMENTARA (PRD 7.5) — link pendaftaran/checkout eksternal (TIDAK harus
    * lynk.id; label UI-nya sekarang "Input Link Pendaftaran"). Nama kolom tetap
-   * `link_lynkid` supaya tidak perlu migration rename yang berisiko. Dipakai
-   * selama Payment otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
+   * `link_lynkid` supaya tidak perlu migration rename yang berisiko. Terisi ->
+   * tombol Daftar Sekarang ke link ini; kosong -> checkout Dimentoring (aturan
+   * lengkap di lib/shared/kelasDaftarTarget.ts). Wajib http/https (isValidUrl). */
   link_lynkid: string | null;
   deskripsi: string | null;
 }

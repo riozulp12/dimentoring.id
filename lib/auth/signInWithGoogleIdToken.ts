@@ -23,6 +23,9 @@ interface SignInWithGoogleIdTokenParams {
   pendingAssessmentId?: string;
   utmSource?: string;
   utmCampaign?: string;
+  /** Diteruskan ke google-callback — dititipkan ke cookie HANYA kalau akun
+   * baru/onboarding belum selesai (lib/auth/returnToCookie.ts). */
+  returnTo?: string;
 }
 
 interface SignInWithGoogleIdTokenResult {
@@ -40,6 +43,7 @@ export async function signInWithGoogleIdToken({
   pendingAssessmentId,
   utmSource,
   utmCampaign,
+  returnTo,
 }: SignInWithGoogleIdTokenParams): Promise<SignInWithGoogleIdTokenResult> {
   const { data, error } = await supabase.auth.signInWithIdToken({
     provider: "google",
@@ -62,7 +66,7 @@ export async function signInWithGoogleIdToken({
     const response = await fetch("/api/auth/google-callback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, nama, pendingAssessmentId, utmSource, utmCampaign }),
+      body: JSON.stringify({ email, nama, pendingAssessmentId, utmSource, utmCampaign, returnTo }),
     });
     json = await response.json();
   } catch (postError) {

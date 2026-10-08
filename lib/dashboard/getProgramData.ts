@@ -48,8 +48,8 @@ export interface KelasCardPreview {
   programKategori: string;
   tingkatKelas: string;
   subtesNama: string | null;
-  /** SEMENTARA (PRD 7.5) — link produk Lynk.id, dipakai selama Payment
-   * otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
+  /** kelas.link_lynkid ("Input Link Pendaftaran") — tujuan tombol Daftar
+   * Sekarang kalau terisi, lihat lib/shared/kelasDaftarTarget.ts. */
   linkLynkid: string | null;
 }
 
@@ -333,8 +333,8 @@ export interface KelasDetailPublic {
   kapasitas: number;
   sisaSlot: number;
   diskonAktif: DiskonAktif | null;
-  /** SEMENTARA (PRD 7.5) — link produk Lynk.id, dipakai selama Payment
-   * otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
+  /** kelas.link_lynkid ("Input Link Pendaftaran") — tujuan tombol Daftar
+   * Sekarang kalau terisi, lihat lib/shared/kelasDaftarTarget.ts. */
   linkLynkid: string | null;
 }
 

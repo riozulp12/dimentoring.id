@@ -8,6 +8,7 @@ import {
   verifySessionToken,
 } from "@/lib/auth/session";
 import { subtesNamaCandidates } from "@/lib/shared/mapelSubtesOptions";
+import { clearReturnToCookie, readReturnToCookie } from "@/lib/auth/returnToCookie";
 
 /**
  * Lengkapi Profil API — "babak kedua" Register per PRD Bagian 7.0.2 DIREVISI
@@ -257,9 +258,13 @@ export async function POST(request: NextRequest) {
   }
 
   const activeRole = ROLE_TYPE_MAP[body.role];
+  // Titipan returnTo (alur "Daftar Sekarang" kelas, lib/auth/returnToCookie.ts)
+  // HANYA dipakai kalau role akhirnya Siswa — Mentor tetap ke dashboard-nya.
+  // Cookie dihapus di bawah apa pun role-nya (sekali pakai).
+  const returnTo = activeRole === "student" ? readReturnToCookie(request) : null;
   const response = NextResponse.json({
     success: true,
-    redirectTo: ROLE_DASHBOARD_PATH[activeRole],
+    redirectTo: returnTo ?? ROLE_DASHBOARD_PATH[activeRole],
     warnings: warnings.length > 0 ? warnings : undefined,
   });
 
@@ -271,6 +276,7 @@ export async function POST(request: NextRequest) {
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   });
+  clearReturnToCookie(response);
 
   return response;
 }

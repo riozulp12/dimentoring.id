@@ -692,8 +692,7 @@ export default function KelolaKelasForm({
         />
         {linkLynkidError ? <p className="text-sm text-[#E70A0A]">{linkLynkidError}</p> : null}
         <p className="text-xs text-[#7E7C7C]">
-          Masukkan link pendaftaran/checkout eksternal untuk kelas ini &mdash; boleh platform apa pun, tidak harus
-          Lynk.id. Dipakai selama Payment otomatis belum aktif. Kosongkan kalau belum ada.
+          Kosongkan untuk memakai checkout Dimentoring. Isi untuk mengarahkan ke link pendaftaran eksternal.
         </p>
       </div>
 

@@ -34,6 +34,10 @@ function LoginPageInner() {
   // gunanya. Keduanya divalidasi sebagai path internal (anti open-redirect).
   const returnToAfterLogin = searchParams.get("returnTo");
   const noticeMessage = searchParams.get("message");
+  // "Buat Akun Sekarang" ikut membawa returnTo, supaya akun baru dari alur
+  // "Daftar Sekarang" kelas tetap kembali ke kelas itu setelah onboarding.
+  const returnToPath = safeInternalPath(returnToAfterLogin);
+  const daftarHref = returnToPath ? `/daftar?returnTo=${encodeURIComponent(returnToPath)}` : "/daftar";
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -72,6 +76,9 @@ function LoginPageInner() {
           email,
           password,
           pendingAssessmentId: pendingAssessmentId || undefined,
+          // Cuma dipakai server kalau akun ini ternyata belum selesai onboarding
+          // (dititipkan ke cookie sampai akhir /lengkapi-profil).
+          returnTo: returnToPath ?? undefined,
         }),
       });
       const json = await response.json();
@@ -105,6 +112,7 @@ function LoginPageInner() {
       supabase,
       idToken,
       pendingAssessmentId: pendingAssessmentId || undefined,
+      returnTo: returnToPath ?? undefined,
     });
     if (!result.success || !result.redirectTo) {
       setSubmitError(result.error ?? "Gagal login dengan Google. Coba lagi nanti.");
@@ -255,7 +263,7 @@ function LoginPageInner() {
 
             <div className="flex w-full flex-wrap items-center justify-center gap-1.5 text-center text-sm leading-[1.5] tracking-[-0.28px]">
               <span className="text-black">Belum Punya Akun?</span>
-              <Link href="/daftar" className="font-medium text-[#081EEA]">
+              <Link href={daftarHref} className="font-medium text-[#081EEA]">
                 Buat Akun Sekarang
               </Link>
             </div>

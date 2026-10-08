@@ -88,7 +88,9 @@ export default function KelasCardMeta({ item, sessionRole, compact = false }: Ke
         </p>
       ) : null}
 
-      <div className="mt-1">
+      {/* relative + z-40 = ditumpuk DI ATAS stretched link kartu (z-30, lihat
+          KelasCardFrame.tsx) — area tombol tidak ikut navigasi ke detail. */}
+      <div className="relative z-40 mt-1">
         <KelasDaftarButton
           kelasId={item.id}
           sisaSlot={item.sisaSlot}

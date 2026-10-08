@@ -46,11 +46,16 @@ export default function KelasCardFrame({
   className,
   children,
 }: KelasCardFrameProps) {
+  // Pola "stretched link": kartu = <div>, Link ke detail menutupi SELURUH kartu
+  // lewat elemen absolut (z-30, di atas badge KelasCardVisual yang z-10/z-20),
+  // dan tombol di `children` ditumpuk di atasnya (relative z-40, lihat
+  // KelasCardMeta.tsx) — tombol BUKAN anak dari Link, jadi klik tombol tidak
+  // pernah ikut navigasi ke detail (tombol di dalam <a> = HTML tidak valid &
+  // perilakunya beda-beda antar browser).
   return (
-    <Link
-      href={href}
+    <div
       className={[
-        "flex flex-col overflow-hidden rounded-[20px] bg-white transition-shadow",
+        "relative flex flex-col overflow-hidden rounded-[20px] bg-white transition-shadow",
         diskonAktif
           ? "border-2 border-[#DC2626] shadow-[0_0_0_3px_rgba(220,38,38,0.12),1px_2px_10px_0px_rgba(220,38,38,0.28)] hover:shadow-[0_0_0_3px_rgba(220,38,38,0.16),1px_2px_14px_0px_rgba(220,38,38,0.32)]"
           : "border-[0.8px] border-[#E3E3E3] shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)] hover:shadow-[1px_2px_8px_0px_rgba(0,0,0,0.15)]",
@@ -59,6 +64,11 @@ export default function KelasCardFrame({
         .filter(Boolean)
         .join(" ")}
     >
+      <Link
+        href={href}
+        aria-label={namaKelas}
+        className="absolute inset-0 z-30 rounded-[20px] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#081EEA]"
+      />
       <KelasCardVisual
         namaKelas={namaKelas}
         index={index}
@@ -74,6 +84,6 @@ export default function KelasCardFrame({
       <div className={`flex min-w-0 flex-col ${compact ? "gap-1 p-3 sm:gap-1.5 sm:p-4" : "gap-1.5 p-4"}`}>
         {children}
       </div>
-    </Link>
+    </div>
   );
 }
