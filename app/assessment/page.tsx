@@ -12,9 +12,14 @@ import AssessmentSNBPForm, { type PtnJurusanOption } from "./AssessmentSNBPForm"
  *
  * PRD Bagian 7.4.1b/BR-29: halaman ini WAJIB bisa diakses tanpa login (trial
  * anonim, cookie dm_trial_id di-set oleh middleware.ts) — jangan tambahkan
- * redirect ke /login di sini. Guard di bawah cuma menyingkirkan akun yang
- * SUDAH login tapi bukan Student (mis. Mentor/Admin login), karena data
- * sekolah/akademik yang dipakai form ini murni milik profil Student.
+ * redirect ke /login di sini.
+ *
+ * Akses role (revisi Oktober 2026): TERBUKA untuk SEMUA role (Siswa, Mentor,
+ * Admin) + visitor anonim. Guard "khusus akun Siswa" yang lama DIHAPUS —
+ * Mentor/Admin perlu bisa mencoba & mendemokan fitur ini. Konsekuensinya,
+ * validasi provinsi BR-28 (satu dari dua pilihan wajib seprovinsi dengan
+ * profil siswa) cuma berlaku untuk role Student, lihat
+ * app/api/assessment/snbp/route.ts.
  *
  * Server Component: ambil daftar PTN/Jurusan (jalur='snbp') untuk dropdown
  * "Pilihan Universitas dan Jurusan" di sini (bukan lewat API terpisah), lalu
@@ -24,21 +29,6 @@ export default async function AssessmentPage() {
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
   const navbarProps = await getNavbarProps(session);
-
-  if (session && session.role !== "student") {
-    return (
-      <div className="flex w-full flex-col">
-        <Navbar activeItem="cek-peluang" {...navbarProps} />
-        <main className="mx-auto flex min-h-[60vh] w-full max-w-[1760px] items-center justify-center px-5 py-20 sm:px-8 md:px-12 lg:px-20">
-          <p className="max-w-md text-center text-lg text-[#7E7C7C]">
-            Assessment Prediksi Masuk PTN khusus untuk akun Siswa. Ganti ke Mode Siswa lewat menu akun kalau
-            kamu punya lebih dari satu role.
-          </p>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
 
   // Sumber data sama dengan Widget Cek Keketatan landing page — sudah
   // di-paginate lewat .range() supaya tidak kena batas default 1000 baris

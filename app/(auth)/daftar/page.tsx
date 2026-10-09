@@ -9,6 +9,7 @@ import Mascot from "@/components/ui/Mascot";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { signInWithGoogleIdToken } from "@/lib/auth/signInWithGoogleIdToken";
+import { safeInternalPath } from "@/lib/auth/safeInternalPath";
 
 /**
  * Register — SEKARANG cuma 1 langkah (PRD Bagian 7.0.2 DIREVISI TOTAL, Agustus
@@ -36,6 +37,12 @@ function RegisterPageInner() {
   // (biarkan NULL di database, jangan dipaksa "organic").
   const utmSource = searchParams.get("utm_source")?.trim() || undefined;
   const utmCampaign = searchParams.get("utm_campaign")?.trim() || undefined;
+  // Alur "Daftar Sekarang" kelas (lewat link "Buat Akun Sekarang" di /login):
+  // tujuan akhir setelah onboarding. Dikirim ke API, dititipkan server ke cookie
+  // berumur pendek (lib/auth/returnToCookie.ts) dan dipakai di akhir
+  // /lengkapi-profil HANYA kalau user memilih role Siswa.
+  const returnTo = safeInternalPath(searchParams.get("returnTo")) ?? undefined;
+  const loginHref = returnTo ? `/login?returnTo=${encodeURIComponent(returnTo)}` : "/login";
   const [email, setEmail] = useState("");
   const [namaLengkap, setNamaLengkap] = useState("");
   const [password, setPassword] = useState("");
@@ -78,6 +85,7 @@ function RegisterPageInner() {
           pendingAssessmentId,
           utmSource,
           utmCampaign,
+          returnTo,
         }),
       });
       const json = await response.json();
@@ -111,13 +119,17 @@ function RegisterPageInner() {
       pendingAssessmentId,
       utmSource,
       utmCampaign,
+      returnTo,
     });
     if (!result.success || !result.redirectTo) {
       setSubmitError(result.error ?? "Gagal login dengan Google. Coba lagi nanti.");
       setIsGoogleLoading(false);
       return;
     }
-    router.push(result.redirectTo);
+    // Email Google ternyata akun LAMA yang sudah Siswa -> langsung ke tujuan,
+    // aturan sama dengan resolvePostLoginTarget() di halaman Login. Akun baru
+    // ("unassigned") tetap ke /lengkapi-profil; returnTo-nya sudah dititip di cookie.
+    router.push(!pendingAssessmentId && result.role === "student" && returnTo ? returnTo : result.redirectTo);
   }
 
   return (
@@ -256,7 +268,7 @@ function RegisterPageInner() {
 
             <p className="flex w-full flex-wrap items-center justify-center gap-1.5 text-center text-xs leading-[1.5] tracking-[-0.24px] sm:text-sm sm:tracking-[-0.28px]">
               <span className="text-black">Sudah Punya Akun?</span>
-              <Link href="/login" className="font-medium text-[#081EEA]">
+              <Link href={loginHref} className="font-medium text-[#081EEA]">
                 Login
               </Link>
             </p>

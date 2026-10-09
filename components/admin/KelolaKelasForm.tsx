@@ -10,6 +10,7 @@ import {
   MODE_PEMBELAJARAN_LABEL,
   JUMLAH_SESI_DEFAULT,
 } from "@/lib/shared/kelasLabels";
+import { formatRupiah, hitungHargaSetelahDiskon } from "@/lib/shared/kelasDiskon";
 
 /**
  * Form Tambah/Edit Kelas — SATU komponen dipakai kedua mode (initialKelas
@@ -105,6 +106,12 @@ export default function KelolaKelasForm({
   );
   const [kapasitas, setKapasitas] = useState(initialKelas ? String(initialKelas.kapasitas) : "");
   const [harga, setHarga] = useState(initialKelas ? String(initialKelas.harga) : "");
+  // Diskon OPSIONAL (0-100%) — kosong = tanpa diskon, tampilan harga publik
+  // tetap seperti biasa (lihat components/program/KelasCardMeta.tsx).
+  const [diskonPersen, setDiskonPersen] = useState(
+    initialKelas && initialKelas.diskonPersen > 0 ? String(initialKelas.diskonPersen) : "",
+  );
+  const [diskonError, setDiskonError] = useState<string | null>(null);
   const [jadwalEntries, setJadwalEntries] = useState<JadwalEntry[]>(initialKelas?.jadwalEntries ?? []);
   const [linkMeet, setLinkMeet] = useState(initialKelas?.linkMeet ?? "");
   const [linkMeetError, setLinkMeetError] = useState<string | null>(null);
@@ -214,11 +221,24 @@ export default function KelolaKelasForm({
     }
   }
 
+  // Preview harga coret untuk Admin — pakai rumus yang SAMA dengan tampilan
+  // publik (lib/shared/kelasDiskon.ts), jangan dihitung ulang terpisah.
+  const diskonPreviewValue = diskonPersen.trim() === "" ? 0 : Number(diskonPersen);
+  const hargaPreviewValue = Number(harga);
+  const hargaPreview =
+    diskonPreviewValue > 0 && diskonPreviewValue <= 100 && Number.isFinite(hargaPreviewValue) && hargaPreviewValue > 0
+      ? {
+          asli: formatRupiah(hargaPreviewValue),
+          setelah: formatRupiah(hitungHargaSetelahDiskon(hargaPreviewValue, diskonPreviewValue)),
+        }
+      : null;
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError(null);
     setLinkMeetError(null);
     setLinkLynkidError(null);
+    setDiskonError(null);
 
     const trimmedLinkMeet = linkMeet.trim();
     if (trimmedLinkMeet && !isValidUrl(trimmedLinkMeet)) {
@@ -229,6 +249,12 @@ export default function KelolaKelasForm({
     const trimmedLinkLynkid = linkLynkid.trim();
     if (trimmedLinkLynkid && !isValidUrl(trimmedLinkLynkid)) {
       setLinkLynkidError("Isi dengan link yang valid (harus diawali http:// atau https://).");
+      return;
+    }
+
+    const diskonValue = diskonPersen.trim() === "" ? 0 : Number(diskonPersen);
+    if (!Number.isInteger(diskonValue) || diskonValue < 0 || diskonValue > 100) {
+      setDiskonError("Diskon harus angka bulat 0-100.");
       return;
     }
 
@@ -270,6 +296,7 @@ export default function KelolaKelasForm({
       mentorIds: modePembelajaran === "offline" ? [] : generalMentorIds,
       kapasitas: Number(kapasitas),
       harga: Number(harga),
+      diskonPersen: diskonValue,
       jadwalEntries: completeJadwalEntries,
       linkMeet: trimmedLinkMeet || undefined,
       linkLynkid: trimmedLinkLynkid || undefined,
@@ -334,6 +361,7 @@ export default function KelolaKelasForm({
         kapasitas: Number(kapasitas),
         jumlahSiswa: initialKelas?.jumlahSiswa ?? 0,
         harga: Number(harga),
+        diskonPersen: diskonValue,
         jadwalEntries: completeJadwalEntries,
         jadwalDisplay,
         linkMeet: trimmedLinkMeet || null,
@@ -563,6 +591,28 @@ export default function KelolaKelasForm({
         </div>
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-black">Diskon (%) &mdash; opsional</label>
+        <InputField
+          type="text"
+          size="md"
+          inputMode="numeric"
+          status={diskonError ? "error" : "default"}
+          value={diskonPersen}
+          onChange={(e) => {
+            setDiskonPersen(e.target.value.replace(/[^0-9]/g, "").slice(0, 3));
+            setDiskonError(null);
+          }}
+          placeholder="Mis. 20"
+        />
+        {diskonError ? <p className="text-sm text-[#E70A0A]">{diskonError}</p> : null}
+        <p className="text-xs text-[#7E7C7C]">
+          {hargaPreview
+            ? `Harga tampil ke siswa: ${hargaPreview.setelah} (harga asli ${hargaPreview.asli} dicoret).`
+            : "Kosongkan kalau kelas ini tidak sedang diskon — tampilan harga publik tetap seperti biasa."}
+        </p>
+      </div>
+
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-black">Jadwal</label>
         {jadwalEntries.length === 0 ? (
@@ -628,7 +678,7 @@ export default function KelolaKelasForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-black">Link Lynk.id (Sementara)</label>
+        <label className="text-sm font-medium text-black">Input Link Pendaftaran (opsional)</label>
         <InputField
           type="text"
           size="md"
@@ -638,11 +688,11 @@ export default function KelolaKelasForm({
             setLinkLynkid(e.target.value);
             setLinkLynkidError(null);
           }}
-          placeholder="https://lynk.id/..."
+          placeholder="https://..."
         />
         {linkLynkidError ? <p className="text-sm text-[#E70A0A]">{linkLynkidError}</p> : null}
         <p className="text-xs text-[#7E7C7C]">
-          Diisi selama Payment otomatis belum aktif — link produk Lynk.id untuk kelas ini. Kosongkan kalau belum ada.
+          Kosongkan untuk memakai checkout Dimentoring. Isi untuk mengarahkan ke link pendaftaran eksternal.
         </p>
       </div>
 

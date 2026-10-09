@@ -7,6 +7,8 @@ import {
   createSessionToken,
   verifySessionToken,
 } from "@/lib/auth/session";
+import { subtesNamaCandidates } from "@/lib/shared/mapelSubtesOptions";
+import { clearReturnToCookie, readReturnToCookie } from "@/lib/auth/returnToCookie";
 
 /**
  * Lengkapi Profil API — "babak kedua" Register per PRD Bagian 7.0.2 DIREVISI
@@ -123,11 +125,17 @@ export async function POST(request: NextRequest) {
   const warnings: string[] = [];
 
   // ---- Resolusi nama mapel/subtes -> subtes.id (referensi tabel `subtes`) ----
+  // Label checklist onboarding memakai nama RESMI SNBT/TKA, sementara tabel
+  // master masih bisa menyimpan redaksi lama untuk 3 subtes (lihat
+  // lib/shared/mapelSubtesOptions.ts & db/rename_subtes_nama_resmi.sql) —
+  // jadi tiap label dicocokkan terhadap nama resmi DAN alias lamanya, supaya
+  // pilihan user tidak pernah hilang diam-diam.
   const namesToResolve = body.role === "siswa" ? mapelSulitNames : subtesDiampuNames;
+  const candidateNames = Array.from(new Set(namesToResolve.flatMap((name) => subtesNamaCandidates(name))));
   const { data: subtesRows, error: subtesError } = await supabaseServer
     .from("subtes")
     .select("id, nama")
-    .in("nama", namesToResolve);
+    .in("nama", candidateNames);
 
   if (subtesError) {
     return errorResponse("Gagal memuat referensi mapel/subtes.", 500);
@@ -135,7 +143,9 @@ export async function POST(request: NextRequest) {
 
   const resolvedSubtesIds = (subtesRows ?? []).map((row) => row.id as string);
   const resolvedNames = new Set((subtesRows ?? []).map((row) => (row.nama as string).toLowerCase()));
-  const unresolvedNames = namesToResolve.filter((name) => !resolvedNames.has(name.toLowerCase()));
+  const unresolvedNames = namesToResolve.filter(
+    (name) => !subtesNamaCandidates(name).some((candidate) => resolvedNames.has(candidate.toLowerCase())),
+  );
   if (unresolvedNames.length > 0) {
     warnings.push(
       `Beberapa pilihan tidak ditemukan di data master dan dilewati: ${unresolvedNames.join(", ")}.`,
@@ -248,9 +258,13 @@ export async function POST(request: NextRequest) {
   }
 
   const activeRole = ROLE_TYPE_MAP[body.role];
+  // Titipan returnTo (alur "Daftar Sekarang" kelas, lib/auth/returnToCookie.ts)
+  // HANYA dipakai kalau role akhirnya Siswa — Mentor tetap ke dashboard-nya.
+  // Cookie dihapus di bawah apa pun role-nya (sekali pakai).
+  const returnTo = activeRole === "student" ? readReturnToCookie(request) : null;
   const response = NextResponse.json({
     success: true,
-    redirectTo: ROLE_DASHBOARD_PATH[activeRole],
+    redirectTo: returnTo ?? ROLE_DASHBOARD_PATH[activeRole],
     warnings: warnings.length > 0 ? warnings : undefined,
   });
 
@@ -262,6 +276,7 @@ export async function POST(request: NextRequest) {
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   });
+  clearReturnToCookie(response);
 
   return response;
 }

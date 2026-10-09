@@ -1,24 +1,19 @@
-"use client";
-
-import type { MouseEvent } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Button from "@/components/ui/Button";
+import { buttonClassName } from "@/components/ui/buttonClassName";
 import type { SessionRole } from "@/lib/auth/session";
+import { resolveKelasDaftarAction } from "@/lib/shared/kelasDaftarTarget";
 
 /**
- * Tombol "Daftar Sekarang" di card Kelas publik (PRD 7.5 poin 10). Card
- * pembungkusnya (KelasCardFrame) adalah <Link> ke halaman detail — tombol
- * ini WAJIB stopPropagation supaya klik tombol langsung ke checkout/Lynk.id,
- * bukan ikut ke-trigger navigasi Link detail kelas.
+ * Tombol "Daftar Sekarang" kelas — dipakai card /program (+ Rekomendasi Kelas,
+ * lewat KelasCardMeta) DAN halaman detail publik app/program/kelas/[kelasId]/page.tsx.
+ * Aturan tujuannya ada di SATU tempat: lib/shared/kelasDaftarTarget.ts.
  *
- * Logic REUSE persis dari app/program/kelas/[kelasId]/page.tsx: kalau
- * NEXT_PUBLIC_PENDAFTARAN_MANUAL aktif -> buka kelas.link_lynkid di tab baru
- * (TANPA gating login/role, Payment otomatis belum aktif jadi tidak ada alur
- * internal untuk digating) kalau link-nya sudah diisi Admin, atau nonaktif
- * dengan keterangan kalau belum; kalau mode manual TIDAK aktif -> logic lama:
- * belum login -> /login, login role Siswa -> /checkout/[kelasId], login role
- * lain -> nonaktif (kelas cuma untuk Siswa). "Kelas Penuh" tetap prioritas
- * tertinggi di kedua mode.
+ * Dirender sebagai <a>/<Link> dengan href asli (bukan router.push di onClick)
+ * supaya bisa dibuka di tab baru dan cocok dengan pola stretched-link
+ * KelasCardFrame — tombol ini BUKAN anak dari Link kartu, cuma ditumpuk di
+ * atasnya (lihat KelasCardFrame.tsx), jadi klik tombol tidak pernah ikut ke
+ * halaman detail.
  */
 
 const IS_PENDAFTARAN_MANUAL = process.env.NEXT_PUBLIC_PENDAFTARAN_MANUAL === "true";
@@ -27,88 +22,77 @@ export interface KelasDaftarButtonProps {
   kelasId: string;
   sisaSlot: number;
   sessionRole: SessionRole | null;
-  /** SEMENTARA (PRD 7.5) — dipakai cuma kalau NEXT_PUBLIC_PENDAFTARAN_MANUAL aktif. */
+  /** Kolom kelas.link_lynkid ("Input Link Pendaftaran" di Kelola Kelas). */
   linkLynkid: string | null;
+  /** "card" = tombol kecil di card listing; "detail" = tombol besar full-width
+   * di halaman detail, dengan keterangan di bawahnya saat disabled. */
+  variant?: "card" | "detail";
+  /** Card dirender 2 kolom di mobile (grid /program) — padding tombol
+   * dikecilkan & label panjang dipendekkan HANYA di breakpoint dasar supaya
+   * teks `whitespace-nowrap` tidak keluar dari card. Mulai `sm:` kembali
+   * normal, jadi tablet/desktop tidak berubah. */
+  compact?: boolean;
 }
 
-export default function KelasDaftarButton({ kelasId, sisaSlot, sessionRole, linkLynkid }: KelasDaftarButtonProps) {
-  const router = useRouter();
-  const isPenuh = sisaSlot <= 0;
-  const isRoleLain = sessionRole !== null && sessionRole !== "student";
+export default function KelasDaftarButton({
+  kelasId,
+  sisaSlot,
+  sessionRole,
+  linkLynkid,
+  variant = "card",
+  compact = false,
+}: KelasDaftarButtonProps) {
+  const action = resolveKelasDaftarAction({
+    kelasId,
+    sisaSlot,
+    linkPendaftaran: linkLynkid,
+    sessionRole,
+    isPendaftaranManual: IS_PENDAFTARAN_MANUAL,
+  });
 
-  if (isPenuh) {
-    return (
-      <Button
-        type="button"
-        variant="primary"
-        size="sm"
-        className="w-full"
-        disabled
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        Kelas Penuh
-      </Button>
-    );
-  }
+  const isDetail = variant === "detail";
+  const size = isDetail ? "lg" : "sm";
+  const widthClass = isDetail ? "w-full" : compact ? "w-full px-3 sm:px-5" : "w-full";
 
-  if (IS_PENDAFTARAN_MANUAL) {
-    if (!linkLynkid) {
-      return (
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          className="w-full"
-          disabled
-          onMouseDown={(event) => event.stopPropagation()}
-          title="Link pendaftaran kelas ini belum diisi Admin"
-        >
-          Link Pendaftaran Belum Tersedia
-        </Button>
+  if (action.kind === "disabled") {
+    const label =
+      compact && action.labelCompact !== action.label ? (
+        <>
+          <span className="sm:hidden">{action.labelCompact}</span>
+          <span className="hidden sm:inline">{action.label}</span>
+        </>
+      ) : (
+        action.label
       );
-    }
 
-    function handleLynkidClick(event: MouseEvent<HTMLButtonElement>) {
-      event.preventDefault();
-      event.stopPropagation();
-      window.open(linkLynkid as string, "_blank", "noopener,noreferrer");
-    }
-
-    return (
-      <Button
-        type="button"
-        variant="primary"
-        size="sm"
-        className="w-full"
-        onClick={handleLynkidClick}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        Daftar Sekarang
+    const button = (
+      <Button type="button" variant="primary" size={size} className={widthClass} disabled title={action.keterangan}>
+        {label}
       </Button>
+    );
+
+    if (!isDetail) return button;
+    return (
+      <>
+        {button}
+        <p className="text-center text-sm text-[#7E7C7C]">{action.keterangan}</p>
+      </>
     );
   }
 
-  const disabled = isRoleLain;
+  const className = buttonClassName({ variant: "primary", size, className: widthClass });
 
-  function handleClick(event: MouseEvent<HTMLButtonElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (disabled) return;
-    router.push(sessionRole === "student" ? `/checkout/${kelasId}` : "/login");
+  if (action.kind === "external") {
+    return (
+      <a href={action.href} target="_blank" rel="noopener noreferrer" className={className}>
+        Daftar Sekarang
+      </a>
+    );
   }
 
   return (
-    <Button
-      type="button"
-      variant="primary"
-      size="sm"
-      className="w-full"
-      disabled={disabled}
-      onClick={handleClick}
-      onMouseDown={(event) => event.stopPropagation()}
-      title={isRoleLain ? "Pendaftaran kelas hanya untuk akun Siswa" : undefined}
-    >
+    <Link href={action.href} className={className}>
       Daftar Sekarang
-    </Button>
+    </Link>
   );
 }

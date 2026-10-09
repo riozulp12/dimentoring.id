@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { clearReturnToCookie } from "@/lib/auth/returnToCookie";
 
 /**
  * Logout — hapus session cookie, redirect ke landing page. Dipakai sebagai
@@ -16,6 +17,7 @@ export async function GET(request: NextRequest) {
     path: "/",
     maxAge: 0,
   });
+  clearReturnToCookie(response);
 
   return response;
 }

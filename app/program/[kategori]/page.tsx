@@ -62,7 +62,7 @@ export default async function ProgramKategoriPage({
             </p>
           </div>
         ) : (
-          <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid w-full grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {items.map((item, idx) => (
               <KelasCardFrame
                 key={item.id}
@@ -75,8 +75,9 @@ export default async function ProgramKategoriPage({
                 programKategori={item.programKategori}
                 tingkatKelas={item.tingkatKelas}
                 subtesNama={item.subtesNama}
+                compact
               >
-                <KelasCardMeta item={item} sessionRole={session?.role ?? null} />
+                <KelasCardMeta item={item} sessionRole={session?.role ?? null} compact />
               </KelasCardFrame>
             ))}
           </div>

@@ -9,6 +9,7 @@ import {
 import { resolveSessionForUser } from "@/lib/auth/resolveSession";
 import { generateReferralCode } from "@/lib/auth/generateReferralCode";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
+import { writeReturnToCookie } from "@/lib/auth/returnToCookie";
 
 /**
  * Bridge "Google OAuth sukses -> session aplikasi kita" — dipanggil dari
@@ -31,6 +32,9 @@ interface GoogleCallbackBody {
   // Google (lihat app/auth/callback/page.tsx), cuma dipakai kalau ini akun BARU.
   utmSource?: string;
   utmCampaign?: string;
+  /** Path internal tujuan setelah onboarding (alur "Daftar Sekarang" kelas) —
+   * dititipkan ke cookie, lihat lib/auth/returnToCookie.ts. Divalidasi di sana. */
+  returnTo?: string;
 }
 
 function errorResponse(message: string, status: number, extra?: Record<string, unknown>) {
@@ -152,6 +156,11 @@ export async function POST(request: NextRequest) {
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   });
+  // Cuma akun BARU / onboarding belum selesai yang perlu titipan cookie — akun
+  // lama langsung diproses resolvePostLoginTarget() di halaman Login lewat query.
+  if (resolved.role === "unassigned") {
+    writeReturnToCookie(response, body.returnTo);
+  }
 
   return response;
 }

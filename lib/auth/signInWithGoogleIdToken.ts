@@ -23,12 +23,18 @@ interface SignInWithGoogleIdTokenParams {
   pendingAssessmentId?: string;
   utmSource?: string;
   utmCampaign?: string;
+  /** Diteruskan ke google-callback — dititipkan ke cookie HANYA kalau akun
+   * baru/onboarding belum selesai (lib/auth/returnToCookie.ts). */
+  returnTo?: string;
 }
 
 interface SignInWithGoogleIdTokenResult {
   success: boolean;
   error?: string;
   redirectTo?: string;
+  /** Role aktif yang di-resolve server — dipakai halaman Login untuk
+   * memutuskan apakah param `returnTo` dihormati (cuma untuk siswa). */
+  role?: string;
 }
 
 export async function signInWithGoogleIdToken({
@@ -37,6 +43,7 @@ export async function signInWithGoogleIdToken({
   pendingAssessmentId,
   utmSource,
   utmCampaign,
+  returnTo,
 }: SignInWithGoogleIdTokenParams): Promise<SignInWithGoogleIdTokenResult> {
   const { data, error } = await supabase.auth.signInWithIdToken({
     provider: "google",
@@ -54,12 +61,12 @@ export async function signInWithGoogleIdToken({
     (data.session.user.user_metadata?.name as string | undefined) ??
     null;
 
-  let json: { success: boolean; error?: string; redirectTo?: string };
+  let json: { success: boolean; error?: string; redirectTo?: string; role?: string };
   try {
     const response = await fetch("/api/auth/google-callback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, nama, pendingAssessmentId, utmSource, utmCampaign }),
+      body: JSON.stringify({ email, nama, pendingAssessmentId, utmSource, utmCampaign, returnTo }),
     });
     json = await response.json();
   } catch (postError) {
@@ -75,5 +82,5 @@ export async function signInWithGoogleIdToken({
     return { success: false, error: json.error ?? "Gagal login dengan Google. Coba lagi nanti." };
   }
 
-  return { success: true, redirectTo: json.redirectTo };
+  return { success: true, redirectTo: json.redirectTo, role: json.role };
 }

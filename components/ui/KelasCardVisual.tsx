@@ -109,6 +109,11 @@ export interface KelasCardVisualProps {
    * antar baris teks lebih longgar supaya nyaman dibaca sebagai banner
    * full-width, bukan tile kecil. */
   size?: "card" | "banner";
+  /** HANYA untuk size="card": banner dirender di card 2 kolom pada breakpoint
+   * mobile (grid /program). Judul & kotak CTA dikecilkan HANYA di breakpoint
+   * dasar (<640px); mulai `sm:` identik dengan tampilan normal, jadi
+   * tablet/desktop tidak berubah. Diabaikan kalau size="banner". */
+  compact?: boolean;
 }
 
 export default function KelasCardVisual({
@@ -125,8 +130,10 @@ export default function KelasCardVisual({
   subtesNama,
   className,
   size = "card",
+  compact = false,
 }: KelasCardVisualProps) {
   const isBanner = size === "banner";
+  const isCompactCard = compact && !isBanner;
   // Banner (halaman detail kelas): persegi panjang melebar & pendek — SATU
   // rasio konsisten di semua breakpoint (bukan bertingkat per breakpoint
   // seperti draf sebelumnya) supaya kependekannya konsisten mulai dari
@@ -136,7 +143,7 @@ export default function KelasCardVisual({
   // supaya proporsional dengan banner yang sekarang jauh lebih pendek.
   const mascotSizeClass = isBanner ? "h-[30%] sm:h-[33%]" : "h-[78%]";
   const contentGapClass = isBanner ? "gap-4 sm:gap-5" : "gap-1.5 sm:gap-2";
-  const contentPaddingClass = isBanner ? "p-6 sm:p-8 lg:p-10" : "p-2.5 sm:p-3";
+  const contentPaddingClass = isBanner ? "p-6 sm:p-8 lg:p-10" : isCompactCard ? "p-2 sm:p-3" : "p-2.5 sm:p-3";
   const titleBlockGapClass = isBanner ? "gap-2.5 sm:gap-3" : "gap-1";
   const badgePaddingClass = isBanner ? "px-3 py-1 sm:px-4 sm:py-1.5" : "px-2 py-0.5";
   const ctaPaddingClass = isBanner ? "px-4 py-3 sm:px-5 sm:py-3.5" : "px-2.5 py-1.5 sm:px-3 sm:py-2";
@@ -250,13 +257,18 @@ export default function KelasCardVisual({
       {/* Konten bawah: badge target kelas, judul besar, badge sub-kategori,
           lalu kotak CTA urgency (poin 5, 6, 8, 9). */}
       <div className={`absolute inset-x-0 bottom-0 z-10 flex flex-col ${contentGapClass} ${contentPaddingClass}`}>
-        <div className={`flex w-[70%] flex-col ${titleBlockGapClass} sm:w-[64%]`}>
+        <div className={`flex flex-col ${titleBlockGapClass} ${isCompactCard ? "w-[78%]" : "w-[70%]"} sm:w-[64%]`}>
           <span
             className={`inline-flex w-fit items-center rounded-full bg-white/20 text-[9px] font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm sm:text-[10px] ${badgePaddingClass}`}
           >
             {targetLabel}
           </span>
-          <p className="line-clamp-2 text-lg leading-[1.1] font-extrabold tracking-tight text-white uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] sm:text-xl lg:text-2xl">
+          <p
+            className={[
+              "line-clamp-2 leading-[1.1] font-extrabold tracking-tight text-white uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] sm:text-xl lg:text-2xl",
+              isCompactCard ? "text-[13px]" : "text-lg",
+            ].join(" ")}
+          >
             {namaDisplay}
           </p>
           <span
@@ -272,7 +284,17 @@ export default function KelasCardVisual({
             relevan lagi), "diampu" = tidak ada (badge siswa sudah cukup, lihat
             atas). */}
         {isJual ? (
-          <div className={`flex items-start rounded-lg bg-[#FECDD3] shadow-[0_2px_6px_rgba(0,0,0,0.15)] ${ctaGapClass} ${ctaPaddingClass}`}>
+          <div
+            className={[
+              "items-start rounded-lg bg-[#FECDD3] shadow-[0_2px_6px_rgba(0,0,0,0.15)]",
+              ctaGapClass,
+              ctaPaddingClass,
+              // Card 2 kolom di mobile terlalu sempit untuk kalimat urgency 2
+              // baris — disembunyikan di breakpoint dasar saja (badge kuota &
+              // ribbon diskon tetap tampil, jadi sinyal urgensi tidak hilang).
+              isCompactCard ? "hidden sm:flex" : "flex",
+            ].join(" ")}
+          >
             <svg aria-hidden viewBox="0 0 20 20" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#9F1239]" fill="currentColor">
               <path d="M10 1.5 1 17h18L10 1.5Zm0 5.4c.5 0 .9.4.9.9v4.1c0 .5-.4.9-.9.9s-.9-.4-.9-.9V7.8c0-.5.4-.9.9-.9Zm0 7.4a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" />
             </svg>

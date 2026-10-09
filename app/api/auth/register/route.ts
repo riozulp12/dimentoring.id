@@ -10,6 +10,7 @@ import {
 import { generateReferralCode } from "@/lib/auth/generateReferralCode";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
 import { linkPendingAssessment } from "@/lib/assessment/linkPendingAssessment";
+import { writeReturnToCookie } from "@/lib/auth/returnToCookie";
 
 /**
  * Register API — PRD Bagian 7.0.2 DIREVISI TOTAL (Agustus 2026): "Akun Dulu,
@@ -40,6 +41,9 @@ interface RegisterRequestBody {
   // terhadap daftar nilai tertentu (Admin bebas pakai tag apa saja di iklan).
   utmSource?: string;
   utmCampaign?: string;
+  /** Path internal tujuan setelah onboarding (alur "Daftar Sekarang" kelas) —
+   * dititipkan ke cookie, lihat lib/auth/returnToCookie.ts. Divalidasi di sana. */
+  returnTo?: string;
 }
 
 function isValidEmail(value: string) {
@@ -203,6 +207,8 @@ export async function POST(request: NextRequest) {
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   });
+  // Akun baru selalu "unassigned" -> titip returnTo untuk akhir onboarding.
+  writeReturnToCookie(response, body.returnTo);
 
   return response;
 }

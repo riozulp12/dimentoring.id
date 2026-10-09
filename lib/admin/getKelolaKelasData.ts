@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
+import { normalizeDiskonPersen } from "@/lib/shared/kelasDiskon";
 
 /**
  * Data layer "Kelola Kelas" (Admin) — PRD Bagian 7.5, 7.5.3 (tipe_kelas &
@@ -44,14 +45,18 @@ export interface KelasListItem {
   kapasitas: number;
   jumlahSiswa: number;
   harga: number;
+  /** `kelas.diskon_persen` (0-100) — 0 berarti kelas ini tidak sedang diskon.
+   * Lihat db/add_kelas_diskon.sql. */
+  diskonPersen: number;
   /** Dipakai untuk prefill form edit (picker hari+jam). */
   jadwalEntries: JadwalEntry[];
   /** Dipakai untuk tampilan read-only (list/detail) — reuse formatJadwal yang
    * sama dengan halaman Siswa/Mentor. */
   jadwalDisplay: string;
   linkMeet: string | null;
-  /** SEMENTARA (PRD 7.5) — link produk Lynk.id, dipakai selama Payment
-   * otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
+  /** SEMENTARA (PRD 7.5) — link pendaftaran/checkout eksternal (TIDAK harus
+   * lynk.id; label UI-nya "Input Link Pendaftaran"). Nama kolom DB tetap
+   * `link_lynkid`, cuma label/placeholder UI yang generik. */
   linkLynkid: string | null;
   deskripsi: string | null;
 }
@@ -110,6 +115,7 @@ interface KelasRow {
   subtes_id: string | null;
   kapasitas: number;
   harga: number;
+  diskon_persen: number | null;
   jadwal: unknown;
   link_meet: string | null;
   link_lynkid: string | null;
@@ -135,7 +141,7 @@ export async function getKelasList(): Promise<KelasListItem[]> {
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, mode_pembelajaran, jumlah_sesi, subtes_id, kapasitas, harga, jadwal, link_meet, link_lynkid, deskripsi,
+      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, mode_pembelajaran, jumlah_sesi, subtes_id, kapasitas, harga, diskon_persen, jadwal, link_meet, link_lynkid, deskripsi,
        subtes:subtes_id(nama),
        kelas_subtes(subtes_id, subtes:subtes_id(nama)),
        kelas_mentor(mentor_id, users:mentor_id(nama)),
@@ -192,6 +198,7 @@ export async function getKelasList(): Promise<KelasListItem[]> {
       kapasitas: row.kapasitas,
       jumlahSiswa,
       harga: Number(row.harga),
+      diskonPersen: normalizeDiskonPersen(row.diskon_persen),
       jadwalEntries: extractJadwalEntries(row.jadwal),
       jadwalDisplay: formatJadwal(row.jadwal),
       linkMeet: row.link_meet,

@@ -13,7 +13,7 @@ import {
 import { PROGRAM_KATEGORI_SLUG } from "@/lib/shared/kelasLabels";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
-import Button from "@/components/ui/Button";
+import KelasDaftarButton from "@/components/program/KelasDaftarButton";
 import Avatar from "@/components/ui/Avatar";
 import KelasCardVisual from "@/components/ui/KelasCardVisual";
 import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
@@ -23,15 +23,9 @@ import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
  * dibagi kolom): Card 1 banner (KelasCardVisual full-bleed), Card 2 info kelas
  * (kiri, lebih lebar) + Card 3 sidebar Materi (kanan, lebih sempit) berdampingan
  * di desktop dan bertumpuk di mobile, lalu tombol "Daftar Sekarang" full-width
- * TERPISAH di luar ketiga card. Logic tombol (PRD 7.5, catatan link_lynkid):
- * kalau NEXT_PUBLIC_PENDAFTARAN_MANUAL aktif -> tombol langsung ke
- * kelas.link_lynkid (tab baru, TANPA gating login/role, karena Payment
- * otomatis belum aktif jadi tidak ada alur internal untuk digating) kalau
- * link-nya sudah diisi Admin, atau nonaktif dengan keterangan kalau belum;
- * kalau mode manual TIDAK aktif -> logic lama: belum login -> /login; sudah
- * login sebagai Siswa -> /checkout/[kelasId]; sudah login sebagai role lain
- * (Mentor/Admin) -> nonaktif (kelas cuma untuk Siswa). "Kelas Penuh" tetap
- * prioritas tertinggi di kedua mode. List Mentor & Materi dibatasi gradient
+ * TERPISAH di luar ketiga card. Tujuan tombol ditentukan components/program/
+ * KelasDaftarButton.tsx (aturan di lib/shared/kelasDaftarTarget.ts, SAMA dengan
+ * card /program). List Mentor & Materi dibatasi gradient
  * putih untuk visitor belum login (teaser), tampil penuh begitu sudah login
  * (role apa pun). */
 
@@ -119,7 +113,6 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
   const navbarProps = await getNavbarProps(session);
   const isLoggedIn = Boolean(session);
-  const isPendaftaranManual = process.env.NEXT_PUBLIC_PENDAFTARAN_MANUAL === "true";
 
   return (
     <div className="flex w-full flex-col">
@@ -158,7 +151,23 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
                     </div>
                   ) : null}
                 </div>
-                <p className="text-xl font-semibold whitespace-nowrap text-[#081EEA] sm:text-2xl">{formatRupiah(kelas.harga)}</p>
+                {/* Harga setelah diskon jadi fokus utama (bold, besar) kalau
+                    kelas.diskon_persen > 0; harga asli dicoret di atasnya.
+                    Tanpa diskon: tampilan lama, tidak berubah. */}
+                {kelas.diskonPersen > 0 ? (
+                  <div className="flex shrink-0 flex-col sm:items-end">
+                    <span className="text-sm whitespace-nowrap text-[#7E7C7C] line-through">
+                      {formatRupiah(kelas.harga)}
+                    </span>
+                    <span className="text-2xl font-bold whitespace-nowrap text-[#DC2626] sm:text-3xl">
+                      {formatRupiah(kelas.hargaSetelahDiskon)}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-xl font-semibold whitespace-nowrap text-[#081EEA] sm:text-2xl">
+                    {formatRupiah(kelas.harga)}
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -209,50 +218,16 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
 
           {/* Tombol Daftar Sekarang — full-width, terpisah dari ketiga card */}
           <div className="flex flex-col gap-2">
-            {kelas.sisaSlot <= 0 ? (
-              <>
-                <Button type="button" variant="primary" size="lg" className="w-full" disabled>
-                  Kelas Penuh
-                </Button>
-                <p className="text-center text-sm text-[#7E7C7C]">Kelas ini sudah penuh, kuota sudah terisi semua.</p>
-              </>
-            ) : isPendaftaranManual ? (
-              kelas.linkLynkid ? (
-                <a href={kelas.linkLynkid} target="_blank" rel="noopener noreferrer" className="w-full">
-                  <Button type="button" variant="primary" size="lg" className="w-full">
-                    Daftar Sekarang
-                  </Button>
-                </a>
-              ) : (
-                <>
-                  <Button type="button" variant="primary" size="lg" className="w-full" disabled>
-                    Link Pendaftaran Belum Tersedia
-                  </Button>
-                  <p className="text-center text-sm text-[#7E7C7C]">
-                    Link pendaftaran kelas ini belum diisi Admin. Coba lagi nanti.
-                  </p>
-                </>
-              )
-            ) : session?.role === "student" ? (
-              <Link href={`/checkout/${kelas.id}`} className="w-full">
-                <Button type="button" variant="primary" size="lg" className="w-full">
-                  Daftar Sekarang
-                </Button>
-              </Link>
-            ) : session ? (
-              <>
-                <Button type="button" variant="primary" size="lg" className="w-full" disabled>
-                  Daftar Sekarang
-                </Button>
-                <p className="text-center text-sm text-[#7E7C7C]">Pendaftaran kelas hanya untuk akun Siswa.</p>
-              </>
-            ) : (
-              <Link href="/login" className="w-full">
-                <Button type="button" variant="primary" size="lg" className="w-full">
-                  Daftar Sekarang
-                </Button>
-              </Link>
-            )}
+            {/* Aturan tujuan tombol (penuh / link pendaftaran / login / checkout /
+                role lain / pengaman NEXT_PUBLIC_PENDAFTARAN_MANUAL) SAMA PERSIS
+                dengan card /program — lihat lib/shared/kelasDaftarTarget.ts. */}
+            <KelasDaftarButton
+              kelasId={kelas.id}
+              sisaSlot={kelas.sisaSlot}
+              sessionRole={session?.role ?? null}
+              linkLynkid={kelas.linkLynkid}
+              variant="detail"
+            />
           </div>
         </div>
       </main>

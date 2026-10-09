@@ -10,9 +10,10 @@ import {
   type ProgramKategori,
 } from "@/lib/shared/kelasLabels";
 import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
+import { hitungHargaSetelahDiskon, normalizeDiskonPersen } from "@/lib/shared/kelasDiskon";
 
 export const KELAS_CARD_SELECT =
-  "id, nama, tipe_kelas, mode_pembelajaran, harga, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, subtes:subtes_id(nama), mentor:mentor_id(nama)";
+  "id, nama, tipe_kelas, mode_pembelajaran, harga, diskon_persen, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, subtes:subtes_id(nama), mentor:mentor_id(nama)";
 
 /**
  * Data layer halaman publik /program (PRD Bagian 4.3 poin 5, 7.5.4) — 5
@@ -32,6 +33,13 @@ export interface KelasCardPreview {
   modePembelajaran: string;
   modePembelajaranLabel: string;
   harga: number;
+  /** `kelas.diskon_persen` (0-100) — diskon yang MELEKAT ke kelas (tanpa kode
+   * promo). 0 = tidak ada diskon, tampilan harga tetap seperti biasa. */
+  diskonPersen: number;
+  /** harga * (1 - diskonPersen/100), dibulatkan ke rupiah terdekat. Sama
+   * dengan `harga` kalau diskonPersen = 0 — card/detail cukup bandingkan
+   * diskonPersen > 0 untuk memutuskan tampil harga coret atau tidak. */
+  hargaSetelahDiskon: number;
   mentorNama: string | null;
   diskonAktif: DiskonAktif | null;
   kapasitas: number;
@@ -40,8 +48,8 @@ export interface KelasCardPreview {
   programKategori: string;
   tingkatKelas: string;
   subtesNama: string | null;
-  /** SEMENTARA (PRD 7.5) — link produk Lynk.id, dipakai selama Payment
-   * otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
+  /** kelas.link_lynkid ("Input Link Pendaftaran") — tujuan tombol Daftar
+   * Sekarang kalau terisi, lihat lib/shared/kelasDaftarTarget.ts. */
   linkLynkid: string | null;
 }
 
@@ -66,6 +74,7 @@ export interface KelasCardRow {
   tipe_kelas: string;
   mode_pembelajaran: string;
   harga: number;
+  diskon_persen: number | null;
   kapasitas: number;
   deskripsi: string | null;
   program_kategori: string;
@@ -76,6 +85,8 @@ export interface KelasCardRow {
 }
 
 export function toCardPreview(row: KelasCardRow, diskonAktif: DiskonAktif | null, sisaSlot: number): KelasCardPreview {
+  const harga = Number(row.harga);
+  const diskonPersen = normalizeDiskonPersen(row.diskon_persen);
   return {
     id: row.id,
     nama: row.nama,
@@ -83,9 +94,15 @@ export function toCardPreview(row: KelasCardRow, diskonAktif: DiskonAktif | null
     tipeKelasLabel: TIPE_KELAS_LABEL[row.tipe_kelas] ?? row.tipe_kelas,
     modePembelajaran: row.mode_pembelajaran,
     modePembelajaranLabel: MODE_PEMBELAJARAN_LABEL[row.mode_pembelajaran] ?? row.mode_pembelajaran,
-    harga: Number(row.harga),
+    harga,
+    diskonPersen,
+    hargaSetelahDiskon: hitungHargaSetelahDiskon(harga, diskonPersen),
     mentorNama: firstNama(row.mentor),
-    diskonAktif,
+    // Ribbon + border merah di card (KelasCardFrame/KelasCardVisual) sudah ada
+    // untuk kode promo. Diskon yang melekat ke kelas (`diskon_persen`) ikut
+    // memakainya kalau kelas ini TIDAK sedang kena kode promo — kode promo
+    // tetap prioritas supaya labelnya tidak saling menimpa.
+    diskonAktif: diskonAktif ?? (diskonPersen > 0 ? { label: `Diskon ${diskonPersen}%` } : null),
     kapasitas: row.kapasitas,
     sisaSlot,
     deskripsi: row.deskripsi,
@@ -308,13 +325,16 @@ export interface KelasDetailPublic {
    * WAJIB sembunyikan baris jadwal sepenuhnya kalau null, bukan tampilkan
    * placeholder semacam "Jadwal: -". */
   jadwalDisplay: string | null;
+  /** `kelas.diskon_persen` (0-100) — 0 berarti tampilan harga normal. */
+  diskonPersen: number;
+  hargaSetelahDiskon: number;
   mentorNama: string | null;
   mentors: KelasMentorInfo[];
   kapasitas: number;
   sisaSlot: number;
   diskonAktif: DiskonAktif | null;
-  /** SEMENTARA (PRD 7.5) — link produk Lynk.id, dipakai selama Payment
-   * otomatis belum aktif (NEXT_PUBLIC_PENDAFTARAN_MANUAL). */
+  /** kelas.link_lynkid ("Input Link Pendaftaran") — tujuan tombol Daftar
+   * Sekarang kalau terisi, lihat lib/shared/kelasDaftarTarget.ts. */
   linkLynkid: string | null;
 }
 
@@ -325,7 +345,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tipe_kelas, mode_pembelajaran, jumlah_sesi, tingkat_kelas, deskripsi, harga, jadwal, kapasitas, link_lynkid,
+      `id, nama, program_kategori, tipe_kelas, mode_pembelajaran, jumlah_sesi, tingkat_kelas, deskripsi, harga, diskon_persen, jadwal, kapasitas, link_lynkid,
        subtes:subtes_id(nama)`,
     )
     .eq("id", kelasId)
@@ -347,6 +367,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     tingkat_kelas: string;
     deskripsi: string | null;
     harga: number;
+    diskon_persen: number | null;
     jadwal: unknown;
     kapasitas: number;
     link_lynkid: string | null;
@@ -386,6 +407,9 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
       return { nama: u.nama, avatarUrl: u.avatar_url, asalPtn: profile?.asal_ptn ?? null };
     });
 
+  const hargaDetail = Number(row.harga);
+  const diskonPersenDetail = normalizeDiskonPersen(row.diskon_persen);
+
   return {
     id: row.id,
     nama: row.nama,
@@ -400,13 +424,17 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     tingkatKelas: row.tingkat_kelas,
     tingkatKelasLabel: TINGKAT_KELAS_LABEL[row.tingkat_kelas] ?? row.tingkat_kelas,
     deskripsi: row.deskripsi,
-    harga: Number(row.harga),
+    harga: hargaDetail,
     jadwalDisplay: formatJadwalRingkas(row.jadwal),
+    diskonPersen: diskonPersenDetail,
+    hargaSetelahDiskon: hitungHargaSetelahDiskon(hargaDetail, diskonPersenDetail),
     mentorNama: mentors[0]?.nama ?? null,
     mentors,
     kapasitas: row.kapasitas,
     sisaSlot: row.kapasitas - (count ?? 0),
-    diskonAktif: diskonByKelas.get(kelasId) ?? null,
+    diskonAktif:
+      (diskonByKelas.get(kelasId) ?? null) ??
+      (diskonPersenDetail > 0 ? { label: `Diskon ${diskonPersenDetail}%` } : null),
     linkLynkid: row.link_lynkid,
   };
 }
