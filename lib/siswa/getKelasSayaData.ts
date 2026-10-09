@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
+import { formatJadwalSiswaTerdaftar } from "@/lib/shared/jadwalPilihan";
 import {
   KELAS_CARD_SELECT,
   getDiskonAktifByKelasId,
@@ -23,6 +24,8 @@ export interface KelasSayaItem {
   id: string;
   nama: string;
   mentorNama: string | null;
+  /** Kelas dengan Pilihan Jadwal (PRD 7.5.8): "Menunggu penetapan jadwal" /
+   * "Jadwal: <slot>"; kelas biasa: semua slot (formatJadwal). */
   jadwal: string;
   progresPersen: number;
   programKategori: string;
@@ -52,7 +55,7 @@ export async function getKelasSaya(userId: string): Promise<KelasSayaItem[]> {
   const { data, error } = await supabaseServer
     .from("enrollments")
     .select(
-      "progres_persen, kelas:kelas_id(id, nama, jadwal, program_kategori, tingkat_kelas, mode_pembelajaran, subtes:subtes_id(nama), mentor:mentor_id(nama))",
+      "progres_persen, jadwal_ditetapkan, kelas:kelas_id(id, nama, jadwal, jadwal_pilih_siswa, program_kategori, tingkat_kelas, mode_pembelajaran, subtes:subtes_id(nama), mentor:mentor_id(nama))",
     )
     .eq("user_id", userId)
     .eq("status_pembayaran", "lunas");
@@ -66,13 +69,14 @@ export async function getKelasSaya(userId: string): Promise<KelasSayaItem[]> {
     id: string;
     nama: string;
     jadwal: unknown;
+    jadwal_pilih_siswa: boolean | null;
     program_kategori: string;
     tingkat_kelas: string;
     mode_pembelajaran: string;
     subtes: SubtesJoin;
     mentor: MentorJoin;
   };
-  type Row = { progres_persen: number; kelas: KelasJoin | KelasJoin[] | null };
+  type Row = { progres_persen: number; jadwal_ditetapkan: unknown; kelas: KelasJoin | KelasJoin[] | null };
 
   return ((data ?? []) as unknown as Row[])
     .map((row) => {
@@ -82,7 +86,15 @@ export async function getKelasSaya(userId: string): Promise<KelasSayaItem[]> {
         id: kelas.id,
         nama: kelas.nama,
         mentorNama: resolveMentorNama(kelas.mentor),
-        jadwal: formatJadwal(kelas.jadwal),
+        jadwal:
+          formatJadwalSiswaTerdaftar(
+            {
+              jadwalPilihSiswa: kelas.jadwal_pilih_siswa === true,
+              modePembelajaran: kelas.mode_pembelajaran,
+              jadwal: kelas.jadwal,
+            },
+            row.jadwal_ditetapkan,
+          ) ?? formatJadwal(kelas.jadwal),
         progresPersen: row.progres_persen,
         programKategori: kelas.program_kategori,
         tingkatKelas: kelas.tingkat_kelas,

@@ -19,6 +19,9 @@ export interface KelasDetailData {
   deskripsi: string | null;
   modePembelajaran: string;
   jumlahSesi: number;
+  /** Mentah untuk Pilihan Jadwal (PRD 7.5.8) — lihat formatJadwalSiswaTerdaftar. */
+  jadwalRaw: unknown;
+  jadwalPilihSiswa: boolean;
 }
 
 export interface MateriItem {
@@ -50,7 +53,7 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      "id, nama, jadwal, link_meet, deskripsi, mode_pembelajaran, jumlah_sesi, mentor:mentor_id(nama), subtes:subtes_id(nama)",
+      "id, nama, jadwal, jadwal_pilih_siswa, link_meet, deskripsi, mode_pembelajaran, jumlah_sesi, mentor:mentor_id(nama), subtes:subtes_id(nama)",
     )
     .eq("id", kelasId)
     .maybeSingle();
@@ -65,6 +68,7 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
     id: string;
     nama: string;
     jadwal: unknown;
+    jadwal_pilih_siswa: boolean | null;
     link_meet: string | null;
     deskripsi: string | null;
     mode_pembelajaran: string;
@@ -84,6 +88,8 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
     deskripsi: row.deskripsi,
     modePembelajaran: row.mode_pembelajaran,
     jumlahSesi: row.jumlah_sesi,
+    jadwalRaw: row.jadwal,
+    jadwalPilihSiswa: row.jadwal_pilih_siswa === true,
   };
 }
 
@@ -94,24 +100,27 @@ export async function getEnrollmentStatus(
   enrollmentId: string | null;
   statusPembayaran: "menunggu" | "lunas" | "batal" | null;
   progresPersen: number;
+  /** enrollments.jadwal_ditetapkan (PRD 7.5.8). */
+  jadwalDitetapkan: unknown;
 }> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, status_pembayaran, progres_persen")
+    .select("id, status_pembayaran, progres_persen, jadwal_ditetapkan")
     .eq("user_id", userId)
     .eq("kelas_id", kelasId)
     .maybeSingle();
 
   if (error) {
     console.error("[getEnrollmentStatus] query failed:", error);
-    return { enrollmentId: null, statusPembayaran: null, progresPersen: 0 };
+    return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null };
   }
-  if (!data) return { enrollmentId: null, statusPembayaran: null, progresPersen: 0 };
+  if (!data) return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null };
 
   return {
     enrollmentId: data.id as string,
     statusPembayaran: data.status_pembayaran as "menunggu" | "lunas" | "batal",
     progresPersen: data.progres_persen as number,
+    jadwalDitetapkan: data.jadwal_ditetapkan,
   };
 }
 

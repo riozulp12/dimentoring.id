@@ -15,6 +15,7 @@ import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 import SesiKehadiranSection from "@/components/siswa/SesiKehadiranSection";
 import KelasDaftarButton from "@/components/program/KelasDaftarButton";
 import { getKelasDetailPublic } from "@/lib/dashboard/getProgramData";
+import { formatJadwalSiswaTerdaftar } from "@/lib/shared/jadwalPilihan";
 
 /**
  * Detail Kelas — PRD Bagian 7.5.1. Guard akses: cuma siswa dengan enrollment
@@ -65,6 +66,15 @@ export default async function KelasDetailPage({
   const isLunas = enrollment.statusPembayaran === "lunas";
   const sesiKehadiran =
     isLunas && enrollment.enrollmentId ? await getSesiKehadiran(enrollment.enrollmentId) : null;
+  // Kelas dengan Pilihan Jadwal (PRD 7.5.8): siswa terdaftar lihat jadwal
+  // hasil penetapan Admin, bukan semua slot opsi.
+  const jadwalDisplay =
+    (isLunas
+      ? formatJadwalSiswaTerdaftar(
+          { jadwalPilihSiswa: kelas.jadwalPilihSiswa, modePembelajaran: kelas.modePembelajaran, jadwal: kelas.jadwalRaw },
+          enrollment.jadwalDitetapkan,
+        )
+      : null) ?? kelas.jadwal;
 
   return (
     <>
@@ -85,7 +95,7 @@ export default async function KelasDetailPage({
           </div>
           <div className="flex flex-col gap-1 text-sm text-[#7E7C7C] sm:text-base">
             <p>{kelas.mentorNama ? `Mentor: ${kelas.mentorNama}` : "Mentor belum ditentukan"}</p>
-            <p>{kelas.jadwal}</p>
+            <p>{jadwalDisplay}</p>
             <p>Jumlah Sesi: {kelas.jumlahSesi} sesi</p>
           </div>
 
