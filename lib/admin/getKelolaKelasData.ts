@@ -53,6 +53,8 @@ export interface KelasListItem {
   /** Dipakai untuk tampilan read-only (list/detail) — reuse formatJadwal yang
    * sama dengan halaman Siswa/Mentor. */
   jadwalDisplay: string;
+  /** Saklar "Siswa memilih jadwal (maks. 2)" — PRD 7.5.8. */
+  jadwalPilihSiswa: boolean;
   linkMeet: string | null;
   /** SEMENTARA (PRD 7.5) — link pendaftaran/checkout eksternal (TIDAK harus
    * lynk.id; label UI-nya "Input Link Pendaftaran"). Nama kolom DB tetap
@@ -117,6 +119,7 @@ interface KelasRow {
   harga: number;
   diskon_persen: number | null;
   jadwal: unknown;
+  jadwal_pilih_siswa: boolean | null;
   link_meet: string | null;
   link_lynkid: string | null;
   deskripsi: string | null;
@@ -141,7 +144,7 @@ export async function getKelasList(): Promise<KelasListItem[]> {
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, mode_pembelajaran, jumlah_sesi, subtes_id, kapasitas, harga, diskon_persen, jadwal, link_meet, link_lynkid, deskripsi,
+      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, mode_pembelajaran, jumlah_sesi, subtes_id, kapasitas, harga, diskon_persen, jadwal, jadwal_pilih_siswa, link_meet, link_lynkid, deskripsi,
        subtes:subtes_id(nama),
        kelas_subtes(subtes_id, subtes:subtes_id(nama)),
        kelas_mentor(mentor_id, users:mentor_id(nama)),
@@ -201,6 +204,7 @@ export async function getKelasList(): Promise<KelasListItem[]> {
       diskonPersen: normalizeDiskonPersen(row.diskon_persen),
       jadwalEntries: extractJadwalEntries(row.jadwal),
       jadwalDisplay: formatJadwal(row.jadwal),
+      jadwalPilihSiswa: row.jadwal_pilih_siswa === true,
       linkMeet: row.link_meet,
       linkLynkid: row.link_lynkid,
       deskripsi: row.deskripsi,

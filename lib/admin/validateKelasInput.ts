@@ -66,6 +66,9 @@ export interface KelasInputBody {
    * dianggap 0 (tanpa diskon). Lihat db/add_kelas_diskon.sql. */
   diskonPersen?: number | string;
   jadwalEntries?: JadwalEntryInput[];
+  /** Saklar "Siswa memilih jadwal (maks. 2)" — PRD 7.5.8. Hanya `true` persis
+   * yang dianggap menyala. */
+  jadwalPilihSiswa?: boolean;
   linkMeet?: string;
   linkLynkid?: string;
   deskripsi?: string;
@@ -102,6 +105,8 @@ export interface ValidatedKelasInput {
   diskon_persen: number;
   /** Array {hari, jam_mulai} — bisa lebih dari satu slot per minggu, null kalau belum diisi. */
   jadwal: { hari: string; jam_mulai: string }[] | null;
+  /** PRD 7.5.8 — kalau true, slot di `jadwal` = opsi yang dipilih siswa saat checkout. */
+  jadwal_pilih_siswa: boolean;
   link_meet: string | null;
   /** SEMENTARA (PRD 7.5) — link pendaftaran/checkout eksternal (TIDAK harus
    * lynk.id; label UI-nya sekarang "Input Link Pendaftaran"). Nama kolom tetap
@@ -314,6 +319,23 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
     jadwal = cleaned;
   }
 
+  // Saklar Pilihan Jadwal (PRD 7.5.8): slot jadi OPSI siswa, jadi wajib ada
+  // minimal 1 slot, tidak boleh dobel (siswa tidak bisa membedakannya), dan
+  // kelas offline belum mendapat fitur ini di v1.
+  const jadwalPilihSiswa = body.jadwalPilihSiswa === true;
+  if (jadwalPilihSiswa) {
+    if (modePembelajaran === "offline") {
+      return { ok: false, error: "Pilihan jadwal oleh siswa belum tersedia untuk kelas offline." };
+    }
+    if (!jadwal || jadwal.length === 0) {
+      return { ok: false, error: "Tambahkan minimal 1 slot jadwal kalau siswa memilih jadwal." };
+    }
+    const keys = new Set(jadwal.map((j) => `${j.hari}|${j.jam_mulai}`));
+    if (keys.size !== jadwal.length) {
+      return { ok: false, error: "Ada slot jadwal yang sama persis. Hapus salah satunya." };
+    }
+  }
+
   let linkMeet: string | null = null;
   if (typeof body.linkMeet === "string" && body.linkMeet.trim()) {
     const trimmed = body.linkMeet.trim();
@@ -352,6 +374,7 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
       harga,
       diskon_persen: diskonPersen,
       jadwal,
+      jadwal_pilih_siswa: jadwalPilihSiswa,
       link_meet: linkMeet,
       link_lynkid: linkLynkid,
       deskripsi,
