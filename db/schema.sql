@@ -791,6 +791,25 @@ CREATE TABLE payment_subtes_pilihan (
 
 CREATE INDEX idx_payment_subtes_pilihan_payment ON payment_subtes_pilihan(payment_id);
 
+-- Pilihan Jadwal Siswa (BARU, Oktober 2026 — PRD 7.5.8, migration
+-- db/add_jadwal_pilihan.sql). Saklar per kelas, default MATI. Kalau menyala,
+-- kelas.jadwal = OPSI slot; siswa memilih maks. 2 (berurutan) saat checkout,
+-- Admin menetapkan jadwal akhir. Slot dirujuk lewat salinan {hari, jam_mulai}.
+ALTER TABLE kelas ADD COLUMN jadwal_pilih_siswa BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE payments ADD COLUMN jadwal_pilihan JSONB;  -- ditampung dulu, disalin webhook ke enrollments
+ALTER TABLE payments ADD CONSTRAINT payments_jadwal_pilihan_maks_2 CHECK (
+    CASE
+        WHEN jadwal_pilihan IS NULL THEN true
+        WHEN jsonb_typeof(jadwal_pilihan) = 'array' THEN jsonb_array_length(jadwal_pilihan) <= 2
+        ELSE false
+    END
+);
+
+ALTER TABLE enrollments ADD COLUMN jadwal_pilihan JSONB;           -- [{hari, jam_mulai}] index 0 = Pilihan 1
+ALTER TABLE enrollments ADD COLUMN jadwal_ditetapkan JSONB;        -- {hari, jam_mulai} hasil penetapan Admin
+ALTER TABLE enrollments ADD COLUMN jadwal_ditetapkan_at TIMESTAMPTZ;
+
 -- ============================================================================
 -- KONTEN BEASISWA / INTERNSHIP / EVENT (Bagian 7 — FR-7.x)
 -- ============================================================================
