@@ -15,12 +15,16 @@ export interface KelasCheckoutData {
   /** kelas.link_lynkid ("Input Link Pendaftaran") — dipakai guard checkout
    * (lib/shared/checkoutGuard.ts): kelas yang punya link ditolak checkout internal. */
   linkPendaftaran: string | null;
+  /** Saklar Pilihan Jadwal (PRD 7.5.8) + jadwal mentah — dipakai
+   * lib/shared/jadwalPilihan.ts untuk opsi & validasi checkout. */
+  jadwalPilihSiswa: boolean;
+  jadwal: unknown;
 }
 
 export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckoutData | null> {
   const { data, error } = await supabaseServer
     .from("kelas")
-    .select("id, nama, harga, mode_pembelajaran, link_lynkid")
+    .select("id, nama, harga, mode_pembelajaran, link_lynkid, jadwal, jadwal_pilih_siswa")
     .eq("id", kelasId)
     .maybeSingle();
 
@@ -36,6 +40,8 @@ export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckou
     harga: Number(data.harga),
     modePembelajaran: (data.mode_pembelajaran as "online" | "offline") ?? "online",
     linkPendaftaran: (data.link_lynkid as string | null) ?? null,
+    jadwalPilihSiswa: data.jadwal_pilih_siswa === true,
+    jadwal: data.jadwal,
   };
 }
 

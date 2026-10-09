@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
   const { data: payment, error: paymentError } = await supabaseServer
     .from("payments")
     .select(
-      "id, user_id, item_type, item_id, kode_promo_id, gateway_reference, status, mentor_offline_id, lokasi_siswa_lat, lokasi_siswa_lng",
+      "id, user_id, item_type, item_id, kode_promo_id, gateway_reference, status, mentor_offline_id, lokasi_siswa_lat, lokasi_siswa_lng, jadwal_pilihan",
     )
     .eq("order_id", orderId)
     .maybeSingle();
@@ -121,6 +121,9 @@ export async function POST(request: NextRequest) {
             mentor_offline_id: payment.mentor_offline_id,
             lokasi_siswa_lat: payment.lokasi_siswa_lat,
             lokasi_siswa_lng: payment.lokasi_siswa_lng,
+            // Pilihan Jadwal Siswa (PRD 7.5.8) — ditampung di payments saat
+            // checkout, disalin ke enrollment di upsert yang sama.
+            jadwal_pilihan: payment.jadwal_pilihan ?? null,
           },
           { onConflict: "user_id,kelas_id" },
         )

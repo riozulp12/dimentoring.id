@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
 import MaskotLoading from "@/components/ui/MaskotLoading";
+import { MAX_JADWAL_PILIHAN, formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
 
 /**
  * Form Checkout — PRD Bagian 7.5/Bagian 13 (payments, kode_promo). Validasi
@@ -64,6 +65,7 @@ export default function CheckoutForm({
   isProduction,
   subtesOptions,
   modePembelajaran,
+  jadwalOptions,
 }: {
   kelasId: string;
   harga: number;
@@ -75,6 +77,10 @@ export default function CheckoutForm({
   /** Kelas tatap muka (offline) minta izin lokasi & tampilkan mentor terdekat
    * untuk dipilih siswa — beda alurnya dari kelas online biasa. */
   modePembelajaran: "online" | "offline";
+  /** Slot kelas.jadwal yang dipilih siswa (PRD 7.5.8) — HANYA diisi server
+   * kalau saklar kelas menyala, bukan offline, dan slot >= 2. Kosong = tanpa
+   * pilihan jadwal (perilaku lama). */
+  jadwalOptions: JadwalSlot[];
 }) {
   const router = useRouter();
   const isOffline = modePembelajaran === "offline";
@@ -85,6 +91,10 @@ export default function CheckoutForm({
   const [isApplying, setIsApplying] = useState(false);
   const [selectedSubtesIds, setSelectedSubtesIds] = useState<string[]>([]);
   const [subtesError, setSubtesError] = useState<string | null>(null);
+  const isPilihJadwal = jadwalOptions.length >= 2;
+  // Urutan = prioritas: index 0 = Pilihan 1 (wajib), index 1 = Pilihan 2 (opsional).
+  const [jadwalPilihanKeys, setJadwalPilihanKeys] = useState<[string, string]>(["", ""]);
+  const [jadwalError, setJadwalError] = useState<string | null>(null);
 
   // ---- Kelas Offline: lokasi siswa + pilihan Mentor terdekat ----
   const [geoStatus, setGeoStatus] = useState<"idle" | "requesting" | "granted" | "denied" | "error">(() => {
@@ -208,9 +218,30 @@ export default function CheckoutForm({
     setApplyError(null);
   }
 
+  function setJadwalPilihan(index: 0 | 1, key: string) {
+    setJadwalError(null);
+    setJadwalPilihanKeys((prev) => {
+      const next: [string, string] = [prev[0], prev[1]];
+      next[index] = key;
+      // Pilihan 2 tidak boleh sama dengan Pilihan 1.
+      if (index === 0 && next[1] === key) next[1] = "";
+      return next;
+    });
+  }
+
   async function handleBayar() {
     setPayError(null);
     setSubtesError(null);
+    setJadwalError(null);
+
+    const jadwalPilihan = jadwalPilihanKeys
+      .filter(Boolean)
+      .map((key) => jadwalOptions.find((slot) => slotKey(slot) === key))
+      .filter((slot): slot is JadwalSlot => Boolean(slot));
+    if (isPilihJadwal && jadwalPilihan.length < 1) {
+      setJadwalError("Pilih minimal 1 jadwal dulu.");
+      return;
+    }
 
     if (isPaket && (selectedSubtesIds.length < 1 || selectedSubtesIds.length > MAX_SUBTES_PILIHAN)) {
       setSubtesError(`Pilih minimal 1, maksimal ${MAX_SUBTES_PILIHAN} subtes dulu.`);
@@ -241,6 +272,7 @@ export default function CheckoutForm({
           mentorOfflineId: isOffline ? selectedMentorId : undefined,
           lokasiSiswaLat: isOffline ? studentLat : undefined,
           lokasiSiswaLng: isOffline ? studentLng : undefined,
+          jadwalPilihan: isPilihJadwal ? jadwalPilihan : undefined,
         }),
       });
       const json = await response.json();
@@ -393,6 +425,55 @@ export default function CheckoutForm({
             })}
           </div>
           {subtesError ? <p className="text-sm text-[#E70A0A]">{subtesError}</p> : null}
+        </div>
+      ) : null}
+
+      {isPilihJadwal ? (
+        <div className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Pilih Jadwal</h2>
+            <p className="text-sm text-[#7E7C7C]">
+              Pilih jadwal yang kamu inginkan (maks. {MAX_JADWAL_PILIHAN}, urut prioritas). Ini preferensi — jadwal
+              akhir ditetapkan Admin dan dikabari lewat notifikasi.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-black">Pilihan 1 (wajib)</label>
+              <InputField
+                type="dropdown"
+                size="md"
+                placeholder="Pilih jadwal"
+                value={jadwalPilihanKeys[0]}
+                onChange={(e) => setJadwalPilihan(0, e.target.value)}
+                options={jadwalOptions.map((slot) => ({ label: formatSlot(slot), value: slotKey(slot) }))}
+                status={jadwalError ? "error" : "default"}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-black">Pilihan 2 (opsional)</label>
+              <InputField
+                type="dropdown"
+                size="md"
+                placeholder="Tidak ada"
+                value={jadwalPilihanKeys[1]}
+                onChange={(e) => setJadwalPilihan(1, e.target.value)}
+                options={jadwalOptions
+                  .filter((slot) => slotKey(slot) !== jadwalPilihanKeys[0])
+                  .map((slot) => ({ label: formatSlot(slot), value: slotKey(slot) }))}
+              />
+              {jadwalPilihanKeys[1] ? (
+                <button
+                  type="button"
+                  onClick={() => setJadwalPilihan(1, "")}
+                  className="w-fit text-xs font-medium text-[#7E7C7C] underline hover:text-black"
+                >
+                  Kosongkan Pilihan 2
+                </button>
+              ) : null}
+            </div>
+          </div>
+          {jadwalError ? <p className="text-sm text-[#E70A0A]">{jadwalError}</p> : null}
         </div>
       ) : null}
 
