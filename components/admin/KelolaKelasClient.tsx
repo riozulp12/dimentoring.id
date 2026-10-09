@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import KelolaKelasForm from "./KelolaKelasForm";
@@ -236,6 +237,18 @@ export default function KelolaKelasClient({
                     ))}
                   </div>
                 )}
+                {detailKelas.jadwalPilihSiswa ? (
+                  <p className="mt-1 text-xs text-[#081EEA]">Siswa memilih jadwal (maks. 2) — slot di atas adalah opsi.</p>
+                ) : null}
+              </div>
+              <div className="col-span-2">
+                <p className="text-[#7E7C7C]">Pendaftar</p>
+                <Link
+                  href={`/kelola-kelas/${detailKelas.id}/pendaftar`}
+                  className="text-[#081EEA] underline"
+                >
+                  Lihat daftar pendaftar{detailKelas.jadwalPilihSiswa ? " & tetapkan jadwal" : ""}
+                </Link>
               </div>
               <div className="col-span-2">
                 <p className="text-[#7E7C7C]">Link Meet</p>

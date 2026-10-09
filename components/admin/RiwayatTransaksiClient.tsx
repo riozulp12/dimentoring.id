@@ -227,6 +227,16 @@ export default function RiwayatTransaksiClient({
                   {detailTarget.tanggalLunas ? formatTanggalWaktu(detailTarget.tanggalLunas) : "Belum lunas"}
                 </p>
               </div>
+              {detailTarget.jadwalPilihan.length > 0 ? (
+                <div className="col-span-2">
+                  <p className="text-[#7E7C7C]">Pilihan Jadwal Siswa</p>
+                  {detailTarget.jadwalPilihan.map((slot, index) => (
+                    <p key={index} className="text-black">
+                      Pilihan {index + 1}: {slot}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
               <div className="col-span-2 border-t border-[#E3E3E3] pt-3">
                 <p className="mb-1 text-[#7E7C7C]">Breakdown Harga</p>
                 <div className="flex items-center justify-between text-black">

@@ -350,3 +350,26 @@ export async function notifyAdminSesiDisangkal(kelasNama: string, nomorSesi: num
     })),
   );
 }
+
+/**
+ * 2j: Admin Menetapkan Jadwal (Pilihan Jadwal Siswa, PRD 7.5.8) — notif bell
+ * ke SISWA ybs. Dipanggil dari
+ * app/api/kelola-kelas/[kelasId]/pendaftar/[enrollmentId]/jadwal/route.ts
+ * tepat setelah enrollments.jadwal_ditetapkan diupdate.
+ */
+export async function notifyJadwalDitetapkan(
+  siswaUserId: string,
+  kelasId: string,
+  kelasNama: string,
+  jadwalDisplay: string,
+) {
+  await insertNotifikasi([
+    {
+      user_id: siswaUserId,
+      tipe: "sistem",
+      judul: "Jadwal kelas kamu sudah ditetapkan",
+      pesan: `Kelas ${kelasNama}: ${jadwalDisplay}.`,
+      link_tujuan: `/kelas/${kelasId}`,
+    },
+  ]);
+}
