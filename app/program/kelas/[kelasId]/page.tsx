@@ -219,7 +219,7 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
           {/* Tombol Daftar Sekarang — full-width, terpisah dari ketiga card */}
           <div className="flex flex-col gap-2">
             {/* Aturan tujuan tombol (penuh / link pendaftaran / login / checkout /
-                role lain / pengaman NEXT_PUBLIC_PENDAFTARAN_MANUAL) SAMA PERSIS
+                role lain / pengaman NEXT_PUBLIC_CHECKOUT_INTERNAL_READY) SAMA PERSIS
                 dengan card /program — lihat lib/shared/kelasDaftarTarget.ts. */}
             <KelasDaftarButton
               kelasId={kelas.id}

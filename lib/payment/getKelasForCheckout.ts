@@ -12,12 +12,15 @@ export interface KelasCheckoutData {
   nama: string;
   harga: number;
   modePembelajaran: "online" | "offline";
+  /** kelas.link_lynkid ("Input Link Pendaftaran") — dipakai guard checkout
+   * (lib/shared/checkoutGuard.ts): kelas yang punya link ditolak checkout internal. */
+  linkPendaftaran: string | null;
 }
 
 export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckoutData | null> {
   const { data, error } = await supabaseServer
     .from("kelas")
-    .select("id, nama, harga, mode_pembelajaran")
+    .select("id, nama, harga, mode_pembelajaran, link_lynkid")
     .eq("id", kelasId)
     .maybeSingle();
 
@@ -32,6 +35,7 @@ export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckou
     nama: data.nama as string,
     harga: Number(data.harga),
     modePembelajaran: (data.mode_pembelajaran as "online" | "offline") ?? "online",
+    linkPendaftaran: (data.link_lynkid as string | null) ?? null,
   };
 }
 

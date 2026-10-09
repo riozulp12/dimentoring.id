@@ -13,9 +13,9 @@ import type { SessionRole } from "@/lib/auth/session";
  *    login. Host domain Dimentoring sendiri -> link internal biasa (tab sama);
  *    host lain -> tab baru.
  * 3. Link kosong (atau tidak valid):
- *    - pengaman NEXT_PUBLIC_PENDAFTARAN_MANUAL aktif -> disabled "Pendaftaran
- *      segera dibuka" (checkout internal dianggap belum siap, JANGAN diarahkan
- *      ke /checkout).
+ *    - checkout internal belum siap (NEXT_PUBLIC_CHECKOUT_INTERNAL_READY bukan
+ *      persis "true", lihat lib/shared/checkoutGuard.ts) -> disabled
+ *      "Pendaftaran segera dibuka" (JANGAN diarahkan ke /checkout).
  *    - belum login -> /login?returnTo=<detail kelas>
  *    - Siswa -> /checkout/[kelasId]
  *    - role lain (Mentor/Admin) -> disabled, pendaftaran cuma untuk Siswa.
@@ -52,7 +52,7 @@ export interface ResolveKelasDaftarParams {
   sisaSlot: number;
   linkPendaftaran: string | null;
   sessionRole: SessionRole | null;
-  isPendaftaranManual: boolean;
+  isCheckoutInternalReady: boolean;
 }
 
 export function resolveKelasDaftarAction({
@@ -60,7 +60,7 @@ export function resolveKelasDaftarAction({
   sisaSlot,
   linkPendaftaran,
   sessionRole,
-  isPendaftaranManual,
+  isCheckoutInternalReady,
 }: ResolveKelasDaftarParams): KelasDaftarAction {
   if (sisaSlot <= 0) {
     return {
@@ -79,7 +79,7 @@ export function resolveKelasDaftarAction({
     return { kind: "external", href: link.href };
   }
 
-  if (isPendaftaranManual) {
+  if (!isCheckoutInternalReady) {
     return {
       kind: "disabled",
       label: "Pendaftaran segera dibuka",

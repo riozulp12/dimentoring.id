@@ -47,7 +47,8 @@
 ### Program (`/program`)
 - [ ] 5 section (Konsultasi/TKA/SNBT/Ujian Mandiri/Pendampingan Mahasiswa), 3 pola desain bergantian
 - [ ] "Lihat Semua" → `/program/[kategori]`, filter Tipe Kelas & Tingkat Kelas jalan
-- [ ] Detail kelas: tombol "Daftar Kelas Ini" sesuai mode aktif (Payment biasa ATAU redirect Lynk.id, cek env `NEXT_PUBLIC_PENDAFTARAN_MANUAL`)
+- [ ] Detail kelas: tombol "Daftar Sekarang" sesuai aturan `lib/shared/kelasDaftarTarget.ts` (link pendaftaran kelas terisi → ke link itu; kosong → checkout internal hanya kalau env `NEXT_PUBLIC_CHECKOUT_INTERNAL_READY` persis `"true"`, selain itu disabled "Pendaftaran segera dibuka")
+- [ ] Guard server: buka `/checkout/[kelasId]` langsung untuk kelas berlink pendaftaran, atau saat flag tidak `"true"` → dialihkan ke detail kelas; `POST /api/payment/create` → 403
 
 ### Auth
 - [ ] Daftar (Email+Password) → auto-login → redirect `/lengkapi-profil`
@@ -81,7 +82,7 @@
 - [ ] Level naik/turun otomatis sesuai `gamifikasi_level_tier`
 - [ ] Tukar Poin: cukup vs tidak cukup poin, riwayat penukaran muncul
 
-### Checkout & Pembayaran (kalau `NEXT_PUBLIC_PENDAFTARAN_MANUAL` nonaktif)
+### Checkout & Pembayaran (kalau `NEXT_PUBLIC_CHECKOUT_INTERNAL_READY="true"`)
 - [ ] Checkout kelas, coba Kode Promo valid/invalid/scoping salah/kuota habis
 - [ ] Bayar via Sandbox → halaman "Menunggu Konfirmasi" auto-update tanpa refresh manual
 - [ ] Status jadi lunas → akses Kelas Saya langsung terbuka

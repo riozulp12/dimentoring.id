@@ -4,6 +4,7 @@ import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/
 import { getKelasForCheckout, getKelasSubtesOptions, isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
 import PageTitle from "@/components/dashboard/PageTitle";
 import CheckoutForm from "@/components/siswa/CheckoutForm";
+import { getCheckoutBlockReason, isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 
 /**
  * Halaman Checkout — PRD Bagian 7.5/Bagian 13 (payments, kode_promo,
@@ -35,6 +36,13 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
   const kelas = await getKelasForCheckout(kelasId);
   if (!kelas) {
     redirect(`/kelas?error=${encodeURIComponent("Kelas tidak ditemukan.")}`);
+  }
+
+  // Guard server-side (fail-closed) — URL /checkout bisa diketik langsung,
+  // jadi jangan cuma andalkan tombol "Daftar Sekarang". Dialihkan ke detail
+  // kelas publik, yang tombolnya sudah tahu tujuan yang benar.
+  if (getCheckoutBlockReason({ isReady: isCheckoutInternalReady(), linkPendaftaran: kelas.linkPendaftaran })) {
+    redirect(`/program/kelas/${kelasId}`);
   }
 
   if (await isKelasSudahLunas(session.userId, kelasId)) {

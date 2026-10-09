@@ -6,6 +6,7 @@ import { getOfflineMentorOptions } from "@/lib/payment/getOfflineMentorOptions";
 import { validatePromoCode } from "@/lib/payment/validatePromoCode";
 import { generateOrderId } from "@/lib/payment/generateOrderId";
 import { snap } from "@/lib/payment/midtransSnap";
+import { CHECKOUT_BLOCK_MESSAGE, getCheckoutBlockReason, isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 
 /**
  * Buat transaksi Payment — PRD Bagian 8 BR-19 (status hanya berubah lewat
@@ -64,6 +65,16 @@ export async function POST(request: NextRequest) {
   const kelas = await getKelasForCheckout(kelasId);
   if (!kelas) {
     return errorResponse("Kelas tidak ditemukan.", 404);
+  }
+
+  // Guard checkout internal (fail-closed) — sama dengan halaman /checkout,
+  // dicek ulang di sini karena API bisa dipanggil langsung tanpa halamannya.
+  const blockReason = getCheckoutBlockReason({
+    isReady: isCheckoutInternalReady(),
+    linkPendaftaran: kelas.linkPendaftaran,
+  });
+  if (blockReason) {
+    return errorResponse(CHECKOUT_BLOCK_MESSAGE[blockReason], 403);
   }
 
   if (await isKelasSudahLunas(session.userId, kelasId)) {
