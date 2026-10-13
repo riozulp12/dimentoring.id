@@ -71,7 +71,8 @@
 - [ ] Pengaturan: Ganti Password, toggle Notifikasi, toggle Privasi Leaderboard, Unduh Data (tanpa password_hash), Hapus Akun (request, bukan instant)
 
 ### Kelas Saya (`/kelas`)
-- [ ] List "Kelas Saya" + "Rekomendasi Kelas" (sesuai mapel tersulit + tingkat kelas)
+- [ ] List "Kelas Saya" (grup Sedang Berjalan/Selesai, kartu → `/kelas/[id]`) + "Rekomendasi Kelas" (mapel tersulit + tingkat kelas, fallback kelas katalog lain; kartu → detail jualan `/program/kelas/[id]`)
+- [ ] Akun tanpa kelas: teks "Kamu belum ikut kelas apa pun nih…" + daftar kelas katalog; klik kartu → detail jualan (bukan halaman materi)
 - [ ] Detail kelas: link Meet, list Materi (cuma `published`), tandai selesai → progress bar update
 - [ ] Coba akses kelas yang BUKAN diikuti lewat ganti URL → ditolak
 
@@ -86,6 +87,30 @@
 - [ ] Checkout kelas, coba Kode Promo valid/invalid/scoping salah/kuota habis
 - [ ] Bayar via Sandbox → halaman "Menunggu Konfirmasi" auto-update tanpa refresh manual
 - [ ] Status jadi lunas → akses Kelas Saya langsung terbuka
+
+### Persiapan screenshot Customer Journey Midtrans
+
+Dipakai saat perlu bukti alur pembayaran di Production (mis. pengajuan aktivasi Midtrans) selagi Midtrans masih **Sandbox**.
+
+**Sebelum mulai**
+- Migration `db/add_kelas_tampil_di_katalog.sql` sudah dijalankan.
+- Kelas yang dipakai: tampil di katalog, **tanpa** "Link Pendaftaran" (`link_lynkid` kosong), slot masih ada, harga > 0.
+- Set env Production `NEXT_PUBLIC_CHECKOUT_INTERNAL_READY` persis `true`, lalu **redeploy** (variabel `NEXT_PUBLIC_*` ikut ter-*build*, jadi mengubah env saja tidak cukup). `MIDTRANS_IS_PRODUCTION` tetap bukan `true` dan key Midtrans tetap key Sandbox.
+- Pakai **akun uji Siswa**, bukan akun siswa sungguhan.
+
+**Urutan 7 langkah (screenshot tiap langkah)**
+1. Landing page (`/`)
+2. Login (`/login`)
+3. Dashboard Siswa
+4. Menu "Kelas Saya" (`/kelas`) — akun tanpa kelas melihat teks "Kamu belum ikut kelas apa pun nih…" + daftar kelas
+5. Klik kartu kelas → detail kelas (`/program/kelas/[id]`), tombol "Daftar Sekarang"
+6. Checkout (`/checkout/[id]`)
+7. Klik "Bayar Sekarang" → popup Midtrans Snap (Sandbox)
+
+**PERINGATAN — wajib setelah screenshot selesai**
+- [ ] **Hapus lagi** `NEXT_PUBLIC_CHECKOUT_INTERNAL_READY` dari env Production dan **redeploy**. Selama flag menyala dengan Midtrans Sandbox, siapa pun bisa "membayar" dengan simulasi dan mendapat kelas **gratis**.
+- [ ] Verifikasi sudah tertutup: tombol detail kelas jadi "Pendaftaran segera dibuka" (disabled), `/checkout/[id]` dialihkan, `POST /api/payment/create` → 403.
+- [ ] Kalau pembayaran sempat disimulasikan sampai lunas: bersihkan dengan `db/cleanup_enrollment_uji_TEMPLATE.sql` (salin, isi email akun uji, dry-run dulu). Cukup berhenti di popup Snap kalau tidak butuh screenshot halaman sukses.
 
 ### Lainnya
 - [ ] Beasiswa & Event, Notifikasi bell (badge count, klik tandai dibaca)
