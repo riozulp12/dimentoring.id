@@ -69,6 +69,9 @@ export interface KelasInputBody {
   /** Saklar "Siswa memilih jadwal (maks. 2)" — PRD 7.5.8. Hanya `true` persis
    * yang dianggap menyala. */
   jadwalPilihSiswa?: boolean;
+  /** Saklar "Tampilkan di katalog" — PRD Bagian 13 (kelas.tampil_di_katalog).
+   * Tidak dikirim = menyala (default); kalau dikirim WAJIB boolean. */
+  tampilDiKatalog?: boolean;
   linkMeet?: string;
   linkLynkid?: string;
   deskripsi?: string;
@@ -107,6 +110,9 @@ export interface ValidatedKelasInput {
   jadwal: { hari: string; jam_mulai: string }[] | null;
   /** PRD 7.5.8 — kalau true, slot di `jadwal` = opsi yang dipilih siswa saat checkout. */
   jadwal_pilih_siswa: boolean;
+  /** false = disembunyikan dari katalog, rekomendasi & checkout (kelas yang
+   * sudah diikuti tidak terpengaruh). */
+  tampil_di_katalog: boolean;
   link_meet: string | null;
   /** SEMENTARA (PRD 7.5) — link pendaftaran/checkout eksternal (TIDAK harus
    * lynk.id; label UI-nya sekarang "Input Link Pendaftaran"). Nama kolom tetap
@@ -336,6 +342,13 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
     }
   }
 
+  // Saklar katalog: default MENYALA. Nilai non-boolean ditolak (bukan
+  // ditebak) supaya kelas tidak tersembunyi/tertampil tanpa sengaja.
+  if (body.tampilDiKatalog !== undefined && typeof body.tampilDiKatalog !== "boolean") {
+    return { ok: false, error: "Nilai 'Tampilkan di katalog' tidak valid." };
+  }
+  const tampilDiKatalog = body.tampilDiKatalog ?? true;
+
   let linkMeet: string | null = null;
   if (typeof body.linkMeet === "string" && body.linkMeet.trim()) {
     const trimmed = body.linkMeet.trim();
@@ -375,6 +388,7 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
       diskon_persen: diskonPersen,
       jadwal,
       jadwal_pilih_siswa: jadwalPilihSiswa,
+      tampil_di_katalog: tampilDiKatalog,
       link_meet: linkMeet,
       link_lynkid: linkLynkid,
       deskripsi,

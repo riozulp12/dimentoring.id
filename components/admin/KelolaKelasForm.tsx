@@ -114,6 +114,7 @@ export default function KelolaKelasForm({
   const [diskonError, setDiskonError] = useState<string | null>(null);
   const [jadwalEntries, setJadwalEntries] = useState<JadwalEntry[]>(initialKelas?.jadwalEntries ?? []);
   const [jadwalPilihSiswa, setJadwalPilihSiswa] = useState(initialKelas?.jadwalPilihSiswa ?? false);
+  const [tampilDiKatalog, setTampilDiKatalog] = useState(initialKelas?.tampilDiKatalog ?? true);
   const [linkMeet, setLinkMeet] = useState(initialKelas?.linkMeet ?? "");
   const [linkMeetError, setLinkMeetError] = useState<string | null>(null);
   const [linkLynkid, setLinkLynkid] = useState(initialKelas?.linkLynkid ?? "");
@@ -312,6 +313,7 @@ export default function KelolaKelasForm({
       diskonPersen: diskonValue,
       jadwalEntries: completeJadwalEntries,
       jadwalPilihSiswa,
+      tampilDiKatalog,
       linkMeet: trimmedLinkMeet || undefined,
       linkLynkid: trimmedLinkLynkid || undefined,
       deskripsi: deskripsi.trim() || undefined,
@@ -379,6 +381,7 @@ export default function KelolaKelasForm({
         jadwalEntries: completeJadwalEntries,
         jadwalDisplay,
         jadwalPilihSiswa,
+        tampilDiKatalog,
         linkMeet: trimmedLinkMeet || null,
         linkLynkid: trimmedLinkLynkid || null,
         deskripsi: deskripsi.trim() || null,
@@ -754,6 +757,23 @@ export default function KelolaKelasForm({
           className="w-full rounded-[16px] border border-[#AFAFAF] bg-white px-4 py-2.5 text-sm text-black outline-none transition-colors placeholder:text-[#AFAFAF] focus:border-black"
         />
         {deskripsiError ? <p className="text-sm text-[#E70A0A]">{deskripsiError}</p> : null}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-start gap-2 text-sm text-black">
+          <input
+            type="checkbox"
+            checked={tampilDiKatalog}
+            onChange={(e) => setTampilDiKatalog(e.target.checked)}
+            className="mt-0.5 size-4 accent-[#081EEA]"
+          />
+          Tampilkan di katalog
+        </label>
+        <p className="text-xs text-[#7E7C7C]">
+          {tampilDiKatalog
+            ? "Menyala: kelas tampil di halaman Program, rekomendasi, dan bisa di-checkout."
+            : "Mati: kelas disembunyikan dari halaman Program, rekomendasi, dan checkout. Siswa & mentor yang sudah terdaftar di kelas ini tetap bisa mengaksesnya seperti biasa."}
+        </p>
       </div>
 
       {submitError ? <p className="text-sm text-[#E70A0A]">{submitError}</p> : null}

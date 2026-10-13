@@ -140,7 +140,14 @@ export default function KelolaKelasClient({
                   onClick={() => setDetailKelas(kelas)}
                   className="cursor-pointer border-b border-[#E3E3E3] transition-colors last:border-0 hover:bg-gray-50"
                 >
-                  <td className="px-4 py-3 text-black">{kelas.nama}</td>
+                  <td className="px-4 py-3 text-black">
+                    {kelas.nama}
+                    {kelas.tampilDiKatalog ? null : (
+                      <span className="ml-2 inline-flex items-center rounded-full bg-[#F0F0F0] px-2 py-0.5 align-middle text-xs font-medium whitespace-nowrap text-[#7E7C7C]">
+                        Tersembunyi
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">
                     {PROGRAM_KATEGORI_LABEL[kelas.programKategori as ProgramKategori] ?? kelas.programKategori}
                   </td>
@@ -169,7 +176,17 @@ export default function KelolaKelasClient({
       <Modal open={detailKelas !== null} onClose={() => setDetailKelas(null)}>
         {detailKelas ? (
           <div className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold text-black">{detailKelas.nama}</h2>
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold text-black">{detailKelas.nama}</h2>
+              {detailKelas.tampilDiKatalog ? null : (
+                <p className="text-xs text-[#7E7C7C]">
+                  <span className="mr-1.5 inline-flex items-center rounded-full bg-[#F0F0F0] px-2 py-0.5 font-medium">
+                    Tersembunyi
+                  </span>
+                  Tidak tampil di katalog, rekomendasi, dan checkout.
+                </p>
+              )}
+            </div>
 
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
