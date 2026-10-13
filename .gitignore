@@ -58,3 +58,10 @@ scripts/hasil-tarik-ptn-vokasi-ptkin.csv.bak
 
 # backup lokal foto mentor (data pribadi) — jangan pernah di-commit
 scripts/mentor-photos-backup/
+
+# salinan TERISI template kelas legacy berisi data pribadi (email dsb.) — jangan pernah di-commit;
+# cuma template ber-placeholder yang boleh masuk repo
+db/legacy_kelas_manual_*.sql
+!db/legacy_kelas_manual_TEMPLATE.sql
+db/cleanup_enrollment_uji_*.sql
+!db/cleanup_enrollment_uji_TEMPLATE.sql

@@ -12,13 +12,25 @@ export interface KelasCheckoutData {
   nama: string;
   harga: number;
   modePembelajaran: "online" | "offline";
+  /** kelas.link_lynkid ("Input Link Pendaftaran") — dipakai guard checkout
+   * (lib/shared/checkoutGuard.ts): kelas yang punya link ditolak checkout internal. */
+  linkPendaftaran: string | null;
+  /** Saklar Pilihan Jadwal (PRD 7.5.8) + jadwal mentah — dipakai
+   * lib/shared/jadwalPilihan.ts untuk opsi & validasi checkout. */
+  jadwalPilihSiswa: boolean;
+  jadwal: unknown;
 }
 
+/** null juga untuk kelas yang disembunyikan dari katalog
+ * (`tampil_di_katalog = false`, PRD Bagian 13) — otomatis menutup halaman
+ * checkout, /api/payment/create, validate-promo & offline-mentors yang semuanya
+ * lewat fungsi ini. */
 export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckoutData | null> {
   const { data, error } = await supabaseServer
     .from("kelas")
-    .select("id, nama, harga, mode_pembelajaran")
+    .select("id, nama, harga, mode_pembelajaran, link_lynkid, jadwal, jadwal_pilih_siswa")
     .eq("id", kelasId)
+    .eq("tampil_di_katalog", true)
     .maybeSingle();
 
   if (error) {
@@ -32,6 +44,9 @@ export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckou
     nama: data.nama as string,
     harga: Number(data.harga),
     modePembelajaran: (data.mode_pembelajaran as "online" | "offline") ?? "online",
+    linkPendaftaran: (data.link_lynkid as string | null) ?? null,
+    jadwalPilihSiswa: data.jadwal_pilih_siswa === true,
+    jadwal: data.jadwal,
   };
 }
 

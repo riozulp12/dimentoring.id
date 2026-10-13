@@ -107,7 +107,10 @@ function MateriListItem({ item }: { item: MateriPublicItem }) {
 export default async function KelasDetailPublicPage({ params }: { params: Promise<{ kelasId: string }> }) {
   const { kelasId } = await params;
   const [kelas, materi] = await Promise.all([getKelasDetailPublic(kelasId), getMateriPublicByKelasId(kelasId)]);
-  if (!kelas) notFound();
+  // Kelas yang disembunyikan dari katalog (kelas.tampil_di_katalog = false)
+  // tidak punya halaman publik — siswa terdaftar tetap mengaksesnya lewat
+  // /kelas/[id] (app/(protected)/(siswa)/kelas/[kelasId]/page.tsx).
+  if (!kelas || !kelas.tampilDiKatalog) notFound();
 
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
@@ -219,7 +222,7 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
           {/* Tombol Daftar Sekarang — full-width, terpisah dari ketiga card */}
           <div className="flex flex-col gap-2">
             {/* Aturan tujuan tombol (penuh / link pendaftaran / login / checkout /
-                role lain / pengaman NEXT_PUBLIC_PENDAFTARAN_MANUAL) SAMA PERSIS
+                role lain / pengaman NEXT_PUBLIC_CHECKOUT_INTERNAL_READY) SAMA PERSIS
                 dengan card /program — lihat lib/shared/kelasDaftarTarget.ts. */}
             <KelasDaftarButton
               kelasId={kelas.id}

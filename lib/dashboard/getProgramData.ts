@@ -220,15 +220,43 @@ export async function getDiskonAktifByKelasId(kelasIds: string[]): Promise<Map<s
   return result;
 }
 
+/**
+ * SATU-SATUNYA pintu query "kelas yang tampil di katalog" — dipakai /program,
+ * /program/[kategori], empty state "Kelas Saya", dan Rekomendasi Kelas
+ * (lib/siswa/getKelasSayaData.ts). Kelas dengan `tampil_di_katalog = false`
+ * (PRD Bagian 13, db/add_kelas_tampil_di_katalog.sql — mis. kelas
+ * lama/legacy) TIDAK pernah lolos dari sini.
+ *
+ * JANGAN dipakai untuk kelas yang SUDAH diikuti (Kelas Saya siswa/mentor,
+ * detail kelas terdaftar, honor, siswa binaan) — saklar itu cuma menutup
+ * katalog, rekomendasi & checkout, bukan akses kelas yang sudah berjalan.
+ */
+export function queryKelasKatalog() {
+  return supabaseServer.from("kelas").select(KELAS_CARD_SELECT).eq("tampil_di_katalog", true);
+}
+
+/** Baris kelas -> card jualan lengkap (badge diskon + sisa slot). */
+export async function toCardPreviewList(rows: KelasCardRow[]): Promise<KelasCardPreview[]> {
+  if (rows.length === 0) return [];
+
+  const kelasIds = rows.map((row) => row.id);
+  const kapasitasById = new Map(rows.map((row) => [row.id, row.kapasitas]));
+  const [diskonByKelas, sisaSlotByKelas] = await Promise.all([
+    getDiskonAktifByKelasId(kelasIds),
+    getSisaSlotByKelasId(kelasIds, kapasitasById),
+  ]);
+  return rows.map((row) =>
+    toCardPreview(row, diskonByKelas.get(row.id) ?? null, sisaSlotByKelas.get(row.id) ?? row.kapasitas),
+  );
+}
+
 /** Preview tiap kategori (max 4 terbaru) — dipakai app/program/page.tsx. Cuma
  * kategori yang punya isi yang dikembalikan (section kosong disembunyikan,
  * bukan tampil kosong — PRD 7.5.4). */
 export async function getProgramPreviewSections(): Promise<ProgramSection[]> {
   const results = await Promise.all(
     PROGRAM_KATEGORI_ORDER.map(async (kategori) => {
-      const { data, error } = await supabaseServer
-        .from("kelas")
-        .select(KELAS_CARD_SELECT)
+      const { data, error } = await queryKelasKatalog()
         .eq("program_kategori", kategori)
         .order("created_at", { ascending: false })
         .limit(4);
@@ -241,14 +269,7 @@ export async function getProgramPreviewSections(): Promise<ProgramSection[]> {
       const rows = (data ?? []) as unknown as KelasCardRow[];
       if (rows.length === 0) return null;
 
-      const kapasitasById = new Map(rows.map((row) => [row.id, row.kapasitas]));
-      const [diskonByKelas, sisaSlotByKelas] = await Promise.all([
-        getDiskonAktifByKelasId(rows.map((row) => row.id)),
-        getSisaSlotByKelasId(rows.map((row) => row.id), kapasitasById),
-      ]);
-      const items = rows.map((row) =>
-        toCardPreview(row, diskonByKelas.get(row.id) ?? null, sisaSlotByKelas.get(row.id) ?? row.kapasitas),
-      );
+      const items = await toCardPreviewList(rows);
 
       return {
         kategori,
@@ -273,9 +294,7 @@ export async function getKelasByKategori(
   kategori: ProgramKategori,
   filters: KelasGridFilters = {},
 ): Promise<KelasCardPreview[]> {
-  let query = supabaseServer
-    .from("kelas")
-    .select(KELAS_CARD_SELECT)
+  let query = queryKelasKatalog()
     .eq("program_kategori", kategori)
     .order("created_at", { ascending: false });
 
@@ -289,15 +308,20 @@ export async function getKelasByKategori(
     return [];
   }
 
-  const rows = (data ?? []) as unknown as KelasCardRow[];
-  const kapasitasById = new Map(rows.map((row) => [row.id, row.kapasitas]));
-  const [diskonByKelas, sisaSlotByKelas] = await Promise.all([
-    getDiskonAktifByKelasId(rows.map((row) => row.id)),
-    getSisaSlotByKelasId(rows.map((row) => row.id), kapasitasById),
-  ]);
-  return rows.map((row) =>
-    toCardPreview(row, diskonByKelas.get(row.id) ?? null, sisaSlotByKelas.get(row.id) ?? row.kapasitas),
-  );
+  return toCardPreviewList((data ?? []) as unknown as KelasCardRow[]);
+}
+
+/** Semua kelas katalog, terbaru dulu — dipakai empty state "Kelas Saya"
+ * (siswa belum punya kelas lunas) & fallback Rekomendasi Kelas. */
+export async function getKelasKatalog(): Promise<KelasCardPreview[]> {
+  const { data, error } = await queryKelasKatalog().order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getKelasKatalog] query failed:", error);
+    return [];
+  }
+
+  return toCardPreviewList((data ?? []) as unknown as KelasCardRow[]);
 }
 
 export interface KelasMentorInfo {
@@ -336,6 +360,11 @@ export interface KelasDetailPublic {
   /** kelas.link_lynkid ("Input Link Pendaftaran") — tujuan tombol Daftar
    * Sekarang kalau terisi, lihat lib/shared/kelasDaftarTarget.ts. */
   linkLynkid: string | null;
+  /** `kelas.tampil_di_katalog` — fungsi ini SENGAJA tidak memfilternya
+   * (dipakai juga halaman kelas siswa); pemanggil yang memutuskan: halaman
+   * publik /program/kelas/[id] → notFound(), halaman kelas siswa → cuma
+   * siswa terdaftar yang boleh lihat. */
+  tampilDiKatalog: boolean;
 }
 
 /** Detail publik 1 kelas (app/program/kelas/[kelasId]/page.tsx). Mentor
@@ -345,7 +374,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tipe_kelas, mode_pembelajaran, jumlah_sesi, tingkat_kelas, deskripsi, harga, diskon_persen, jadwal, kapasitas, link_lynkid,
+      `id, nama, program_kategori, tipe_kelas, mode_pembelajaran, jumlah_sesi, tingkat_kelas, deskripsi, harga, diskon_persen, jadwal, kapasitas, link_lynkid, tampil_di_katalog,
        subtes:subtes_id(nama)`,
     )
     .eq("id", kelasId)
@@ -371,6 +400,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     jadwal: unknown;
     kapasitas: number;
     link_lynkid: string | null;
+    tampil_di_katalog: boolean | null;
     subtes: NamaJoin;
   };
   const row = data as unknown as Row;
@@ -436,6 +466,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
       (diskonByKelas.get(kelasId) ?? null) ??
       (diskonPersenDetail > 0 ? { label: `Diskon ${diskonPersenDetail}%` } : null),
     linkLynkid: row.link_lynkid,
+    tampilDiKatalog: row.tampil_di_katalog !== false,
   };
 }
 

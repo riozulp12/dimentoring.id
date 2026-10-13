@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
+import { hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
 
 /**
  * Data layer halaman Detail Kelas — PRD Bagian 7.5.1 (Materi) & Bagian 13
@@ -19,6 +20,13 @@ export interface KelasDetailData {
   deskripsi: string | null;
   modePembelajaran: string;
   jumlahSesi: number;
+  /** Mentah untuk Pilihan Jadwal (PRD 7.5.8) — lihat formatJadwalSiswaTerdaftar. */
+  jadwalRaw: unknown;
+  jadwalPilihSiswa: boolean;
+  /** `kelas.tampil_di_katalog` (PRD Bagian 13) — TIDAK difilter di sini supaya
+   * siswa terdaftar tetap bisa buka kelas tersembunyi; halaman yang menolak
+   * siswa yang belum terdaftar. */
+  tampilDiKatalog: boolean;
 }
 
 export interface MateriItem {
@@ -50,7 +58,7 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      "id, nama, jadwal, link_meet, deskripsi, mode_pembelajaran, jumlah_sesi, mentor:mentor_id(nama), subtes:subtes_id(nama)",
+      "id, nama, jadwal, jadwal_pilih_siswa, link_meet, deskripsi, mode_pembelajaran, jumlah_sesi, tampil_di_katalog, mentor:mentor_id(nama), subtes:subtes_id(nama)",
     )
     .eq("id", kelasId)
     .maybeSingle();
@@ -65,10 +73,12 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
     id: string;
     nama: string;
     jadwal: unknown;
+    jadwal_pilih_siswa: boolean | null;
     link_meet: string | null;
     deskripsi: string | null;
     mode_pembelajaran: string;
     jumlah_sesi: number;
+    tampil_di_katalog: boolean | null;
     mentor: NamaJoin;
     subtes: NamaJoin;
   };
@@ -84,6 +94,9 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
     deskripsi: row.deskripsi,
     modePembelajaran: row.mode_pembelajaran,
     jumlahSesi: row.jumlah_sesi,
+    jadwalRaw: row.jadwal,
+    jadwalPilihSiswa: row.jadwal_pilih_siswa === true,
+    tampilDiKatalog: row.tampil_di_katalog !== false,
   };
 }
 
@@ -94,24 +107,27 @@ export async function getEnrollmentStatus(
   enrollmentId: string | null;
   statusPembayaran: "menunggu" | "lunas" | "batal" | null;
   progresPersen: number;
+  /** enrollments.jadwal_ditetapkan (PRD 7.5.8). */
+  jadwalDitetapkan: unknown;
 }> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, status_pembayaran, progres_persen")
+    .select("id, status_pembayaran, progres_persen, jadwal_ditetapkan")
     .eq("user_id", userId)
     .eq("kelas_id", kelasId)
     .maybeSingle();
 
   if (error) {
     console.error("[getEnrollmentStatus] query failed:", error);
-    return { enrollmentId: null, statusPembayaran: null, progresPersen: 0 };
+    return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null };
   }
-  if (!data) return { enrollmentId: null, statusPembayaran: null, progresPersen: 0 };
+  if (!data) return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null };
 
   return {
     enrollmentId: data.id as string,
     statusPembayaran: data.status_pembayaran as "menunggu" | "lunas" | "batal",
     progresPersen: data.progres_persen as number,
+    jadwalDitetapkan: data.jadwal_ditetapkan,
   };
 }
 
@@ -143,7 +159,7 @@ export async function getSesiKehadiran(enrollmentId: string): Promise<SesiKehadi
   }
 
   const rows = (data ?? []) as { id: string; nomor_sesi: number; dikonfirmasi_mentor: boolean; status_siswa: string }[];
-  const validCount = rows.filter((r) => r.dikonfirmasi_mentor && r.status_siswa !== "disangkal").length;
+  const validCount = hitungSesiTerkonfirmasi(rows);
   const pendingRow = rows.find((r) => r.dikonfirmasi_mentor && r.status_siswa === "belum");
 
   return {

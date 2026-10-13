@@ -113,6 +113,8 @@ export default function KelolaKelasForm({
   );
   const [diskonError, setDiskonError] = useState<string | null>(null);
   const [jadwalEntries, setJadwalEntries] = useState<JadwalEntry[]>(initialKelas?.jadwalEntries ?? []);
+  const [jadwalPilihSiswa, setJadwalPilihSiswa] = useState(initialKelas?.jadwalPilihSiswa ?? false);
+  const [tampilDiKatalog, setTampilDiKatalog] = useState(initialKelas?.tampilDiKatalog ?? true);
   const [linkMeet, setLinkMeet] = useState(initialKelas?.linkMeet ?? "");
   const [linkMeetError, setLinkMeetError] = useState<string | null>(null);
   const [linkLynkid, setLinkLynkid] = useState(initialKelas?.linkLynkid ?? "");
@@ -146,6 +148,8 @@ export default function KelolaKelasForm({
 
   function handleModePembelajaranChange(value: string) {
     setModePembelajaran(value);
+    // Kelas offline belum mendapat Pilihan Jadwal (PRD 7.5.8, v1).
+    if (value === "offline") setJadwalPilihSiswa(false);
     if (!jumlahSesiTouched) {
       setJumlahSesi(String(JUMLAH_SESI_DEFAULT[value] ?? JUMLAH_SESI_DEFAULT.online));
     }
@@ -275,6 +279,16 @@ export default function KelolaKelasForm({
     }
 
     const completeJadwalEntries = jadwalEntries.filter((entry) => entry.hari && entry.jamMulai);
+    if (jadwalPilihSiswa) {
+      if (modePembelajaran === "offline") {
+        setSubmitError("Pilihan jadwal oleh siswa belum tersedia untuk kelas offline.");
+        return;
+      }
+      if (completeJadwalEntries.length === 0) {
+        setSubmitError("Tambahkan minimal 1 slot jadwal kalau siswa memilih jadwal.");
+        return;
+      }
+    }
     const subtesMentorPairs =
       modePembelajaran === "offline"
         ? []
@@ -298,6 +312,8 @@ export default function KelolaKelasForm({
       harga: Number(harga),
       diskonPersen: diskonValue,
       jadwalEntries: completeJadwalEntries,
+      jadwalPilihSiswa,
+      tampilDiKatalog,
       linkMeet: trimmedLinkMeet || undefined,
       linkLynkid: trimmedLinkLynkid || undefined,
       deskripsi: deskripsi.trim() || undefined,
@@ -364,6 +380,8 @@ export default function KelolaKelasForm({
         diskonPersen: diskonValue,
         jadwalEntries: completeJadwalEntries,
         jadwalDisplay,
+        jadwalPilihSiswa,
+        tampilDiKatalog,
         linkMeet: trimmedLinkMeet || null,
         linkLynkid: trimmedLinkLynkid || null,
         deskripsi: deskripsi.trim() || null,
@@ -658,6 +676,26 @@ export default function KelolaKelasForm({
         >
           + Tambah Jadwal
         </button>
+
+        <label
+          className={`mt-1 flex items-start gap-2 text-sm ${modePembelajaran === "offline" ? "text-[#AFAFAF]" : "text-black"}`}
+        >
+          <input
+            type="checkbox"
+            checked={jadwalPilihSiswa}
+            disabled={modePembelajaran === "offline"}
+            onChange={(e) => setJadwalPilihSiswa(e.target.checked)}
+            className="mt-0.5 size-4 accent-[#081EEA]"
+          />
+          Siswa memilih jadwal (maks. 2)
+        </label>
+        <p className="text-xs text-[#7E7C7C]">
+          {modePembelajaran === "offline"
+            ? "Belum tersedia untuk kelas offline."
+            : jadwalPilihSiswa
+              ? "Menyala: tiap slot di atas = OPSI untuk siswa. Saat checkout siswa memilih Pilihan 1 (dan opsional Pilihan 2), lalu Admin menetapkan jadwal akhirnya di halaman Pendaftar. Tanpa kuota per slot."
+              : "Mati: siswa mengikuti SEMUA slot di atas (perilaku biasa)."}
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -719,6 +757,23 @@ export default function KelolaKelasForm({
           className="w-full rounded-[16px] border border-[#AFAFAF] bg-white px-4 py-2.5 text-sm text-black outline-none transition-colors placeholder:text-[#AFAFAF] focus:border-black"
         />
         {deskripsiError ? <p className="text-sm text-[#E70A0A]">{deskripsiError}</p> : null}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-start gap-2 text-sm text-black">
+          <input
+            type="checkbox"
+            checked={tampilDiKatalog}
+            onChange={(e) => setTampilDiKatalog(e.target.checked)}
+            className="mt-0.5 size-4 accent-[#081EEA]"
+          />
+          Tampilkan di katalog
+        </label>
+        <p className="text-xs text-[#7E7C7C]">
+          {tampilDiKatalog
+            ? "Menyala: kelas tampil di halaman Program, rekomendasi, dan bisa di-checkout."
+            : "Mati: kelas disembunyikan dari halaman Program, rekomendasi, dan checkout. Siswa & mentor yang sudah terdaftar di kelas ini tetap bisa mengaksesnya seperti biasa."}
+        </p>
       </div>
 
       {submitError ? <p className="text-sm text-[#E70A0A]">{submitError}</p> : null}

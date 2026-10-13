@@ -6,6 +6,8 @@ import { getOfflineMentorOptions } from "@/lib/payment/getOfflineMentorOptions";
 import { validatePromoCode } from "@/lib/payment/validatePromoCode";
 import { generateOrderId } from "@/lib/payment/generateOrderId";
 import { snap } from "@/lib/payment/midtransSnap";
+import { validateJadwalPilihan } from "@/lib/shared/jadwalPilihan";
+import { CHECKOUT_BLOCK_MESSAGE, getCheckoutBlockReason, isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 
 /**
  * Buat transaksi Payment — PRD Bagian 8 BR-19 (status hanya berubah lewat
@@ -30,6 +32,10 @@ interface CreatePaymentBody {
   mentorOfflineId?: string;
   lokasiSiswaLat?: number;
   lokasiSiswaLng?: number;
+  /** Pilihan jadwal siswa (PRD 7.5.8), array {hari, jam_mulai} urut prioritas,
+   * maks. 2. DIVALIDASI ULANG terhadap kelas.jadwal di server; diabaikan kalau
+   * saklar kelas mati atau kelas offline. */
+  jadwalPilihan?: unknown;
 }
 
 const MAX_SUBTES_PILIHAN = 3;
@@ -64,6 +70,16 @@ export async function POST(request: NextRequest) {
   const kelas = await getKelasForCheckout(kelasId);
   if (!kelas) {
     return errorResponse("Kelas tidak ditemukan.", 404);
+  }
+
+  // Guard checkout internal (fail-closed) — sama dengan halaman /checkout,
+  // dicek ulang di sini karena API bisa dipanggil langsung tanpa halamannya.
+  const blockReason = getCheckoutBlockReason({
+    isReady: isCheckoutInternalReady(),
+    linkPendaftaran: kelas.linkPendaftaran,
+  });
+  if (blockReason) {
+    return errorResponse(CHECKOUT_BLOCK_MESSAGE[blockReason], 403);
   }
 
   if (await isKelasSudahLunas(session.userId, kelasId)) {
@@ -123,6 +139,11 @@ export async function POST(request: NextRequest) {
     lokasiSiswaLng = lng;
   }
 
+  const jadwalPilihanResult = validateJadwalPilihan(body.jadwalPilihan, kelas);
+  if (!jadwalPilihanResult.ok) {
+    return errorResponse(jadwalPilihanResult.error, 400);
+  }
+
   let kodePromoId: string | null = null;
   let total = kelas.harga;
 
@@ -166,6 +187,7 @@ export async function POST(request: NextRequest) {
         mentor_offline_id: mentorOfflineId,
         lokasi_siswa_lat: lokasiSiswaLat,
         lokasi_siswa_lng: lokasiSiswaLng,
+        jadwal_pilihan: jadwalPilihanResult.value,
       })
       .select("id, order_id")
       .single();

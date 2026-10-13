@@ -3,6 +3,7 @@ import Button from "@/components/ui/Button";
 import { buttonClassName } from "@/components/ui/buttonClassName";
 import type { SessionRole } from "@/lib/auth/session";
 import { resolveKelasDaftarAction } from "@/lib/shared/kelasDaftarTarget";
+import { isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 
 /**
  * Tombol "Daftar Sekarang" kelas — dipakai card /program (+ Rekomendasi Kelas,
@@ -15,8 +16,6 @@ import { resolveKelasDaftarAction } from "@/lib/shared/kelasDaftarTarget";
  * atasnya (lihat KelasCardFrame.tsx), jadi klik tombol tidak pernah ikut ke
  * halaman detail.
  */
-
-const IS_PENDAFTARAN_MANUAL = process.env.NEXT_PUBLIC_PENDAFTARAN_MANUAL === "true";
 
 export interface KelasDaftarButtonProps {
   kelasId: string;
@@ -47,7 +46,7 @@ export default function KelasDaftarButton({
     sisaSlot,
     linkPendaftaran: linkLynkid,
     sessionRole,
-    isPendaftaranManual: IS_PENDAFTARAN_MANUAL,
+    isCheckoutInternalReady: isCheckoutInternalReady(),
   });
 
   const isDetail = variant === "detail";

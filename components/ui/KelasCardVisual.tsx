@@ -90,8 +90,9 @@ export interface KelasCardVisualProps {
   sisaSlot?: number;
   /** Dipakai variant "jual" saja. */
   kapasitas?: number;
-  /** Dipakai variant "dimiliki" saja — persentase materi selesai (0-100). */
-  progresPersen?: number;
+  /** Dipakai variant "dimiliki" saja — kelas sudah selesai (Progress
+   * Kehadiran 100%, lib/shared/progresSesi.ts) → badge "Selesai". */
+  selesai?: boolean;
   /** Dipakai variant "diampu" saja — jumlah siswa enrollment lunas di kelas ini. */
   jumlahSiswaAktif?: number;
   /** Diterima untuk kompatibilitas signature props (PRD 7.5) — TIDAK dipakai
@@ -123,7 +124,7 @@ export default function KelasCardVisual({
   diskonAktif,
   sisaSlot = 0,
   kapasitas = 0,
-  progresPersen = 0,
+  selesai = false,
   jumlahSiswaAktif = 0,
   programKategori,
   tingkatKelas,
@@ -167,7 +168,6 @@ export default function KelasCardVisual({
 
   const SubtesIcon = SUBTES_ICON_COMPONENTS[getSubtesIconKey(subtesNama)];
   const ctaText = resolveCtaText(isPenuh, isMenipis, hasDiskon);
-  const progresClamped = Math.min(100, Math.max(0, progresPersen));
 
   return (
     <div
@@ -219,7 +219,8 @@ export default function KelasCardVisual({
 
       {/* Badge kuota — pojok kiri atas, kondisional & tergantung variant
           (poin 3): "jual" = badge kuota (sisa slot/penuh), "diampu" = badge
-          jumlah siswa aktif. Nilai CSS PERSIS sesuai spesifikasi ".badge-kuota"
+          jumlah siswa aktif, "dimiliki" = badge "Selesai" (cuma kalau kelas
+          sudah selesai). Nilai CSS PERSIS sesuai spesifikasi ".badge-kuota"
           (ditulis sebagai Tailwind mobile-first: class dasar = breakpoint
           mobile ≤640px, sm: = breakpoint desktop, karena default Tailwind
           "tanpa prefix" berlaku di SEMUA ukuran termasuk mobile sampai
@@ -237,6 +238,10 @@ export default function KelasCardVisual({
       ) : variant === "diampu" ? (
         <span className="absolute top-2 left-2 z-20 rounded-full bg-[#FACC15] px-2 py-[3px] text-[10px] font-medium text-[#422006] sm:top-3 sm:left-3 sm:px-3 sm:py-1 sm:text-xs">
           {jumlahSiswaAktif} Siswa
+        </span>
+      ) : variant === "dimiliki" && selesai ? (
+        <span className="absolute top-2 left-2 z-20 rounded-full bg-[#0CBA00] px-2 py-[3px] text-[10px] font-medium text-white sm:top-3 sm:left-3 sm:px-3 sm:py-1 sm:text-xs">
+          Selesai
         </span>
       ) : null}
 
@@ -279,10 +284,10 @@ export default function KelasCardVisual({
         </div>
 
         {/* Kotak bawah — tergantung variant: "jual" = CTA urgency (SELALU
-            tampil, teks dinamis, poin 9), "dimiliki" = progress bar materi
-            (pengganti CTA, karena kelas ini sudah dibeli jadi urgency tidak
-            relevan lagi), "diampu" = tidak ada (badge siswa sudah cukup, lihat
-            atas). */}
+            tampil, teks dinamis, poin 9), "dimiliki"/"diampu" = tidak ada
+            (kelas sudah dibeli/diampu jadi urgency tidak relevan; Progress
+            Kehadiran kelas "dimiliki" tampil di konten card bawah banner,
+            lihat components/siswa/KelasSayaCard.tsx). */}
         {isJual ? (
           <div
             className={[
@@ -299,16 +304,6 @@ export default function KelasCardVisual({
               <path d="M10 1.5 1 17h18L10 1.5Zm0 5.4c.5 0 .9.4.9.9v4.1c0 .5-.4.9-.9.9s-.9-.4-.9-.9V7.8c0-.5.4-.9.9-.9Zm0 7.4a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" />
             </svg>
             <p className="line-clamp-2 text-[9.5px] leading-snug font-semibold text-[#9F1239] sm:text-[10.5px]">{ctaText}</p>
-          </div>
-        ) : variant === "dimiliki" ? (
-          <div className="flex flex-col gap-1 rounded-lg bg-white/15 px-2.5 py-1.5 backdrop-blur-sm sm:px-3 sm:py-2">
-            <div className="flex items-center justify-between text-[9.5px] font-semibold text-white sm:text-[10.5px]">
-              <span>Progress Materi</span>
-              <span>{progresClamped}%</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/25">
-              <div className="h-full rounded-full bg-white" style={{ width: `${progresClamped}%` }} />
-            </div>
           </div>
         ) : null}
       </div>

@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { formatSlot, parseJadwalSlots } from "@/lib/shared/jadwalPilihan";
 
 /**
  * Data layer "Riwayat Transaksi" (Admin) — PRD Bagian 8 (BR-19: status
@@ -28,6 +29,8 @@ export interface RiwayatTransaksiItem {
   kodePromo: string | null;
   dibuatPada: string;
   tanggalLunas: string | null;
+  /** payments.jadwal_pilihan (PRD 7.5.8), urut Pilihan 1, 2 — read-only. */
+  jadwalPilihan: string[];
 }
 
 function firstOrNull<T>(value: T | T[] | null | undefined): T | null {
@@ -50,6 +53,7 @@ interface PaymentRow {
   status: RiwayatTransaksiItem["status"];
   dibuat_pada: string;
   tanggal_lunas: string | null;
+  jadwal_pilihan: unknown;
   user: NamaEmailOnly | NamaEmailOnly[] | null;
   kode_promo: KodeOnly | KodeOnly[] | null;
 }
@@ -59,7 +63,7 @@ export async function getRiwayatTransaksiList(): Promise<RiwayatTransaksiItem[]>
   const { data, error } = await supabaseServer
     .from("payments")
     .select(
-      `id, order_id, gateway_reference, item_type, item_id, jumlah_sebelum_diskon, jumlah, metode, status, dibuat_pada, tanggal_lunas,
+      `id, order_id, gateway_reference, item_type, item_id, jumlah_sebelum_diskon, jumlah, metode, status, dibuat_pada, tanggal_lunas, jadwal_pilihan,
        user:user_id(nama, email),
        kode_promo:kode_promo_id(kode)`,
     )
@@ -106,6 +110,7 @@ export async function getRiwayatTransaksiList(): Promise<RiwayatTransaksiItem[]>
       kodePromo: kodePromo?.kode ?? null,
       dibuatPada: row.dibuat_pada,
       tanggalLunas: row.tanggal_lunas,
+      jadwalPilihan: parseJadwalSlots(row.jadwal_pilihan).map(formatSlot),
     };
   });
 }

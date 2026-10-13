@@ -118,18 +118,33 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-function ListCard({
+/** Diexport supaya card "Info Beasiswa & Event" yang sama bisa dipakai ulang
+ * di halaman "Kelas Saya" (section "Event dan Beasiswa") — `headerAction`
+ * opsional, mis. link "Lihat Semua". */
+export function ListCard({
   title,
   rows,
   emptyText,
+  headerAction,
 }: {
   title: string;
   rows: Array<{ left: string; right: string; rightColor?: string }>;
   emptyText: string;
+  headerAction?: { href: string; label: string };
 }) {
   return (
     <Card className="gap-4 sm:gap-5 lg:w-full">
-      <h3 className="text-lg font-semibold tracking-[-0.02em] text-black sm:text-xl">{title}</h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="min-w-0 text-lg font-semibold tracking-[-0.02em] text-black sm:text-xl">{title}</h3>
+        {headerAction ? (
+          <Link
+            href={headerAction.href}
+            className="shrink-0 text-sm font-medium text-[#081EEA] transition-opacity hover:opacity-80 sm:text-base"
+          >
+            {headerAction.label}
+          </Link>
+        ) : null}
+      </div>
       {rows.length === 0 ? (
         <EmptyState text={emptyText} />
       ) : (

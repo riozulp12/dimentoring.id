@@ -224,6 +224,7 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
       const { data: kelasRows } = await supabaseServer
         .from("kelas")
         .select("id, nama, harga")
+        .eq("tampil_di_katalog", true)
         .in("subtes_id", subtesIds)
         .order("nama", { ascending: true })
         .limit(3);
