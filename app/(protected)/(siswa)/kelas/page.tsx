@@ -1,25 +1,82 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
+import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken, type SessionRole } from "@/lib/auth/session";
 import { supabaseServer } from "@/lib/supabase/server";
-import { getKelasSaya, getRekomendasiKelas } from "@/lib/siswa/getKelasSayaData";
+import { getKelasSaya, getRekomendasiKelas, type KelasSayaItem } from "@/lib/siswa/getKelasSayaData";
+import { getKelasKatalog, type KelasCardPreview } from "@/lib/dashboard/getProgramData";
+import { getInfoBeasiswaEvent } from "@/lib/dashboard/getInfoBeasiswaEvent";
+import { formatDeadline } from "@/lib/shared/formatDeadline";
 import PageTitle from "@/components/dashboard/PageTitle";
+import { ListCard } from "@/components/dashboard/DashboardOverview";
 import KelasSayaCard from "@/components/siswa/KelasSayaCard";
 import KelasCardFrame from "@/components/program/KelasCardFrame";
 import KelasCardMeta from "@/components/program/KelasCardMeta";
 
 /**
- * "Kelas Saya" — PRD Bagian 7.5 (Kelas Bimbingan). Dua section: kelas yang
- * sudah lunas (dengan progress bar), dan Rekomendasi Kelas berdasarkan
- * mapel_tersulit + tingkat_kelas siswa (Bagian 7.0.2 Langkah 2 & 3).
+ * "Kelas Saya" — PRD Bagian 7.5 (Kelas Bimbingan). Kelas yang sudah lunas
+ * dipisah "Sedang Berjalan"/"Selesai" berdasar Progress KEHADIRAN
+ * (lib/shared/progresSesi.ts, sama dengan detail kelas), Rekomendasi Kelas
+ * (mapel_tersulit + tingkat_kelas, fallback ke kelas katalog lain), lalu
+ * "Event dan Beasiswa". Siswa yang belum punya kelas lunas melihat seluruh
+ * kelas katalog sebagai pengganti dua section pertama.
  */
 
-// Server Component ini sengaja tidak import Button (client component) cuma
-// buat 1 CTA link — style disamakan manual dengan Button variant="primary" size="sm"
-// (pola sama seperti DashboardOverview.tsx).
-const CTA_LINK_CLASS =
-  "inline-flex items-center justify-center rounded-[18px] font-medium leading-[1.5] whitespace-nowrap transition-[filter,border-color] duration-150 ease-out px-5 py-2 text-sm sm:text-base tracking-[-0.32px] bg-[#081EEA] text-white border border-solid border-transparent drop-shadow-[2px_2px_0px_#000000] hover:border-white hover:drop-shadow-[0px_0px_5px_#000000] active:border-white active:drop-shadow-[2px_2px_0px_#000000]";
+const MAX_EVENT_BEASISWA = 6;
+
+/** Card jualan — REUSE persis komponen /program (KelasCardFrame +
+ * KelasCardMeta, tombol daftar pakai pola stretched-link, bukan tombol di
+ * dalam Link). `compact` = grid 2 kolom di mobile seperti /program. */
+function KelasJualGrid({
+  items,
+  sessionRole,
+  compact = false,
+}: {
+  items: KelasCardPreview[];
+  sessionRole: SessionRole;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={
+        compact
+          ? "grid w-full grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
+          : "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3"
+      }
+    >
+      {items.map((item, idx) => (
+        <KelasCardFrame
+          key={item.id}
+          href={`/kelas/${item.id}`}
+          namaKelas={item.nama}
+          index={idx}
+          diskonAktif={item.diskonAktif}
+          sisaSlot={item.sisaSlot}
+          kapasitas={item.kapasitas}
+          programKategori={item.programKategori}
+          tingkatKelas={item.tingkatKelas}
+          subtesNama={item.subtesNama}
+          compact={compact}
+        >
+          <KelasCardMeta item={item} sessionRole={sessionRole} compact={compact} />
+        </KelasCardFrame>
+      ))}
+    </div>
+  );
+}
+
+function KelasSayaGroup({ judul, items, indexOffset }: { judul: string; items: KelasSayaItem[]; indexOffset: number }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-3 sm:gap-4">
+      <h3 className="text-lg font-semibold tracking-[-0.02em] text-black sm:text-xl">{judul}</h3>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
+        {items.map((kelas, idx) => (
+          <KelasSayaCard key={kelas.id} index={indexOffset + idx} {...kelas} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default async function KelasSayaPage({
   searchParams,
@@ -44,10 +101,20 @@ export default async function KelasSayaPage({
     .eq("id", session.userId)
     .maybeSingle();
 
-  const [kelasSaya, rekomendasi] = await Promise.all([
+  const [kelasSaya, eventBeasiswa] = await Promise.all([
     getKelasSaya(session.userId),
-    getRekomendasiKelas(session.userId, (user?.tingkat_kelas as string | null) ?? null),
+    getInfoBeasiswaEvent(MAX_EVENT_BEASISWA),
   ]);
+
+  const punyaKelas = kelasSaya.length > 0;
+  // Belum punya kelas lunas: tawarkan SELURUH kelas katalog. Sudah punya:
+  // Rekomendasi (mapel tersulit + tingkat kelas, fallback kelas katalog lain).
+  const kelasTawaran = punyaKelas
+    ? await getRekomendasiKelas(session.userId, (user?.tingkat_kelas as string | null) ?? null)
+    : await getKelasKatalog();
+
+  const kelasBerjalan = kelasSaya.filter((kelas) => !kelas.selesai);
+  const kelasSelesai = kelasSaya.filter((kelas) => kelas.selesai);
 
   return (
     <>
@@ -61,25 +128,22 @@ export default async function KelasSayaPage({
 
         <section className="flex flex-col gap-4 sm:gap-6">
           <h2 className="text-xl font-semibold tracking-[-0.02em] text-black sm:text-2xl">Kelas Saya</h2>
-          {kelasSaya.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-12 text-center">
-              <p className="text-base text-[#7E7C7C]">
-                Kamu belum ikut kelas apa pun nih. Yuk cari tahu kelas yang cocok buatmu lewat Assessment!
-              </p>
-              <Link href="/assessment" className={CTA_LINK_CLASS}>
-                Coba Assessment Sekarang
-              </Link>
-            </div>
+          {punyaKelas ? (
+            <>
+              <KelasSayaGroup judul="Sedang Berjalan" items={kelasBerjalan} indexOffset={0} />
+              <KelasSayaGroup judul="Selesai" items={kelasSelesai} indexOffset={kelasBerjalan.length} />
+            </>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
-              {kelasSaya.map((kelas, idx) => (
-                <KelasSayaCard key={kelas.id} index={idx} {...kelas} />
-              ))}
-            </div>
+            <>
+              <p className="rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-6 text-center text-base text-[#7E7C7C]">
+                Kamu belum ikut kelas apa pun nih. Yuk telusuri kelas yang cocok untukmu dibawah ini
+              </p>
+              <KelasJualGrid items={kelasTawaran} sessionRole={session.role} compact />
+            </>
           )}
         </section>
 
-        {rekomendasi.length > 0 ? (
+        {punyaKelas && kelasTawaran.length > 0 ? (
           <section className="flex flex-col gap-4 sm:gap-6">
             <h2 className="text-xl font-semibold tracking-[-0.02em] text-black sm:text-2xl">
               Rekomendasi Kelas
@@ -87,24 +151,22 @@ export default async function KelasSayaPage({
             {/* Kelas di sini BELUM dibeli — treatment jualan lengkap tetap
                 relevan, makanya reuse persis komponen yang sama dengan
                 /program (variant "jual" default di KelasCardVisual). */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
-              {rekomendasi.map((item, idx) => (
-                <KelasCardFrame
-                  key={item.id}
-                  href={`/kelas/${item.id}`}
-                  namaKelas={item.nama}
-                  index={idx}
-                  diskonAktif={item.diskonAktif}
-                  sisaSlot={item.sisaSlot}
-                  kapasitas={item.kapasitas}
-                  programKategori={item.programKategori}
-                  tingkatKelas={item.tingkatKelas}
-                  subtesNama={item.subtesNama}
-                >
-                  <KelasCardMeta item={item} sessionRole={session.role} />
-                </KelasCardFrame>
-              ))}
-            </div>
+            <KelasJualGrid items={kelasTawaran} sessionRole={session.role} />
+          </section>
+        ) : null}
+
+        {eventBeasiswa.length > 0 ? (
+          <section>
+            <ListCard
+              title="Event dan Beasiswa"
+              headerAction={{ href: "/beasiswa-event", label: "Lihat Semua" }}
+              rows={eventBeasiswa.map((item) => ({
+                left: item.judul,
+                right: formatDeadline(item.deadline),
+                rightColor: "text-[#E70A0A]",
+              }))}
+              emptyText=""
+            />
           </section>
         ) : null}
       </div>
