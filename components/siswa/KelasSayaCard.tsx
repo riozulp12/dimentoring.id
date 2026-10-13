@@ -2,6 +2,7 @@ import Link from "next/link";
 import KelasCardVisual from "@/components/ui/KelasCardVisual";
 import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 import type { KelasSayaItem } from "@/lib/siswa/getKelasSayaData";
+import { hrefKelasDimiliki } from "@/lib/shared/kelasHref";
 
 /**
  * Card "Kelas Saya" (Siswa, kelas SUDAH lunas) — PRD 7.5 poin 2 (revisi
@@ -34,7 +35,7 @@ export default function KelasSayaCard({
 }: KelasSayaCardProps) {
   return (
     <Link
-      href={`/kelas/${id}`}
+      href={hrefKelasDimiliki(id)}
       className="flex flex-col overflow-hidden rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)] transition-shadow hover:shadow-[1px_2px_8px_0px_rgba(0,0,0,0.15)]"
     >
       <KelasCardVisual

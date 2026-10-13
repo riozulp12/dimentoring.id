@@ -6,6 +6,7 @@ import { getKelasSaya, getRekomendasiKelas, type KelasSayaItem } from "@/lib/sis
 import { getKelasKatalog, type KelasCardPreview } from "@/lib/dashboard/getProgramData";
 import { getInfoBeasiswaEvent } from "@/lib/dashboard/getInfoBeasiswaEvent";
 import { formatDeadline } from "@/lib/shared/formatDeadline";
+import { hrefKelasJualan } from "@/lib/shared/kelasHref";
 import PageTitle from "@/components/dashboard/PageTitle";
 import { ListCard } from "@/components/dashboard/DashboardOverview";
 import KelasSayaCard from "@/components/siswa/KelasSayaCard";
@@ -25,7 +26,9 @@ const MAX_EVENT_BEASISWA = 6;
 
 /** Card jualan — REUSE persis komponen /program (KelasCardFrame +
  * KelasCardMeta, tombol daftar pakai pola stretched-link, bukan tombol di
- * dalam Link). `compact` = grid 2 kolom di mobile seperti /program. */
+ * dalam Link). `compact` = grid 2 kolom di mobile seperti /program. Kelas di
+ * sini BELUM dibeli, jadi klik card → detail jualan (/program/kelas/[id]),
+ * bukan halaman kelas siswa. */
 function KelasJualGrid({
   items,
   sessionRole,
@@ -46,7 +49,7 @@ function KelasJualGrid({
       {items.map((item, idx) => (
         <KelasCardFrame
           key={item.id}
-          href={`/kelas/${item.id}`}
+          href={hrefKelasJualan(item.id)}
           namaKelas={item.nama}
           index={idx}
           diskonAktif={item.diskonAktif}
