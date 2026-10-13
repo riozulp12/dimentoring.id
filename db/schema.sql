@@ -444,11 +444,15 @@ CREATE TABLE kelas (
                                             -- mentor sekarang dikelola lewat kelas_mentor (many-to-many)
     kapasitas INT NOT NULL,
     harga DECIMAL(12,2) NOT NULL DEFAULT 0,
+    diskon_persen SMALLINT NOT NULL DEFAULT 0  -- diskon yang MELEKAT ke kelas (tanpa kode promo) — db/add_kelas_diskon.sql
+        CONSTRAINT kelas_diskon_persen_range CHECK (diskon_persen >= 0 AND diskon_persen <= 100),
     deskripsi TEXT,                        -- manual atau AI-generated, tampil di detail kelas
     jadwal JSONB,                          -- array of {hari, jam} — mendukung lebih dari satu slot
     link_meet TEXT,                        -- link recurring statis per Kelas (bukan per siswa)
     link_lynkid TEXT,                      -- SEMENTARA: link produk Lynk.id, dipakai selama Payment 
                                             -- otomatis belum aktif (lihat BR pendaftaran manual)
+    tampil_di_katalog BOOLEAN NOT NULL DEFAULT true,  -- false = disembunyikan dari katalog, rekomendasi & checkout
+                                            -- (TIDAK menyentuh kelas yang sudah diikuti) — db/add_kelas_tampil_di_katalog.sql
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
