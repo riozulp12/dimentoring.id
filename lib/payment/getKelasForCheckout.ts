@@ -21,11 +21,16 @@ export interface KelasCheckoutData {
   jadwal: unknown;
 }
 
+/** null juga untuk kelas yang disembunyikan dari katalog
+ * (`tampil_di_katalog = false`, PRD Bagian 13) — otomatis menutup halaman
+ * checkout, /api/payment/create, validate-promo & offline-mentors yang semuanya
+ * lewat fungsi ini. */
 export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckoutData | null> {
   const { data, error } = await supabaseServer
     .from("kelas")
     .select("id, nama, harga, mode_pembelajaran, link_lynkid, jadwal, jadwal_pilih_siswa")
     .eq("id", kelasId)
+    .eq("tampil_di_katalog", true)
     .maybeSingle();
 
   if (error) {

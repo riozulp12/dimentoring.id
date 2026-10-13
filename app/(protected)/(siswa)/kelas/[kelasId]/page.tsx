@@ -64,6 +64,12 @@ export default async function KelasDetailPage({
 
   const enrollment = await getEnrollmentStatus(session.userId, kelasId);
   const isLunas = enrollment.statusPembayaran === "lunas";
+  // Kelas tersembunyi dari katalog (kelas.tampil_di_katalog = false): cuma
+  // siswa yang SUDAH terdaftar yang boleh membukanya — bagi yang lain kelas
+  // ini tidak ditawarkan sama sekali (pesan sama dengan kelas tidak ada).
+  if (!isLunas && !kelas.tampilDiKatalog) {
+    redirect(`/kelas?error=${encodeURIComponent("Kelas tidak ditemukan.")}`);
+  }
   const sesiKehadiran =
     isLunas && enrollment.enrollmentId ? await getSesiKehadiran(enrollment.enrollmentId) : null;
   // Kelas dengan Pilihan Jadwal (PRD 7.5.8): siswa terdaftar lihat jadwal

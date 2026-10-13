@@ -223,13 +223,16 @@ export async function getDiskonAktifByKelasId(kelasIds: string[]): Promise<Map<s
 /**
  * SATU-SATUNYA pintu query "kelas yang tampil di katalog" — dipakai /program,
  * /program/[kategori], empty state "Kelas Saya", dan Rekomendasi Kelas
- * (lib/siswa/getKelasSayaData.ts). Saat ini belum ada mekanisme
- * menyembunyikan kelas dari katalog (tidak ada kolom status/aktif di tabel
- * `kelas`), jadi SEMUA kelas lolos. Kalau nanti ada (mis. kelas lama/legacy),
- * filternya cukup ditambahkan DI SINI supaya semua permukaan ikut konsisten.
+ * (lib/siswa/getKelasSayaData.ts). Kelas dengan `tampil_di_katalog = false`
+ * (PRD Bagian 13, db/add_kelas_tampil_di_katalog.sql — mis. kelas
+ * lama/legacy) TIDAK pernah lolos dari sini.
+ *
+ * JANGAN dipakai untuk kelas yang SUDAH diikuti (Kelas Saya siswa/mentor,
+ * detail kelas terdaftar, honor, siswa binaan) — saklar itu cuma menutup
+ * katalog, rekomendasi & checkout, bukan akses kelas yang sudah berjalan.
  */
 export function queryKelasKatalog() {
-  return supabaseServer.from("kelas").select(KELAS_CARD_SELECT);
+  return supabaseServer.from("kelas").select(KELAS_CARD_SELECT).eq("tampil_di_katalog", true);
 }
 
 /** Baris kelas -> card jualan lengkap (badge diskon + sisa slot). */
@@ -357,6 +360,11 @@ export interface KelasDetailPublic {
   /** kelas.link_lynkid ("Input Link Pendaftaran") — tujuan tombol Daftar
    * Sekarang kalau terisi, lihat lib/shared/kelasDaftarTarget.ts. */
   linkLynkid: string | null;
+  /** `kelas.tampil_di_katalog` — fungsi ini SENGAJA tidak memfilternya
+   * (dipakai juga halaman kelas siswa); pemanggil yang memutuskan: halaman
+   * publik /program/kelas/[id] → notFound(), halaman kelas siswa → cuma
+   * siswa terdaftar yang boleh lihat. */
+  tampilDiKatalog: boolean;
 }
 
 /** Detail publik 1 kelas (app/program/kelas/[kelasId]/page.tsx). Mentor
@@ -366,7 +374,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tipe_kelas, mode_pembelajaran, jumlah_sesi, tingkat_kelas, deskripsi, harga, diskon_persen, jadwal, kapasitas, link_lynkid,
+      `id, nama, program_kategori, tipe_kelas, mode_pembelajaran, jumlah_sesi, tingkat_kelas, deskripsi, harga, diskon_persen, jadwal, kapasitas, link_lynkid, tampil_di_katalog,
        subtes:subtes_id(nama)`,
     )
     .eq("id", kelasId)
@@ -392,6 +400,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     jadwal: unknown;
     kapasitas: number;
     link_lynkid: string | null;
+    tampil_di_katalog: boolean | null;
     subtes: NamaJoin;
   };
   const row = data as unknown as Row;
@@ -457,6 +466,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
       (diskonByKelas.get(kelasId) ?? null) ??
       (diskonPersenDetail > 0 ? { label: `Diskon ${diskonPersenDetail}%` } : null),
     linkLynkid: row.link_lynkid,
+    tampilDiKatalog: row.tampil_di_katalog !== false,
   };
 }
 

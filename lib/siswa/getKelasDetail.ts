@@ -23,6 +23,10 @@ export interface KelasDetailData {
   /** Mentah untuk Pilihan Jadwal (PRD 7.5.8) — lihat formatJadwalSiswaTerdaftar. */
   jadwalRaw: unknown;
   jadwalPilihSiswa: boolean;
+  /** `kelas.tampil_di_katalog` (PRD Bagian 13) — TIDAK difilter di sini supaya
+   * siswa terdaftar tetap bisa buka kelas tersembunyi; halaman yang menolak
+   * siswa yang belum terdaftar. */
+  tampilDiKatalog: boolean;
 }
 
 export interface MateriItem {
@@ -54,7 +58,7 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      "id, nama, jadwal, jadwal_pilih_siswa, link_meet, deskripsi, mode_pembelajaran, jumlah_sesi, mentor:mentor_id(nama), subtes:subtes_id(nama)",
+      "id, nama, jadwal, jadwal_pilih_siswa, link_meet, deskripsi, mode_pembelajaran, jumlah_sesi, tampil_di_katalog, mentor:mentor_id(nama), subtes:subtes_id(nama)",
     )
     .eq("id", kelasId)
     .maybeSingle();
@@ -74,6 +78,7 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
     deskripsi: string | null;
     mode_pembelajaran: string;
     jumlah_sesi: number;
+    tampil_di_katalog: boolean | null;
     mentor: NamaJoin;
     subtes: NamaJoin;
   };
@@ -91,6 +96,7 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
     jumlahSesi: row.jumlah_sesi,
     jadwalRaw: row.jadwal,
     jadwalPilihSiswa: row.jadwal_pilih_siswa === true,
+    tampilDiKatalog: row.tampil_di_katalog !== false,
   };
 }
 
