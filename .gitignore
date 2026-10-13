@@ -63,3 +63,5 @@ scripts/mentor-photos-backup/
 # cuma template ber-placeholder yang boleh masuk repo
 db/legacy_kelas_manual_*.sql
 !db/legacy_kelas_manual_TEMPLATE.sql
+db/cleanup_enrollment_uji_*.sql
+!db/cleanup_enrollment_uji_TEMPLATE.sql
