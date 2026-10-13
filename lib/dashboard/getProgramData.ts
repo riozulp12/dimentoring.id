@@ -220,15 +220,40 @@ export async function getDiskonAktifByKelasId(kelasIds: string[]): Promise<Map<s
   return result;
 }
 
+/**
+ * SATU-SATUNYA pintu query "kelas yang tampil di katalog" — dipakai /program,
+ * /program/[kategori], empty state "Kelas Saya", dan Rekomendasi Kelas
+ * (lib/siswa/getKelasSayaData.ts). Saat ini belum ada mekanisme
+ * menyembunyikan kelas dari katalog (tidak ada kolom status/aktif di tabel
+ * `kelas`), jadi SEMUA kelas lolos. Kalau nanti ada (mis. kelas lama/legacy),
+ * filternya cukup ditambahkan DI SINI supaya semua permukaan ikut konsisten.
+ */
+export function queryKelasKatalog() {
+  return supabaseServer.from("kelas").select(KELAS_CARD_SELECT);
+}
+
+/** Baris kelas -> card jualan lengkap (badge diskon + sisa slot). */
+export async function toCardPreviewList(rows: KelasCardRow[]): Promise<KelasCardPreview[]> {
+  if (rows.length === 0) return [];
+
+  const kelasIds = rows.map((row) => row.id);
+  const kapasitasById = new Map(rows.map((row) => [row.id, row.kapasitas]));
+  const [diskonByKelas, sisaSlotByKelas] = await Promise.all([
+    getDiskonAktifByKelasId(kelasIds),
+    getSisaSlotByKelasId(kelasIds, kapasitasById),
+  ]);
+  return rows.map((row) =>
+    toCardPreview(row, diskonByKelas.get(row.id) ?? null, sisaSlotByKelas.get(row.id) ?? row.kapasitas),
+  );
+}
+
 /** Preview tiap kategori (max 4 terbaru) — dipakai app/program/page.tsx. Cuma
  * kategori yang punya isi yang dikembalikan (section kosong disembunyikan,
  * bukan tampil kosong — PRD 7.5.4). */
 export async function getProgramPreviewSections(): Promise<ProgramSection[]> {
   const results = await Promise.all(
     PROGRAM_KATEGORI_ORDER.map(async (kategori) => {
-      const { data, error } = await supabaseServer
-        .from("kelas")
-        .select(KELAS_CARD_SELECT)
+      const { data, error } = await queryKelasKatalog()
         .eq("program_kategori", kategori)
         .order("created_at", { ascending: false })
         .limit(4);
@@ -241,14 +266,7 @@ export async function getProgramPreviewSections(): Promise<ProgramSection[]> {
       const rows = (data ?? []) as unknown as KelasCardRow[];
       if (rows.length === 0) return null;
 
-      const kapasitasById = new Map(rows.map((row) => [row.id, row.kapasitas]));
-      const [diskonByKelas, sisaSlotByKelas] = await Promise.all([
-        getDiskonAktifByKelasId(rows.map((row) => row.id)),
-        getSisaSlotByKelasId(rows.map((row) => row.id), kapasitasById),
-      ]);
-      const items = rows.map((row) =>
-        toCardPreview(row, diskonByKelas.get(row.id) ?? null, sisaSlotByKelas.get(row.id) ?? row.kapasitas),
-      );
+      const items = await toCardPreviewList(rows);
 
       return {
         kategori,
@@ -273,9 +291,7 @@ export async function getKelasByKategori(
   kategori: ProgramKategori,
   filters: KelasGridFilters = {},
 ): Promise<KelasCardPreview[]> {
-  let query = supabaseServer
-    .from("kelas")
-    .select(KELAS_CARD_SELECT)
+  let query = queryKelasKatalog()
     .eq("program_kategori", kategori)
     .order("created_at", { ascending: false });
 
@@ -289,15 +305,20 @@ export async function getKelasByKategori(
     return [];
   }
 
-  const rows = (data ?? []) as unknown as KelasCardRow[];
-  const kapasitasById = new Map(rows.map((row) => [row.id, row.kapasitas]));
-  const [diskonByKelas, sisaSlotByKelas] = await Promise.all([
-    getDiskonAktifByKelasId(rows.map((row) => row.id)),
-    getSisaSlotByKelasId(rows.map((row) => row.id), kapasitasById),
-  ]);
-  return rows.map((row) =>
-    toCardPreview(row, diskonByKelas.get(row.id) ?? null, sisaSlotByKelas.get(row.id) ?? row.kapasitas),
-  );
+  return toCardPreviewList((data ?? []) as unknown as KelasCardRow[]);
+}
+
+/** Semua kelas katalog, terbaru dulu — dipakai empty state "Kelas Saya"
+ * (siswa belum punya kelas lunas) & fallback Rekomendasi Kelas. */
+export async function getKelasKatalog(): Promise<KelasCardPreview[]> {
+  const { data, error } = await queryKelasKatalog().order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getKelasKatalog] query failed:", error);
+    return [];
+  }
+
+  return toCardPreviewList((data ?? []) as unknown as KelasCardRow[]);
 }
 
 export interface KelasMentorInfo {
