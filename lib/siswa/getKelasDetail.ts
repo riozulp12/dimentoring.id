@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
+import { hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
 
 /**
  * Data layer halaman Detail Kelas — PRD Bagian 7.5.1 (Materi) & Bagian 13
@@ -152,7 +153,7 @@ export async function getSesiKehadiran(enrollmentId: string): Promise<SesiKehadi
   }
 
   const rows = (data ?? []) as { id: string; nomor_sesi: number; dikonfirmasi_mentor: boolean; status_siswa: string }[];
-  const validCount = rows.filter((r) => r.dikonfirmasi_mentor && r.status_siswa !== "disangkal").length;
+  const validCount = hitungSesiTerkonfirmasi(rows);
   const pendingRow = rows.find((r) => r.dikonfirmasi_mentor && r.status_siswa === "belum");
 
   return {
