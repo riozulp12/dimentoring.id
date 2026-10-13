@@ -8,6 +8,9 @@
 import assert from "node:assert/strict";
 import { before, beforeEach, describe, it } from "node:test";
 import { hitungProgresSesi, hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
+import { hrefKelasDimiliki, hrefKelasJualan } from "@/lib/shared/kelasHref";
+import { resolveKelasDaftarAction } from "@/lib/shared/kelasDaftarTarget";
+import { getCheckoutBlockReason, parseCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 
 type Row = Record<string, unknown>;
 type Db = Record<string, Row[]>;
@@ -141,6 +144,7 @@ type CheckoutModule = typeof import("@/lib/payment/getKelasForCheckout");
 type ValidateModule = typeof import("@/lib/admin/validateKelasInput");
 type KelolaKelasRouteModule = typeof import("@/app/api/kelola-kelas/[kelasId]/route");
 type SessionModule = typeof import("@/lib/auth/session");
+type PaymentCreateRouteModule = typeof import("@/app/api/payment/create/route");
 
 let kelasSayaData: KelasSayaModule;
 let kelasDetail: KelasDetailModule;
@@ -150,6 +154,7 @@ let checkoutData: CheckoutModule;
 let validateKelas: ValidateModule;
 let kelolaKelasRoute: KelolaKelasRouteModule;
 let sessionLib: SessionModule;
+let paymentCreateRoute: PaymentCreateRouteModule;
 
 before(async () => {
   // Nilai dummy — client aslinya tidak pernah dipakai, `from` diganti tiruan.
@@ -167,6 +172,7 @@ before(async () => {
   validateKelas = await import("@/lib/admin/validateKelasInput");
   kelolaKelasRoute = await import("@/app/api/kelola-kelas/[kelasId]/route");
   sessionLib = await import("@/lib/auth/session");
+  paymentCreateRoute = await import("@/app/api/payment/create/route");
 });
 
 beforeEach(() => {
@@ -451,5 +457,88 @@ describe('Kelola Kelas — saklar "Tampilkan di katalog"', () => {
   it("selain Admin tidak bisa mengubah saklar", async () => {
     assert.equal((await patchKelas("X1", false, "student")).status, 403);
     assert.equal(db.kelas.find((k) => k.id === "X1")?.tampil_di_katalog, true);
+  });
+});
+
+describe("customer journey: Kelas Saya → detail jualan → checkout", () => {
+  it("kelas BELUM dibeli → detail jualan /program/kelas/[id]; sudah dibeli → /kelas/[id]", () => {
+    assert.equal(hrefKelasJualan("abc"), "/program/kelas/abc");
+    assert.equal(hrefKelasDimiliki("abc"), "/kelas/abc");
+  });
+
+  it("siswa tanpa kelas: katalog di empty state cuma berisi kelas aktif, semuanya menuju detail jualan", async () => {
+    assert.deepEqual(await kelasSayaData.getKelasSaya(SISWA_BARU), []);
+    const katalog = await programData.getKelasKatalog();
+    assert.ok(katalog.length > 0);
+    for (const item of katalog) {
+      assert.equal(db.kelas.find((k) => k.id === item.id)?.tampil_di_katalog, true);
+      // Detail jualan memang bisa dibuka untuk kelas ini (tidak notFound).
+      assert.equal((await programData.getKelasDetailPublic(item.id))?.tampilDiKatalog, true);
+      assert.equal(hrefKelasJualan(item.id), `/program/kelas/${item.id}`);
+    }
+  });
+
+  it("kelas yang sudah lunas tidak pernah ditawarkan ulang sebagai card jualan", async () => {
+    const lunas = (await kelasSayaData.getKelasSaya(SISWA)).map((k) => k.id);
+    const rekomendasi = (await kelasSayaData.getRekomendasiKelas(SISWA, "kelas_12")).map((k) => k.id);
+    assert.ok(lunas.length > 0 && rekomendasi.length > 0);
+    assert.deepEqual(rekomendasi.filter((id) => lunas.includes(id)), []);
+  });
+
+  const dasar = { kelasId: "X1", sisaSlot: 5, linkPendaftaran: null, sessionRole: "student" as const };
+
+  it('"Daftar Sekarang" → /checkout/[id] HANYA kalau tanpa link pendaftaran DAN flag persis "true"', () => {
+    assert.deepEqual(resolveKelasDaftarAction({ ...dasar, isCheckoutInternalReady: true }), {
+      kind: "internal",
+      href: "/checkout/X1",
+    });
+    // Flag tidak siap → tombol disabled, bukan ke checkout.
+    assert.equal(resolveKelasDaftarAction({ ...dasar, isCheckoutInternalReady: false }).kind, "disabled");
+    // Punya link pendaftaran → ke link itu walau flag siap.
+    assert.deepEqual(
+      resolveKelasDaftarAction({ ...dasar, linkPendaftaran: "https://lynk.id/contoh", isCheckoutInternalReady: true }),
+      { kind: "external", href: "https://lynk.id/contoh" },
+    );
+    // Belum login → login dulu, kembali ke detail jualan.
+    assert.deepEqual(resolveKelasDaftarAction({ ...dasar, sessionRole: null, isCheckoutInternalReady: true }), {
+      kind: "internal",
+      href: `/login?returnTo=${encodeURIComponent("/program/kelas/X1")}`,
+    });
+  });
+
+  it('flag fail-closed: cuma "true" persis yang membuka checkout', () => {
+    assert.equal(parseCheckoutInternalReady("true"), true);
+    for (const nilai of [undefined, "", "True", "TRUE", "1", "yes", " true"]) {
+      assert.equal(parseCheckoutInternalReady(nilai), false);
+    }
+    assert.equal(getCheckoutBlockReason({ isReady: true, linkPendaftaran: null }), null);
+    assert.equal(getCheckoutBlockReason({ isReady: false, linkPendaftaran: null }), "belum_siap");
+    assert.equal(getCheckoutBlockReason({ isReady: true, linkPendaftaran: "https://lynk.id/x" }), "link_eksternal");
+  });
+
+  async function postPaymentCreate(kelasId: string) {
+    const { NextRequest } = await import("next/server");
+    const token = sessionLib.createSessionToken({ userId: SISWA_BARU, role: "student" });
+    const request = new NextRequest("http://localhost/api/payment/create", {
+      method: "POST",
+      headers: { cookie: `${sessionLib.SESSION_COOKIE_NAME}=${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ kelasId }),
+    });
+    return paymentCreateRoute.POST(request);
+  }
+
+  it("POST /api/payment/create → 403 dan TIDAK membuat payment kalau flag bukan \"true\"", async () => {
+    const semula = process.env.NEXT_PUBLIC_CHECKOUT_INTERNAL_READY;
+    try {
+      for (const nilai of [undefined, "True", "1"]) {
+        if (nilai === undefined) delete process.env.NEXT_PUBLIC_CHECKOUT_INTERNAL_READY;
+        else process.env.NEXT_PUBLIC_CHECKOUT_INTERNAL_READY = nilai;
+        assert.equal((await postPaymentCreate("X1")).status, 403);
+      }
+      assert.deepEqual(db.payments ?? [], []);
+    } finally {
+      if (semula === undefined) delete process.env.NEXT_PUBLIC_CHECKOUT_INTERNAL_READY;
+      else process.env.NEXT_PUBLIC_CHECKOUT_INTERNAL_READY = semula;
+    }
   });
 });
