@@ -11,7 +11,9 @@ Education Journey Mentoring Platform — website & platform pembelajaran untuk s
 
 - Frontend: Next.js (App Router)
 - Database: PostgreSQL — [isi provider final: Supabase/Neon/lainnya]
-- Payment Gateway: [isi setelah diputuskan: Midtrans/Xendit]
+- Payment Gateway: Mayar (API v2); Midtrans DEPRECATED dormant
+  - Key sandbox Mayar (`api.mayar.io`) hanya untuk Preview/lokal; key production (`api.mayar.id`) hanya di Vercel Production.
+  - Transaksi simulasi (sandbox) tidak bisa dibedakan dari transaksi nyata lewat API Mayar — pemisahan lingkungan (key + base URL) adalah pengaman utama, jangan pernah dicampur.
 - WhatsApp Business API: [ditunda sampai ada revenue — lihat catatan Email di bawah]
 - Email Service: Resend (free tier) — jalur utama verifikasi & reset password saat ini, pakai domain custom terverifikasi (bukan domain default Resend)
 
