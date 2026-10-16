@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { verifyWebhookSignature } from "@/lib/payment/verifyWebhookSignature";
-import { convertReferralOnPayment } from "@/lib/referral/convertReferralOnPayment";
-import {
-  notifyPembayaranBerhasil,
-  notifyMentorsSiswaBaruDaftar,
-  notifyMentorOfflineSiswaBaruDaftar,
-} from "@/lib/notifikasi/notify";
-import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
-import { generateSesiKelasUntukEnrollment } from "@/lib/absensi/generateSesiKelas";
+import { jalankanPascaLunas } from "@/lib/payment/fulfillPayment";
 
 /**
+ * DEPRECATED: dihapus setelah Mayar stabil di Production. Webhook Mayar: app/api/payment/webhook/mayar/route.ts.
+ *
  * Webhook notifikasi Midtrans — PRD Bagian 8 BR-19 ("status pembayaran hanya
  * berubah lewat webhook gateway atau override manual Admin") & BR-10/BR-11
  * (konversi referral). WAJIB verifikasi signature dulu sebelum proses apa pun,
@@ -106,113 +101,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: "Sudah diproses sebelumnya." });
     }
 
-    const kelasId = payment.item_id as string;
-    let enrollmentSubtesIds: string[] = [];
-    let enrollmentId: string | null = null;
-
-    if (payment.item_type === "kelas") {
-      const { data: enrollment, error: enrollmentError } = await supabaseServer
-        .from("enrollments")
-        .upsert(
-          {
-            user_id: payment.user_id,
-            kelas_id: kelasId,
-            status_pembayaran: "lunas",
-            mentor_offline_id: payment.mentor_offline_id,
-            lokasi_siswa_lat: payment.lokasi_siswa_lat,
-            lokasi_siswa_lng: payment.lokasi_siswa_lng,
-            // Pilihan Jadwal Siswa (PRD 7.5.8) — ditampung di payments saat
-            // checkout, disalin ke enrollment di upsert yang sama.
-            jadwal_pilihan: payment.jadwal_pilihan ?? null,
-          },
-          { onConflict: "user_id,kelas_id" },
-        )
-        .select("id")
-        .single();
-      if (enrollmentError) {
-        console.error("[payment/webhook] upsert enrollments failed:", enrollmentError);
-      }
-      enrollmentId = (enrollment?.id as string | undefined) ?? null;
-
-      // Pindahkan pilihan Subtes dari payment_subtes_pilihan (ditampung saat
-      // checkout, lihat app/api/payment/create/route.ts) ke enrollment_subtes
-      // sekarang enrollment sudah pasti ada — dasar filter Materi (Kelas Saya)
-      // & notifikasi mentor di bawah (cuma mentor subtes yang dipilih siswa).
-      if (enrollment?.id) {
-        const { data: pilihan, error: pilihanError } = await supabaseServer
-          .from("payment_subtes_pilihan")
-          .select("subtes_id")
-          .eq("payment_id", payment.id);
-        if (pilihanError) {
-          console.error("[payment/webhook] query payment_subtes_pilihan failed:", pilihanError);
-        } else if (pilihan && pilihan.length > 0) {
-          enrollmentSubtesIds = pilihan.map((row) => row.subtes_id as string);
-          const { error: enrollmentSubtesError } = await supabaseServer
-            .from("enrollment_subtes")
-            .insert(enrollmentSubtesIds.map((subtesId) => ({ enrollment_id: enrollment.id, subtes_id: subtesId })));
-          if (enrollmentSubtesError) {
-            console.error("[payment/webhook] insert enrollment_subtes failed:", enrollmentSubtesError);
-          }
-        }
-      }
-    }
-
-    if (payment.kode_promo_id) {
-      const { data: promo, error: promoFetchError } = await supabaseServer
-        .from("kode_promo")
-        .select("jumlah_terpakai")
-        .eq("id", payment.kode_promo_id)
-        .maybeSingle();
-
-      if (promoFetchError) {
-        console.error("[payment/webhook] query kode_promo failed:", promoFetchError);
-      } else if (promo) {
-        const { error: promoUpdateError } = await supabaseServer
-          .from("kode_promo")
-          .update({ jumlah_terpakai: (promo.jumlah_terpakai as number) + 1 })
-          .eq("id", payment.kode_promo_id);
-        if (promoUpdateError) {
-          console.error("[payment/webhook] update kode_promo.jumlah_terpakai failed:", promoUpdateError);
-        }
-      }
-    }
-
-    await convertReferralOnPayment(payment.user_id as string, payment.id as string);
-
-    if (payment.item_type === "kelas") {
-      const { data: kelas } = await supabaseServer
-        .from("kelas")
-        .select("nama, jadwal, mode_pembelajaran, jumlah_sesi")
-        .eq("id", kelasId)
-        .maybeSingle();
-      const kelasNama = (kelas?.nama as string) ?? "kamu";
-      const jadwalDisplay = formatJadwalRingkas(kelas?.jadwal);
-
-      // Absensi (PRD 7.5.5) — generate baris sesi_kelas 1..jumlah_sesi begitu
-      // enrollment 'lunas' pasti ada, sebelum notifikasi apa pun dikirim.
-      if (enrollmentId && kelas?.jumlah_sesi) {
-        await generateSesiKelasUntukEnrollment(enrollmentId, kelas.jumlah_sesi as number);
-      }
-
-      await notifyPembayaranBerhasil(payment.user_id as string, kelasId, kelasNama);
-
-      // Offline: notif HANYA ke mentor_offline_id yang dipilih siswa saat
-      // checkout (BUKAN semua mentor kelas ini) — kelas offline memang tidak
-      // punya kelas_subtes_mentor/kelas_mentor sama sekali (lihat
-      // lib/admin/validateKelasInput.ts), jadi notifyMentorsSiswaBaruDaftar
-      // (online) tidak relevan di sini.
-      if (kelas?.mode_pembelajaran === "offline") {
-        if (payment.mentor_offline_id) {
-          await notifyMentorOfflineSiswaBaruDaftar(
-            payment.mentor_offline_id as string,
-            kelasId,
-            kelasNama,
-            jadwalDisplay,
-          );
-        }
-      } else {
-        await notifyMentorsSiswaBaruDaftar(kelasId, kelasNama, jadwalDisplay, enrollmentSubtesIds);
-      }
+    try {
+      await jalankanPascaLunas(
+        payment as Parameters<typeof jalankanPascaLunas>[0],
+        { pertamaKali: true },
+      );
+    } catch (error) {
+      console.error("[payment/webhook] langkah pasca-lunas gagal:", (error as Error).message);
+      return NextResponse.json({ success: false, error: "Gagal memproses notifikasi." }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

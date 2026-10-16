@@ -7,20 +7,16 @@ import PaymentStatusPoller from "@/components/siswa/PaymentStatusPoller";
 
 /**
  * "Menunggu Konfirmasi" — PRD Bagian 13 (payments.status, order_id). Dituju
- * Snap.js onSuccess/onPending (lihat components/siswa/CheckoutForm.tsx) —
- * BUKAN halaman sukses; status final ditentukan di sini (polling) begitu
- * webhook Midtrans benar-benar mengonfirmasi (BR-19).
+ * redirect dari halaman pembayaran Mayar — BUKAN halaman sukses; status final
+ * ditentukan di sini (polling) begitu webhook Mayar terverifikasi (BR-19).
  */
 
 export default async function PaymentStatusPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ orderId: string }>;
-  searchParams: Promise<{ metode?: string }>;
 }) {
   const { orderId } = await params;
-  const { metode } = await searchParams;
 
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
@@ -50,7 +46,6 @@ export default async function PaymentStatusPage({
           initialStatus={payment.status}
           kelasId={payment.itemId}
           kelasNama={payment.kelasNama}
-          metode={metode ?? null}
         />
       </div>
     </>

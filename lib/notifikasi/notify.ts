@@ -102,7 +102,7 @@ export async function notifyPembayaranBerhasil(userId: string, kelasId: string, 
 /**
  * 2f: Siswa Baru Daftar (Payment Berhasil) — notif bell + email ke mentor
  * yang RELEVAN (PRD Bagian 7.5, Bagian 13 kelas_subtes_mentor — BARU).
- * Dipanggil dari app/api/payment/webhook/route.ts SETELAH enrollments
+ * Dipanggil dari lib/payment/fulfillPayment.ts SETELAH enrollments
  * di-upsert 'lunas' & enrollment_subtes diisi. TANPA nama siswa (privasi
  * anak, PRD Bagian 8 Data & Privasi) — cukup info kelas & jadwal.
  *
@@ -192,7 +192,7 @@ export async function notifyMentorsSiswaBaruDaftar(
  * mentor (mentor_offline_id) yang DIPILIH siswa saat checkout (matching
  * jarak terdekat, lihat lib/payment/getOfflineMentorOptions.ts), REUSE
  * template email yang sama dengan kelas online (kirimEmailMentorSiswaBaru).
- * Dipanggil dari app/api/payment/webhook/route.ts SETELAH enrollments
+ * Dipanggil dari lib/payment/fulfillPayment.ts SETELAH enrollments
  * di-upsert 'lunas' untuk kelas mode_pembelajaran='offline'.
  */
 export async function notifyMentorOfflineSiswaBaruDaftar(

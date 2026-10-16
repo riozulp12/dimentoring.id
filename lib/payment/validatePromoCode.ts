@@ -6,7 +6,7 @@ import { supabaseServer } from "@/lib/supabase/server";
  * kode_promo_kelas). SATU implementasi dipakai oleh
  * app/api/payment/validate-promo/route.ts (tombol "Terapkan" di UI) DAN
  * app/api/payment/create/route.ts (validasi ulang wajib di server sebelum
- * membuat transaksi Midtrans, jangan percaya hasil "Terapkan" dari client) —
+ * membuat transaksi ke gateway, jangan percaya hasil "Terapkan" dari client) —
  * supaya 5 poin aturan selalu konsisten di kedua jalur.
  */
 

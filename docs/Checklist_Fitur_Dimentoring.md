@@ -84,11 +84,37 @@
 - [ ] Tukar Poin: cukup vs tidak cukup poin, riwayat penukaran muncul
 
 ### Checkout & Pembayaran (kalau `NEXT_PUBLIC_CHECKOUT_INTERNAL_READY="true"`)
+
+Gateway: **Mayar** (Request Payment, API v2). Midtrans tidak dipakai lagi.
+
+**Lingkungan**
+- Preview / lokal: akun **sandbox** `web.mayar.io`, `MAYAR_BASE_URL=https://api.mayar.io`, key sandbox.
+- Production: akun **production** `web.mayar.id`, `MAYAR_BASE_URL=https://api.mayar.id`, key production.
+- Env lain: `PAYMENT_PROVIDER` (kosong = `mayar`), `APP_BASE_URL` (mis. `https://dimentoring.id`; kosong = origin request, untuk Preview).
+- Guard kode: Production + `api.mayar.io` ditolak; non-Production + `api.mayar.id` ditolak kecuali `MAYAR_ALLOW_PROD_IN_PREVIEW=true`. "Production" dibaca dari `VERCEL_ENV` (Preview Vercel tetap dianggap non-Production walau `NODE_ENV=production`); di luar Vercel dari `NODE_ENV`.
+
+**Webhook (wajib didaftarkan di dashboard Mayar → Integration → Webhook)**
+- Preview: `https://<domain-preview>/api/payment/webhook/mayar` di dashboard **sandbox**.
+- Production: `https://dimentoring.id/api/payment/webhook/mayar` di dashboard **production**.
+- Keaslian webhook TIDAK dari signature: isi payload tidak dipercaya, server mencari payment lewat `data.productId` → `data.id` → `data.transactionId` (dicocokkan ke `payments.gateway_reference`), lalu **GET status ke API Mayar** pakai key server. Lunas hanya kalau Mayar bilang `paid` DAN nominal transaksi = tagihan. Log `[payment/webhook/mayar] cocok lewat field data.…` menunjukkan field mana yang cocok — catat saat uji sandbox pertama.
+- Langkah pasca-lunas gagal → webhook membalas HTTP 500 supaya Mayar mengirim ulang; kiriman ulang melengkapi tanpa data ganda.
+- Admin bisa cek ulang manual: `POST /api/admin/payment/recheck` (body kosong = semua yang masih menunggu, atau `{"orderId":"DMT-..."}`). Gagal hanya kalau Mayar menyatakan belum dibayar DAN status `closed`/lewat 24 jam.
+
+**Nominal & biaya**
+- Tagihan ke Mayar = harga final setelah promo; potongan Mayar ditanggung Dimentoring.
+- `PAYMENT_FEE_BORNE_BY_CUSTOMER=true` saat ini **tidak berpengaruh** (cuma log peringatan): docs Mayar menyatakan pengaturan biaya ditanggung pembeli tidak berlaku untuk Request Payment, dan tarif potongan per channel tidak tersedia lewat API, jadi tidak ada rumus yang bisa dipasang dengan aman. Kalau suatu saat dibutuhkan, rumus harus disepakati dulu dan nominal webhook akan dicek ulang (beda nominal + biaya ditanggung pembeli = dicatat, TIDAK lunas otomatis).
+- Jangan buat kode diskon di dashboard Mayar — halaman tagihan Mayar menampilkan "Punya kode diskon?"; kalau dipakai, nominal transaksi tidak cocok dan pembayaran tidak dilunasi otomatis.
+- Mayar menolak create dengan email + nominal sama dalam 1 menit (HTTP 429) → siswa melihat "Tunggu 1 menit lalu coba lagi".
+
+**Uji**
 - [ ] Checkout kelas, coba Kode Promo valid/invalid/scoping salah/kuota habis
-- [ ] Bayar via Sandbox → halaman "Menunggu Konfirmasi" auto-update tanpa refresh manual
+- [ ] "Bayar Sekarang" → diarahkan ke halaman tagihan Mayar (bukan popup) → pilih channel → **Simulasi Pembayaran** (sandbox) → kembali ke `/payment-status/[orderId]`, halaman "Menunggu Konfirmasi" auto-update tanpa refresh manual
 - [ ] Status jadi lunas → akses Kelas Saya langsung terbuka
+- [ ] Skrip `npx tsx scripts/mayar-sandbox-check.ts` (sandbox saja) untuk cek key/base URL tanpa browser
 
 ### Persiapan screenshot Customer Journey Midtrans
+
+> **TIDAK LAGI DIPAKAI** — Dimentoring pindah ke Mayar. Bagian ini disimpan sebagai arsip sampai kode Midtrans dihapus.
 
 Dipakai saat perlu bukti alur pembayaran di Production (mis. pengajuan aktivasi Midtrans) selagi Midtrans masih **Sandbox**.
 

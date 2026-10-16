@@ -50,8 +50,6 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
     redirect(`/kelas/${kelasId}`);
   }
 
-  const snapClientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY ?? "";
-  const isProduction = process.env.MIDTRANS_IS_PRODUCTION === "true";
   const subtesOptions = await getKelasSubtesOptions(kelasId);
   // Opsi jadwal cuma dikirim kalau siswa memang perlu memilih (PRD 7.5.8).
   const jadwalOptions = perluPilihJadwal(kelas) ? parseJadwalSlots(kelas.jadwal) : [];
@@ -68,8 +66,6 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
         <CheckoutForm
           kelasId={kelas.id}
           harga={kelas.harga}
-          snapClientKey={snapClientKey}
-          isProduction={isProduction}
           subtesOptions={subtesOptions}
           modePembelajaran={kelas.modePembelajaran}
           jadwalOptions={jadwalOptions}

@@ -87,7 +87,7 @@ export default async function KebijakanPrivasiPage() {
                 (skor, label), tidak pernah nama, email, atau identitas pribadi lain.
               </li>
               <li>
-                <span className="font-medium">Mitra pembayaran</span> (Midtrans/Xendit, setelah aktif) — memproses
+                <span className="font-medium">Mitra pembayaran</span> (Mayar) — memproses
                 transaksi sesuai standar keamanan mereka sendiri.
               </li>
             </ul>

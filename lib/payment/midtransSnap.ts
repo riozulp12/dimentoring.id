@@ -2,6 +2,8 @@ import "server-only";
 import midtransClient from "midtrans-client";
 
 /**
+ * DEPRECATED: dihapus setelah Mayar stabil di Production. Tidak dipanggil dari alur utama (lihat lib/payment/provider.ts).
+ *
  * Instance Snap client Midtrans — dipakai app/api/payment/create/route.ts.
  * SERVER_KEY tidak boleh pernah bocor ke client (dipakai juga di webhook untuk
  * verifikasi signature, lihat lib/payment/verifyWebhookSignature.ts).

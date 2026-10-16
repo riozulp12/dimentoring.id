@@ -1,3 +1,5 @@
+// DEPRECATED: dihapus setelah Mayar stabil di Production (bersama dependency
+// midtrans-client di package.json). Tipe untuk lib/payment/midtransSnap.ts.
 declare module "midtrans-client" {
   export interface SnapConfig {
     isProduction: boolean;
