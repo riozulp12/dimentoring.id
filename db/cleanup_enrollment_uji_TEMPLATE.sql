@@ -14,6 +14,7 @@
 --
 -- VARIABEL — ganti di SEMUA tempat (ada 2: LANGKAH 1 dan LANGKAH 2):
 --     <<EMAIL_AKUN_UJI>>   email akun uji, mis. akun QA khusus pengujian
+--                          (ganti SELURUHNYA, termasuk tanda << dan >>)
 --
 -- PERINGATAN: skrip ini menghapus SEMUA payments & enrollments akun itu, bukan
 -- cuma yang terakhir. Pakai HANYA untuk akun yang memang khusus pengujian —
@@ -40,7 +41,7 @@
 -- LANGKAH 1 — LIHAT DULU (read-only, satu statement)
 -- ============================================================================
 WITH akun AS (
-    SELECT id, email FROM users WHERE lower(email) = lower('<<EMAIL_AKUN_UJI>>')
+    SELECT id, email FROM users WHERE lower(email) = lower(trim('<<EMAIL_AKUN_UJI>>'))
 )
 SELECT 1 AS urut, 'akun' AS bagian, count(*) AS jumlah,
        jsonb_agg(jsonb_build_object('user_id', a.id, 'email', a.email)) AS rincian
@@ -103,9 +104,15 @@ DECLARE
     v_jumlah  INT;
     v_sisa    INT;
 BEGIN
-    SELECT id INTO v_user_id FROM users WHERE lower(email) = lower(v_email);
+    -- Placeholder yang tertinggal (mis. Find & Replace tanpa << >>) tidak akan
+    -- pernah cocok dengan email mana pun — hentikan dengan pesan yang jelas.
+    IF v_email LIKE '%<<%' OR v_email LIKE '%>>%' THEN
+        RAISE EXCEPTION 'Placeholder belum diganti dengan benar: [%]', v_email;
+    END IF;
+
+    SELECT id INTO v_user_id FROM users WHERE lower(email) = lower(trim(v_email));
     IF v_user_id IS NULL THEN
-        RAISE EXCEPTION 'Akun uji tidak ditemukan (cek EMAIL_AKUN_UJI)';
+        RAISE EXCEPTION 'Akun uji tidak ditemukan: [%] (tanda [] memperlihatkan spasi/sisa placeholder)', v_email;
     END IF;
     -- Rem darurat: Admin/Mentor bukan akun uji pembayaran.
     IF EXISTS (SELECT 1 FROM user_roles WHERE user_id = v_user_id AND role_type IN ('admin', 'mentor')) THEN
