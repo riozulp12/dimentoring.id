@@ -313,7 +313,7 @@ export async function notifySesiDitandaiMentor(
       user_id: siswaUserId,
       tipe: "sistem",
       judul: `Mentor menandai sesi ke-${nomorSesi} sudah selesai`,
-      pesan: `Konfirmasi kehadiran sesi ke-${nomorSesi} kelas ${kelasNama} ya.`,
+      pesan: `Konfirmasi kehadiran sesi ke-${nomorSesi} kelas ${kelasNama} ya. Sesi ini akan terkonfirmasi otomatis dalam 24 jam jika tidak ada respons.`,
       link_tujuan: `/kelas/${kelasId}`,
     },
   ]);
