@@ -8,7 +8,8 @@ import type { SesiReviewItem } from "@/lib/admin/getSesiReviewData";
  * List "Sesi Perlu Ditinjau" (Admin) — PRD Bagian 7.5.5 FR-A3. "Setujui
  * sebagai Valid" = sesi dianggap terlaksana (masuk progress kehadiran
  * siswa). "Batalkan Sesi Ini" = sesi dikembalikan ke kondisi belum terjadi
- * sama sekali (mentor bisa tandai ulang lewat alur normal).
+ * sama sekali (mentor bisa tandai ulang lewat alur normal). Setiap keputusan
+ * tercatat di log audit (sesi_review_log); alasan WAJIB untuk "Batalkan".
  */
 
 function formatTanggalIndonesia(iso: string | null): string {
@@ -19,19 +20,24 @@ function formatTanggalIndonesia(iso: string | null): string {
 interface RowState extends SesiReviewItem {
   busy: boolean;
   error: string | null;
+  alasan: string;
 }
 
 export default function SesiReviewClient({ initialItems }: { initialItems: SesiReviewItem[] }) {
-  const [rows, setRows] = useState<RowState[]>(initialItems.map((item) => ({ ...item, busy: false, error: null })));
+  const [rows, setRows] = useState<RowState[]>(initialItems.map((item) => ({ ...item, busy: false, error: null, alasan: "" })));
 
-  async function handleAction(sesiId: string, action: "setujui" | "batalkan") {
+  function setAlasan(sesiId: string, alasan: string) {
+    setRows((prev) => prev.map((r) => (r.id === sesiId ? { ...r, alasan, error: null } : r)));
+  }
+
+  async function handleAction(sesiId: string, action: "setujui" | "batalkan", alasan: string) {
     setRows((prev) => prev.map((r) => (r.id === sesiId ? { ...r, busy: true, error: null } : r)));
 
     try {
       const response = await fetch("/api/admin/sesi-review", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sesiId, action }),
+        body: JSON.stringify({ sesiId, action, alasan }),
       });
       const json = await response.json();
       if (!response.ok || !json.success) {
@@ -90,6 +96,16 @@ export default function SesiReviewClient({ initialItems }: { initialItems: SesiR
             </div>
           </div>
 
+          <textarea
+            value={row.alasan}
+            onChange={(e) => setAlasan(row.id, e.target.value)}
+            rows={2}
+            maxLength={1000}
+            disabled={row.busy}
+            placeholder="Alasan keputusan (wajib untuk Batalkan) — tercatat di log audit."
+            className="w-full rounded-[16px] border border-[#AFAFAF] bg-white px-4 py-2.5 text-sm text-black outline-none transition-colors placeholder:text-[#AFAFAF] focus:border-black"
+          />
+
           {row.error ? <p className="text-sm text-[#E70A0A]">{row.error}</p> : null}
 
           <div className="flex gap-3">
@@ -97,8 +113,8 @@ export default function SesiReviewClient({ initialItems }: { initialItems: SesiR
               type="button"
               variant="secondary"
               size="sm"
-              disabled={row.busy}
-              onClick={() => handleAction(row.id, "batalkan")}
+              disabled={row.busy || !row.alasan.trim()}
+              onClick={() => handleAction(row.id, "batalkan", row.alasan)}
             >
               Batalkan Sesi Ini
             </Button>
@@ -107,7 +123,7 @@ export default function SesiReviewClient({ initialItems }: { initialItems: SesiR
               variant="primary"
               size="sm"
               disabled={row.busy}
-              onClick={() => handleAction(row.id, "setujui")}
+              onClick={() => handleAction(row.id, "setujui", row.alasan)}
             >
               Setujui sebagai Valid
             </Button>
