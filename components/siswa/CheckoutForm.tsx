@@ -1,7 +1,5 @@
 "use client";
 
-import Script from "next/script";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
@@ -11,24 +9,10 @@ import { MAX_JADWAL_PILIHAN, formatSlot, slotKey, type JadwalSlot } from "@/lib/
 /**
  * Form Checkout — PRD Bagian 7.5/Bagian 13 (payments, kode_promo). Validasi
  * Kode Promo dan pembuatan transaksi SELALU lewat API server (bukan dihitung
- * di client) — komponen ini cuma menampilkan hasilnya.
+ * di client) — komponen ini cuma menampilkan hasilnya. Setelah transaksi
+ * dibuat, siswa diarahkan ke halaman pembayaran gateway (Mayar, bukan popup);
+ * gateway mengembalikan siswa ke /payment-status/[orderId].
  */
-
-declare global {
-  interface Window {
-    snap?: {
-      pay: (
-        snapToken: string,
-        callbacks: {
-          onSuccess?: (result: unknown) => void;
-          onPending?: (result: unknown) => void;
-          onError?: (result: unknown) => void;
-          onClose?: () => void;
-        },
-      ) => void;
-    };
-  }
-}
 
 function formatRupiah(value: number): string {
   return `Rp${Math.round(value).toLocaleString("id-ID")}`;
@@ -61,16 +45,12 @@ function formatJarak(km: number): string {
 export default function CheckoutForm({
   kelasId,
   harga,
-  snapClientKey,
-  isProduction,
   subtesOptions,
   modePembelajaran,
   jadwalOptions,
 }: {
   kelasId: string;
   harga: number;
-  snapClientKey: string;
-  isProduction: boolean;
   /** Pool Subtes kelas ini (kelas_subtes) — checklist cuma tampil kalau > 1
    * (kelas paket). Kalau <= 1, dikirim otomatis tanpa perlu siswa memilih. */
   subtesOptions: CheckoutSubtesOption[];
@@ -82,7 +62,6 @@ export default function CheckoutForm({
    * pilihan jadwal (perilaku lama). */
   jadwalOptions: JadwalSlot[];
 }) {
-  const router = useRouter();
   const isOffline = modePembelajaran === "offline";
   const isPaket = !isOffline && subtesOptions.length > 1;
   const [kodePromoInput, setKodePromoInput] = useState("");
@@ -282,35 +261,16 @@ export default function CheckoutForm({
         return;
       }
 
-      if (!window.snap) {
-        setPayError("Modul pembayaran belum siap dimuat. Coba lagi sesaat lagi.");
+      const paymentUrl = json.paymentUrl as string | undefined;
+      if (!paymentUrl || !paymentUrl.startsWith("https://")) {
+        setPayError("Gagal membuka halaman pembayaran. Coba lagi nanti.");
         setIsPaying(false);
         return;
       }
 
-      const orderId = json.orderId as string;
-
-      // onSuccess Snap.js untuk metode async (VA/e-wallet) CUMA berarti transaksi
-      // sudah dibuat, BUKAN uang sudah masuk — jadi onSuccess & onPending SAMA-SAMA
-      // diarahkan ke halaman "Menunggu Konfirmasi", bukan langsung dianggap sukses.
-      // Status final ditentukan di sana lewat polling ke payments.status (webhook).
-      function redirectToStatus(result: unknown) {
-        const metode = (result as { payment_type?: string } | null)?.payment_type;
-        const query = metode ? `?metode=${encodeURIComponent(metode)}` : "";
-        router.push(`/payment-status/${orderId}${query}`);
-      }
-
-      window.snap.pay(json.snapToken as string, {
-        onSuccess: redirectToStatus,
-        onPending: redirectToStatus,
-        onError: () => {
-          setPayError("Pembayaran gagal diproses. Coba lagi.");
-          setIsPaying(false);
-        },
-        // User menutup popup sebelum selesai — TETAP di halaman checkout, jangan
-        // diarahkan ke mana pun, supaya bisa coba bayar lagi tanpa ulang dari awal.
-        onClose: () => setIsPaying(false),
-      });
+      // Lunas/tidaknya TIDAK ditentukan di sini — halaman "Menunggu Konfirmasi"
+      // yang memantau payments.status (cuma diubah webhook, BR-19).
+      window.location.assign(paymentUrl);
     } catch {
       setPayError("Gagal membuat transaksi pembayaran. Coba lagi nanti.");
       setIsPaying(false);
@@ -319,12 +279,6 @@ export default function CheckoutForm({
 
   return (
     <>
-      <Script
-        src={isProduction ? "https://app.midtrans.com/snap/snap.js" : "https://app.sandbox.midtrans.com/snap/snap.js"}
-        data-client-key={snapClientKey}
-        strategy="afterInteractive"
-      />
-
       {isOffline ? (
         <div className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
           <div className="flex flex-col gap-1">

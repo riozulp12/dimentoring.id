@@ -4,7 +4,7 @@ import { hitungDanUpdateLevel } from "@/lib/gamifikasi/hitungLevel";
 
 /**
  * BR-10/BR-11 (PRD Bagian 8): reward referral cair setelah pembayaran PERTAMA
- * referee terkonfirmasi sukses. Dipanggil dari app/api/payment/webhook/route.ts
+ * referee terkonfirmasi sukses. Dipanggil dari lib/payment/fulfillPayment.ts
  * TEPAT SETELAH payments.status di-set 'berhasil' untuk payment yang baru
  * diproses (paymentId dikecualikan saat cek "pembayaran pertama" supaya tidak
  * menghitung dirinya sendiri).

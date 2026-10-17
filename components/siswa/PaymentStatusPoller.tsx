@@ -14,18 +14,13 @@ import MaskotLoading from "@/components/ui/MaskotLoading";
  * POLL_INTERVAL_MS ke app/api/payment/status/[orderId]/route.ts, berhenti
  * otomatis setelah TIMEOUT_MS kalau status tidak kunjung berubah.
  *
- * onSuccess Snap.js untuk metode VA/e-wallet async CUMA berarti "transaksi
- * dibuat", BUKAN "uang sudah masuk" — makanya halaman checkout tidak pernah
- * langsung anggap sukses, semua diarahkan kemari dan status final ditentukan
- * di sini dari payments.status (yang cuma diubah webhook, PRD Bagian 8 BR-19).
+ * Kembali dari halaman pembayaran Mayar BUKAN berarti "uang sudah masuk" —
+ * status final ditentukan di sini dari payments.status (yang cuma diubah
+ * webhook terverifikasi / Admin, PRD Bagian 8 BR-19).
  */
 
 const POLL_INTERVAL_MS = 4000;
 const TIMEOUT_MS = 10 * 60 * 1000; // 10 menit
-
-// payment_type dari Snap.js yang biasanya settle instan (dalam hitungan detik) —
-// selebihnya (VA, cstore, dst.) butuh aksi manual lanjutan dari siswa.
-const INSTANT_METHODS = new Set(["gopay", "qris", "shopeepay"]);
 
 type PaymentStatus = "menunggu" | "berhasil" | "gagal" | "refunded";
 
@@ -34,13 +29,11 @@ export default function PaymentStatusPoller({
   initialStatus,
   kelasId,
   kelasNama,
-  metode,
 }: {
   orderId: string;
   initialStatus: PaymentStatus;
   kelasId: string;
   kelasNama: string | null;
-  metode: string | null;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<PaymentStatus>(initialStatus);
@@ -98,16 +91,12 @@ export default function PaymentStatusPoller({
     );
   }
 
-  const isInstant = metode !== null && INSTANT_METHODS.has(metode);
-
   return (
     <div className="flex flex-col items-center gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-10 text-center">
       <MaskotLoading size="lg" variant="Listen" />
       <p className="text-lg font-medium text-black">Pembayaran kamu sedang diproses...</p>
       <p className="text-sm text-[#7E7C7C]">
-        {isInstant
-          ? `Mohon tunggu sebentar — status akan otomatis berubah begitu pembayaran untuk ${namaKelas} kami terima.`
-          : `Selesaikan transfer sesuai nomor VA yang muncul tadi. Status akan otomatis update begitu pembayaran untuk ${namaKelas} kami terima — halaman ini tidak perlu di-refresh.`}
+        {`Status akan otomatis update begitu pembayaran untuk ${namaKelas} kami terima — halaman ini tidak perlu di-refresh.`}
       </p>
       {timedOut ? (
         <p className="text-sm text-[#7E7C7C]">

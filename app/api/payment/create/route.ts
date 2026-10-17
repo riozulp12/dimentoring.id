@@ -5,7 +5,9 @@ import { getKelasForCheckout, getKelasSubtesOptions, isKelasSudahLunas } from "@
 import { getOfflineMentorOptions } from "@/lib/payment/getOfflineMentorOptions";
 import { validatePromoCode } from "@/lib/payment/validatePromoCode";
 import { generateOrderId } from "@/lib/payment/generateOrderId";
-import { snap } from "@/lib/payment/midtransSnap";
+import { getPaymentProvider } from "@/lib/payment/provider";
+import { MayarError } from "@/lib/payment/mayar";
+import { computeExpiredAt, computeTagihan, parseFeeBorneByCustomer, resolveAppBaseUrl } from "@/lib/payment/mayarLogic";
 import { validateJadwalPilihan } from "@/lib/shared/jadwalPilihan";
 import { CHECKOUT_BLOCK_MESSAGE, getCheckoutBlockReason, isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 
@@ -14,6 +16,10 @@ import { CHECKOUT_BLOCK_MESSAGE, getCheckoutBlockReason, isCheckoutInternalReady
  * webhook/admin override) & Bagian 13 (payments). Harga & diskon SELALU
  * dihitung ulang di sini dari database, JANGAN pernah percaya angka dari
  * body request (client bisa memanipulasi devtools/curl).
+ *
+ * Gateway lewat lib/payment/provider.ts (Mayar): payment request dibuat DULU
+ * di gateway, lalu id-nya disimpan ke payments.gateway_reference dengan status
+ * 'menunggu' dalam INSERT yang sama. Frontend redirect ke link pembayaran.
  */
 
 interface CreatePaymentBody {
@@ -159,7 +165,7 @@ export async function POST(request: NextRequest) {
 
   const { data: user, error: userError } = await supabaseServer
     .from("users")
-    .select("nama, email")
+    .select("email")
     .eq("id", session.userId)
     .maybeSingle();
 
@@ -168,11 +174,42 @@ export async function POST(request: NextRequest) {
     return errorResponse("Gagal memuat data akun. Coba lagi nanti.", 500);
   }
 
+  const tagihan = computeTagihan(total);
+  if (parseFeeBorneByCustomer(process.env.PAYMENT_FEE_BORNE_BY_CUSTOMER)) {
+    // Request Payment Mayar tidak mendukung biaya ditanggung pembeli — tagihan
+    // tetap harga final. Lihat docs/Checklist_Fitur_Dimentoring.md.
+    console.warn("[payment/create] PAYMENT_FEE_BORNE_BY_CUSTOMER=true diabaikan: tidak didukung Request Payment Mayar.");
+  }
+  const appBaseUrl = resolveAppBaseUrl(process.env.APP_BASE_URL, request.nextUrl.origin);
+  const provider = getPaymentProvider();
+
   let paymentId: string | null = null;
   let orderId: string | null = null;
+  let paymentUrl: string | null = null;
 
   for (let attempt = 0; attempt < MAX_ORDER_ID_ATTEMPTS; attempt++) {
     const candidateOrderId = generateOrderId();
+
+    let gateway;
+    try {
+      gateway = await provider.createPayment({
+        orderId: candidateOrderId,
+        amount: tagihan,
+        title: kelas.nama,
+        email: (user.email as string | null) ?? null,
+        description: `Dimentoring ${candidateOrderId}`,
+        redirectUrl: `${appBaseUrl}/payment-status/${candidateOrderId}`,
+        expiredAt: computeExpiredAt(new Date()),
+      });
+    } catch (gatewayError) {
+      console.error(`[payment/create] ${provider.name} createPayment failed:`, (gatewayError as Error).message);
+      // Mayar menolak create dengan isi sama (email + nominal) dalam 1 menit.
+      if (gatewayError instanceof MayarError && gatewayError.httpStatus === 429) {
+        return errorResponse("Permintaan pembayaran terlalu cepat. Tunggu 1 menit lalu coba lagi.", 429);
+      }
+      return errorResponse("Gagal membuat transaksi pembayaran ke gateway. Coba lagi nanti.", 502);
+    }
+
     const { data: inserted, error: insertError } = await supabaseServer
       .from("payments")
       .insert({
@@ -180,10 +217,11 @@ export async function POST(request: NextRequest) {
         item_type: "kelas",
         item_id: kelasId,
         jumlah_sebelum_diskon: kelas.harga,
-        jumlah: total,
+        jumlah: tagihan,
         status: "menunggu",
         kode_promo_id: kodePromoId,
         order_id: candidateOrderId,
+        gateway_reference: gateway.gatewayReference,
         mentor_offline_id: mentorOfflineId,
         lokasi_siswa_lat: lokasiSiswaLat,
         lokasi_siswa_lng: lokasiSiswaLng,
@@ -195,9 +233,12 @@ export async function POST(request: NextRequest) {
     if (!insertError) {
       paymentId = inserted.id as string;
       orderId = inserted.order_id as string;
+      paymentUrl = gateway.paymentUrl;
       break;
     }
 
+    // Payment request di gateway yang tidak tersimpan dibiarkan kedaluwarsa
+    // sendiri (expiredAt) — tidak pernah bisa dicocokkan ke payments mana pun.
     const isOrderIdCollision = insertError.code === "23505" && insertError.message.includes("order_id");
     if (!isOrderIdCollision) {
       console.error("[payment/create] insert payments failed:", insertError);
@@ -205,14 +246,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  if (!paymentId || !orderId) {
+  if (!paymentId || !orderId || !paymentUrl) {
     console.error("[payment/create] gagal generate order_id unik setelah beberapa percobaan.");
     return errorResponse("Gagal membuat transaksi pembayaran. Coba lagi nanti.", 500);
   }
 
   // Tampung pilihan Subtes di sini dulu (enrollments belum ada — baru dibuat
   // webhook kalau payment sukses) — dipindahkan ke enrollment_subtes oleh
-  // webhook, lihat app/api/payment/webhook/route.ts.
+  // webhook, lihat lib/payment/fulfillPayment.ts.
   if (resolvedSubtesIds.length > 0) {
     const { error: pilihanInsertError } = await supabaseServer
       .from("payment_subtes_pilihan")
@@ -224,30 +265,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  try {
-    const transaction = await snap.createTransaction({
-      transaction_details: {
-        order_id: orderId,
-        gross_amount: Math.round(total),
-      },
-      item_details: [
-        {
-          id: kelasId,
-          price: Math.round(total),
-          quantity: 1,
-          name: kelas.nama,
-        },
-      ],
-      customer_details: {
-        first_name: (user.nama as string) ?? undefined,
-        email: (user.email as string) ?? undefined,
-      },
-    });
-
-    return NextResponse.json({ success: true, snapToken: transaction.token, orderId });
-  } catch (midtransError) {
-    console.error("[payment/create] Midtrans createTransaction failed:", midtransError);
-    await supabaseServer.from("payments").update({ status: "gagal" }).eq("id", paymentId);
-    return errorResponse("Gagal membuat transaksi pembayaran ke gateway. Coba lagi nanti.", 500);
-  }
+  return NextResponse.json({ success: true, paymentUrl, orderId });
 }
