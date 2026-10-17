@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
 import { hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
+import { hitungStatusSesi } from "@/lib/shared/statusSesi";
 
 /**
  * Data layer halaman Detail Kelas — PRD Bagian 7.5.1 (Materi) & Bagian 13
@@ -134,13 +135,17 @@ export async function getEnrollmentStatus(
 export interface SesiPending {
   id: string;
   nomorSesi: number;
+  /** ISO — batas siswa boleh menjawab (penandaan mentor + 24 jam); null
+   * kalau waktu penandaan tidak tercatat (lihat lib/shared/statusSesi.ts). */
+  batasRespons: string | null;
 }
 
 export interface SesiKehadiran {
   /** COUNT sesi_kelas WHERE dikonfirmasi_mentor=true AND status_siswa != 'disangkal' (BR-34/FR-A4). */
   validCount: number;
-  /** Sesi paling awal yang ditandai mentor tapi BELUM direspons siswa — null
-   * kalau tidak ada yang menunggu konfirmasi. */
+  /** Sesi paling awal berstatus efektif "menunggu_siswa" (ditandai mentor,
+   * belum dijawab, 24 jam belum lewat) — null kalau tidak ada. Yang sudah
+   * lewat 24 jam = terkonfirmasi otomatis, tidak ditanyakan lagi. */
   pending: SesiPending | null;
 }
 
@@ -149,7 +154,7 @@ export interface SesiKehadiran {
 export async function getSesiKehadiran(enrollmentId: string): Promise<SesiKehadiran> {
   const { data, error } = await supabaseServer
     .from("sesi_kelas")
-    .select("id, nomor_sesi, dikonfirmasi_mentor, status_siswa")
+    .select("id, nomor_sesi, dikonfirmasi_mentor, dikonfirmasi_mentor_pada, status_siswa, dikonfirmasi_siswa_pada")
     .eq("enrollment_id", enrollmentId)
     .order("nomor_sesi", { ascending: true });
 
@@ -158,14 +163,23 @@ export async function getSesiKehadiran(enrollmentId: string): Promise<SesiKehadi
     return { validCount: 0, pending: null };
   }
 
-  const rows = (data ?? []) as { id: string; nomor_sesi: number; dikonfirmasi_mentor: boolean; status_siswa: string }[];
+  const rows = (data ?? []) as {
+    id: string;
+    nomor_sesi: number;
+    dikonfirmasi_mentor: boolean;
+    dikonfirmasi_mentor_pada: string | null;
+    status_siswa: string;
+    dikonfirmasi_siswa_pada: string | null;
+  }[];
   const validCount = hitungSesiTerkonfirmasi(rows);
-  const pendingRow = rows.find((r) => r.dikonfirmasi_mentor && r.status_siswa === "belum");
-
-  return {
-    validCount,
-    pending: pendingRow ? { id: pendingRow.id, nomorSesi: pendingRow.nomor_sesi } : null,
-  };
+  const now = new Date();
+  for (const row of rows) {
+    const info = hitungStatusSesi(row, now);
+    if (info.status === "menunggu_siswa") {
+      return { validCount, pending: { id: row.id, nomorSesi: row.nomor_sesi, batasRespons: info.batasRespons } };
+    }
+  }
+  return { validCount, pending: null };
 }
 
 /**

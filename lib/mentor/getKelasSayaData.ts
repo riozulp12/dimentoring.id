@@ -2,6 +2,9 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { TINGKAT_KELAS_LABEL } from "@/lib/shared/kelasLabels";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
+import { hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
+import { hitungStatusSesi } from "@/lib/shared/statusSesi";
+import { rentangHariWib } from "@/lib/shared/hariWib";
 
 /**
  * Data layer "Kelas Saya" (Mentor) — PRD Bagian 7.5 & Bagian 13 (kelas,
@@ -139,6 +142,12 @@ export interface SesiSiswaItem {
   nama: string;
   avatarUrl: string | null;
   sesiValidCount: number;
+  /** Ditandai mentor, belum dijawab siswa, 24 jam belum lewat. */
+  sesiMenungguSiswa: number;
+  /** Disangkal siswa, menunggu keputusan Admin. */
+  sesiDisangkal: number;
+  /** Sudah ada penandaan hari ini (hari kalender WIB) — maks. satu per hari. */
+  ditandaiHariIni: boolean;
   /** Nomor sesi paling kecil yang BELUM ditandai mentor — null kalau semua
    * sesi (1..jumlahSesi) sudah ditandai (tombol "Tandai Selesai" disembunyikan). */
   sesiBerikutnya: number | null;
@@ -154,9 +163,10 @@ function firstUser(value: UserJoin): { id: string; nama: string; avatar_url: str
 /**
  * Progress sesi (Absensi, PRD 7.5.5) per siswa lunas di kelas ini — dasar
  * tombol "Tandai Sesi Hari Ini Selesai" & progress "Sesi X dari Y" di halaman
- * Kelas Saya (Mentor). `sesiValidCount` = COUNT sesi_kelas WHERE
- * dikonfirmasi_mentor=true AND status_siswa != 'disangkal' (BR-34/FR-A4) —
- * sesi yang masih disangkal & menunggu review Admin TIDAK dihitung progress.
+ * Kelas Saya (Mentor). `sesiValidCount` pakai definisi bersama
+ * lib/shared/progresSesi.ts (BR-34/FR-A4) — sesi yang masih disangkal &
+ * menunggu review Admin TIDAK dihitung progress. Rincian status per sesi
+ * dari lib/shared/statusSesi.ts.
  */
 export async function getSesiSiswaByKelasId(kelasId: string): Promise<SesiSiswaItem[]> {
   const { data: enrollmentRows, error: enrollmentError } = await supabaseServer
@@ -174,7 +184,7 @@ export async function getSesiSiswaByKelasId(kelasId: string): Promise<SesiSiswaI
   const enrollmentIds = enrollmentRows.map((r) => r.id as string);
   const { data: sesiRows, error: sesiError } = await supabaseServer
     .from("sesi_kelas")
-    .select("enrollment_id, nomor_sesi, dikonfirmasi_mentor, status_siswa")
+    .select("enrollment_id, nomor_sesi, dikonfirmasi_mentor, dikonfirmasi_mentor_pada, status_siswa, dikonfirmasi_siswa_pada")
     .in("enrollment_id", enrollmentIds)
     .order("nomor_sesi", { ascending: true });
 
@@ -182,7 +192,14 @@ export async function getSesiSiswaByKelasId(kelasId: string): Promise<SesiSiswaI
     console.error("[getSesiSiswaByKelasId] query sesi_kelas failed:", sesiError);
   }
 
-  type SesiRow = { enrollment_id: string; nomor_sesi: number; dikonfirmasi_mentor: boolean; status_siswa: string };
+  type SesiRow = {
+    enrollment_id: string;
+    nomor_sesi: number;
+    dikonfirmasi_mentor: boolean;
+    dikonfirmasi_mentor_pada: string | null;
+    status_siswa: string;
+    dikonfirmasi_siswa_pada: string | null;
+  };
   const sesiByEnrollment = new Map<string, SesiRow[]>();
   for (const row of (sesiRows ?? []) as unknown as SesiRow[]) {
     const list = sesiByEnrollment.get(row.enrollment_id) ?? [];
@@ -190,19 +207,32 @@ export async function getSesiSiswaByKelasId(kelasId: string): Promise<SesiSiswaI
     sesiByEnrollment.set(row.enrollment_id, list);
   }
 
+  const now = new Date();
+  const hariIni = rentangHariWib(now);
+
   return (enrollmentRows as unknown as { id: string; users: UserJoin }[])
     .map((row) => {
       const user = firstUser(row.users);
       if (!user) return null;
       const sesiList = sesiByEnrollment.get(row.id) ?? [];
-      const sesiValidCount = sesiList.filter((s) => s.dikonfirmasi_mentor && s.status_siswa !== "disangkal").length;
+      const statusList = sesiList.map((s) => hitungStatusSesi(s, now).status);
+      const ditandaiHariIni = sesiList.some(
+        (s) =>
+          s.dikonfirmasi_mentor &&
+          s.dikonfirmasi_mentor_pada !== null &&
+          Date.parse(s.dikonfirmasi_mentor_pada) >= Date.parse(hariIni.mulai) &&
+          Date.parse(s.dikonfirmasi_mentor_pada) < Date.parse(hariIni.akhir),
+      );
       const sesiBerikutnya = sesiList.find((s) => !s.dikonfirmasi_mentor)?.nomor_sesi ?? null;
       return {
         enrollmentId: row.id,
         userId: user.id,
         nama: user.nama,
         avatarUrl: user.avatar_url,
-        sesiValidCount,
+        sesiValidCount: hitungSesiTerkonfirmasi(sesiList),
+        sesiMenungguSiswa: statusList.filter((st) => st === "menunggu_siswa").length,
+        sesiDisangkal: statusList.filter((st) => st === "disangkal_menunggu_review").length,
+        ditandaiHariIni,
         sesiBerikutnya,
       };
     })

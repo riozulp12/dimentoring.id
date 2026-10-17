@@ -9,7 +9,21 @@ import type { SesiPending } from "@/lib/siswa/getKelasDetail";
  * BR-34) — TERPISAH dari "Progress Materi" (materi_progress, sudah ada
  * duluan di MateriList) karena beda metrik: ini kehadiran sesi tatap
  * muka/live, bukan penyelesaian materi belajar.
+ *
+ * `sesiId` cuma terisi kalau status efektifnya "menunggu_siswa"
+ * (lib/shared/statusSesi.ts) — sesi yang lewat 24 jam tanpa jawaban sudah
+ * terkonfirmasi otomatis dan tidak ditanyakan lagi.
  */
+
+function formatBatasWib(iso: string): string {
+  return new Date(iso).toLocaleString("id-ID", {
+    timeZone: "Asia/Jakarta",
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function SesiKehadiranSection({
   sesiId: initialSesiId,
@@ -41,7 +55,9 @@ export default function SesiKehadiranSection({
         setBusy(false);
         return;
       }
-      if (konfirmasi) setValidCount((prev) => prev + 1);
+      // Sesi yang menunggu jawaban SUDAH ikut terhitung (progresSesi.ts) —
+      // "Ya" tidak mengubah angka, "Tidak" mengeluarkannya dari hitungan.
+      if (!konfirmasi) setValidCount((prev) => Math.max(0, prev - 1));
       setPending(null);
       setBusy(false);
     } catch {
@@ -70,6 +86,12 @@ export default function SesiKehadiranSection({
           <p className="text-sm text-black sm:text-base">
             Mentor bilang sesi ke-{pending.nomorSesi} sudah selesai, betul?
           </p>
+          {pending.batasRespons ? (
+            <p className="text-xs text-[#7E7C7C] sm:text-sm">
+              Jawab sebelum {formatBatasWib(pending.batasRespons)} WIB. Kalau tidak ada jawaban, sesi ini otomatis
+              terkonfirmasi.
+            </p>
+          ) : null}
           {error ? <p className="text-sm text-[#E70A0A]">{error}</p> : null}
           <div className="flex gap-3">
             <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => submit(false)}>

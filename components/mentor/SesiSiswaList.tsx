@@ -10,7 +10,8 @@ import type { SesiSiswaItem } from "@/lib/mentor/getKelasSayaData";
  * Tiap siswa punya progress "Sesi X dari Y" sendiri (bukan agregat kelas),
  * karena beda siswa bisa beda progress sesi meski satu kelas yang sama.
  * Klik "Tandai Sesi Hari Ini Selesai" SELALU menandai nomor_sesi PALING
- * KECIL yang belum ditandai — urut, tidak bisa loncat sesi.
+ * KECIL yang belum ditandai — urut, tidak bisa loncat sesi — dan maksimal
+ * SATU kali per siswa per hari kalender WIB (server menolak 409 kalau lebih).
  */
 
 interface RowState extends SesiSiswaItem {
@@ -55,7 +56,11 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
             ? {
                 ...r,
                 busy: false,
-                info: `Sesi ke-${nomorDitandai} ditandai, menunggu konfirmasi siswa.`,
+                info: `Sesi ke-${nomorDitandai} ditandai. Terkonfirmasi otomatis dalam 24 jam kalau siswa tidak merespons.`,
+                // Sesi yang baru ditandai langsung ikut terhitung (progresSesi.ts).
+                sesiValidCount: r.sesiValidCount + 1,
+                sesiMenungguSiswa: r.sesiMenungguSiswa + 1,
+                ditandaiHariIni: true,
                 sesiBerikutnya: nomorBerikutnya <= jumlahSesi ? nomorBerikutnya : null,
               }
             : r,
@@ -92,11 +97,25 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
               <p className="text-xs text-[#7E7C7C] sm:text-sm">
                 Sesi {row.sesiValidCount} dari {jumlahSesi}
               </p>
+              {row.sesiMenungguSiswa > 0 || row.sesiDisangkal > 0 ? (
+                <p className="text-xs text-[#7E7C7C]">
+                  {[
+                    row.sesiMenungguSiswa > 0 ? `${row.sesiMenungguSiswa} menunggu konfirmasi siswa` : null,
+                    row.sesiDisangkal > 0 ? `${row.sesiDisangkal} disangkal, ditinjau Admin` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              ) : null}
             </div>
           </div>
 
           <div className="flex flex-col items-start gap-1 sm:items-end">
-            {row.sesiBerikutnya !== null ? (
+            {row.sesiBerikutnya !== null && row.ditandaiHariIni ? (
+              <span className="inline-flex items-center rounded-full bg-[#F0F0F0] px-2.5 py-0.5 text-xs font-medium text-[#7E7C7C]">
+                Sudah ditandai hari ini
+              </span>
+            ) : row.sesiBerikutnya !== null ? (
               <Button
                 type="button"
                 variant="secondary"
