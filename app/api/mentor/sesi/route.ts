@@ -3,12 +3,15 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
 import { notifySesiDitandaiMentor } from "@/lib/notifikasi/notify";
+import { rentangHariWib, tanggalWib } from "@/lib/shared/hariWib";
 
 /**
  * "Tandai Sesi Hari Ini Selesai" (Mentor) — PRD Bagian 7.5.5 FR-A1. Selalu
  * menandai nomor_sesi PALING KECIL yang belum ditandai (urut, tidak bisa
  * loncat) — dikonfirmasi_mentor=true, tanggal_dilaksanakan=hari ini. BR-7:
  * cuma mentor yang di-assign ke kelas enrollment ini yang boleh menandai.
+ * Maksimal SATU penandaan per enrollment per hari kalender WIB (Asia/Jakarta)
+ * — lebih dari itu 409. tanggal_dilaksanakan juga tanggal WIB, bukan UTC.
  */
 
 interface TandaiSesiBody {
@@ -61,6 +64,29 @@ export async function POST(request: NextRequest) {
     return errorResponse("Siswa ini bukan bagian dari kelas yang kamu ampu.", 403);
   }
 
+  const now = new Date();
+  const hariIni = rentangHariWib(now);
+  // Sesi yang dibatalkan Admin (dikonfirmasi_mentor_pada di-reset NULL) tidak
+  // ikut terhitung, jadi mentor tetap bisa menandai ulang di hari yang sama.
+  const { count: ditandaiHariIni, error: hariIniError } = await supabaseServer
+    .from("sesi_kelas")
+    .select("id", { count: "exact", head: true })
+    .eq("enrollment_id", enrollmentId)
+    .eq("dikonfirmasi_mentor", true)
+    .gte("dikonfirmasi_mentor_pada", hariIni.mulai)
+    .lt("dikonfirmasi_mentor_pada", hariIni.akhir);
+
+  if (hariIniError) {
+    console.error("[mentor/sesi] query penandaan hari ini failed:", hariIniError);
+    return errorResponse("Gagal memuat sesi. Coba lagi nanti.", 500);
+  }
+  if ((ditandaiHariIni ?? 0) > 0) {
+    return errorResponse(
+      "Sesi siswa ini sudah ditandai hari ini. Maksimal satu sesi per hari — tandai sesi berikutnya besok.",
+      409,
+    );
+  }
+
   const { data: nextSesi, error: nextSesiError } = await supabaseServer
     .from("sesi_kelas")
     .select("id, nomor_sesi")
@@ -78,7 +104,6 @@ export async function POST(request: NextRequest) {
     return errorResponse("Semua sesi kelas ini sudah ditandai selesai.", 400);
   }
 
-  const todayIso = new Date().toISOString().slice(0, 10);
   // Kondisional/atomik: cuma baris yang MASIH belum ditandai. Dua request
   // bersamaan (klik dobel, dua tab) memilih baris yang sama — yang kalah
   // mengubah 0 baris dan TIDAK mengirim notifikasi.
@@ -86,8 +111,8 @@ export async function POST(request: NextRequest) {
     .from("sesi_kelas")
     .update({
       dikonfirmasi_mentor: true,
-      dikonfirmasi_mentor_pada: new Date().toISOString(),
-      tanggal_dilaksanakan: todayIso,
+      dikonfirmasi_mentor_pada: now.toISOString(),
+      tanggal_dilaksanakan: tanggalWib(now),
     })
     .eq("id", nextSesi.id)
     .eq("dikonfirmasi_mentor", false)
