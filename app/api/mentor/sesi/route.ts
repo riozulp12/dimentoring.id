@@ -79,18 +79,26 @@ export async function POST(request: NextRequest) {
   }
 
   const todayIso = new Date().toISOString().slice(0, 10);
-  const { error: updateError } = await supabaseServer
+  // Kondisional/atomik: cuma baris yang MASIH belum ditandai. Dua request
+  // bersamaan (klik dobel, dua tab) memilih baris yang sama — yang kalah
+  // mengubah 0 baris dan TIDAK mengirim notifikasi.
+  const { data: updatedRows, error: updateError } = await supabaseServer
     .from("sesi_kelas")
     .update({
       dikonfirmasi_mentor: true,
       dikonfirmasi_mentor_pada: new Date().toISOString(),
       tanggal_dilaksanakan: todayIso,
     })
-    .eq("id", nextSesi.id);
+    .eq("id", nextSesi.id)
+    .eq("dikonfirmasi_mentor", false)
+    .select("id");
 
   if (updateError) {
     console.error("[mentor/sesi] update sesi_kelas failed:", updateError);
     return errorResponse("Gagal menandai sesi. Coba lagi nanti.", 500);
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    return errorResponse("Sesi ini baru saja ditandai (mungkin dari tab lain). Muat ulang halaman.", 409);
   }
 
   await notifySesiDitandaiMentor(
