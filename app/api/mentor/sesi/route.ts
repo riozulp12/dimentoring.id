@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
+import { getAksesMentorEnrollment } from "@/lib/mentor/aksesMentor";
 import { notifySesiDitandaiMentor } from "@/lib/notifikasi/notify";
 import { rentangHariWib, tanggalWib } from "@/lib/shared/hariWib";
 
@@ -9,7 +10,8 @@ import { rentangHariWib, tanggalWib } from "@/lib/shared/hariWib";
  * "Tandai Sesi Hari Ini Selesai" (Mentor) — PRD Bagian 7.5.5 FR-A1. Selalu
  * menandai nomor_sesi PALING KECIL yang belum ditandai (urut, tidak bisa
  * loncat) — dikonfirmasi_mentor=true, tanggal_dilaksanakan=hari ini. BR-7:
- * cuma mentor yang di-assign ke kelas enrollment ini yang boleh menandai.
+ * cuma mentor yang terkait enrollment ini (kelas.mentor_id, kelas_mentor,
+ * atau enrollments.mentor_offline_id — lib/mentor/aksesMentor.ts) yang boleh.
  * Maksimal SATU penandaan per enrollment per hari kalender WIB (Asia/Jakarta)
  * — lebih dari itu 409. tanggal_dilaksanakan juga tanggal WIB, bukan UTC.
  */
@@ -43,26 +45,16 @@ export async function POST(request: NextRequest) {
     return errorResponse("Siswa/kelas tidak valid.", 400);
   }
 
-  const { data: enrollment, error: enrollmentError } = await supabaseServer
-    .from("enrollments")
-    .select("id, user_id, kelas_id, kelas:kelas_id(mentor_id, nama)")
-    .eq("id", enrollmentId)
-    .maybeSingle();
-
-  if (enrollmentError) {
-    console.error("[mentor/sesi] query enrollment failed:", enrollmentError);
+  const akses = await getAksesMentorEnrollment(session.userId, enrollmentId);
+  if (akses === "gagal") {
     return errorResponse("Gagal memuat data siswa. Coba lagi nanti.", 500);
   }
-
-  type KelasJoin = { mentor_id: string | null; nama: string } | { mentor_id: string | null; nama: string }[] | null;
-  const kelasJoin = enrollment?.kelas as KelasJoin;
-  const kelas = Array.isArray(kelasJoin) ? (kelasJoin[0] ?? null) : kelasJoin;
-
-  // BR-7: dua-duanya (enrollment tidak ada, ATAU ada tapi bukan kelas mentor
-  // ini) ditolak dengan pesan sama supaya tidak bocorkan kelas mentor lain.
-  if (!enrollment || !kelas || kelas.mentor_id !== session.userId) {
+  // BR-7: dua-duanya (enrollment tidak ada, ATAU ada tapi mentor ini tidak
+  // terkait) ditolak dengan pesan sama supaya tidak bocorkan kelas mentor lain.
+  if (!akses) {
     return errorResponse("Siswa ini bukan bagian dari kelas yang kamu ampu.", 403);
   }
+  const { enrollment, kelas } = akses;
 
   const now = new Date();
   const hariIni = rentangHariWib(now);
@@ -127,8 +119,8 @@ export async function POST(request: NextRequest) {
   }
 
   await notifySesiDitandaiMentor(
-    enrollment.user_id as string,
-    enrollment.kelas_id as string,
+    enrollment.userId,
+    enrollment.kelasId,
     kelas.nama,
     nextSesi.nomor_sesi as number,
   );

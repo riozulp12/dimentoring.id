@@ -5,12 +5,14 @@ import { formatJadwal } from "@/lib/shared/formatJadwal";
 import { hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
 import { hitungStatusSesi } from "@/lib/shared/statusSesi";
 import { rentangHariWib } from "@/lib/shared/hariWib";
+import { getKelasAksesMentor, type AksesMentor } from "@/lib/mentor/aksesMentor";
 
 /**
  * Data layer "Kelas Saya" (Mentor) — PRD Bagian 7.5 & Bagian 13 (kelas,
- * enrollments, materi). BR-7: mentor cuma boleh kelola kelas yang di-assign
- * eksplisit Admin (mentor_id = user ini) — seluruh query di sini scoped ke
- * mentor_id, dan detail page menambah guard eksplisit di server juga.
+ * enrollments, materi). BR-7: mentor cuma boleh membuka kelas yang terkait
+ * dengannya — kelas.mentor_id, kelas_mentor (multi-mentor), atau
+ * enrollments.mentor_offline_id (kelas offline) — lewat SATU helper
+ * lib/mentor/aksesMentor.ts. Detail page menambah guard eksplisit di server.
  */
 
 export { TINGKAT_KELAS_LABEL };
@@ -56,14 +58,17 @@ function firstNama(value: NamaJoin): string | null {
   return row?.nama ?? null;
 }
 
-/** Halaman list — semua kelas yang di-assign ke mentor ini. */
+/** Halaman list — semua kelas yang terkait mentor ini (lib/mentor/aksesMentor.ts). */
 export async function getMentorKelasSaya(userId: string): Promise<MentorKelasItem[]> {
+  const aksesMap = await getKelasAksesMentor(userId);
+  if (aksesMap.size === 0) return [];
+
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      "id, nama, program_kategori, tingkat_kelas, jadwal, kapasitas, link_meet, subtes:subtes_id(nama), enrollments(status_pembayaran)",
+      "id, nama, program_kategori, tingkat_kelas, jadwal, kapasitas, link_meet, subtes:subtes_id(nama), enrollments(status_pembayaran, mentor_offline_id)",
     )
-    .eq("mentor_id", userId);
+    .in("id", Array.from(aksesMap.keys()));
 
   if (error) {
     console.error("[getMentorKelasSaya] query failed:", error);
@@ -79,7 +84,7 @@ export async function getMentorKelasSaya(userId: string): Promise<MentorKelasIte
     kapasitas: number;
     link_meet: string | null;
     subtes: NamaJoin;
-    enrollments: { status_pembayaran: string }[] | null;
+    enrollments: { status_pembayaran: string; mentor_offline_id: string | null }[] | null;
   };
 
   return ((data ?? []) as unknown as Row[]).map((row) => ({
@@ -90,7 +95,10 @@ export async function getMentorKelasSaya(userId: string): Promise<MentorKelasIte
     tingkatKelas: row.tingkat_kelas,
     tingkatKelasLabel: TINGKAT_KELAS_LABEL[row.tingkat_kelas] ?? row.tingkat_kelas,
     jadwal: formatJadwal(row.jadwal),
-    jumlahSiswa: (row.enrollments ?? []).filter((e) => e.status_pembayaran === "lunas").length,
+    // Mentor offline cuma menghitung siswa yang ditugaskan ke dia.
+    jumlahSiswa: (row.enrollments ?? []).filter(
+      (e) => e.status_pembayaran === "lunas" && (aksesMap.get(row.id) !== "offline" || e.mentor_offline_id === userId),
+    ).length,
     kapasitas: row.kapasitas,
     linkMeetBelumDiatur: !row.link_meet,
   }));
@@ -168,12 +176,20 @@ function firstUser(value: UserJoin): { id: string; nama: string; avatar_url: str
  * menunggu review Admin TIDAK dihitung progress. Rincian status per sesi
  * dari lib/shared/statusSesi.ts.
  */
-export async function getSesiSiswaByKelasId(kelasId: string): Promise<SesiSiswaItem[]> {
-  const { data: enrollmentRows, error: enrollmentError } = await supabaseServer
+export async function getSesiSiswaByKelasId(
+  kelasId: string,
+  mentorId: string,
+  akses: AksesMentor,
+): Promise<SesiSiswaItem[]> {
+  let enrollmentQuery = supabaseServer
     .from("enrollments")
     .select("id, users:user_id(id, nama, avatar_url)")
     .eq("kelas_id", kelasId)
     .eq("status_pembayaran", "lunas");
+  // Mentor offline cuma melihat siswa yang ditugaskan ke dia; mentor kelas
+  // (utama/kelas_mentor) melihat semua siswa lunas.
+  if (akses === "offline") enrollmentQuery = enrollmentQuery.eq("mentor_offline_id", mentorId);
+  const { data: enrollmentRows, error: enrollmentError } = await enrollmentQuery;
 
   if (enrollmentError) {
     console.error("[getSesiSiswaByKelasId] query enrollments failed:", enrollmentError);

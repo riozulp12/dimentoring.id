@@ -3,16 +3,21 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
+import { getAksesMentorKelas } from "@/lib/mentor/aksesMentor";
 import { getMentorKelasDetail, getMentorMateriList, getSesiSiswaByKelasId } from "@/lib/mentor/getKelasSayaData";
 import PageTitle from "@/components/dashboard/PageTitle";
 import LinkMeetForm from "@/components/mentor/LinkMeetForm";
 import SesiSiswaList from "@/components/mentor/SesiSiswaList";
 
 /**
- * Detail Kelas (Mentor) — PRD Bagian 7.5.1. GUARD: kelas.mentor_id harus sama
- * dengan mentor yang login (BR-7) — dicek server-side di sini, bukan cuma
- * disembunyikan di UI, supaya mentor A tidak bisa buka kelas mentor B lewat
- * ganti URL manual.
+ * Detail Kelas (Mentor) — PRD Bagian 7.5.1. GUARD: mentor yang login harus
+ * terkait kelas ini (kelas.mentor_id, kelas_mentor, atau mentor offline yang
+ * ditugaskan — lib/mentor/aksesMentor.ts, BR-7) — dicek server-side di sini,
+ * bukan cuma disembunyikan di UI, supaya mentor A tidak bisa buka kelas
+ * mentor B lewat ganti URL manual.
+ *
+ * Edit Link Meet & Tambah Materi masih khusus kelas.mentor_id (endpoint-nya
+ * belum diubah) — mentor lain cuma melihat Absensi + daftar Materi.
  */
 
 const TIPE_LABEL: Record<string, string> = {
@@ -52,18 +57,19 @@ export default async function KelasSayaDetailMentorPage({
     redirect("/dashboard/mentor");
   }
 
-  const kelas = await getMentorKelasDetail(kelasId);
+  const [kelas, akses] = await Promise.all([getMentorKelasDetail(kelasId), getAksesMentorKelas(session.userId, kelasId)]);
 
-  // BR-7: kelas tidak ada, ATAU ada tapi bukan kelas yang di-assign ke mentor
-  // ini — dua-duanya ditolak dengan pesan yang sama supaya tidak bocorkan
-  // informasi kelas mentor lain lewat pesan error yang beda.
-  if (!kelas || kelas.mentorId !== session.userId) {
+  // BR-7: kelas tidak ada, ATAU ada tapi mentor ini tidak terkait — dua-duanya
+  // ditolak dengan pesan yang sama supaya tidak bocorkan informasi kelas
+  // mentor lain lewat pesan error yang beda.
+  if (!kelas || !akses) {
     redirect(`/kelas-saya?error=${encodeURIComponent("Kelas tidak ditemukan atau bukan kelas yang kamu ampu.")}`);
   }
+  const bisaKelolaKelas = kelas.mentorId === session.userId;
 
   const [materiList, sesiSiswa] = await Promise.all([
     getMentorMateriList(kelasId),
-    getSesiSiswaByKelasId(kelasId),
+    getSesiSiswaByKelasId(kelasId, session.userId, akses),
   ]);
 
   return (
@@ -84,9 +90,11 @@ export default async function KelasSayaDetailMentorPage({
               </span>
             </div>
           </div>
-          <p className="text-sm text-[#7E7C7C] sm:text-base">{kelas.jumlahSiswa} siswa terdaftar</p>
+          <p className="text-sm text-[#7E7C7C] sm:text-base">
+            {akses === "offline" ? `${sesiSiswa.length} siswa ditugaskan ke kamu` : `${kelas.jumlahSiswa} siswa terdaftar`}
+          </p>
 
-          <LinkMeetForm kelasId={kelas.id} initialLinkMeet={kelas.linkMeet} />
+          {bisaKelolaKelas ? <LinkMeetForm kelasId={kelas.id} initialLinkMeet={kelas.linkMeet} /> : null}
         </div>
 
         <div className="flex flex-col gap-3">
@@ -96,18 +104,20 @@ export default async function KelasSayaDetailMentorPage({
 
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Materi</h2>
-          <Link
-            href={`/kelas-saya/${kelas.id}/tambah-materi`}
-            className="inline-flex items-center justify-center rounded-[18px] bg-[#081EEA] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-          >
-            + Tambah Materi
-          </Link>
+          {bisaKelolaKelas ? (
+            <Link
+              href={`/kelas-saya/${kelas.id}/tambah-materi`}
+              className="inline-flex items-center justify-center rounded-[18px] bg-[#081EEA] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+            >
+              + Tambah Materi
+            </Link>
+          ) : null}
         </div>
 
         {materiList.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-10 text-center">
             <p className="text-base text-[#7E7C7C]">
-              Belum ada materi untuk kelas ini. Klik &quot;Tambah Materi&quot; untuk mulai.
+              Belum ada materi untuk kelas ini.{bisaKelolaKelas ? <> Klik &quot;Tambah Materi&quot; untuk mulai.</> : null}
             </p>
           </div>
         ) : (
