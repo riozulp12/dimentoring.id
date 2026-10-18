@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import Button from "@/components/ui/Button";
 import Mascot from "@/components/ui/Mascot";
+import LeadCaptureCard from "./LeadCaptureCard";
 
 export interface PilihanCardData {
   urutanPilihan: number;
@@ -52,6 +53,11 @@ export interface AssessmentHasilData {
   kelasRekomendasi: KelasRekomendasiData[];
   tryoutRekomendasi: TryoutRekomendasiData[];
   showDaftarCta: boolean;
+  /** Dipakai CTA Daftar (pending_assessment) & Lead Capture. */
+  assessmentId: string;
+  /** PRD 7.4.6: tamu, atau user login yang belum punya no_wa. */
+  showLeadCapture: boolean;
+  leadSudahTerkirim: boolean;
 }
 
 // Sama dengan FALLBACK_NOTE di lib/ai/generateNote.ts — dipakai kalau note_ai
@@ -386,6 +392,10 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
         </div>
       </AccordionSection>
 
+      {data.showLeadCapture ? (
+        <LeadCaptureCard assessmentId={data.assessmentId} sudahTerkirim={data.leadSudahTerkirim} />
+      ) : null}
+
       {data.showDaftarCta ? (
         <div className="flex w-full flex-col items-center gap-5 rounded-[24px] border border-[#E3E3E3] bg-[#F9FAFF] px-5 py-6 sm:flex-row sm:justify-between sm:gap-6 sm:rounded-[32px] sm:px-8">
           <div className="flex items-center gap-4">
@@ -395,7 +405,11 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
               yang lebih personal
             </p>
           </div>
-          <Link href="/daftar" className="w-full shrink-0 sm:w-auto">
+          {/* pending_assessment: hasil anonim ke-1/ke-2 ikut tertaut ke akun baru (PRD 7.4.1b). */}
+          <Link
+            href={`/daftar?pending_assessment=${encodeURIComponent(data.assessmentId)}`}
+            className="w-full shrink-0 sm:w-auto"
+          >
             <Button size="lg" className="w-full">
               Daftar Sekarang
             </Button>

@@ -263,6 +263,29 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
         : "Direkomendasikan untuk membantu memperbesar Peluang kamu.",
     }));
 
+  // ---- Lead Capture (PRD 7.4.6, BR-38): tamu, atau user login yang belum
+  // punya no_wa. "Sudah terkirim" = sudah ada lead untuk assessment ini. ----
+  let showLeadCapture = !assessmentUserId;
+  if (assessmentUserId) {
+    const { data: userRow } = await supabaseServer
+      .from("users")
+      .select("no_wa")
+      .eq("id", assessmentUserId)
+      .maybeSingle();
+    showLeadCapture = Boolean(userRow) && !userRow?.no_wa;
+  }
+  let leadSudahTerkirim = false;
+  if (showLeadCapture) {
+    const { data: leadRow, error: leadError } = await supabaseServer
+      .from("leads")
+      .select("id")
+      .eq("assessment_id", id)
+      .limit(1)
+      .maybeSingle();
+    if (leadError) console.error("[assessment/hasil] query leads failed:", leadError);
+    leadSudahTerkirim = Boolean(leadRow);
+  }
+
   // ---- CTA Daftar (item 4): tampil kalau hasil ini masih anonim (sudah pasti
   // trial 1/2 karena akses control di atas sudah memvalidasi cookie trial cocok). ----
   const hasilData: AssessmentHasilData = {
@@ -277,6 +300,9 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
     kelasRekomendasi,
     tryoutRekomendasi,
     showDaftarCta: !assessmentUserId,
+    assessmentId: id,
+    showLeadCapture,
+    leadSudahTerkirim,
   };
 
   return (
