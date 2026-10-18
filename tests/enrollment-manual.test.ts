@@ -561,6 +561,31 @@ describe("embed PostgREST users <-> enrollments tidak ambigu", () => {
   });
 });
 
+describe("db/cleanup_enrollment_uji_TEMPLATE.sql", () => {
+  const isi = readFileSync(path.join(process.cwd(), "db", "cleanup_enrollment_uji_TEMPLATE.sql"), "utf8");
+  const notify = readFileSync(path.join(process.cwd(), "lib", "notifikasi", "notify.ts"), "utf8");
+  const langkah2 = isi.slice(isi.indexOf("LANGKAH 2 — HAPUS"));
+
+  it("LANGKAH 1 menampilkan enrollment_manual_log & notifikasi didaftarkan", () => {
+    const langkah1 = isi.slice(isi.indexOf("LANGKAH 1 — LIHAT DULU"), isi.indexOf("LANGKAH 2 — HAPUS"));
+    assert.match(langkah1, /FROM enrollment_manual_log l JOIN akun a ON a\.id = l\.siswa_id/);
+    assert.match(langkah1, /'Kamu sudah terdaftar di kelas baru'/);
+  });
+
+  it("judul notifikasi di template sama dengan notifySiswaDidaftarkanAdmin", () => {
+    assert.match(notify, /judul: "Kamu sudah terdaftar di kelas baru"/);
+  });
+
+  it("LANGKAH 2 menghapus notifikasi didaftarkan, TIDAK menghapus log, pengaman tetap ada", () => {
+    assert.match(langkah2, /'Kamu sudah terdaftar di kelas baru'/);
+    assert.doesNotMatch(langkah2, /DELETE FROM enrollment_manual_log/);
+    assert.match(langkah2, /RAISE NOTICE 'enrollment_manual_log dipertahankan/);
+    assert.match(langkah2, /IF v_email LIKE '%<<%'/);
+    assert.match(langkah2, /role_type IN \('admin', 'mentor'\)/);
+    assert.match(langkah2.trimEnd(), /\nROLLBACK;$/);
+  });
+});
+
 describe("privasi snapshot log (db/add_enrollment_manual.sql)", () => {
   const sql = readFileSync(path.join(process.cwd(), "db", "add_enrollment_manual.sql"), "utf8");
   const schema = readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8");
