@@ -2,13 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
+import { getAksesMentorEnrollment } from "@/lib/mentor/aksesMentor";
+import { getNamaMapelMentor } from "@/lib/mentor/mapelMentor";
 import { notifySesiDitandaiMentor } from "@/lib/notifikasi/notify";
+import { rentangHariWib, tanggalWib } from "@/lib/shared/hariWib";
+import { labelMentorSesi } from "@/lib/shared/statusSesi";
 
 /**
  * "Tandai Sesi Hari Ini Selesai" (Mentor) — PRD Bagian 7.5.5 FR-A1. Selalu
  * menandai nomor_sesi PALING KECIL yang belum ditandai (urut, tidak bisa
  * loncat) — dikonfirmasi_mentor=true, tanggal_dilaksanakan=hari ini. BR-7:
- * cuma mentor yang di-assign ke kelas enrollment ini yang boleh menandai.
+ * cuma mentor yang terkait enrollment ini (kelas.mentor_id, kelas_mentor,
+ * atau enrollments.mentor_offline_id — lib/mentor/aksesMentor.ts) yang boleh.
+ * Multi-mentor: total sesi per siswa tetap kelas.jumlah_sesi (dibagi antar
+ * mentor, belum ada kuota per mentor) — mentor mana pun mengambil sesi
+ * berikutnya yang belum ditandai dan mencatat mentor_id + nama_mapel
+ * (snapshot) di baris itu. Maksimal SATU penandaan per enrollment per MENTOR
+ * per hari kalender WIB (Asia/Jakarta) — mentor yang sama dua kali 409, dua
+ * mentor berbeda boleh di hari yang sama. tanggal_dilaksanakan = tanggal WIB.
  */
 
 interface TandaiSesiBody {
@@ -40,25 +51,40 @@ export async function POST(request: NextRequest) {
     return errorResponse("Siswa/kelas tidak valid.", 400);
   }
 
-  const { data: enrollment, error: enrollmentError } = await supabaseServer
-    .from("enrollments")
-    .select("id, user_id, kelas_id, kelas:kelas_id(mentor_id, nama)")
-    .eq("id", enrollmentId)
-    .maybeSingle();
-
-  if (enrollmentError) {
-    console.error("[mentor/sesi] query enrollment failed:", enrollmentError);
+  const akses = await getAksesMentorEnrollment(session.userId, enrollmentId);
+  if (akses === "gagal") {
     return errorResponse("Gagal memuat data siswa. Coba lagi nanti.", 500);
   }
-
-  type KelasJoin = { mentor_id: string | null; nama: string } | { mentor_id: string | null; nama: string }[] | null;
-  const kelasJoin = enrollment?.kelas as KelasJoin;
-  const kelas = Array.isArray(kelasJoin) ? (kelasJoin[0] ?? null) : kelasJoin;
-
-  // BR-7: dua-duanya (enrollment tidak ada, ATAU ada tapi bukan kelas mentor
-  // ini) ditolak dengan pesan sama supaya tidak bocorkan kelas mentor lain.
-  if (!enrollment || !kelas || kelas.mentor_id !== session.userId) {
+  // BR-7: dua-duanya (enrollment tidak ada, ATAU ada tapi mentor ini tidak
+  // terkait) ditolak dengan pesan sama supaya tidak bocorkan kelas mentor lain.
+  if (!akses) {
     return errorResponse("Siswa ini bukan bagian dari kelas yang kamu ampu.", 403);
+  }
+  const { enrollment, kelas } = akses;
+
+  const now = new Date();
+  const hariIni = rentangHariWib(now);
+  // Per mentor: cuma penandaan mentor INI yang dihitung. Sesi yang dibatalkan
+  // Admin (dikonfirmasi_mentor_pada & mentor_id di-reset NULL) tidak ikut
+  // terhitung, jadi mentor tetap bisa menandai ulang di hari yang sama.
+  const { count: ditandaiHariIni, error: hariIniError } = await supabaseServer
+    .from("sesi_kelas")
+    .select("id", { count: "exact", head: true })
+    .eq("enrollment_id", enrollmentId)
+    .eq("mentor_id", session.userId)
+    .eq("dikonfirmasi_mentor", true)
+    .gte("dikonfirmasi_mentor_pada", hariIni.mulai)
+    .lt("dikonfirmasi_mentor_pada", hariIni.akhir);
+
+  if (hariIniError) {
+    console.error("[mentor/sesi] query penandaan hari ini failed:", hariIniError);
+    return errorResponse("Gagal memuat sesi. Coba lagi nanti.", 500);
+  }
+  if ((ditandaiHariIni ?? 0) > 0) {
+    return errorResponse(
+      "Kamu sudah menandai sesi siswa ini hari ini. Maksimal satu sesi per hari untuk tiap mentor — tandai sesi berikutnya besok.",
+      409,
+    );
   }
 
   const { data: nextSesi, error: nextSesiError } = await supabaseServer
@@ -78,27 +104,60 @@ export async function POST(request: NextRequest) {
     return errorResponse("Semua sesi kelas ini sudah ditandai selesai.", 400);
   }
 
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const { error: updateError } = await supabaseServer
+  const namaMapel = await getNamaMapelMentor(session.userId, kelas, enrollment.id);
+  if (namaMapel === "gagal") {
+    return errorResponse("Gagal memuat data mapel. Coba lagi nanti.", 500);
+  }
+
+  const tanggalDilaksanakan = tanggalWib(now);
+
+  // Kondisional/atomik: cuma baris yang MASIH belum ditandai. Dua request
+  // bersamaan (klik dobel, dua tab) memilih baris yang sama — yang kalah
+  // mengubah 0 baris dan TIDAK mengirim notifikasi.
+  const { data: updatedRows, error: updateError } = await supabaseServer
     .from("sesi_kelas")
     .update({
       dikonfirmasi_mentor: true,
-      dikonfirmasi_mentor_pada: new Date().toISOString(),
-      tanggal_dilaksanakan: todayIso,
+      dikonfirmasi_mentor_pada: now.toISOString(),
+      tanggal_dilaksanakan: tanggalDilaksanakan,
+      mentor_id: session.userId,
+      nama_mapel: namaMapel,
     })
-    .eq("id", nextSesi.id);
+    .eq("id", nextSesi.id)
+    .eq("dikonfirmasi_mentor", false)
+    .select("id");
 
   if (updateError) {
     console.error("[mentor/sesi] update sesi_kelas failed:", updateError);
     return errorResponse("Gagal menandai sesi. Coba lagi nanti.", 500);
   }
+  if (!updatedRows || updatedRows.length === 0) {
+    return errorResponse("Sesi ini baru saja ditandai (mungkin dari tab lain). Muat ulang halaman.", 409);
+  }
+
+  // Nama mentor cuma untuk label "Nama Mentor — Mapel" (notifikasi & UI) —
+  // gagal dimuat tidak membatalkan penandaan yang sudah tersimpan.
+  const { data: mentorRow, error: mentorError } = await supabaseServer
+    .from("users")
+    .select("nama")
+    .eq("id", session.userId)
+    .maybeSingle();
+  if (mentorError) console.error("[mentor/sesi] query nama mentor failed:", mentorError);
+  const mentorLabel = labelMentorSesi((mentorRow?.nama as string | undefined) ?? null, namaMapel);
 
   await notifySesiDitandaiMentor(
-    enrollment.user_id as string,
-    enrollment.kelas_id as string,
+    enrollment.userId,
+    enrollment.kelasId,
     kelas.nama,
     nextSesi.nomor_sesi as number,
+    mentorLabel,
   );
 
-  return NextResponse.json({ success: true, nomorSesi: nextSesi.nomor_sesi });
+  return NextResponse.json({
+    success: true,
+    nomorSesi: nextSesi.nomor_sesi,
+    namaMapel,
+    mentorLabel,
+    tanggalDilaksanakan,
+  });
 }

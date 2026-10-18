@@ -7,11 +7,20 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
  * "setujui": sesi dianggap valid (masuk progress kehadiran). "batalkan":
  * sesi dikembalikan ke kondisi "belum terjadi" sama sekali (mentor bisa
  * menandai ulang dari awal lewat alur normal).
+ *
+ * Setiap keputusan WAJIB tercatat di sesi_review_log (admin, keputusan,
+ * snapshot baris sebelum diubah, alasan — wajib untuk "batalkan"). Keputusan
+ * + log dijalankan dalam SATU transaksi lewat fungsi DB putuskan_sesi_review
+ * (db/add_sesi_review_log.sql): log gagal = keputusan ikut batal, dan dua
+ * Admin yang klik bersamaan tidak bisa sama-sama memutuskan.
  */
+
+const ALASAN_MAKS = 1000;
 
 interface SesiReviewBody {
   sesiId?: string;
   action?: "setujui" | "batalkan";
+  alasan?: string;
 }
 
 function errorResponse(message: string, status: number) {
@@ -35,38 +44,30 @@ export async function PATCH(request: NextRequest) {
   if (body.action !== "setujui" && body.action !== "batalkan") {
     return errorResponse("Aksi tidak valid.", 400);
   }
-
-  const { data: sesi, error: sesiError } = await supabaseServer
-    .from("sesi_kelas")
-    .select("id")
-    .eq("id", sesiId)
-    .eq("perlu_review_admin", true)
-    .maybeSingle();
-
-  if (sesiError) {
-    console.error("[admin/sesi-review] query sesi_kelas failed:", sesiError);
-    return errorResponse("Gagal memuat sesi. Coba lagi nanti.", 500);
+  if (body.alasan !== undefined && typeof body.alasan !== "string") {
+    return errorResponse("Alasan tidak valid.", 400);
   }
-  if (!sesi) {
-    return errorResponse("Sesi tidak ditemukan atau sudah tidak menunggu review.", 404);
+  const alasan = body.alasan?.trim() ?? "";
+  if (body.action === "batalkan" && !alasan) {
+    return errorResponse("Alasan wajib diisi untuk membatalkan sesi.", 400);
+  }
+  if (alasan.length > ALASAN_MAKS) {
+    return errorResponse(`Alasan maksimal ${ALASAN_MAKS} karakter.`, 400);
   }
 
-  const update =
-    body.action === "setujui"
-      ? { status_siswa: "dikonfirmasi" as const, perlu_review_admin: false }
-      : {
-          dikonfirmasi_mentor: false,
-          dikonfirmasi_mentor_pada: null,
-          tanggal_dilaksanakan: null,
-          status_siswa: "belum" as const,
-          dikonfirmasi_siswa_pada: null,
-          perlu_review_admin: false,
-        };
+  const { data: diputuskan, error: rpcError } = await supabaseServer.rpc("putuskan_sesi_review", {
+    p_sesi_id: sesiId,
+    p_admin_id: session.userId,
+    p_keputusan: body.action,
+    p_alasan: alasan || null,
+  });
 
-  const { error: updateError } = await supabaseServer.from("sesi_kelas").update(update).eq("id", sesiId);
-  if (updateError) {
-    console.error("[admin/sesi-review] update sesi_kelas failed:", updateError);
+  if (rpcError) {
+    console.error("[admin/sesi-review] putuskan_sesi_review failed:", rpcError);
     return errorResponse("Gagal menyimpan keputusan. Coba lagi nanti.", 500);
+  }
+  if (diputuskan !== true) {
+    return errorResponse("Sesi tidak ditemukan atau sudah tidak menunggu review.", 404);
   }
 
   return NextResponse.json({ success: true });

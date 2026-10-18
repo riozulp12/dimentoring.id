@@ -547,10 +547,79 @@ CREATE TABLE sesi_kelas (
     status_siswa status_konfirmasi_sesi NOT NULL DEFAULT 'belum',
     dikonfirmasi_siswa_pada TIMESTAMPTZ,
     perlu_review_admin BOOLEAN NOT NULL DEFAULT false,
+    -- Multi-mentor (db/add_sesi_mentor_mapel.sql): mentor yang MENANDAI sesi
+    -- ini + snapshot nama Subtes-nya saat ditandai. NULL = baris lama / belum ditandai.
+    mentor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    nama_mapel TEXT,
     UNIQUE(enrollment_id, nomor_sesi)
 );
 
 CREATE INDEX idx_sesi_kelas_enrollment ON sesi_kelas(enrollment_id);
+CREATE INDEX idx_sesi_kelas_enrollment_mentor ON sesi_kelas(enrollment_id, mentor_id);
+
+-- Log audit keputusan Admin atas sesi yang disangkal siswa (BR-34, FR-A3) —
+-- db/add_sesi_review_log.sql. snapshot_sebelum = baris sesi_kelas sebelum
+-- keputusan. SET NULL supaya log tetap ada walau baris sesi dihapus.
+CREATE TABLE sesi_review_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sesi_id UUID REFERENCES sesi_kelas(id) ON DELETE SET NULL,
+    admin_id UUID NOT NULL REFERENCES users(id),
+    keputusan TEXT NOT NULL CHECK (keputusan IN ('setujui', 'batalkan')),
+    snapshot_sebelum JSONB NOT NULL,
+    alasan TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT sesi_review_log_alasan_batalkan
+        CHECK (keputusan <> 'batalkan' OR length(btrim(coalesce(alasan, ''))) > 0)
+);
+
+CREATE INDEX idx_sesi_review_log_sesi ON sesi_review_log(sesi_id);
+
+-- Keputusan Admin + log dalam SATU transaksi (baris dikunci FOR UPDATE).
+-- Dipanggil app/api/admin/sesi-review via service_role saja.
+CREATE OR REPLACE FUNCTION putuskan_sesi_review(
+    p_sesi_id UUID,
+    p_admin_id UUID,
+    p_keputusan TEXT,
+    p_alasan TEXT
+) RETURNS BOOLEAN
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+    v_sesi sesi_kelas%ROWTYPE;
+BEGIN
+    SELECT * INTO v_sesi FROM sesi_kelas
+    WHERE id = p_sesi_id AND perlu_review_admin = true
+    FOR UPDATE;
+    IF NOT FOUND THEN
+        RETURN false;
+    END IF;
+
+    INSERT INTO sesi_review_log (sesi_id, admin_id, keputusan, snapshot_sebelum, alasan)
+    VALUES (p_sesi_id, p_admin_id, p_keputusan, to_jsonb(v_sesi), NULLIF(btrim(p_alasan), ''));
+
+    IF p_keputusan = 'setujui' THEN
+        UPDATE sesi_kelas
+        SET status_siswa = 'dikonfirmasi', perlu_review_admin = false
+        WHERE id = p_sesi_id;
+    ELSE
+        UPDATE sesi_kelas
+        SET dikonfirmasi_mentor = false,
+            dikonfirmasi_mentor_pada = NULL,
+            tanggal_dilaksanakan = NULL,
+            status_siswa = 'belum',
+            dikonfirmasi_siswa_pada = NULL,
+            perlu_review_admin = false,
+            mentor_id = NULL,
+            nama_mapel = NULL
+        WHERE id = p_sesi_id;
+    END IF;
+
+    RETURN true;
+END $$;
+
+REVOKE ALL ON FUNCTION putuskan_sesi_review(UUID, UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION putuskan_sesi_review(UUID, UUID, TEXT, TEXT) TO service_role;
 
 -- Konfigurasi persentase honor per tipe kelas — tabel terpisah (bukan hardcode
 -- di query) supaya Admin bisa ubah angkanya lewat Table Editor tanpa perlu

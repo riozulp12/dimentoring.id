@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
 import { hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
+import { hitungStatusSesi, labelMentorSesi, type StatusSesiEfektif } from "@/lib/shared/statusSesi";
 
 /**
  * Data layer halaman Detail Kelas — PRD Bagian 7.5.1 (Materi) & Bagian 13
@@ -134,38 +135,88 @@ export async function getEnrollmentStatus(
 export interface SesiPending {
   id: string;
   nomorSesi: number;
+  /** ISO — batas siswa boleh menjawab (penandaan mentor + 24 jam); null
+   * kalau waktu penandaan tidak tercatat (lihat lib/shared/statusSesi.ts). */
+  batasRespons: string | null;
+  /** "Nama Mentor — Mapel" (lib/shared/statusSesi.ts labelMentorSesi) — null untuk sesi lama. */
+  mentorLabel: string | null;
+}
+
+/** Satu sesi yang SUDAH ditandai mentor — daftar riwayat di Detail Kelas Siswa. */
+export interface SesiRiwayat {
+  id: string;
+  nomorSesi: number;
+  /** "YYYY-MM-DD" (tanggal WIB saat ditandai). */
+  tanggalDilaksanakan: string | null;
+  mentorLabel: string | null;
+  status: StatusSesiEfektif;
+  /** ISO — cuma terisi saat status "menunggu_siswa". */
+  batasRespons: string | null;
 }
 
 export interface SesiKehadiran {
   /** COUNT sesi_kelas WHERE dikonfirmasi_mentor=true AND status_siswa != 'disangkal' (BR-34/FR-A4). */
   validCount: number;
-  /** Sesi paling awal yang ditandai mentor tapi BELUM direspons siswa — null
-   * kalau tidak ada yang menunggu konfirmasi. */
+  /** Sesi paling awal berstatus efektif "menunggu_siswa" (ditandai mentor,
+   * belum dijawab, 24 jam belum lewat) — null kalau tidak ada. Yang sudah
+   * lewat 24 jam = terkonfirmasi otomatis, tidak ditanyakan lagi. */
   pending: SesiPending | null;
+  /** Semua sesi yang sudah ditandai mentor, urut nomor sesi. */
+  riwayat: SesiRiwayat[];
 }
 
+type MentorJoin = { nama: string } | { nama: string }[] | null;
+
 /** Absensi (PRD 7.5.5) — dasar progress "X dari Y sesi" + prompt konfirmasi
- * di halaman Detail Kelas Siswa. */
+ * + riwayat sesi (dengan mentor & mapel per sesi) di halaman Detail Kelas Siswa. */
 export async function getSesiKehadiran(enrollmentId: string): Promise<SesiKehadiran> {
   const { data, error } = await supabaseServer
     .from("sesi_kelas")
-    .select("id, nomor_sesi, dikonfirmasi_mentor, status_siswa")
+    .select(
+      "id, nomor_sesi, tanggal_dilaksanakan, dikonfirmasi_mentor, dikonfirmasi_mentor_pada, status_siswa, dikonfirmasi_siswa_pada, nama_mapel, mentor:mentor_id(nama)",
+    )
     .eq("enrollment_id", enrollmentId)
     .order("nomor_sesi", { ascending: true });
 
   if (error) {
     console.error("[getSesiKehadiran] query failed:", error);
-    return { validCount: 0, pending: null };
+    return { validCount: 0, pending: null, riwayat: [] };
   }
 
-  const rows = (data ?? []) as { id: string; nomor_sesi: number; dikonfirmasi_mentor: boolean; status_siswa: string }[];
+  const rows = (data ?? []) as unknown as {
+    id: string;
+    nomor_sesi: number;
+    tanggal_dilaksanakan: string | null;
+    dikonfirmasi_mentor: boolean;
+    dikonfirmasi_mentor_pada: string | null;
+    status_siswa: string;
+    dikonfirmasi_siswa_pada: string | null;
+    nama_mapel?: string | null;
+    mentor?: MentorJoin;
+  }[];
   const validCount = hitungSesiTerkonfirmasi(rows);
-  const pendingRow = rows.find((r) => r.dikonfirmasi_mentor && r.status_siswa === "belum");
+  const now = new Date();
 
-  return {
-    validCount,
-    pending: pendingRow ? { id: pendingRow.id, nomorSesi: pendingRow.nomor_sesi } : null,
-  };
+  let pending: SesiPending | null = null;
+  const riwayat: SesiRiwayat[] = [];
+  for (const row of rows) {
+    const info = hitungStatusSesi(row, now);
+    if (info.status === "belum_terjadi") continue;
+    const mentor = Array.isArray(row.mentor) ? (row.mentor[0] ?? null) : (row.mentor ?? null);
+    const mentorLabel = labelMentorSesi(mentor?.nama, row.nama_mapel);
+    riwayat.push({
+      id: row.id,
+      nomorSesi: row.nomor_sesi,
+      tanggalDilaksanakan: row.tanggal_dilaksanakan,
+      mentorLabel,
+      status: info.status,
+      batasRespons: info.batasRespons,
+    });
+    if (!pending && info.status === "menunggu_siswa") {
+      pending = { id: row.id, nomorSesi: row.nomor_sesi, batasRespons: info.batasRespons, mentorLabel };
+    }
+  }
+  return { validCount, pending, riwayat };
 }
 
 /**

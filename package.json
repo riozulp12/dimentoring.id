@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --conditions=react-server --test tests/kelas-saya.test.ts tests/payment-mayar.test.ts",
+    "test": "tsx --conditions=react-server --test tests/kelas-saya.test.ts tests/payment-mayar.test.ts tests/presensi.test.ts tests/presensi-mentor.test.ts",
     "tarik-ptn": "tsx scripts/tarik-data-ptn.ts jawa",
     "tarik-ptn:luar-jawa": "tsx scripts/tarik-data-ptn.ts luar-jawa",
     "tarik-ptn:vokasi-ptkin": "tsx scripts/tarik-data-ptn.ts vokasi-ptkin"

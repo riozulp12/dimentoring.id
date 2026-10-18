@@ -2,12 +2,17 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { TINGKAT_KELAS_LABEL } from "@/lib/shared/kelasLabels";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
+import { hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
+import { hitungStatusSesi, labelMentorSesi, type StatusSesiEfektif } from "@/lib/shared/statusSesi";
+import { rentangHariWib } from "@/lib/shared/hariWib";
+import { getKelasAksesMentor, type AksesMentor } from "@/lib/mentor/aksesMentor";
 
 /**
  * Data layer "Kelas Saya" (Mentor) — PRD Bagian 7.5 & Bagian 13 (kelas,
- * enrollments, materi). BR-7: mentor cuma boleh kelola kelas yang di-assign
- * eksplisit Admin (mentor_id = user ini) — seluruh query di sini scoped ke
- * mentor_id, dan detail page menambah guard eksplisit di server juga.
+ * enrollments, materi). BR-7: mentor cuma boleh membuka kelas yang terkait
+ * dengannya — kelas.mentor_id, kelas_mentor (multi-mentor), atau
+ * enrollments.mentor_offline_id (kelas offline) — lewat SATU helper
+ * lib/mentor/aksesMentor.ts. Detail page menambah guard eksplisit di server.
  */
 
 export { TINGKAT_KELAS_LABEL };
@@ -53,14 +58,17 @@ function firstNama(value: NamaJoin): string | null {
   return row?.nama ?? null;
 }
 
-/** Halaman list — semua kelas yang di-assign ke mentor ini. */
+/** Halaman list — semua kelas yang terkait mentor ini (lib/mentor/aksesMentor.ts). */
 export async function getMentorKelasSaya(userId: string): Promise<MentorKelasItem[]> {
+  const aksesMap = await getKelasAksesMentor(userId);
+  if (aksesMap.size === 0) return [];
+
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      "id, nama, program_kategori, tingkat_kelas, jadwal, kapasitas, link_meet, subtes:subtes_id(nama), enrollments(status_pembayaran)",
+      "id, nama, program_kategori, tingkat_kelas, jadwal, kapasitas, link_meet, subtes:subtes_id(nama), enrollments(status_pembayaran, mentor_offline_id)",
     )
-    .eq("mentor_id", userId);
+    .in("id", Array.from(aksesMap.keys()));
 
   if (error) {
     console.error("[getMentorKelasSaya] query failed:", error);
@@ -76,7 +84,7 @@ export async function getMentorKelasSaya(userId: string): Promise<MentorKelasIte
     kapasitas: number;
     link_meet: string | null;
     subtes: NamaJoin;
-    enrollments: { status_pembayaran: string }[] | null;
+    enrollments: { status_pembayaran: string; mentor_offline_id: string | null }[] | null;
   };
 
   return ((data ?? []) as unknown as Row[]).map((row) => ({
@@ -87,7 +95,10 @@ export async function getMentorKelasSaya(userId: string): Promise<MentorKelasIte
     tingkatKelas: row.tingkat_kelas,
     tingkatKelasLabel: TINGKAT_KELAS_LABEL[row.tingkat_kelas] ?? row.tingkat_kelas,
     jadwal: formatJadwal(row.jadwal),
-    jumlahSiswa: (row.enrollments ?? []).filter((e) => e.status_pembayaran === "lunas").length,
+    // Mentor offline cuma menghitung siswa yang ditugaskan ke dia.
+    jumlahSiswa: (row.enrollments ?? []).filter(
+      (e) => e.status_pembayaran === "lunas" && (aksesMap.get(row.id) !== "offline" || e.mentor_offline_id === userId),
+    ).length,
     kapasitas: row.kapasitas,
     linkMeetBelumDiatur: !row.link_meet,
   }));
@@ -139,9 +150,29 @@ export interface SesiSiswaItem {
   nama: string;
   avatarUrl: string | null;
   sesiValidCount: number;
+  /** Ditandai mentor, belum dijawab siswa, 24 jam belum lewat. */
+  sesiMenungguSiswa: number;
+  /** Disangkal siswa, menunggu keputusan Admin. */
+  sesiDisangkal: number;
+  /** Mentor INI sudah menandai siswa ini hari ini (hari kalender WIB) —
+   * maks. satu per mentor per hari; mentor lain tetap boleh. */
+  ditandaiHariIni: boolean;
+  /** Jumlah sesi siswa ini yang ditandai oleh mentor INI (selain progress total). */
+  sesiDitandaiSaya: number;
+  /** Semua sesi yang sudah ditandai (oleh mentor mana pun), urut nomor sesi. */
+  riwayat: SesiMentorRiwayat[];
   /** Nomor sesi paling kecil yang BELUM ditandai mentor — null kalau semua
    * sesi (1..jumlahSesi) sudah ditandai (tombol "Tandai Selesai" disembunyikan). */
   sesiBerikutnya: number | null;
+}
+
+export interface SesiMentorRiwayat {
+  nomorSesi: number;
+  tanggalDilaksanakan: string | null;
+  /** "Nama Mentor — Mapel" — null untuk sesi lama (mentor_id NULL). */
+  mentorLabel: string | null;
+  olehSaya: boolean;
+  status: StatusSesiEfektif;
 }
 
 type UserJoin = { id: string; nama: string; avatar_url: string | null } | { id: string; nama: string; avatar_url: string | null }[] | null;
@@ -154,16 +185,25 @@ function firstUser(value: UserJoin): { id: string; nama: string; avatar_url: str
 /**
  * Progress sesi (Absensi, PRD 7.5.5) per siswa lunas di kelas ini — dasar
  * tombol "Tandai Sesi Hari Ini Selesai" & progress "Sesi X dari Y" di halaman
- * Kelas Saya (Mentor). `sesiValidCount` = COUNT sesi_kelas WHERE
- * dikonfirmasi_mentor=true AND status_siswa != 'disangkal' (BR-34/FR-A4) —
- * sesi yang masih disangkal & menunggu review Admin TIDAK dihitung progress.
+ * Kelas Saya (Mentor). `sesiValidCount` pakai definisi bersama
+ * lib/shared/progresSesi.ts (BR-34/FR-A4) — sesi yang masih disangkal &
+ * menunggu review Admin TIDAK dihitung progress. Rincian status per sesi
+ * dari lib/shared/statusSesi.ts.
  */
-export async function getSesiSiswaByKelasId(kelasId: string): Promise<SesiSiswaItem[]> {
-  const { data: enrollmentRows, error: enrollmentError } = await supabaseServer
+export async function getSesiSiswaByKelasId(
+  kelasId: string,
+  mentorId: string,
+  akses: AksesMentor,
+): Promise<SesiSiswaItem[]> {
+  let enrollmentQuery = supabaseServer
     .from("enrollments")
     .select("id, users:user_id(id, nama, avatar_url)")
     .eq("kelas_id", kelasId)
     .eq("status_pembayaran", "lunas");
+  // Mentor offline cuma melihat siswa yang ditugaskan ke dia; mentor kelas
+  // (utama/kelas_mentor) melihat semua siswa lunas.
+  if (akses === "offline") enrollmentQuery = enrollmentQuery.eq("mentor_offline_id", mentorId);
+  const { data: enrollmentRows, error: enrollmentError } = await enrollmentQuery;
 
   if (enrollmentError) {
     console.error("[getSesiSiswaByKelasId] query enrollments failed:", enrollmentError);
@@ -174,7 +214,9 @@ export async function getSesiSiswaByKelasId(kelasId: string): Promise<SesiSiswaI
   const enrollmentIds = enrollmentRows.map((r) => r.id as string);
   const { data: sesiRows, error: sesiError } = await supabaseServer
     .from("sesi_kelas")
-    .select("enrollment_id, nomor_sesi, dikonfirmasi_mentor, status_siswa")
+    .select(
+      "enrollment_id, nomor_sesi, tanggal_dilaksanakan, dikonfirmasi_mentor, dikonfirmasi_mentor_pada, status_siswa, dikonfirmasi_siswa_pada, mentor_id, nama_mapel, mentor:mentor_id(nama)",
+    )
     .in("enrollment_id", enrollmentIds)
     .order("nomor_sesi", { ascending: true });
 
@@ -182,7 +224,18 @@ export async function getSesiSiswaByKelasId(kelasId: string): Promise<SesiSiswaI
     console.error("[getSesiSiswaByKelasId] query sesi_kelas failed:", sesiError);
   }
 
-  type SesiRow = { enrollment_id: string; nomor_sesi: number; dikonfirmasi_mentor: boolean; status_siswa: string };
+  type SesiRow = {
+    enrollment_id: string;
+    nomor_sesi: number;
+    dikonfirmasi_mentor: boolean;
+    dikonfirmasi_mentor_pada: string | null;
+    status_siswa: string;
+    dikonfirmasi_siswa_pada: string | null;
+    tanggal_dilaksanakan?: string | null;
+    mentor_id?: string | null;
+    nama_mapel?: string | null;
+    mentor?: { nama: string } | { nama: string }[] | null;
+  };
   const sesiByEnrollment = new Map<string, SesiRow[]>();
   for (const row of (sesiRows ?? []) as unknown as SesiRow[]) {
     const list = sesiByEnrollment.get(row.enrollment_id) ?? [];
@@ -190,19 +243,47 @@ export async function getSesiSiswaByKelasId(kelasId: string): Promise<SesiSiswaI
     sesiByEnrollment.set(row.enrollment_id, list);
   }
 
+  const now = new Date();
+  const hariIni = rentangHariWib(now);
+
   return (enrollmentRows as unknown as { id: string; users: UserJoin }[])
     .map((row) => {
       const user = firstUser(row.users);
       if (!user) return null;
       const sesiList = sesiByEnrollment.get(row.id) ?? [];
-      const sesiValidCount = sesiList.filter((s) => s.dikonfirmasi_mentor && s.status_siswa !== "disangkal").length;
+      const statusList = sesiList.map((s) => hitungStatusSesi(s, now).status);
+      const ditandaiHariIni = sesiList.some(
+        (s) =>
+          s.dikonfirmasi_mentor &&
+          s.mentor_id === mentorId &&
+          s.dikonfirmasi_mentor_pada !== null &&
+          Date.parse(s.dikonfirmasi_mentor_pada) >= Date.parse(hariIni.mulai) &&
+          Date.parse(s.dikonfirmasi_mentor_pada) < Date.parse(hariIni.akhir),
+      );
       const sesiBerikutnya = sesiList.find((s) => !s.dikonfirmasi_mentor)?.nomor_sesi ?? null;
       return {
         enrollmentId: row.id,
         userId: user.id,
         nama: user.nama,
         avatarUrl: user.avatar_url,
-        sesiValidCount,
+        sesiValidCount: hitungSesiTerkonfirmasi(sesiList),
+        sesiMenungguSiswa: statusList.filter((st) => st === "menunggu_siswa").length,
+        sesiDisangkal: statusList.filter((st) => st === "disangkal_menunggu_review").length,
+        ditandaiHariIni,
+        sesiDitandaiSaya: sesiList.filter((s) => s.dikonfirmasi_mentor && s.mentor_id === mentorId).length,
+        riwayat: sesiList
+          .map((s, i) => ({ s, status: statusList[i] }))
+          .filter(({ status }) => status !== "belum_terjadi")
+          .map(({ s, status }) => {
+            const mentor = Array.isArray(s.mentor) ? (s.mentor[0] ?? null) : (s.mentor ?? null);
+            return {
+              nomorSesi: s.nomor_sesi,
+              tanggalDilaksanakan: s.tanggal_dilaksanakan ?? null,
+              mentorLabel: labelMentorSesi(mentor?.nama, s.nama_mapel),
+              olehSaya: s.mentor_id === mentorId,
+              status,
+            };
+          }),
         sesiBerikutnya,
       };
     })

@@ -3,15 +3,32 @@
 import { useState } from "react";
 import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
-import type { SesiSiswaItem } from "@/lib/mentor/getKelasSayaData";
+import type { SesiMentorRiwayat, SesiSiswaItem } from "@/lib/mentor/getKelasSayaData";
 
 /**
  * Absensi per siswa (PRD 7.5.5 FR-A1) — di halaman Kelas Saya (Mentor).
  * Tiap siswa punya progress "Sesi X dari Y" sendiri (bukan agregat kelas),
  * karena beda siswa bisa beda progress sesi meski satu kelas yang sama.
  * Klik "Tandai Sesi Hari Ini Selesai" SELALU menandai nomor_sesi PALING
- * KECIL yang belum ditandai — urut, tidak bisa loncat sesi.
+ * KECIL yang belum ditandai — urut, tidak bisa loncat sesi — dan maksimal
+ * SATU kali per siswa per MENTOR per hari kalender WIB (server menolak 409
+ * kalau lebih). Kelas multi-mentor: total sesi per siswa dibagi antar
+ * mentor; riwayat menampilkan "Nama Mentor — Mapel" per sesi.
  */
+
+const STATUS_LABEL: Record<SesiMentorRiwayat["status"], string> = {
+  belum_terjadi: "Belum terjadi",
+  menunggu_siswa: "Menunggu siswa",
+  terkonfirmasi_siswa: "Dikonfirmasi siswa",
+  terkonfirmasi_otomatis: "Terkonfirmasi otomatis",
+  disangkal_menunggu_review: "Disangkal, ditinjau Admin",
+};
+
+/** tanggal_dilaksanakan = DATE (sudah tanggal WIB) — diformat apa adanya. */
+function formatTanggal(tanggal: string | null): string | null {
+  if (!tanggal) return null;
+  return new Date(`${tanggal}T00:00:00Z`).toLocaleDateString("id-ID", { timeZone: "UTC", day: "numeric", month: "short" });
+}
 
 interface RowState extends SesiSiswaItem {
   busy: boolean;
@@ -55,7 +72,22 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
             ? {
                 ...r,
                 busy: false,
-                info: `Sesi ke-${nomorDitandai} ditandai, menunggu konfirmasi siswa.`,
+                info: `Sesi ke-${nomorDitandai} ditandai. Terkonfirmasi otomatis dalam 24 jam kalau siswa tidak merespons.`,
+                // Sesi yang baru ditandai langsung ikut terhitung (progresSesi.ts).
+                sesiValidCount: r.sesiValidCount + 1,
+                sesiMenungguSiswa: r.sesiMenungguSiswa + 1,
+                ditandaiHariIni: true,
+                sesiDitandaiSaya: r.sesiDitandaiSaya + 1,
+                riwayat: [
+                  ...r.riwayat,
+                  {
+                    nomorSesi: nomorDitandai,
+                    tanggalDilaksanakan: (json.tanggalDilaksanakan as string | undefined) ?? null,
+                    mentorLabel: (json.mentorLabel as string | null | undefined) ?? null,
+                    olehSaya: true,
+                    status: "menunggu_siswa" as const,
+                  },
+                ].sort((a, b) => a.nomorSesi - b.nomorSesi),
                 sesiBerikutnya: nomorBerikutnya <= jumlahSesi ? nomorBerikutnya : null,
               }
             : r,
@@ -83,20 +115,36 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
       {rows.map((row) => (
         <div
           key={row.enrollmentId}
-          className="flex flex-col gap-3 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+          className="flex flex-col gap-3 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-6"
         >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <Avatar avatarUrl={row.avatarUrl} nama={row.nama} size="md" />
             <div className="flex flex-col">
               <p className="text-sm font-medium text-black sm:text-base">{row.nama}</p>
               <p className="text-xs text-[#7E7C7C] sm:text-sm">
                 Sesi {row.sesiValidCount} dari {jumlahSesi}
+                {row.sesiDitandaiSaya > 0 ? ` · ${row.sesiDitandaiSaya} ditandai kamu` : ""}
               </p>
+              {row.sesiMenungguSiswa > 0 || row.sesiDisangkal > 0 ? (
+                <p className="text-xs text-[#7E7C7C]">
+                  {[
+                    row.sesiMenungguSiswa > 0 ? `${row.sesiMenungguSiswa} menunggu konfirmasi siswa` : null,
+                    row.sesiDisangkal > 0 ? `${row.sesiDisangkal} disangkal, ditinjau Admin` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              ) : null}
             </div>
           </div>
 
           <div className="flex flex-col items-start gap-1 sm:items-end">
-            {row.sesiBerikutnya !== null ? (
+            {row.sesiBerikutnya !== null && row.ditandaiHariIni ? (
+              <span className="inline-flex items-center rounded-full bg-[#F0F0F0] px-2.5 py-0.5 text-xs font-medium text-[#7E7C7C]">
+                Sudah ditandai hari ini
+              </span>
+            ) : row.sesiBerikutnya !== null ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -114,6 +162,34 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
             {row.info ? <p className="text-xs text-[#7E7C7C]">{row.info}</p> : null}
             {row.error ? <p className="text-xs text-[#E70A0A]">{row.error}</p> : null}
           </div>
+          </div>
+
+          {row.riwayat.length > 0 ? (
+            <details className="text-xs sm:text-sm">
+              <summary className="cursor-pointer text-[#081EEA]">Riwayat sesi ({row.riwayat.length})</summary>
+              <ul className="mt-2 flex flex-col divide-y divide-[#F0F0F0]">
+                {row.riwayat.map((r) => {
+                  const tanggal = formatTanggal(r.tanggalDilaksanakan);
+                  return (
+                    <li key={r.nomorSesi} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                      <span className="text-black">
+                        Sesi {r.nomorSesi}
+                        {tanggal ? <span className="text-[#7E7C7C]"> · {tanggal}</span> : null}
+                        {r.mentorLabel ? (
+                          <span className="text-[#7E7C7C]">
+                            {" "}
+                            · {r.mentorLabel}
+                            {r.olehSaya ? " (kamu)" : ""}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="text-[#7E7C7C]">{STATUS_LABEL[r.status]}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </details>
+          ) : null}
         </div>
       ))}
     </div>

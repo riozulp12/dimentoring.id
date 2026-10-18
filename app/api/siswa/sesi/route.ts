@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { notifyAdminSesiDisangkal } from "@/lib/notifikasi/notify";
+import { BATAS_RESPONS_JAM, hitungStatusSesi } from "@/lib/shared/statusSesi";
 
 /**
  * Konfirmasi balik Siswa atas sesi yang ditandai Mentor — PRD Bagian 7.5.5
  * FR-A2, BR-34 (konfirmasi DUA ARAH, bukan klaim sepihak mentor). "Tidak"
  * menandai perlu_review_admin=true DAN memberitahu Admin — TIDAK otomatis
  * dianggap tidak sah, menunggu keputusan Admin (lihat app/api/admin/sesi-review).
+ *
+ * Jendela jawab 24 jam sejak mentor menandai (lib/shared/statusSesi.ts) —
+ * sesudahnya sesi sudah terkonfirmasi otomatis dan endpoint menolak (409).
  */
 
 interface KonfirmasiSesiBody {
@@ -38,7 +42,7 @@ export async function PATCH(request: NextRequest) {
   const { data: sesi, error: sesiError } = await supabaseServer
     .from("sesi_kelas")
     .select(
-      "id, nomor_sesi, dikonfirmasi_mentor, status_siswa, enrollment:enrollment_id(user_id, kelas_id, kelas:kelas_id(nama))",
+      "id, nomor_sesi, dikonfirmasi_mentor, dikonfirmasi_mentor_pada, status_siswa, dikonfirmasi_siswa_pada, enrollment:enrollment_id(user_id, kelas_id, kelas:kelas_id(nama))",
     )
     .eq("id", sesiId)
     .maybeSingle();
@@ -58,22 +62,40 @@ export async function PATCH(request: NextRequest) {
   if (!sesi || !enrollment || enrollment.user_id !== session.userId) {
     return errorResponse("Sesi tidak ditemukan.", 404);
   }
-  if (!sesi.dikonfirmasi_mentor || sesi.status_siswa !== "belum") {
+  const now = new Date();
+  const statusSesi = hitungStatusSesi(sesi, now).status;
+  if (statusSesi === "terkonfirmasi_otomatis") {
+    return errorResponse(
+      `Batas ${BATAS_RESPONS_JAM} jam untuk menjawab sudah lewat, jadi sesi ini sudah terkonfirmasi otomatis. Kalau sesi ini sebenarnya tidak terjadi, hubungi Admin.`,
+      409,
+    );
+  }
+  if (statusSesi !== "menunggu_siswa") {
     return errorResponse("Sesi ini sudah tidak menunggu konfirmasi kamu.", 409);
   }
 
   const update = body.konfirmasi
-    ? { status_siswa: "dikonfirmasi" as const, dikonfirmasi_siswa_pada: new Date().toISOString() }
+    ? { status_siswa: "dikonfirmasi" as const, dikonfirmasi_siswa_pada: now.toISOString() }
     : {
         status_siswa: "disangkal" as const,
-        dikonfirmasi_siswa_pada: new Date().toISOString(),
+        dikonfirmasi_siswa_pada: now.toISOString(),
         perlu_review_admin: true,
       };
 
-  const { error: updateError } = await supabaseServer.from("sesi_kelas").update(update).eq("id", sesiId);
+  // Kondisional: cuma baris yang MASIH 'belum' — dua klik/tab bersamaan
+  // tidak bisa menimpa jawaban pertama (atau mengirim notif Admin dua kali).
+  const { data: updatedRows, error: updateError } = await supabaseServer
+    .from("sesi_kelas")
+    .update(update)
+    .eq("id", sesiId)
+    .eq("status_siswa", "belum")
+    .select("id");
   if (updateError) {
     console.error("[siswa/sesi] update sesi_kelas failed:", updateError);
     return errorResponse("Gagal menyimpan konfirmasi. Coba lagi nanti.", 500);
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    return errorResponse("Sesi ini sudah tidak menunggu konfirmasi kamu.", 409);
   }
 
   if (!body.konfirmasi) {

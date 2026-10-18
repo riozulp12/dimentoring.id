@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { labelMentorSesi } from "@/lib/shared/statusSesi";
 
 /**
  * Data layer "Sesi Perlu Ditinjau" (Admin) — PRD Bagian 7.5.5 FR-A3, BR-34.
@@ -16,7 +17,11 @@ export interface SesiReviewItem {
   siswaNama: string;
   kelasId: string;
   kelasNama: string;
+  /** Mentor kelas (kelas.mentor_id, kolom lama) — fallback untuk sesi lama. */
   mentorNama: string | null;
+  /** "Nama Mentor — Mapel" dari mentor yang MENANDAI sesi ini — null untuk
+   * sesi lama (mentor_id NULL). */
+  mentorSesiLabel: string | null;
 }
 
 type NamaJoin = { nama: string } | { nama: string }[] | null;
@@ -44,6 +49,8 @@ interface SesiReviewRow {
   tanggal_dilaksanakan: string | null;
   dikonfirmasi_mentor_pada: string | null;
   dikonfirmasi_siswa_pada: string | null;
+  nama_mapel: string | null;
+  mentor_sesi: NamaJoin;
   enrollment: EnrollmentJoin | EnrollmentJoin[] | null;
 }
 
@@ -51,7 +58,7 @@ export async function getSesiPerluReview(): Promise<SesiReviewItem[]> {
   const { data, error } = await supabaseServer
     .from("sesi_kelas")
     .select(
-      "id, nomor_sesi, tanggal_dilaksanakan, dikonfirmasi_mentor_pada, dikonfirmasi_siswa_pada, enrollment:enrollment_id(users:user_id(nama), kelas:kelas_id(id, nama, mentor:mentor_id(nama)))",
+      "id, nomor_sesi, tanggal_dilaksanakan, dikonfirmasi_mentor_pada, dikonfirmasi_siswa_pada, nama_mapel, mentor_sesi:mentor_id(nama), enrollment:enrollment_id(users:user_id(nama), kelas:kelas_id(id, nama, mentor:mentor_id(nama)))",
     )
     .eq("perlu_review_admin", true)
     .order("dikonfirmasi_siswa_pada", { ascending: true });
@@ -77,6 +84,7 @@ export async function getSesiPerluReview(): Promise<SesiReviewItem[]> {
         kelasId: kelas.id,
         kelasNama: kelas.nama,
         mentorNama: firstNama(kelas.mentor),
+        mentorSesiLabel: labelMentorSesi(firstNama(row.mentor_sesi), row.nama_mapel),
       };
     })
     .filter((item): item is SesiReviewItem => item !== null);
