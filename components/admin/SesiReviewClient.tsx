@@ -75,8 +75,8 @@ export default function SesiReviewClient({ initialItems }: { initialItems: SesiR
               <p className="text-black">{row.siswaNama}</p>
             </div>
             <div>
-              <p className="text-[#7E7C7C]">Mentor</p>
-              <p className="text-black">{row.mentorNama ?? "-"}</p>
+              <p className="text-[#7E7C7C]">{row.mentorSesiLabel ? "Ditandai oleh" : "Mentor"}</p>
+              <p className="text-black">{row.mentorSesiLabel ?? row.mentorNama ?? "-"}</p>
             </div>
             <div>
               <p className="text-[#7E7C7C]">Kelas</p>

@@ -3,7 +3,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { TINGKAT_KELAS_LABEL } from "@/lib/shared/kelasLabels";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
 import { hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
-import { hitungStatusSesi } from "@/lib/shared/statusSesi";
+import { hitungStatusSesi, labelMentorSesi, type StatusSesiEfektif } from "@/lib/shared/statusSesi";
 import { rentangHariWib } from "@/lib/shared/hariWib";
 import { getKelasAksesMentor, type AksesMentor } from "@/lib/mentor/aksesMentor";
 
@@ -154,11 +154,25 @@ export interface SesiSiswaItem {
   sesiMenungguSiswa: number;
   /** Disangkal siswa, menunggu keputusan Admin. */
   sesiDisangkal: number;
-  /** Sudah ada penandaan hari ini (hari kalender WIB) — maks. satu per hari. */
+  /** Mentor INI sudah menandai siswa ini hari ini (hari kalender WIB) —
+   * maks. satu per mentor per hari; mentor lain tetap boleh. */
   ditandaiHariIni: boolean;
+  /** Jumlah sesi siswa ini yang ditandai oleh mentor INI (selain progress total). */
+  sesiDitandaiSaya: number;
+  /** Semua sesi yang sudah ditandai (oleh mentor mana pun), urut nomor sesi. */
+  riwayat: SesiMentorRiwayat[];
   /** Nomor sesi paling kecil yang BELUM ditandai mentor — null kalau semua
    * sesi (1..jumlahSesi) sudah ditandai (tombol "Tandai Selesai" disembunyikan). */
   sesiBerikutnya: number | null;
+}
+
+export interface SesiMentorRiwayat {
+  nomorSesi: number;
+  tanggalDilaksanakan: string | null;
+  /** "Nama Mentor — Mapel" — null untuk sesi lama (mentor_id NULL). */
+  mentorLabel: string | null;
+  olehSaya: boolean;
+  status: StatusSesiEfektif;
 }
 
 type UserJoin = { id: string; nama: string; avatar_url: string | null } | { id: string; nama: string; avatar_url: string | null }[] | null;
@@ -200,7 +214,9 @@ export async function getSesiSiswaByKelasId(
   const enrollmentIds = enrollmentRows.map((r) => r.id as string);
   const { data: sesiRows, error: sesiError } = await supabaseServer
     .from("sesi_kelas")
-    .select("enrollment_id, nomor_sesi, dikonfirmasi_mentor, dikonfirmasi_mentor_pada, status_siswa, dikonfirmasi_siswa_pada")
+    .select(
+      "enrollment_id, nomor_sesi, tanggal_dilaksanakan, dikonfirmasi_mentor, dikonfirmasi_mentor_pada, status_siswa, dikonfirmasi_siswa_pada, mentor_id, nama_mapel, mentor:mentor_id(nama)",
+    )
     .in("enrollment_id", enrollmentIds)
     .order("nomor_sesi", { ascending: true });
 
@@ -215,6 +231,10 @@ export async function getSesiSiswaByKelasId(
     dikonfirmasi_mentor_pada: string | null;
     status_siswa: string;
     dikonfirmasi_siswa_pada: string | null;
+    tanggal_dilaksanakan?: string | null;
+    mentor_id?: string | null;
+    nama_mapel?: string | null;
+    mentor?: { nama: string } | { nama: string }[] | null;
   };
   const sesiByEnrollment = new Map<string, SesiRow[]>();
   for (const row of (sesiRows ?? []) as unknown as SesiRow[]) {
@@ -235,6 +255,7 @@ export async function getSesiSiswaByKelasId(
       const ditandaiHariIni = sesiList.some(
         (s) =>
           s.dikonfirmasi_mentor &&
+          s.mentor_id === mentorId &&
           s.dikonfirmasi_mentor_pada !== null &&
           Date.parse(s.dikonfirmasi_mentor_pada) >= Date.parse(hariIni.mulai) &&
           Date.parse(s.dikonfirmasi_mentor_pada) < Date.parse(hariIni.akhir),
@@ -249,6 +270,20 @@ export async function getSesiSiswaByKelasId(
         sesiMenungguSiswa: statusList.filter((st) => st === "menunggu_siswa").length,
         sesiDisangkal: statusList.filter((st) => st === "disangkal_menunggu_review").length,
         ditandaiHariIni,
+        sesiDitandaiSaya: sesiList.filter((s) => s.dikonfirmasi_mentor && s.mentor_id === mentorId).length,
+        riwayat: sesiList
+          .map((s, i) => ({ s, status: statusList[i] }))
+          .filter(({ status }) => status !== "belum_terjadi")
+          .map(({ s, status }) => {
+            const mentor = Array.isArray(s.mentor) ? (s.mentor[0] ?? null) : (s.mentor ?? null);
+            return {
+              nomorSesi: s.nomor_sesi,
+              tanggalDilaksanakan: s.tanggal_dilaksanakan ?? null,
+              mentorLabel: labelMentorSesi(mentor?.nama, s.nama_mapel),
+              olehSaya: s.mentor_id === mentorId,
+              status,
+            };
+          }),
         sesiBerikutnya,
       };
     })

@@ -6,6 +6,7 @@ import { getAksesMentorEnrollment } from "@/lib/mentor/aksesMentor";
 import { getNamaMapelMentor } from "@/lib/mentor/mapelMentor";
 import { notifySesiDitandaiMentor } from "@/lib/notifikasi/notify";
 import { rentangHariWib, tanggalWib } from "@/lib/shared/hariWib";
+import { labelMentorSesi } from "@/lib/shared/statusSesi";
 
 /**
  * "Tandai Sesi Hari Ini Selesai" (Mentor) — PRD Bagian 7.5.5 FR-A1. Selalu
@@ -108,6 +109,8 @@ export async function POST(request: NextRequest) {
     return errorResponse("Gagal memuat data mapel. Coba lagi nanti.", 500);
   }
 
+  const tanggalDilaksanakan = tanggalWib(now);
+
   // Kondisional/atomik: cuma baris yang MASIH belum ditandai. Dua request
   // bersamaan (klik dobel, dua tab) memilih baris yang sama — yang kalah
   // mengubah 0 baris dan TIDAK mengirim notifikasi.
@@ -116,7 +119,7 @@ export async function POST(request: NextRequest) {
     .update({
       dikonfirmasi_mentor: true,
       dikonfirmasi_mentor_pada: now.toISOString(),
-      tanggal_dilaksanakan: tanggalWib(now),
+      tanggal_dilaksanakan: tanggalDilaksanakan,
       mentor_id: session.userId,
       nama_mapel: namaMapel,
     })
@@ -132,12 +135,29 @@ export async function POST(request: NextRequest) {
     return errorResponse("Sesi ini baru saja ditandai (mungkin dari tab lain). Muat ulang halaman.", 409);
   }
 
+  // Nama mentor cuma untuk label "Nama Mentor — Mapel" (notifikasi & UI) —
+  // gagal dimuat tidak membatalkan penandaan yang sudah tersimpan.
+  const { data: mentorRow, error: mentorError } = await supabaseServer
+    .from("users")
+    .select("nama")
+    .eq("id", session.userId)
+    .maybeSingle();
+  if (mentorError) console.error("[mentor/sesi] query nama mentor failed:", mentorError);
+  const mentorLabel = labelMentorSesi((mentorRow?.nama as string | undefined) ?? null, namaMapel);
+
   await notifySesiDitandaiMentor(
     enrollment.userId,
     enrollment.kelasId,
     kelas.nama,
     nextSesi.nomor_sesi as number,
+    mentorLabel,
   );
 
-  return NextResponse.json({ success: true, nomorSesi: nextSesi.nomor_sesi, namaMapel });
+  return NextResponse.json({
+    success: true,
+    nomorSesi: nextSesi.nomor_sesi,
+    namaMapel,
+    mentorLabel,
+    tanggalDilaksanakan,
+  });
 }

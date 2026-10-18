@@ -301,19 +301,22 @@ export async function notifyMentorsKontenMenungguReview(subtesId: string | null)
  * SISWA ybs (bukan email, cukup ringan) begitu mentor checklist "Sudah
  * Mengajar" untuk satu sesi. Dipanggil dari app/api/mentor/sesi/route.ts
  * tepat setelah sesi_kelas.dikonfirmasi_mentor diupdate jadi true.
+ * `mentorLabel` = "Nama Mentor — Mapel" (lib/shared/statusSesi.ts) — null
+ * kalau tidak ada, dan bagian itu dilewati (tanpa label kosong).
  */
 export async function notifySesiDitandaiMentor(
   siswaUserId: string,
   kelasId: string,
   kelasNama: string,
   nomorSesi: number,
+  mentorLabel: string | null = null,
 ) {
   await insertNotifikasi([
     {
       user_id: siswaUserId,
       tipe: "sistem",
       judul: `Mentor menandai sesi ke-${nomorSesi} sudah selesai`,
-      pesan: `Konfirmasi kehadiran sesi ke-${nomorSesi} kelas ${kelasNama} ya. Sesi ini akan terkonfirmasi otomatis dalam 24 jam jika tidak ada respons.`,
+      pesan: `Konfirmasi kehadiran sesi ke-${nomorSesi} kelas ${kelasNama}${mentorLabel ? ` (${mentorLabel})` : ""} ya. Sesi ini akan terkonfirmasi otomatis dalam 24 jam jika tidak ada respons.`,
       link_tujuan: `/kelas/${kelasId}`,
     },
   ]);

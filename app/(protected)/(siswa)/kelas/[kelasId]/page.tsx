@@ -133,7 +133,7 @@ export default async function KelasDetailPage({
 
         {isLunas && sesiKehadiran ? (
           <SesiKehadiranSection
-            sesiId={sesiKehadiran.pending}
+            riwayat={sesiKehadiran.riwayat}
             jumlahSesi={kelas.jumlahSesi}
             initialValidCount={sesiKehadiran.validCount}
           />

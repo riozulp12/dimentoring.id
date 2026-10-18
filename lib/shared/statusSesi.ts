@@ -78,3 +78,13 @@ export function hitungStatusSesi(row: SesiWaktuRow, now: Date = new Date()): Sta
   }
   return { status: "menunggu_siswa", waktuTerkonfirmasi: null, batasRespons: batasIso };
 }
+
+/**
+ * "Nama Mentor — Mapel" untuk satu sesi (multi-mentor, PRD 7.5.5). Bagian
+ * yang kosong dilewati; dua-duanya kosong (sesi lama tanpa mentor_id) → null,
+ * supaya pemanggil tidak menampilkan label kosong.
+ */
+export function labelMentorSesi(mentorNama: string | null | undefined, namaMapel: string | null | undefined): string | null {
+  const bagian = [mentorNama?.trim(), namaMapel?.trim()].filter((v): v is string => Boolean(v));
+  return bagian.length > 0 ? bagian.join(" — ") : null;
+}

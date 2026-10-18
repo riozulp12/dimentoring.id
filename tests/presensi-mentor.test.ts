@@ -73,9 +73,9 @@ function subtesOf(id: unknown) {
   return db.subtes.find((s) => s.id === id) ?? null;
 }
 
-/** Tiruan `supabaseServer.from` — embed yang dipakai: enrollments→kelas→subtes,
- * kelas_subtes_mentor→subtes. Tabel lain memakai referensi baris asli
- * (supaya update tersimpan). */
+/** Tiruan `supabaseServer.from` — embed yang dipakai: enrollments→kelas→subtes
+ * & users, kelas_subtes_mentor→subtes, sesi_kelas→mentor (users). Tabel lain
+ * memakai referensi baris asli (supaya update tersimpan). */
 function fakeFrom(table: string) {
   db[table] ??= [];
   const rows = db[table];
@@ -83,12 +83,20 @@ function fakeFrom(table: string) {
     return new FakeQuery(
       rows.map((row) => {
         const kelas = db.kelas.find((k) => k.id === row.kelas_id) ?? null;
-        return { ...row, kelas: kelas ? { ...kelas, subtes: subtesOf(kelas.subtes_id) } : null };
+        return {
+          ...row,
+          kelas: kelas ? { ...kelas, subtes: subtesOf(kelas.subtes_id) } : null,
+          users: db.users.find((u) => u.id === row.user_id) ?? null,
+        };
       }),
     );
   }
   if (table === "kelas_subtes_mentor") {
     return new FakeQuery(rows.map((row) => ({ ...row, subtes: subtesOf(row.subtes_id) })));
+  }
+  if (table === "sesi_kelas") {
+    // Embed mentor:mentor_id(nama) disegarkan di baris ASLI (update tetap tersimpan).
+    for (const row of rows) row.mentor = db.users.find((u) => u.id === row.mentor_id) ?? null;
   }
   const query = new FakeQuery(rows);
   return Object.assign(query, {
@@ -210,6 +218,8 @@ beforeEach(() => {
       { id: MENTOR_KEDUA, nama: "Citra" },
       { id: MENTOR_OFFLINE, nama: "Dewi" },
       { id: "siswa-1", nama: "Siswa Satu", avatar_url: null },
+      { id: "siswa-2", nama: "Siswa Dua", avatar_url: null },
+      { id: "siswa-3", nama: "Siswa Tiga", avatar_url: null },
     ],
     sesi_kelas: [...sesiRows("e-on", 10), ...sesiRows("e-off", 8)],
     notifikasi: [],
@@ -368,5 +378,68 @@ describe("POST /api/mentor/sesi (multi-mentor)", () => {
     const [lama, baru] = ditandai("e-on");
     assert.equal(lama.mentor_id, null);
     assert.equal(baru.mentor_id, MENTOR_UTAMA);
+  });
+});
+
+describe("tampilan multi-mentor (Kelas Saya Mentor + notifikasi)", () => {
+  it("riwayat menampilkan 'Nama Mentor — Mapel'; hitungan & batas harian per mentor", async () => {
+    await tandai(MENTOR_UTAMA, "e-on");
+    await tandai(MENTOR_KEDUA, "e-on");
+
+    const [utama] = await kelasSayaMentor.getSesiSiswaByKelasId("K-ON", MENTOR_UTAMA, "utama");
+    assert.equal(utama.sesiValidCount, 2, "progress total tetap gabungan semua mentor");
+    assert.equal(utama.sesiDitandaiSaya, 1);
+    assert.equal(utama.ditandaiHariIni, true);
+    assert.deepEqual(
+      utama.riwayat.map((r) => [r.nomorSesi, r.mentorLabel, r.olehSaya, r.status]),
+      [
+        [1, "Budi — Penalaran Matematika", true, "menunggu_siswa"],
+        [2, "Citra — Literasi B. Inggris", false, "menunggu_siswa"],
+      ],
+    );
+  });
+
+  it("mentor kedua yang belum menandai hari ini tidak ikut terkunci oleh penandaan mentor utama", async () => {
+    await tandai(MENTOR_UTAMA, "e-on");
+    const [kedua] = await kelasSayaMentor.getSesiSiswaByKelasId("K-ON", MENTOR_KEDUA, "kelas");
+    assert.equal(kedua.ditandaiHariIni, false);
+    assert.equal(kedua.sesiDitandaiSaya, 0);
+  });
+
+  it("sesi lama tanpa mentor_id: tanpa label (null), tidak error", async () => {
+    Object.assign(db.sesi_kelas[0], {
+      dikonfirmasi_mentor: true,
+      dikonfirmasi_mentor_pada: "2026-01-01T00:00:00.000Z",
+      status_siswa: "dikonfirmasi",
+      dikonfirmasi_siswa_pada: "2026-01-01T01:00:00.000Z",
+    });
+    const [item] = await kelasSayaMentor.getSesiSiswaByKelasId("K-ON", MENTOR_UTAMA, "utama");
+    assert.deepEqual(item.riwayat.map((r) => [r.mentorLabel, r.olehSaya]), [[null, false]]);
+    assert.equal(item.sesiDitandaiSaya, 0);
+  });
+
+  it("mentor offline cuma melihat siswa yang ditugaskan ke dia", async () => {
+    const items = await kelasSayaMentor.getSesiSiswaByKelasId("K-OFF", MENTOR_OFFLINE, "offline");
+    assert.deepEqual(items.map((i) => i.enrollmentId), ["e-off"]);
+  });
+
+  it("notifikasi ke siswa menyebut mentor + mapel dan konfirmasi otomatis 24 jam", async () => {
+    await tandai(MENTOR_KEDUA, "e-on");
+    const [notif] = db.notifikasi;
+    assert.equal(notif.user_id, "siswa-1");
+    assert.match(String(notif.pesan), /\(Citra — Literasi B\. Inggris\)/);
+    assert.match(String(notif.pesan), /akan terkonfirmasi otomatis dalam 24 jam jika tidak ada respons/);
+  });
+
+  it("kelas tanpa mapel: notifikasi cuma nama mentor, tanpa label kosong", async () => {
+    db.kelas.push({ id: "K-KONSUL", nama: "Konsultasi", mentor_id: MENTOR_UTAMA, subtes_id: null, jumlah_sesi: 4 });
+    db.kelas_mentor.push({ kelas_id: "K-KONSUL", mentor_id: MENTOR_UTAMA });
+    db.enrollments.push({ id: "e-k", user_id: "siswa-1", kelas_id: "K-KONSUL", status_pembayaran: "lunas", mentor_offline_id: null });
+    db.sesi_kelas.push(...sesiRows("e-k", 4));
+    const res = await tandai(MENTOR_UTAMA, "e-k");
+    assert.equal(res.status, 200);
+    assert.equal(res.json.namaMapel, null);
+    assert.equal(res.json.mentorLabel, "Budi");
+    assert.match(String(db.notifikasi[0].pesan), /kelas Konsultasi \(Budi\) ya\./);
   });
 });
