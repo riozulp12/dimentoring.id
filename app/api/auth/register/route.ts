@@ -11,6 +11,7 @@ import { generateReferralCode } from "@/lib/auth/generateReferralCode";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
 import { linkPendingAssessment } from "@/lib/assessment/linkPendingAssessment";
 import { writeReturnToCookie } from "@/lib/auth/returnToCookie";
+import { bacaAtribusi, pilihUtmPendaftaran } from "@/lib/shared/atribusi";
 
 /**
  * Register API — PRD Bagian 7.0.2 DIREVISI TOTAL (Agustus 2026): "Akun Dulu,
@@ -81,9 +82,13 @@ export async function POST(request: NextRequest) {
   const passwordHash = await hashPassword(body.password);
 
   // Kosong = biarkan NULL di database (dianggap "organic" di tampilan Dashboard
-  // Marketing) — JANGAN diisi default string apa pun di sini.
-  const utmSource = body.utmSource?.trim() || null;
-  const utmCampaign = body.utmCampaign?.trim() || null;
+  // Marketing) — JANGAN diisi default string apa pun di sini. Query /daftar
+  // kosong -> cadangan dari cookie first-touch dm_attr (BR-38).
+  const { utmSource, utmCampaign } = pilihUtmPendaftaran(
+    body.utmSource,
+    body.utmCampaign,
+    bacaAtribusi(request.cookies),
+  );
 
   // ---- Insert users (profiling_selesai default false lewat skema) ----
   // Format kode referral (3 huruf + 2 angka) cuma punya 100 kombinasi per prefix,
