@@ -77,7 +77,7 @@ ALTER TABLE enrollment_manual_log ENABLE ROW LEVEL SECURITY;
 -- integritas data (duplikat, kapasitas, idempotensi).
 --
 -- status hasil: 'dibuat' | 'sudah_diproses' (request_id sama) | 'duplikat'
--- | 'penuh' | 'kelas_tidak_ada'.
+-- | 'penuh' | 'kelas_tidak_ada' | 'mentor_sama_dengan_siswa'.
 CREATE OR REPLACE FUNCTION daftar_siswa_manual(
     p_admin_id UUID,
     p_siswa_id UUID,
@@ -102,6 +102,11 @@ DECLARE
     v_enrollment enrollments%ROWTYPE;
     v_subtes UUID[] := coalesce(p_subtes_ids, ARRAY[]::UUID[]);
 BEGIN
+    -- Akun multi-role (Student + Mentor) tidak boleh jadi mentor dirinya sendiri.
+    IF p_mentor_offline_id IS NOT NULL AND p_mentor_offline_id = p_siswa_id THEN
+        RETURN jsonb_build_object('status', 'mentor_sama_dengan_siswa');
+    END IF;
+
     SELECT * INTO v_kelas FROM kelas WHERE id = p_kelas_id FOR UPDATE;
     IF NOT FOUND THEN
         RETURN jsonb_build_object('status', 'kelas_tidak_ada');
@@ -196,7 +201,7 @@ GRANT EXECUTE ON FUNCTION daftar_siswa_manual(UUID, UUID, UUID, UUID[], UUID, DE
 -- lama TIDAK diubah (sesi_kelas.mentor_id tetap mencatat siapa yang mengajar).
 --
 -- status hasil: 'diubah' | 'tidak_ditemukan' | 'bukan_offline' | 'belum_lunas'
--- | 'sama' | 'mentor_tidak_valid'.
+-- | 'sama' | 'mentor_tidak_valid' | 'mentor_sama_dengan_siswa'.
 CREATE OR REPLACE FUNCTION ubah_mentor_offline_manual(
     p_admin_id UUID,
     p_enrollment_id UUID,
@@ -221,6 +226,9 @@ BEGIN
     END IF;
     IF v_enrollment.status_pembayaran <> 'lunas' THEN
         RETURN jsonb_build_object('status', 'belum_lunas');
+    END IF;
+    IF p_mentor_baru = v_enrollment.user_id THEN
+        RETURN jsonb_build_object('status', 'mentor_sama_dengan_siswa');
     END IF;
     IF v_enrollment.mentor_offline_id IS NOT DISTINCT FROM p_mentor_baru THEN
         RETURN jsonb_build_object('status', 'sama');

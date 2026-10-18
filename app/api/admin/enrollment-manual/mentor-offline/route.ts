@@ -14,6 +14,8 @@ import { getKelasSubtesOptions } from "@/lib/payment/getKelasForCheckout";
  * Mentor tatap muka per enrollment — PRD 7.5.10.
  * GET   : kandidat mentor untuk satu kelas offline (form Daftarkan Siswa
  *         Manual & aksi Ubah Mentor). lat/lng opsional (cuma urutan jarak).
+ *         siswaId / enrollmentId opsional: siswa itu dikeluarkan dari daftar
+ *         (akun multi-role tidak boleh jadi mentor dirinya sendiri).
  * PATCH : ganti enrollments.mentor_offline_id satu siswa, alasan wajib.
  *         Update + log dalam SATU transaksi (fungsi DB
  *         ubah_mentor_offline_manual). Mentor baru langsung dikenali
@@ -31,10 +33,25 @@ export async function GET(request: NextRequest) {
   const lokasi = parseLokasi(params.get("lat"), params.get("lng"));
   if (!lokasi.ok) return NextResponse.json({ success: false, error: "Koordinat tidak valid." }, { status: 400 });
 
+  let kecualiUserId = params.get("siswaId") || null;
+  const enrollmentId = params.get("enrollmentId");
+  if (!kecualiUserId && enrollmentId) {
+    const { data: enr, error: enrError } = await supabaseServer
+      .from("enrollments")
+      .select("user_id")
+      .eq("id", enrollmentId)
+      .maybeSingle();
+    if (enrError) {
+      console.error("[admin/mentor-offline GET] query enrollment failed:", enrError);
+      return NextResponse.json({ success: false, error: "Gagal memuat mentor. Coba lagi nanti." }, { status: 500 });
+    }
+    kecualiUserId = (enr?.user_id as string | undefined) ?? null;
+  }
+
   const subtesId = (await getKelasSubtesOptions(kelasId))[0]?.id;
   if (!subtesId) return NextResponse.json({ success: true, mentor: [] });
 
-  const kandidat = await getMentorOfflineKandidat(subtesId, lokasi.value);
+  const kandidat = await getMentorOfflineKandidat(subtesId, lokasi.value, kecualiUserId);
   if (kandidat === "gagal") {
     return NextResponse.json({ success: false, error: "Gagal memuat mentor. Coba lagi nanti." }, { status: 500 });
   }
@@ -49,7 +66,11 @@ interface UbahMentorBody {
 
 type UbahHasil =
   | { status: "diubah"; mentor_lama: string | null; kelas_id: string; siswa_id: string }
-  | { status: "tidak_ditemukan" | "bukan_offline" | "belum_lunas" | "sama" | "mentor_tidak_valid" };
+  | {
+      status: "tidak_ditemukan" | "bukan_offline" | "belum_lunas" | "sama" | "mentor_tidak_valid" | "mentor_sama_dengan_siswa";
+    };
+
+const PESAN_MENTOR_SISWA = "Mentor tatap muka tidak boleh akun siswa itu sendiri.";
 
 function errorResponse(message: string, status: number) {
   return NextResponse.json({ success: false, error: message }, { status });
@@ -76,7 +97,7 @@ export async function PATCH(request: NextRequest) {
 
   const { data: enrollment, error: enrollmentError } = await supabaseServer
     .from("enrollments")
-    .select("id, kelas_id, kelas:kelas_id(nama, mode_pembelajaran)")
+    .select("id, user_id, kelas_id, kelas:kelas_id(nama, mode_pembelajaran)")
     .eq("id", enrollmentId)
     .maybeSingle();
   if (enrollmentError) {
@@ -91,10 +112,12 @@ export async function PATCH(request: NextRequest) {
     return errorResponse("Mentor per siswa cuma berlaku untuk kelas offline. Mentor kelas online diatur di Kelola Kelas.", 409);
   }
 
+  if (mentorId === enrollment.user_id) return errorResponse(PESAN_MENTOR_SISWA, 400);
+
   // Kriteria sama dengan checkout: aktif, bisa_offline, mengampu mapel kelas.
   const subtesId = (await getKelasSubtesOptions(enrollment.kelas_id as string))[0]?.id;
   if (!subtesId) return errorResponse("Kelas offline ini belum punya Subtes. Atur dulu di Kelola Kelas.", 400);
-  const kandidat = await getMentorOfflineKandidat(subtesId, null);
+  const kandidat = await getMentorOfflineKandidat(subtesId, null, enrollment.user_id as string);
   if (kandidat === "gagal") return errorResponse("Gagal memeriksa mentor. Coba lagi nanti.", 500);
   if (!kandidat.some((m) => m.mentorId === mentorId)) {
     return errorResponse("Mentor yang dipilih tidak aktif, tidak bersedia tatap muka, atau tidak mengampu mapel kelas ini.", 400);
@@ -125,6 +148,8 @@ export async function PATCH(request: NextRequest) {
       return errorResponse("Mentor itu sudah menjadi mentor siswa ini.", 409);
     case "mentor_tidak_valid":
       return errorResponse("Mentor yang dipilih tidak aktif atau tidak bersedia tatap muka.", 400);
+    case "mentor_sama_dengan_siswa":
+      return errorResponse(PESAN_MENTOR_SISWA, 400);
     default:
       console.error("[admin/mentor-offline PATCH] hasil RPC tidak dikenal:", hasilRaw);
       return errorResponse("Gagal menyimpan mentor. Coba lagi nanti.", 500);

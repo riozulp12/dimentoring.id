@@ -54,7 +54,8 @@ type RpcHasil =
   | { status: "sudah_diproses"; enrollment_id: string | null }
   | { status: "duplikat"; status_pembayaran?: string }
   | { status: "penuh"; kapasitas: number; terisi: number }
-  | { status: "kelas_tidak_ada" };
+  | { status: "kelas_tidak_ada" }
+  | { status: "mentor_sama_dengan_siswa" };
 
 function errorResponse(message: string, status: number) {
   return NextResponse.json({ success: false, error: message }, { status });
@@ -62,6 +63,7 @@ function errorResponse(message: string, status: number) {
 
 const PESAN_DUPLIKAT = "Siswa ini sudah punya pendaftaran di kelas ini.";
 const PESAN_PENUH = "Kelas sudah penuh. Pendaftaran manual tidak bisa melewati kapasitas kelas.";
+const PESAN_MENTOR_SISWA = "Mentor tatap muka tidak boleh akun siswa itu sendiri.";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAdminAktif(request.cookies.get(SESSION_COOKIE_NAME)?.value);
@@ -185,7 +187,8 @@ export async function POST(request: NextRequest) {
     if (typeof body.mentorOfflineId !== "string" || !body.mentorOfflineId) {
       return errorResponse("Pilih mentor tatap muka untuk siswa ini.", 400);
     }
-    const kandidat = await getMentorOfflineKandidat(subtesOffline, lokasi);
+    if (body.mentorOfflineId === siswaId) return errorResponse(PESAN_MENTOR_SISWA, 400);
+    const kandidat = await getMentorOfflineKandidat(subtesOffline, lokasi, siswaId);
     if (kandidat === "gagal") return errorResponse("Gagal memeriksa mentor. Coba lagi nanti.", 500);
     if (!kandidat.some((m) => m.mentorId === body.mentorOfflineId)) {
       return errorResponse("Mentor yang dipilih tidak aktif, tidak bersedia tatap muka, atau tidak mengampu mapel kelas ini.", 400);
@@ -224,6 +227,8 @@ export async function POST(request: NextRequest) {
       return errorResponse(PESAN_PENUH, 409);
     case "kelas_tidak_ada":
       return errorResponse("Kelas tidak ditemukan.", 404);
+    case "mentor_sama_dengan_siswa":
+      return errorResponse(PESAN_MENTOR_SISWA, 400);
     default:
       console.error("[admin/enrollment-manual] hasil RPC tidak dikenal:", hasilRaw);
       return errorResponse("Gagal mendaftarkan siswa. Coba lagi nanti.", 500);

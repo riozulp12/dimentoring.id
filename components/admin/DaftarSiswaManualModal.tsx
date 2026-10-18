@@ -102,6 +102,7 @@ export default function DaftarSiswaManualModal({
     setError(null);
     try {
       const params = new URLSearchParams({ kelasId });
+      if (siswa) params.set("siswaId", siswa.id);
       if (lat.trim() && lng.trim()) {
         params.set("lat", lat.trim());
         params.set("lng", lng.trim());
@@ -204,7 +205,16 @@ export default function DaftarSiswaManualModal({
             <span className="text-black">
               {siswa.nama} <span className="text-[#7E7C7C]">· {siswa.email}</span>
             </span>
-            <button type="button" className="text-[#081EEA] hover:underline" onClick={() => setSiswa(null)}>
+            <button
+              type="button"
+              className="text-[#081EEA] hover:underline"
+              onClick={() => {
+                setSiswa(null);
+                // Daftar mentor mengecualikan siswa terpilih — muat ulang setelah ganti siswa.
+                setMentorList(null);
+                setMentorId("");
+              }}
+            >
               Ganti
             </button>
           </div>
@@ -225,7 +235,11 @@ export default function DaftarSiswaManualModal({
                     key={s.id}
                     type="button"
                     className="px-4 py-2 text-left text-sm hover:bg-[#F9FAFF]"
-                    onClick={() => setSiswa(s)}
+                    onClick={() => {
+                      setSiswa(s);
+                      setMentorList(null);
+                      setMentorId("");
+                    }}
                   >
                     {s.nama} <span className="text-[#7E7C7C]">· {s.email}</span>
                   </button>

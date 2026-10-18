@@ -43,7 +43,8 @@ export default function UbahMentorOfflineModal({
     setMemuat(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/enrollment-manual/mentor-offline?kelasId=${encodeURIComponent(kelasId)}`);
+      const params = new URLSearchParams({ kelasId, enrollmentId });
+      const res = await fetch(`/api/admin/enrollment-manual/mentor-offline?${params.toString()}`);
       const json = await res.json();
       if (!res.ok || !json.success) {
         setError(json.error ?? "Gagal memuat mentor.");

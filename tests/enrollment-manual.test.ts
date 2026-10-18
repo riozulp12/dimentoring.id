@@ -96,6 +96,9 @@ function fakeFrom(table: string) {
 function fakeRpc(name: string, p: Row) {
   rpcCalls.push(name);
   if (name === "daftar_siswa_manual") {
+    if (p.p_mentor_offline_id && p.p_mentor_offline_id === p.p_siswa_id) {
+      return Promise.resolve({ data: { status: "mentor_sama_dengan_siswa" }, error: null });
+    }
     const kelas = db.kelas.find((k) => k.id === p.p_kelas_id);
     if (!kelas) return Promise.resolve({ data: { status: "kelas_tidak_ada" }, error: null });
     if (p.p_request_id) {
@@ -146,6 +149,7 @@ function fakeRpc(name: string, p: Row) {
   if (name === "ubah_mentor_offline_manual") {
     const e = db.enrollments.find((r) => r.id === p.p_enrollment_id);
     if (!e) return Promise.resolve({ data: { status: "tidak_ditemukan" }, error: null });
+    if (p.p_mentor_baru === e.user_id) return Promise.resolve({ data: { status: "mentor_sama_dengan_siswa" }, error: null });
     if (e.mentor_offline_id === p.p_mentor_baru) return Promise.resolve({ data: { status: "sama" }, error: null });
     const lama = e.mentor_offline_id;
     e.mentor_offline_id = p.p_mentor_baru;
@@ -173,6 +177,8 @@ const MENTOR_ON = "mentor-online";
 const MENTOR_OFF = "mentor-offline";
 const MENTOR_OFF_2 = "mentor-offline-2";
 const MENTOR_PENDING = "mentor-pending";
+/** Satu akun dengan role Student DAN Mentor aktif (bisa_offline, mengampu mapel). */
+const MULTI = "multi-role";
 const ALASAN = "Sudah transfer ke BCA tanggal 12 Oktober";
 const REQ_1 = "11111111-1111-4111-8111-111111111111";
 
@@ -210,6 +216,7 @@ beforeEach(() => {
       { id: MENTOR_OFF, nama: "Mentor Offline", email: "moff@x.id" },
       { id: MENTOR_OFF_2, nama: "Mentor Offline Dua", email: "moff2@x.id" },
       { id: MENTOR_PENDING, nama: "Mentor Pending", email: "mp@x.id" },
+      { id: MULTI, nama: "Siswa Sekaligus Mentor", email: "multi@x.id" },
     ],
     user_roles: [
       { user_id: ADMIN, role_type: "admin", status: "active" },
@@ -219,6 +226,8 @@ beforeEach(() => {
       { user_id: MENTOR_OFF, role_type: "mentor", status: "active" },
       { user_id: MENTOR_OFF_2, role_type: "mentor", status: "active" },
       { user_id: MENTOR_PENDING, role_type: "mentor", status: "pending" },
+      { user_id: MULTI, role_type: "student", status: "active" },
+      { user_id: MULTI, role_type: "mentor", status: "active" },
     ],
     subtes: [
       { id: "s-mtk", nama: "Penalaran Matematika", mapel_dasar: "matematika" },
@@ -243,12 +252,14 @@ beforeEach(() => {
       { id: "mp-off2", user_id: MENTOR_OFF_2, asal_ptn: "UI", bisa_offline: true, lokasi_lat: -6.2, lokasi_lng: 106.8 },
       { id: "mp-on", user_id: MENTOR_ON, asal_ptn: "ITB", bisa_offline: false, lokasi_lat: null, lokasi_lng: null },
       { id: "mp-pending", user_id: MENTOR_PENDING, asal_ptn: "UNY", bisa_offline: true, lokasi_lat: null, lokasi_lng: null },
+      { id: "mp-multi", user_id: MULTI, asal_ptn: "UNS", bisa_offline: true, lokasi_lat: null, lokasi_lng: null },
     ],
     mentor_subtes_diampu: [
       { mentor_profile_id: "mp-off", subtes_id: "s-mtk" },
       { mentor_profile_id: "mp-off2", subtes_id: "s-mtk" },
       { mentor_profile_id: "mp-on", subtes_id: "s-mtk" },
       { mentor_profile_id: "mp-pending", subtes_id: "s-mtk" },
+      { mentor_profile_id: "mp-multi", subtes_id: "s-mtk" },
     ],
     enrollments: [{ id: "enr-lama", user_id: SISWA_2, kelas_id: "K-PENUH", status_pembayaran: "lunas", sumber: "checkout" }],
     enrollment_subtes: [],
@@ -417,6 +428,46 @@ describe("POST /api/admin/enrollment-manual", () => {
     assert.deepEqual([a.status, b.status].sort(), [201, 409]);
     assert.equal(db.enrollments.filter((e) => e.user_id === SISWA && e.kelas_id === "K-ON").length, 1);
     assert.equal(db.sesi_kelas.length, 10);
+  });
+});
+
+describe("mentor tatap muka tidak boleh siswa itu sendiri", () => {
+  async function kandidat(query: string) {
+    const token = sessionLib.createSessionToken({ userId: ADMIN, role: "admin" });
+    const res = await mentorRoute.GET(
+      new NextRequest(`http://localhost/api/admin/enrollment-manual/mentor-offline?${query}`, {
+        headers: { cookie: `${sessionLib.SESSION_COOKIE_NAME}=${token}` },
+      }),
+    );
+    const json = (await res.json()) as { mentor: { mentorId: string }[] };
+    return json.mentor.map((m) => m.mentorId);
+  }
+
+  it("daftar: mentorOfflineId = siswaId → 400, tanpa memanggil fungsi DB", async () => {
+    const r = await daftar({ ...dasar, siswaId: MULTI, kelasId: "K-OFF", mentorOfflineId: MULTI });
+    assert.equal(r.status, 400);
+    assert.match(r.json.error as string, /tidak boleh akun siswa itu sendiri/);
+    assert.equal(rpcCalls.length, 0);
+    assert.equal(db.enrollments.filter((e) => e.user_id === MULTI).length, 0);
+  });
+
+  it("ubah: mentor baru = siswa enrollment → 400, mentor tidak berubah", async () => {
+    const r0 = await daftar({ ...dasar, siswaId: MULTI, kelasId: "K-OFF", mentorOfflineId: MENTOR_OFF });
+    assert.equal(r0.status, 201);
+    const enrollmentId = r0.json.enrollmentId as string;
+    const r = await ubahMentor({ enrollmentId, mentorOfflineId: MULTI, alasan: ALASAN });
+    assert.equal(r.status, 400);
+    assert.match(r.json.error as string, /tidak boleh akun siswa itu sendiri/);
+    assert.equal(db.enrollments.find((e) => e.id === enrollmentId)!.mentor_offline_id, MENTOR_OFF);
+    assert.equal(db.enrollment_manual_log.filter((l) => l.aksi === "tugaskan_mentor").length, 0);
+  });
+
+  it("daftar kandidat mengecualikan siswa (siswaId & enrollmentId)", async () => {
+    assert.ok((await kandidat("kelasId=K-OFF")).includes(MULTI));
+    assert.ok(!(await kandidat(`kelasId=K-OFF&siswaId=${MULTI}`)).includes(MULTI));
+    const r0 = await daftar({ ...dasar, siswaId: MULTI, kelasId: "K-OFF", mentorOfflineId: MENTOR_OFF });
+    const enrollmentId = r0.json.enrollmentId as string;
+    assert.ok(!(await kandidat(`kelasId=K-OFF&enrollmentId=${enrollmentId}`)).includes(MULTI));
   });
 });
 

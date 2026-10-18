@@ -104,10 +104,13 @@ interface KandidatRow {
  * 'active', mengampu Subtes itu (lewat mapel_dasar, fallback subtes_id).
  * Bedanya: lokasi siswa/mentor TIDAK wajib (Admin belum tentu tahu titik
  * GPS siswa) — dipakai cuma untuk mengurutkan berdasar jarak kalau ada.
+ * `kecualiUserId` = siswa yang didaftarkan: akun multi-role (Student +
+ * Mentor) tidak boleh jadi mentor dirinya sendiri.
  */
 export async function getMentorOfflineKandidat(
   subtesId: string,
   lokasiSiswa: { lat: number; lng: number } | null,
+  kecualiUserId: string | null = null,
 ): Promise<MentorOfflineKandidat[] | "gagal"> {
   const { data: subtes, error: subtesError } = await supabaseServer
     .from("subtes")
@@ -130,6 +133,7 @@ export async function getMentorOfflineKandidat(
   }
 
   const cocok = ((candidates ?? []) as unknown as KandidatRow[]).filter((row) => {
+    if (kecualiUserId && row.user_id === kecualiUserId) return false;
     const diampu = row.mentor_subtes_diampu ?? [];
     if (targetMapelDasar) return diampu.some((r) => first(r.subtes)?.mapel_dasar === targetMapelDasar);
     return diampu.some((r) => r.subtes_id === subtesId);
