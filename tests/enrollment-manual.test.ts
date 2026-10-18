@@ -40,6 +40,10 @@ class FakeQuery implements PromiseLike<{ data: Row[] | null; error: null; count:
     this.rows = this.rows.filter((row) => values.includes(row[column]));
     return this;
   }
+  gt(column: string, value: string) {
+    this.rows = this.rows.filter((row) => typeof row[column] === "string" && Date.parse(row[column] as string) > Date.parse(value));
+    return this;
+  }
   order() {
     return this;
   }
@@ -108,6 +112,16 @@ function fakeRpc(name: string, p: Row) {
     if (db.enrollments.some((e) => e.user_id === p.p_siswa_id && e.kelas_id === p.p_kelas_id)) {
       return Promise.resolve({ data: { status: "duplikat" }, error: null });
     }
+    const batas = Date.now() - (p.p_payment_kedaluwarsa_jam as number) * 60 * 60 * 1000;
+    const menunggu = db.payments.some(
+      (x) =>
+        x.user_id === p.p_siswa_id &&
+        x.item_type === "kelas" &&
+        x.item_id === p.p_kelas_id &&
+        x.status === "menunggu" &&
+        Date.parse(x.dibuat_pada as string) > batas,
+    );
+    if (menunggu) return Promise.resolve({ data: { status: "payment_menunggu" }, error: null });
     const terisi = db.enrollments.filter((e) => e.kelas_id === p.p_kelas_id && e.status_pembayaran === "lunas").length;
     if (terisi >= (kelas.kapasitas as number)) {
       return Promise.resolve({ data: { status: "penuh" }, error: null });
@@ -428,6 +442,42 @@ describe("POST /api/admin/enrollment-manual", () => {
     assert.deepEqual([a.status, b.status].sort(), [201, 409]);
     assert.equal(db.enrollments.filter((e) => e.user_id === SISWA && e.kelas_id === "K-ON").length, 1);
     assert.equal(db.sesi_kelas.length, 10);
+  });
+});
+
+describe("checkout yang masih menunggu bayar", () => {
+  const jamLalu = (jam: number) => new Date(Date.now() - jam * 60 * 60 * 1000).toISOString();
+  const payment = (over: Row) => ({
+    id: newId("pay"),
+    user_id: SISWA,
+    item_type: "kelas",
+    item_id: "K-ON",
+    status: "menunggu",
+    dibuat_pada: jamLalu(1),
+    ...over,
+  });
+
+  it("payment menunggu (link belum kedaluwarsa) untuk kelas yang sama → 409, payments tidak diubah", async () => {
+    db.payments.push(payment({}));
+    const sebelum = JSON.stringify(db.payments);
+    const r = await daftar(dasar);
+    assert.equal(r.status, 409);
+    assert.match(r.json.error as string, /menunggu/);
+    assert.match(r.json.error as string, /kedaluwarsa/);
+    assert.equal(rpcCalls.length, 0);
+    assert.equal(db.enrollments.filter((e) => e.user_id === SISWA).length, 0);
+    assert.equal(JSON.stringify(db.payments), sebelum);
+  });
+
+  it("tidak menghalangi: link sudah kedaluwarsa (> 24 jam), status lain, kelas lain, siswa lain", async () => {
+    db.payments.push(
+      payment({ dibuat_pada: jamLalu(25) }),
+      payment({ status: "gagal" }),
+      payment({ item_id: "K-PAKET" }),
+      payment({ user_id: SISWA_2 }),
+    );
+    const r = await daftar(dasar);
+    assert.equal(r.status, 201);
   });
 });
 

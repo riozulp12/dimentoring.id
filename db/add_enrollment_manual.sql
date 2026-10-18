@@ -76,8 +76,19 @@ ALTER TABLE enrollment_manual_log ENABLE ROW LEVEL SECURITY;
 -- di app/api/admin/enrollment-manual; di sini lapis terakhir yang menyangkut
 -- integritas data (duplikat, kapasitas, idempotensi).
 --
+-- Checkout yang masih MENUNGGU bayar (payments 'menunggu', link belum
+-- kedaluwarsa) untuk siswa+kelas yang sama juga ditolak: kalau siswa tetap
+-- membayar link itu, webhook akan menimpa baris manual ini dan siswa membayar
+-- dua kali. payments tidak punya kolom kedaluwarsa — batasnya dibuat_pada +
+-- p_payment_kedaluwarsa_jam (dikirim API dari PAYMENT_EXPIRY_HOURS,
+-- lib/payment/mayarLogic.ts). payments HANYA dibaca, tidak pernah diubah.
+--
 -- status hasil: 'dibuat' | 'sudah_diproses' (request_id sama) | 'duplikat'
--- | 'penuh' | 'kelas_tidak_ada' | 'mentor_sama_dengan_siswa'.
+-- | 'payment_menunggu' | 'penuh' | 'kelas_tidak_ada' | 'mentor_sama_dengan_siswa'.
+-- [migrasi-saja] Signature lama (tanpa p_payment_kedaluwarsa_jam) dari draf
+-- sebelumnya — hapus supaya tidak ada versi tanpa cek payment yang tertinggal.
+DROP FUNCTION IF EXISTS daftar_siswa_manual(UUID, UUID, UUID, UUID[], UUID, DECIMAL, DECIMAL, TEXT, INTEGER, TEXT, UUID);
+-- [/migrasi-saja]
 CREATE OR REPLACE FUNCTION daftar_siswa_manual(
     p_admin_id UUID,
     p_siswa_id UUID,
@@ -89,7 +100,8 @@ CREATE OR REPLACE FUNCTION daftar_siswa_manual(
     p_metode TEXT,
     p_nominal INTEGER,
     p_alasan TEXT,
-    p_request_id UUID
+    p_request_id UUID,
+    p_payment_kedaluwarsa_jam INTEGER
 ) RETURNS JSONB
 LANGUAGE plpgsql
 SET search_path = public
@@ -130,6 +142,17 @@ BEGIN
             'enrollment_id', v_existing.id,
             'status_pembayaran', v_existing.status_pembayaran
         );
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM payments
+        WHERE user_id = p_siswa_id
+          AND item_type = 'kelas'
+          AND item_id = p_kelas_id
+          AND status = 'menunggu'
+          AND dibuat_pada > now() - make_interval(hours => p_payment_kedaluwarsa_jam)
+    ) THEN
+        RETURN jsonb_build_object('status', 'payment_menunggu');
     END IF;
 
     SELECT count(*) INTO v_lunas FROM enrollments
@@ -190,9 +213,9 @@ BEGIN
     );
 END $$;
 
-REVOKE ALL ON FUNCTION daftar_siswa_manual(UUID, UUID, UUID, UUID[], UUID, DECIMAL, DECIMAL, TEXT, INTEGER, TEXT, UUID)
+REVOKE ALL ON FUNCTION daftar_siswa_manual(UUID, UUID, UUID, UUID[], UUID, DECIMAL, DECIMAL, TEXT, INTEGER, TEXT, UUID, INTEGER)
     FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION daftar_siswa_manual(UUID, UUID, UUID, UUID[], UUID, DECIMAL, DECIMAL, TEXT, INTEGER, TEXT, UUID)
+GRANT EXECUTE ON FUNCTION daftar_siswa_manual(UUID, UUID, UUID, UUID[], UUID, DECIMAL, DECIMAL, TEXT, INTEGER, TEXT, UUID, INTEGER)
     TO service_role;
 
 -- ---- 4. Ubah mentor offline satu enrollment (SATU transaksi) ---------------

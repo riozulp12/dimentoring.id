@@ -8,6 +8,7 @@ import {
   requireAdminAktif,
 } from "@/lib/admin/enrollmentManual";
 import { getKelasSubtesOptions } from "@/lib/payment/getKelasForCheckout";
+import { PAYMENT_EXPIRY_HOURS } from "@/lib/payment/mayarLogic";
 import {
   MAX_SUBTES_MANUAL,
   UUID_RE,
@@ -32,6 +33,9 @@ import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
  * - TIDAK membuat baris payments, jadi promo, poin, dan reward referral
  *   (yang cuma dipicu lib/payment/fulfillPayment.ts) tidak pernah jalan.
  * - Duplikat & kelas penuh -> 409, TANPA override kapasitas.
+ * - Checkout siswa yang masih MENUNGGU bayar untuk kelas ini (link Mayar
+ *   belum kedaluwarsa) -> 409: kalau link itu tetap dibayar, webhook menimpa
+ *   pendaftaran manual dan siswa membayar dua kali. payments cuma DIBACA.
  * - Idempotent: requestId (satu per pengisian form) — kirim ulang dengan
  *   requestId sama mengembalikan hasil yang sama tanpa pendaftaran kedua.
  */
@@ -53,6 +57,7 @@ type RpcHasil =
   | { status: "dibuat"; enrollment_id: string; jumlah_sesi: number }
   | { status: "sudah_diproses"; enrollment_id: string | null }
   | { status: "duplikat"; status_pembayaran?: string }
+  | { status: "payment_menunggu" }
   | { status: "penuh"; kapasitas: number; terisi: number }
   | { status: "kelas_tidak_ada" }
   | { status: "mentor_sama_dengan_siswa" };
@@ -64,6 +69,8 @@ function errorResponse(message: string, status: number) {
 const PESAN_DUPLIKAT = "Siswa ini sudah punya pendaftaran di kelas ini.";
 const PESAN_PENUH = "Kelas sudah penuh. Pendaftaran manual tidak bisa melewati kapasitas kelas.";
 const PESAN_MENTOR_SISWA = "Mentor tatap muka tidak boleh akun siswa itu sendiri.";
+const PESAN_PAYMENT_MENUNGGU =
+  "Siswa ini masih punya pembayaran checkout yang menunggu untuk kelas ini. Tunggu link pembayarannya kedaluwarsa (24 jam sejak checkout dibuat), atau batalkan dulu pembayaran menunggu itu (tutup link di dashboard Mayar lalu jalankan cek ulang pembayaran Admin), baru daftarkan manual.";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAdminAktif(request.cookies.get(SESSION_COOKIE_NAME)?.value);
@@ -147,6 +154,24 @@ export async function POST(request: NextRequest) {
   }
   if (existing) return errorResponse(PESAN_DUPLIKAT, 409);
 
+  // payments tidak punya kolom kedaluwarsa — link Mayar berlaku
+  // PAYMENT_EXPIRY_HOURS sejak dibuat_pada (sama dengan recheck Admin).
+  const batasKedaluwarsa = new Date(Date.now() - PAYMENT_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
+  const { data: paymentMenunggu, error: paymentError } = await supabaseServer
+    .from("payments")
+    .select("id")
+    .eq("user_id", siswaId)
+    .eq("item_type", "kelas")
+    .eq("item_id", kelasId)
+    .eq("status", "menunggu")
+    .gt("dibuat_pada", batasKedaluwarsa)
+    .limit(1);
+  if (paymentError) {
+    console.error("[admin/enrollment-manual] query payments failed:", paymentError);
+    return errorResponse("Gagal memeriksa pembayaran siswa. Coba lagi nanti.", 500);
+  }
+  if ((paymentMenunggu ?? []).length > 0) return errorResponse(PESAN_PAYMENT_MENUNGGU, 409);
+
   const { count: terisi, error: countError } = await supabaseServer
     .from("enrollments")
     .select("id", { count: "exact", head: true })
@@ -209,6 +234,7 @@ export async function POST(request: NextRequest) {
     p_nominal: nominal.value,
     p_alasan: alasan,
     p_request_id: requestId,
+    p_payment_kedaluwarsa_jam: PAYMENT_EXPIRY_HOURS,
   });
   if (rpcError) {
     console.error("[admin/enrollment-manual] daftar_siswa_manual failed:", rpcError);
@@ -223,6 +249,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, enrollmentId: hasil.enrollment_id, sudahDiproses: true });
     case "duplikat":
       return errorResponse(PESAN_DUPLIKAT, 409);
+    case "payment_menunggu":
+      return errorResponse(PESAN_PAYMENT_MENUNGGU, 409);
     case "penuh":
       return errorResponse(PESAN_PENUH, 409);
     case "kelas_tidak_ada":
