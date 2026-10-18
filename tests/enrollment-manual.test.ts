@@ -98,19 +98,38 @@ function fakeFrom(table: string) {
   });
 }
 
+/** CHECK (length(btrim(alasan)) >= 10) Postgres — length() menghitung code point. */
+function cekAlasanPostgres(alasan: unknown) {
+  if (typeof alasan !== "string" || [...alasan.trim()].length < 10) {
+    throw new Error("new row for relation \"enrollment_manual_log\" violates check constraint");
+  }
+}
+
 /** Tiruan fungsi DB — logika sama dengan db/add_enrollment_manual.sql. */
 function fakeRpc(name: string, p: Row) {
   rpcCalls.push(name);
+  try {
+    return fakeRpcInner(name, p);
+  } catch (error) {
+    return Promise.resolve({ data: null, error: { message: (error as Error).message, code: "23514" } });
+  }
+}
+
+function fakeRpcInner(name: string, p: Row) {
   if (name === "daftar_siswa_manual") {
     if (p.p_mentor_offline_id && p.p_mentor_offline_id === p.p_siswa_id) {
       return Promise.resolve({ data: { status: "mentor_sama_dengan_siswa" }, error: null });
     }
-    const kelas = db.kelas.find((k) => k.id === p.p_kelas_id);
-    if (!kelas) return Promise.resolve({ data: { status: "kelas_tidak_ada" }, error: null });
     if (p.p_request_id) {
       const log = db.enrollment_manual_log.find((l) => l.request_id === p.p_request_id);
+      if (log && (log.siswa_id !== p.p_siswa_id || log.kelas_id !== p.p_kelas_id)) {
+        return Promise.resolve({ data: { status: "request_id_bentrok" }, error: null });
+      }
       if (log) return Promise.resolve({ data: { status: "sudah_diproses", enrollment_id: log.enrollment_id }, error: null });
     }
+    const kelas = db.kelas.find((k) => k.id === p.p_kelas_id);
+    if (!kelas) return Promise.resolve({ data: { status: "kelas_tidak_ada" }, error: null });
+    cekAlasanPostgres(p.p_alasan);
     if (db.enrollments.some((e) => e.user_id === p.p_siswa_id && e.kelas_id === p.p_kelas_id)) {
       return Promise.resolve({ data: { status: "duplikat" }, error: null });
     }
@@ -166,6 +185,7 @@ function fakeRpc(name: string, p: Row) {
     const e = db.enrollments.find((r) => r.id === p.p_enrollment_id);
     if (!e) return Promise.resolve({ data: { status: "tidak_ditemukan" }, error: null });
     if (p.p_mentor_baru === e.user_id) return Promise.resolve({ data: { status: "mentor_sama_dengan_siswa" }, error: null });
+    cekAlasanPostgres(p.p_alasan);
     if (e.mentor_offline_id === p.p_mentor_baru) return Promise.resolve({ data: { status: "sama" }, error: null });
     const lama = e.mentor_offline_id;
     e.mentor_offline_id = p.p_mentor_baru;
@@ -197,6 +217,7 @@ const MENTOR_PENDING = "mentor-pending";
 const MULTI = "multi-role";
 const ALASAN = "Sudah transfer ke BCA tanggal 12 Oktober";
 const REQ_1 = "11111111-1111-4111-8111-111111111111";
+const REQ_2 = "22222222-2222-4222-8222-222222222222";
 
 type RouteModule = typeof import("@/app/api/admin/enrollment-manual/route");
 type MentorRouteModule = typeof import("@/app/api/admin/enrollment-manual/mentor-offline/route");
@@ -458,6 +479,53 @@ describe("POST /api/admin/enrollment-manual", () => {
   });
 });
 
+describe("error yang jelas", () => {
+  it("request_id sama untuk kelas lain → 409 (bukan 500), tanpa pendaftaran kedua", async () => {
+    assert.equal((await daftar({ ...dasar, requestId: REQ_1 })).status, 201);
+    const r = await daftar({ ...dasar, kelasId: "K-PAKET", subtesIds: ["s-ing"], requestId: REQ_1 });
+    assert.equal(r.status, 409);
+    assert.match(r.json.error as string, /Formulir ini sudah dipakai/);
+    assert.equal(db.enrollments.filter((e) => e.kelas_id === "K-PAKET").length, 0);
+  });
+
+  it("request_id sama untuk siswa lain → 409", async () => {
+    assert.equal((await daftar({ ...dasar, requestId: REQ_1 })).status, 201);
+    assert.equal((await daftar({ ...dasar, siswaId: SISWA_2, requestId: REQ_1 })).status, 409);
+    assert.equal(db.enrollments.filter((e) => e.user_id === SISWA_2 && e.kelas_id === "K-ON").length, 0);
+  });
+
+  it("request_id sama, beda kelas, BERSAMAAN → satu 201, satu 409 (dari fungsi DB)", async () => {
+    const [a, b] = await Promise.all([
+      daftar({ ...dasar, requestId: REQ_2 }),
+      daftar({ ...dasar, kelasId: "K-PAKET", subtesIds: ["s-ing"], requestId: REQ_2 }),
+    ]);
+    assert.deepEqual([a.status, b.status].sort(), [201, 409]);
+    assert.equal(db.enrollment_manual_log.length, 1);
+  });
+
+  it("alasan emoji dihitung per karakter, sama dengan CHECK Postgres", async () => {
+    // 5 emoji = 10 unit UTF-16 tapi 5 karakter → ditolak API (bukan lolos API lalu 500 di DB).
+    const lima = "😀".repeat(5);
+    assert.equal(lima.length, 10);
+    const r1 = await daftar({ ...dasar, alasan: lima });
+    assert.equal(r1.status, 400);
+    assert.equal(rpcCalls.length, 0);
+    // 10 emoji = 10 karakter → lolos API DAN CHECK Postgres.
+    const sepuluh = "😀".repeat(10);
+    const r2 = await daftar({ ...dasar, alasan: sepuluh });
+    assert.equal(r2.status, 201);
+    assert.equal(db.enrollment_manual_log[0].alasan, sepuluh);
+  });
+
+  it("panjangKarakter = length() Postgres", async () => {
+    const { panjangKarakter, validateAlasan } = await import("@/lib/shared/enrollmentManual");
+    assert.equal(panjangKarakter("😀"), 1);
+    assert.equal(panjangKarakter("abc"), 3);
+    assert.equal(validateAlasan("😀".repeat(9)), "Alasan wajib diisi (min. 10 karakter).");
+    assert.equal(validateAlasan("😀".repeat(10)), null);
+  });
+});
+
 describe("privasi snapshot log (db/add_enrollment_manual.sql)", () => {
   const sql = readFileSync(path.join(process.cwd(), "db", "add_enrollment_manual.sql"), "utf8");
   const schema = readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8");
@@ -483,6 +551,8 @@ describe("privasi snapshot log (db/add_enrollment_manual.sql)", () => {
     );
     const kunci = fungsi.indexOf("FROM kelas WHERE id = p_kelas_id FOR NO KEY UPDATE");
     assert.ok(kunci > 0, "kunci FOR NO KEY UPDATE tidak ditemukan");
+    const kunciRequest = fungsi.indexOf("pg_advisory_xact_lock");
+    assert.ok(kunciRequest > 0 && kunciRequest < kunci, "kunci request_id harus sebelum kunci kelas (urutan tetap, tanpa deadlock)");
     assert.doesNotMatch(fungsi, /FOR UPDATE/);
     for (const cek of ["INTO v_existing FROM enrollments", "FROM payments", "status_pembayaran = 'lunas'", "INSERT INTO enrollments"]) {
       const posisi = fungsi.indexOf(cek);

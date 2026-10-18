@@ -23,12 +23,21 @@ export function isMetodePembayaranManual(value: unknown): value is MetodePembaya
   return typeof value === "string" && (METODE_PEMBAYARAN_MANUAL as readonly string[]).includes(value);
 }
 
+/**
+ * Jumlah karakter (code point), BUKAN unit UTF-16 — sama dengan length()
+ * Postgres yang dipakai CHECK enrollment_manual_log.alasan. "😀".length = 2
+ * tapi panjangKarakter("😀") = 1.
+ */
+export function panjangKarakter(value: string): number {
+  return [...value].length;
+}
+
 /** null = valid. Alasan dipangkas spasi dulu sebelum dihitung. */
 export function validateAlasan(value: unknown): string | null {
   if (typeof value !== "string") return `Alasan wajib diisi (min. ${ALASAN_MIN} karakter).`;
-  const trimmed = value.trim();
-  if (trimmed.length < ALASAN_MIN) return `Alasan wajib diisi (min. ${ALASAN_MIN} karakter).`;
-  if (trimmed.length > ALASAN_MAKS) return `Alasan maksimal ${ALASAN_MAKS} karakter.`;
+  const panjang = panjangKarakter(value.trim());
+  if (panjang < ALASAN_MIN) return `Alasan wajib diisi (min. ${ALASAN_MIN} karakter).`;
+  if (panjang > ALASAN_MAKS) return `Alasan maksimal ${ALASAN_MAKS} karakter.`;
   return null;
 }
 

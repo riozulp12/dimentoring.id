@@ -60,7 +60,8 @@ type RpcHasil =
   | { status: "payment_menunggu" }
   | { status: "penuh"; kapasitas: number; terisi: number }
   | { status: "kelas_tidak_ada" }
-  | { status: "mentor_sama_dengan_siswa" };
+  | { status: "mentor_sama_dengan_siswa" }
+  | { status: "request_id_bentrok" };
 
 function errorResponse(message: string, status: number) {
   return NextResponse.json({ success: false, error: message }, { status });
@@ -69,6 +70,8 @@ function errorResponse(message: string, status: number) {
 const PESAN_DUPLIKAT = "Siswa ini sudah punya pendaftaran di kelas ini.";
 const PESAN_PENUH = "Kelas sudah penuh. Pendaftaran manual tidak bisa melewati kapasitas kelas.";
 const PESAN_MENTOR_SISWA = "Mentor tatap muka tidak boleh akun siswa itu sendiri.";
+const PESAN_REQUEST_BENTROK =
+  "Formulir ini sudah dipakai untuk mendaftarkan siswa/kelas lain. Tutup lalu buka lagi formulir Daftarkan Siswa Manual.";
 const PESAN_PAYMENT_MENUNGGU =
   "Siswa ini masih punya pembayaran checkout yang menunggu untuk kelas ini. Tunggu link pembayarannya kedaluwarsa (24 jam sejak checkout dibuat), atau batalkan dulu pembayaran menunggu itu (tutup link di dashboard Mayar lalu jalankan cek ulang pembayaran Admin), baru daftarkan manual.";
 
@@ -113,7 +116,7 @@ export async function POST(request: NextRequest) {
   if (requestId) {
     const { data: logLama, error: logError } = await supabaseServer
       .from("enrollment_manual_log")
-      .select("enrollment_id")
+      .select("enrollment_id, siswa_id, kelas_id")
       .eq("request_id", requestId)
       .maybeSingle();
     if (logError) {
@@ -121,6 +124,9 @@ export async function POST(request: NextRequest) {
       return errorResponse("Gagal memeriksa pendaftaran. Coba lagi nanti.", 500);
     }
     if (logLama) {
+      if (logLama.siswa_id !== siswaId || logLama.kelas_id !== kelasId) {
+        return errorResponse(PESAN_REQUEST_BENTROK, 409);
+      }
       return NextResponse.json({ success: true, enrollmentId: logLama.enrollment_id, sudahDiproses: true });
     }
   }
@@ -257,6 +263,8 @@ export async function POST(request: NextRequest) {
       return errorResponse("Kelas tidak ditemukan.", 404);
     case "mentor_sama_dengan_siswa":
       return errorResponse(PESAN_MENTOR_SISWA, 400);
+    case "request_id_bentrok":
+      return errorResponse(PESAN_REQUEST_BENTROK, 409);
     default:
       console.error("[admin/enrollment-manual] hasil RPC tidak dikenal:", hasilRaw);
       return errorResponse("Gagal mendaftarkan siswa. Coba lagi nanti.", 500);

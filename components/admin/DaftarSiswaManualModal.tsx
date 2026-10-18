@@ -8,6 +8,7 @@ import {
   MAX_SUBTES_MANUAL,
   METODE_PEMBAYARAN_LABEL,
   METODE_PEMBAYARAN_MANUAL,
+  panjangKarakter,
 } from "@/lib/shared/enrollmentManual";
 
 /**
@@ -128,7 +129,7 @@ export default function DaftarSiswaManualModal({
     );
   }
 
-  const alasanCukup = alasan.trim().length >= ALASAN_MIN;
+  const alasanCukup = panjangKarakter(alasan.trim()) >= ALASAN_MIN;
   const bisaKirim =
     !busy &&
     Boolean(siswa) &&

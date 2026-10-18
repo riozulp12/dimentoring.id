@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
-import { ALASAN_MIN } from "@/lib/shared/enrollmentManual";
+import { ALASAN_MIN, panjangKarakter } from "@/lib/shared/enrollmentManual";
 
 /**
  * Ganti mentor tatap muka satu siswa (enrollments.mentor_offline_id) —
@@ -58,7 +58,7 @@ export default function UbahMentorOfflineModal({
     }
   }
 
-  const alasanCukup = alasan.trim().length >= ALASAN_MIN;
+  const alasanCukup = panjangKarakter(alasan.trim()) >= ALASAN_MIN;
 
   async function handleSimpan() {
     if (!mentorId || !alasanCukup) return;

@@ -954,8 +954,16 @@ ALTER TABLE enrollment_manual_log ENABLE ROW LEVEL SECURITY;
 -- p_payment_kedaluwarsa_jam (dikirim API dari PAYMENT_EXPIRY_HOURS,
 -- lib/payment/mayarLogic.ts). payments HANYA dibaca, tidak pernah diubah.
 --
+-- Idempotensi request_id: dikunci dengan pg_advisory_xact_lock (per
+-- request_id, lepas otomatis di akhir transaksi) SEBELUM kunci kelas, supaya
+-- request_id yang sama untuk kelas BERBEDA juga bergantian. request_id yang
+-- sudah tercatat untuk siswa+kelas yang sama -> 'sudah_diproses'; untuk
+-- siswa/kelas lain -> 'request_id_bentrok' (bukan error UNIQUE / HTTP 500).
+-- Urutan kunci selalu request_id lalu kelas, jadi tidak ada deadlock.
+--
 -- status hasil: 'dibuat' | 'sudah_diproses' (request_id sama) | 'duplikat'
--- | 'payment_menunggu' | 'penuh' | 'kelas_tidak_ada' | 'mentor_sama_dengan_siswa'.
+-- | 'payment_menunggu' | 'penuh' | 'kelas_tidak_ada' | 'mentor_sama_dengan_siswa'
+-- | 'request_id_bentrok'.
 CREATE OR REPLACE FUNCTION daftar_siswa_manual(
     p_admin_id UUID,
     p_siswa_id UUID,
@@ -976,7 +984,7 @@ AS $$
 DECLARE
     v_kelas kelas%ROWTYPE;
     v_existing enrollments%ROWTYPE;
-    v_log_enrollment UUID;
+    v_log enrollment_manual_log%ROWTYPE;
     v_lunas INT;
     v_enrollment enrollments%ROWTYPE;
     v_subtes UUID[] := coalesce(p_subtes_ids, ARRAY[]::UUID[]);
@@ -986,19 +994,22 @@ BEGIN
         RETURN jsonb_build_object('status', 'mentor_sama_dengan_siswa');
     END IF;
 
+    -- Idempotensi — dicek SETELAH kunci request_id supaya permintaan kembar
+    -- yang menunggu kunci melihat log milik permintaan pertama.
+    IF p_request_id IS NOT NULL THEN
+        PERFORM pg_advisory_xact_lock(hashtextextended('daftar_siswa_manual:' || p_request_id::text, 0));
+        SELECT * INTO v_log FROM enrollment_manual_log WHERE request_id = p_request_id;
+        IF FOUND THEN
+            IF v_log.siswa_id IS NOT DISTINCT FROM p_siswa_id AND v_log.kelas_id IS NOT DISTINCT FROM p_kelas_id THEN
+                RETURN jsonb_build_object('status', 'sudah_diproses', 'enrollment_id', v_log.enrollment_id);
+            END IF;
+            RETURN jsonb_build_object('status', 'request_id_bentrok');
+        END IF;
+    END IF;
+
     SELECT * INTO v_kelas FROM kelas WHERE id = p_kelas_id FOR NO KEY UPDATE;
     IF NOT FOUND THEN
         RETURN jsonb_build_object('status', 'kelas_tidak_ada');
-    END IF;
-
-    -- Idempotensi — dicek SETELAH kunci kelas supaya permintaan kembar yang
-    -- menunggu kunci melihat log milik permintaan pertama.
-    IF p_request_id IS NOT NULL THEN
-        SELECT enrollment_id INTO v_log_enrollment
-        FROM enrollment_manual_log WHERE request_id = p_request_id;
-        IF FOUND THEN
-            RETURN jsonb_build_object('status', 'sudah_diproses', 'enrollment_id', v_log_enrollment);
-        END IF;
     END IF;
 
     SELECT * INTO v_existing FROM enrollments
@@ -1017,7 +1028,9 @@ BEGIN
           AND item_type = 'kelas'
           AND item_id = p_kelas_id
           AND status = 'menunggu'
-          AND dibuat_pada > now() - make_interval(hours => p_payment_kedaluwarsa_jam)
+          -- NULL = fail-closed: semua payment 'menunggu' dianggap masih berlaku.
+          AND (p_payment_kedaluwarsa_jam IS NULL
+               OR dibuat_pada > now() - make_interval(hours => p_payment_kedaluwarsa_jam))
     ) THEN
         RETURN jsonb_build_object('status', 'payment_menunggu');
     END IF;
