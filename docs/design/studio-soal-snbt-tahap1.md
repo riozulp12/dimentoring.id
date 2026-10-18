@@ -430,7 +430,12 @@ Skor parsial nanti cukup menambah cabang `aturan_skor === 'parsial_per_bagian'` 
 1. `CREATE TABLE IF NOT EXISTS` keenam tabel (urutan: `soal_topik` → `soal_stimulus` → `soal_bank` → `paket_soal` → `paket_soal_item` → `soal_tinjauan_log`).
 2. Constraint ditambah lewat `DO $$ … IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = …) THEN ALTER TABLE … ADD CONSTRAINT …` supaya aman diulang.
 3. `CREATE [UNIQUE] INDEX IF NOT EXISTS`.
-4. `CREATE OR REPLACE FUNCTION` untuk RPC: `ajukan_soal`, `ajukan_kelompok_stimulus`, `tinjau_soal`, `publikasi_soal_admin`, `buat_versi_soal`, `simpan_item_paket`, `ajukan_paket`; lalu `REVOKE ALL … FROM PUBLIC, anon, authenticated`.
+4. `CREATE OR REPLACE FUNCTION` — nama final di PR 1 (semua berawalan `studio_soal_`):
+   - bantu: `subtes_snbt`, `mentor_eligible`, `hitung_peninjau_eligible`, `admin_aktif`, `mulai_rpc`/`dalam_rpc` (penanda transaksi — status hanya bisa berubah di dalam RPC), `tulis_log`;
+   - trigger: `jaga_baris` (status via RPC saja, isi terbit terkunci, hapus hanya draf yang belum pernah diajukan), `cek_relasi` (subtes SNBT, pembuat eligible, topik/stimulus se-subtes, satu penulis per stimulus), `jaga_item_paket`;
+   - RPC: `ajukan_soal`, `ajukan_stimulus`, `tarik`, `tinjau`, `publikasi_admin`, `buat_versi_soal`, `buat_versi_stimulus`, `arsipkan_soal`, `simpan_item_paket`, `ajukan_paket`, `buat_versi_paket`, `arsipkan_paket`; internal `terbitkan`, `terbitkan_paket`, `sinkron_paket`.
+   Lalu `REVOKE ALL … FROM PUBLIC, anon, authenticated` + `GRANT EXECUTE … TO service_role` untuk semua fungsi `studio_soal_*`.
+   Kelengkapan isi (5 opsi, 2–6 pernyataan, 1–5 rumpang, pembahasan, sumber rujukan stimulus) di-CHECK hanya untuk status `diajukan`/`terpublikasi`/`digantikan` — draf boleh belum lengkap.
 5. `ALTER TABLE … ENABLE ROW LEVEL SECURITY` keenam tabel (blok RLS di `schema.sql` tidak retroaktif).
 6. Query verifikasi di komentar akhir.
 - **Tidak ada** `ALTER TYPE`, tidak ada perubahan tabel yang sudah ada.

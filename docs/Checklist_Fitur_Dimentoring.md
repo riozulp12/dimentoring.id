@@ -185,6 +185,19 @@ Dipakai saat perlu bukti alur pembayaran di Production (mis. pengajuan aktivasi 
 - [ ] Presensi: klik dobel / dua tab bersamaan → cuma satu sesi tertandai dan siswa cuma menerima satu notifikasi
 - [ ] Presensi: baris siswa menampilkan jumlah sesi "menunggu konfirmasi siswa" dan "disangkal, ditinjau Admin"
 
+### Studio Soal SNBT (Tahap 1 — PRD 7.7 revisi, BR-37)
+*Butir bertanda (DB) sudah bisa dicek sekarang lewat SQL Editor; sisanya menunggu UI (PR 3–6).*
+- [ ] (DB) Migrasi `db/add_studio_soal.sql`: dry-run `BEGIN; <migrasi> <db/test_studio_soal_DRYRUN.sql> ROLLBACK;` → NOTICE "SEMUA SKENARIO LULUS"; lalu jalankan sungguhan **dua kali** tanpa error; query verifikasi (a)–(e) di header migrasi sesuai harapan (6 tabel RLS aktif, 0 policy, fungsi `studio_soal_*` tidak bisa dieksekusi anon/authenticated)
+- [ ] (DB) UPDATE langsung `soal_bank.status` dari SQL Editor (tanpa fungsi `studio_soal_*`) → ditolak trigger
+- [ ] Mentor membuat soal hanya untuk subtes SNBT yang dia ampu (subtes lain / TKA → ditolak); Mentor Pending → fitur terkunci
+- [ ] Tiga tipe soal tersimpan & terlihat di pratinjau: pilihan ganda (5 opsi, 1 kunci), majemuk kompleks (2–6 pernyataan, label kolom bisa diganti), isian (1–5 rumpang, jawaban alternatif)
+- [ ] Penulis tidak bisa meninjau soalnya sendiri (tombol tidak ada; paksa lewat API → ditolak)
+- [ ] Tolak tanpa alasan / alasan < 10 karakter (emoji dihitung per karakter) → ditolak; alasan tampil ke penulis
+- [ ] Admin: tombol "Publikasikan sebagai Admin" hanya muncul bila tidak ada mentor lain yang eligible di subtes itu; aksinya tercatat di log
+- [ ] Stimulus + soal-soalnya diajukan & ditinjau sebagai satu kesatuan; mentor lain tidak bisa menambah soal ke stimulus orang lain
+- [ ] Edit soal terbit → membuat versi baru; versi lama tetap dipakai paket yang sudah terbit sampai versi baru disetujui
+- [ ] Paket campuran 3 tipe: hanya terbit bila semua soalnya terbit; paket berisi draf milik sendiri → "menunggu soal" → terbit otomatis saat soal terakhir disetujui, kembali draf bila ada yang ditolak
+
 ### Siswa Saya
 - [ ] Search + filter kelas berfungsi
 - [ ] Detail siswa: HANYA bisa akses siswa binaan sendiri (coba ganti URL manual harus ditolak)

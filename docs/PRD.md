@@ -634,12 +634,23 @@ Tryout Gratis (soal terbatas, funnel akuisisi) dan Tryout Premium (bank soal len
 
 AI menghasilkan **soal** (3 tingkat kesulitan Mudah/Sedang/HOTS, dengan jawaban, pembahasan, konsep, estimasi waktu) **dan materi belajar** (rangkuman/penjelasan topik). Orisinalitas wajib (redaksi baru, bukan salinan). Versioning untuk variasi soal antar percobaan. **Wajib human review** sebelum status `Published` — tidak ada soal/materi AI tayang tanpa approval Mentor/Admin, baik itu dipicu oleh Mentor maupun Admin (BR-31).
 
-Mentor **juga bisa upload soal/materi manual sendiri** (bukan cuma AI) — konten manual dari mentor yang sudah di-approve langsung `published` tanpa gerbang review tambahan (beda dari konten AI, lihat 7.5.1).
+Mentor **juga bisa upload materi manual sendiri** (bukan cuma AI) — **materi** manual dari mentor yang sudah di-approve langsung `published` tanpa gerbang review tambahan (beda dari konten AI, lihat 7.5.1).
+
+**DIREVISI (Oktober 2026) — Soal manual mentor TIDAK lagi langsung terbit.** Soal manual dibuat di **Studio Soal SNBT** dan wajib lolos **tinjau sejawat** sebelum terbit (BR-37). Ringkasan Tahap 1 (desain lengkap: `docs/design/studio-soal-snbt-tahap1.md`):
+- **Cakupan:** subtes SNBT saja (kategori `tps`/`literasi`: PU, PPU, PBM, PK, Literasi B. Indonesia, Literasi B. Inggris, Penalaran Matematika). Tanpa poin, tanpa impor file, tanpa AI, tanpa halaman siswa (Tahap 2+).
+- **Tiga tipe soal (panduan SNPMB):** `pilihan_ganda` (5 opsi A–E, satu kunci); `majemuk_kompleks` (2–6 pernyataan, dua kolom jawaban berlabel bebas mis. Benar/Salah, kunci per baris); `isian` (1–5 rumpang, tiap rumpang ≥ 1 jawaban diterima, jenis teks atau angka). Satu paket boleh mencampur ketiganya.
+- **Wajib:** tingkat kesulitan (mudah/sedang/hots), pembahasan. `level_kognitif` (1/2/3, TKA) opsional dan belum tampil di UI.
+- **Stimulus** (bacaan/tabel; gambar menyusul) dipakai banyak soal; atribusi sumber **wajib** untuk stimulus ("Buatan sendiri" atau nama sumber, BR-18), opsional untuk soal. Satu penulis per stimulus; stimulus + soalnya ditinjau sebagai satu kesatuan.
+- **Bank & paket:** soal disimpan di bank per subtes; **paket** (judul, deskripsi, durasi opsional) menyusun soal terbit secara berurutan dan bisa memakai ulang soal siapa pun di subtes itu. Paket tidak ditinjau ulang — hanya bisa terbit bila semua soalnya terbit.
+- **Versi:** soal/stimulus/paket terbit tidak diedit di tempat; edit = versi baru (hanya penulis), versi lama tetap dipakai sampai versi baru lolos tinjau. Bila penulis nonaktif, Admin menugaskan ulang penulis (kebutuhan, belum ada UI).
+- **Penilaian (dipakai Tahap 2):** benar hanya bila semua bagian benar (majemuk: semua baris; isian: semua rumpang). Isian teks dicocokkan tanpa beda huruf besar-kecil & spasi; isian angka dicocokkan nilainya (koma/titik desimal, `.5`, pecahan eksak setara; pemisah ribuan tidak didukung).
+- Tabel lama `soal_ai`/`materi` dan alur review AI di bawah **tidak berubah**.
 
 **Halaman Review Konten (menu sidebar Mentor: "Materi & Latihan Soal"):**
 - Menampilkan antrian gabungan: Materi AI (status `draft`) + Soal AI (status `draft`) yang relevan dengan Subtes yang Diampu mentor tersebut.
 - Aksi per item: **Setujui** (→ `published`) atau **Tolak** (→ `ditolak`, dengan catatan alasan opsional).
 - Mentor **tidak** melakukan review terhadap hasil pengerjaan tryout siswa di halaman ini — itu di luar scope, karena tryout auto-scoring (lihat 7.6).
+- **(Studio Soal, menyusul)** halaman ini mendapat tab tambahan untuk antrean tinjau Studio Soal dengan pratinjau lengkap (stimulus, opsi/pernyataan/rumpang, kunci, pembahasan) dan **alasan tolak wajib** (min. 10 karakter). Tab Materi AI / Soal AI tetap seperti di atas.
 
 ---
 
@@ -691,6 +702,7 @@ Diimplementasikan konsisten di: Empty state, Loading, Achievement/Badge, **AI Me
 ### AI Pembuat Soal
 - **BR-17**: Soal AI tidak dapat tayang ke siswa tanpa approval eksplisit Mentor/Admin.
 - **BR-18**: Soal AI dilarang mereplikasi teks sumber berhak cipta; hanya menyimpan referensi konsep.
+- **BR-37 (baru, Oktober 2026)**: Soal manual Studio Soal (7.7 revisi) **wajib tinjau sejawat** sebelum terbit. Peninjau = Mentor berstatus Active yang tercatat mengampu subtes itu (`mentor_subtes_diampu`, `subtes_id` persis — bukan `mapel_dasar`), dan **bukan penulis** soal/stimulus tersebut. **Admin hanya boleh mempublikasikan** bila tidak ada satu pun Mentor eligible selain penulis (dihitung saat aksi), dengan alasan min. 10 karakter, tercatat di `SoalTinjauanLog`. Admin boleh menolak kapan saja. **Alasan tolak wajib** (min. 10 karakter, dihitung per karakter). Perubahan status hanya lewat fungsi database `studio_soal_*` (bukan UPDATE langsung); isi yang sudah diajukan/terbit terkunci.
 
 ### Payment
 - **BR-19**: Perubahan status pembayaran hanya dari payment gateway (webhook) atau override manual Admin dengan log audit.
@@ -960,6 +972,14 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
 - **LeadRateLimit (baru, Oktober 2026)** — id, kunci (`trial:<uuid>` atau `ip:<hmac>` — IP tidak disimpan mentah), created_at. Catatan percobaan `POST /api/leads` untuk batas per jam; baris > 1 hari dibersihkan aplikasi.
 - **User (koreksi dokumentasi, Oktober 2026)** — `no_wa` dan `password_hash` **nullable** sejak `db/make_no_wa_password_nullable.sql` (no_wa diisi di `/lengkapi-profil`; password_hash NULL untuk akun Google). `db/schema.sql` sudah diselaraskan.
 - **LandingCampaign (baru, September 2026)** — id, judul, isi, gambar_url, **status** (`draft`/`aktif`/`nonaktif`), tanggal_mulai, tanggal_selesai, dibuat_pada. Basis fitur popup→banner di landing page (7.5.7).
+- **Subtes (diperluas)** — **ditawarkan** (BOOLEAN, default `true`; `false` = tidak tampil di checklist Subtes Kelola Kelas). Kolom sudah ada di database sejak `db/add_subtes_ditawarkan.sql`, baru disinkronkan ke `db/schema.sql` Oktober 2026.
+- **Studio Soal SNBT (baru, Oktober 2026 — 7.7 revisi, BR-37; `db/add_studio_soal.sql`)** — terpisah dari `SoalAI`/`Materi` (enum `soal_ai_status`/`konten_sumber` tidak dipakai). Status semua pakai TEXT + CHECK. Konvensi **versi copy-on-write**: satu baris = satu versi, `keluarga_id` sama untuk semua versi, `versi` 1..N, `menggantikan_id` ke versi sebelumnya; maksimal satu versi terbit & satu versi terbuka per keluarga.
+  - **SoalTopik** — id, subtes_id, nama (unik per subtes, tanpa beda huruf besar-kecil), dibuat_oleh_id.
+  - **SoalStimulus** — id, keluarga_id, versi, menggantikan_id, subtes_id, judul_internal, **konten** (JSONB `{v, blok: [{jenis: 'teks', teks} | {jenis: 'tabel', judul?, kepala[], baris[][]}]}`; blok `gambar` menyusul), **sumber_rujukan** (wajib saat diajukan), status (`draf`/`diajukan`/`terpublikasi`/`ditolak`/`digantikan`/`diarsipkan`), penulis_id, peninjau_id, diajukan_pada, ditinjau_pada, alasan_tolak.
+  - **SoalBank** — id, keluarga_id, versi, menggantikan_id, subtes_id, topik_id (opsional), stimulus_id + urutan_dalam_stimulus (opsional, berpasangan), **tipe** (`pilihan_ganda`/`majemuk_kompleks`/`isian`), redaksi (teks + LaTeX `\( \)`; isian memuat penanda `{{r1}}`), **konten** (JSONB bagian yang boleh dilihat siswa), **kunci** (JSONB, RAHASIA — tidak pernah dikirim ke siswa), pembahasan, sumber_rujukan (opsional), tingkat_kesulitan (`mudah`/`sedang`/`hots`), level_kognitif (1–3, opsional), estimasi_waktu_detik, **aturan_skor** (`semua_benar`; skor parsial menyusul lewat CHECK), bobot, sumber (`manual`), status (sama dengan stimulus), penulis_id, peninjau_id, diajukan_pada, ditinjau_pada, alasan_tolak.
+  - **PaketSoal** — id, keluarga_id, versi, menggantikan_id, subtes_id, judul, deskripsi (≤ 500), durasi_menit (opsional), status (`draf`/`menunggu_soal`/`terpublikasi`/`digantikan`/`diarsipkan`), pembuat_id, dipublikasikan_pada.
+  - **PaketSoalItem** — paket_id, soal_id (versi spesifik), urutan (unik per paket). Soal satu stimulus wajib berurutan.
+  - **SoalTinjauanLog** — id, objek_jenis (`soal`/`stimulus`/`paket`), objek_id, aktor_id, peran (`mentor`/`admin`), aksi (`ajukan`/`tarik`/`setujui`/`tolak`/`publikasi_admin`/`arsipkan`/`publikasi_paket`/`versi_baru`), alasan, jumlah_peninjau_eligible, snapshot (JSONB), dibuat_pada.
 
 ---
 
