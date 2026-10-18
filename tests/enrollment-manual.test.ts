@@ -439,6 +439,17 @@ describe("POST /api/admin/enrollment-manual", () => {
     assert.equal(db.enrollments.filter((e) => e.user_id === SISWA).length, 1);
   });
 
+  it("dua siswa bersamaan ke kursi terakhir → cuma satu yang masuk", async () => {
+    db.kelas.push({ id: "K-SISA1", nama: "Sisa Satu", kapasitas: 2, jumlah_sesi: 10, mode_pembelajaran: "online", jadwal: null, mentor_id: null, subtes_id: null });
+    db.enrollments.push({ id: "enr-k1", user_id: "lain", kelas_id: "K-SISA1", status_pembayaran: "lunas", sumber: "checkout" });
+    const [a, b] = await Promise.all([
+      daftar({ ...dasar, kelasId: "K-SISA1" }),
+      daftar({ ...dasar, siswaId: SISWA_2, kelasId: "K-SISA1" }),
+    ]);
+    assert.deepEqual([a.status, b.status].sort(), [201, 409]);
+    assert.equal(db.enrollments.filter((e) => e.kelas_id === "K-SISA1" && e.status_pembayaran === "lunas").length, 2);
+  });
+
   it("klik dobel tanpa requestId → yang kedua 409, tetap satu enrollment", async () => {
     const [a, b] = await Promise.all([daftar(dasar), daftar(dasar)]);
     assert.deepEqual([a.status, b.status].sort(), [201, 409]);
@@ -464,6 +475,20 @@ describe("privasi snapshot log (db/add_enrollment_manual.sql)", () => {
       }
     });
   }
+
+  it("kelas dikunci FOR NO KEY UPDATE sebelum cek duplikat, payment menunggu & kapasitas", () => {
+    const fungsi = sql.slice(
+      sql.indexOf("CREATE OR REPLACE FUNCTION daftar_siswa_manual"),
+      sql.indexOf("-- ---- 4. Ubah mentor offline"),
+    );
+    const kunci = fungsi.indexOf("FROM kelas WHERE id = p_kelas_id FOR NO KEY UPDATE");
+    assert.ok(kunci > 0, "kunci FOR NO KEY UPDATE tidak ditemukan");
+    assert.doesNotMatch(fungsi, /FOR UPDATE/);
+    for (const cek of ["INTO v_existing FROM enrollments", "FROM payments", "status_pembayaran = 'lunas'", "INSERT INTO enrollments"]) {
+      const posisi = fungsi.indexOf(cek);
+      assert.ok(posisi > kunci, `${cek} harus sesudah kunci kelas`);
+    }
+  });
 
   it("ubah_mentor_offline_manual: snapshot cuma id mentor lama/baru", () => {
     const fungsi = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION ubah_mentor_offline_manual"));

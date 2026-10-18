@@ -66,8 +66,13 @@ ALTER TABLE enrollment_manual_log ENABLE ROW LEVEL SECURITY;
 -- ---- 3. Daftarkan siswa manual (SATU transaksi) ----------------------------
 -- enrollment 'lunas' (sumber='manual') + enrollment_subtes + sesi_kelas
 -- 1..jumlah_sesi + log. Gagal di langkah mana pun = semuanya batal.
--- Baris kelas dikunci FOR UPDATE supaya dua pendaftaran manual bersamaan ke
--- kelas yang sama tidak bisa sama-sama lolos cek kapasitas.
+-- Baris kelas dikunci FOR NO KEY UPDATE supaya dua pendaftaran manual
+-- bersamaan ke kelas yang sama bergantian (kunci ini bentrok dengan dirinya
+-- sendiri) dan tidak bisa sama-sama lolos cek kapasitas — hitungan 'lunas'
+-- dibaca SETELAH kunci didapat (READ COMMITTED: snapshot baru per statement,
+-- jadi pemanggil kedua melihat enrollment pemanggil pertama). Sengaja bukan
+-- FOR UPDATE: FOR NO KEY UPDATE tidak menahan FOR KEY SHARE yang dipakai cek
+-- FK saat checkout/webhook menulis enrollments ke kelas ini.
 --
 -- sesi_kelas dibentuk SAMA PERSIS dengan lib/absensi/generateSesiKelas.ts
 -- (enrollment_id, nomor_sesi 1..N, kolom lain default) — diulang di SQL
@@ -120,7 +125,7 @@ BEGIN
         RETURN jsonb_build_object('status', 'mentor_sama_dengan_siswa');
     END IF;
 
-    SELECT * INTO v_kelas FROM kelas WHERE id = p_kelas_id FOR UPDATE;
+    SELECT * INTO v_kelas FROM kelas WHERE id = p_kelas_id FOR NO KEY UPDATE;
     IF NOT FOUND THEN
         RETURN jsonb_build_object('status', 'kelas_tidak_ada');
     END IF;
