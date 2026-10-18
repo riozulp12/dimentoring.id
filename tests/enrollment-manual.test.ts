@@ -8,7 +8,7 @@
  * Jalankan: npm test
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { before, beforeEach, describe, it } from "node:test";
 import { NextRequest } from "next/server";
@@ -523,6 +523,41 @@ describe("error yang jelas", () => {
     assert.equal(panjangKarakter("abc"), 3);
     assert.equal(validateAlasan("😀".repeat(9)), "Alasan wajib diisi (min. 10 karakter).");
     assert.equal(validateAlasan("😀".repeat(10)), null);
+  });
+});
+
+describe("embed PostgREST users <-> enrollments tidak ambigu", () => {
+  // enrollments punya 3 FK ke users (user_id, mentor_offline_id, dibuat_oleh):
+  // embed tanpa nama constraint / kolom gagal dengan PGRST201.
+  function semuaFile(dir: string): string[] {
+    return readdirSync(dir).flatMap((nama) => {
+      const p = path.join(dir, nama);
+      if (statSync(p).isDirectory()) return semuaFile(p);
+      return /\.(ts|tsx)$/.test(nama) ? [p] : [];
+    });
+  }
+  const files = ["app", "lib", "components"].flatMap((d) => semuaFile(path.join(process.cwd(), d)));
+
+  it("from(\"users\") tidak meng-embed enrollments(...) tanpa !enrollments_user_id_fkey", () => {
+    const pelanggaran: string[] = [];
+    for (const f of files) {
+      const isi = readFileSync(f, "utf8");
+      for (const m of isi.matchAll(/\.from\("users"\)\s*\.select\(\s*(`[^`]*`|"[^"]*")/g)) {
+        if (/(^|[\s,(])enrollments(?!!enrollments_user_id_fkey)\s*\(/.test(m[1])) pelanggaran.push(path.relative(process.cwd(), f));
+      }
+    }
+    assert.deepEqual(pelanggaran, []);
+  });
+
+  it("from(\"enrollments\") meng-embed users lewat kolom (users:user_id / alias:mentor_offline_id)", () => {
+    const pelanggaran: string[] = [];
+    for (const f of files) {
+      const isi = readFileSync(f, "utf8");
+      for (const m of isi.matchAll(/\.from\("enrollments"\)\s*\.select\(\s*(`[^`]*`|"[^"]*")/g)) {
+        if (/(^|[\s,(])users\s*\(/.test(m[1])) pelanggaran.push(path.relative(process.cwd(), f));
+      }
+    }
+    assert.deepEqual(pelanggaran, []);
   });
 });
 

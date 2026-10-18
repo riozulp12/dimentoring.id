@@ -7,7 +7,9 @@ import { supabaseServer } from "@/lib/supabase/server";
  * users<->user_roles WAJIB disambiguasi lewat nama constraint eksplisit
  * (user_roles!user_roles_user_id_fkey) — user_roles punya 2 FK ke users
  * (user_id DAN direview_oleh_id), embed polos "user_roles!inner(...)" gagal
- * dengan PGRST201 "more than one relationship was found".
+ * dengan PGRST201 "more than one relationship was found". Sama untuk
+ * users->enrollments: enrollments punya 3 FK ke users (user_id,
+ * mentor_offline_id, dibuat_oleh) -> WAJIB enrollments!enrollments_user_id_fkey.
  */
 
 export interface SiswaListItem {
@@ -40,7 +42,7 @@ export async function getSiswaList(): Promise<SiswaListItem[]> {
     .select(
       `id, nama, email, nama_sekolah, tingkat_kelas, sub_status, created_at,
        user_roles!user_roles_user_id_fkey!inner(role_type),
-       enrollments(status_pembayaran)`,
+       enrollments!enrollments_user_id_fkey(status_pembayaran)`,
     )
     .eq("user_roles.role_type", "student")
     .order("created_at", { ascending: false });
