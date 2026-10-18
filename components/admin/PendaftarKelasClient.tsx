@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import Modal from "@/components/ui/Modal";
 import DaftarSiswaManualModal from "@/components/admin/DaftarSiswaManualModal";
+import UbahMentorOfflineModal from "@/components/admin/UbahMentorOfflineModal";
 import type { PendaftarItem, SlotStatus } from "@/lib/admin/getPendaftarKelas";
 import { formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
 
@@ -16,7 +17,8 @@ import { formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan
  * dengan badge "slot tidak lagi tersedia".
  *
  * PRD 7.5.9: tombol "Daftarkan Siswa Manual" (siswa yang bayar di luar
- * website) + badge "Manual" untuk enrollment sumber='manual'.
+ * website) + badge "Manual" untuk enrollment sumber='manual', dan (kelas
+ * offline) aksi "Ubah mentor" per siswa.
  */
 
 const STATUS_LABEL: Record<PendaftarItem["statusPembayaran"], string> = {
@@ -72,6 +74,17 @@ export default function PendaftarKelasClient({
 }) {
   const router = useRouter();
   const [manualOpen, setManualOpen] = useState(false);
+  // Refresh data setelah modal ditutup (bukan saat sukses) — refresh me-remount
+  // komponen ini (key di page) dan akan menutup layar sukses terlalu cepat.
+  const perluRefresh = useRef(false);
+  function tutupManual() {
+    setManualOpen(false);
+    if (perluRefresh.current) {
+      perluRefresh.current = false;
+      router.refresh();
+    }
+  }
+  const [ubahMentorId, setUbahMentorId] = useState<string | null>(null);
   const penuh = terisi >= kapasitas;
   const slotOptions = slots.map((s) => ({ label: formatSlot(s), value: slotKey(s) }));
   const tersediaKeys = new Set(slotOptions.map((o) => o.value));
@@ -128,17 +141,38 @@ export default function PendaftarKelasClient({
     </div>
   );
 
+  const ubahTarget = rows.find((r) => r.enrollmentId === ubahMentorId) ?? null;
+
   const modal = (
-    <Modal open={manualOpen} onClose={() => setManualOpen(false)}>
-      <DaftarSiswaManualModal
-        kelasId={kelasId}
-        kelasNama={kelasNama}
-        modePembelajaran={modePembelajaran}
-        subtesPool={subtesPool}
-        onClose={() => setManualOpen(false)}
-        onSuccess={() => router.refresh()}
-      />
-    </Modal>
+    <>
+      <Modal open={ubahTarget !== null} onClose={() => setUbahMentorId(null)}>
+        {ubahTarget ? (
+          <UbahMentorOfflineModal
+            kelasId={kelasId}
+            enrollmentId={ubahTarget.enrollmentId}
+            siswaNama={ubahTarget.siswaNama}
+            mentorSekarang={ubahTarget.mentorOffline}
+            onClose={() => setUbahMentorId(null)}
+            onSaved={(mentor) => {
+              updateRow(ubahTarget.enrollmentId, { mentorOffline: mentor });
+              setUbahMentorId(null);
+            }}
+          />
+        ) : null}
+      </Modal>
+      <Modal open={manualOpen} onClose={tutupManual}>
+        <DaftarSiswaManualModal
+          kelasId={kelasId}
+          kelasNama={kelasNama}
+          modePembelajaran={modePembelajaran}
+          subtesPool={subtesPool}
+          onClose={tutupManual}
+          onSuccess={() => {
+            perluRefresh.current = true;
+          }}
+        />
+      </Modal>
+    </>
   );
 
   if (rows.length === 0) {
@@ -185,6 +219,20 @@ export default function PendaftarKelasClient({
               <SlotCell value={row.pilihan[1]} />
             </div>
           </div>
+
+          {modePembelajaran === "offline" ? (
+            <div className="flex flex-col gap-2 border-t border-[#E3E3E3] pt-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <p>
+                <span className="text-[#7E7C7C]">Mentor tatap muka: </span>
+                <span className="text-black">{row.mentorOffline?.nama ?? "Belum ada"}</span>
+              </p>
+              {row.statusPembayaran === "lunas" ? (
+                <Button type="button" variant="secondary" size="sm" onClick={() => setUbahMentorId(row.enrollmentId)}>
+                  Ubah mentor
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
 
           {jadwalPilihanAktif ? (
             <div className="flex flex-col gap-2 border-t border-[#E3E3E3] pt-3">
