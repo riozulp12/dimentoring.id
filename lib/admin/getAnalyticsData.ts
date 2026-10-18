@@ -36,6 +36,8 @@ export interface CampaignListItem {
   leads: number;
   /** Cost per Lead = budget / leads — null kalau budget kosong atau leads 0 (hindari div/0). */
   cpl: number | null;
+  /** BR-38: jumlah baris leads (nomor WA dari Assessment) dengan utm_campaign = utm_campaign_tag. */
+  leadsWa: number;
 }
 
 export interface BulanTotal {
@@ -108,12 +110,13 @@ export async function getPendaftaranPerSumber(): Promise<PendaftaranPerSumber[]>
 
 /** Section "Campaign Iklan" — leads dihitung dari users.utm_campaign yang cocok PERSIS ke utm_campaign_tag. */
 export async function getCampaignList(): Promise<CampaignListItem[]> {
-  const [campaignRes, usersRes] = await Promise.all([
+  const [campaignRes, usersRes, leadsWaRes] = await Promise.all([
     supabaseServer
       .from("iklan_campaign")
       .select("id, nama_campaign, platform, budget, tanggal_mulai, tanggal_selesai, utm_campaign_tag, catatan")
       .order("created_at", { ascending: false }),
     supabaseServer.from("users").select("utm_campaign").not("utm_campaign", "is", null),
+    supabaseServer.from("leads").select("utm_campaign").not("utm_campaign", "is", null),
   ]);
 
   if (campaignRes.error) {
@@ -122,6 +125,16 @@ export async function getCampaignList(): Promise<CampaignListItem[]> {
   }
   if (usersRes.error) {
     console.error("[getCampaignList] query users.utm_campaign failed:", usersRes.error);
+  }
+
+  // Tabel leads belum ada (migrasi belum dijalankan) -> 0, tidak menggagalkan halaman.
+  if (leadsWaRes.error) {
+    console.error("[getCampaignList] query leads.utm_campaign failed:", leadsWaRes.error);
+  }
+  const leadsWaPerTag = new Map<string, number>();
+  for (const row of leadsWaRes.data ?? []) {
+    const tag = row.utm_campaign as string;
+    leadsWaPerTag.set(tag, (leadsWaPerTag.get(tag) ?? 0) + 1);
   }
 
   const leadsPerTag = new Map<string, number>();
@@ -147,6 +160,7 @@ export async function getCampaignList(): Promise<CampaignListItem[]> {
       catatan: row.catatan as string | null,
       leads,
       cpl,
+      leadsWa: utmCampaignTag ? (leadsWaPerTag.get(utmCampaignTag) ?? 0) : 0,
     };
   });
 }

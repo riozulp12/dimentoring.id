@@ -231,6 +231,7 @@ export default function AnalyticsClient({
           catatan: form.catatan || null,
           leads: 0,
           cpl: null,
+          leadsWa: 0,
         },
         ...prev,
       ]);
@@ -440,6 +441,9 @@ export default function AnalyticsClient({
                 <div className="mt-1 flex items-center justify-between gap-3 border-t border-[#E3E3E3] pt-2">
                   <p className="text-sm text-[#7E7C7C]">
                     Leads: <span className="font-medium text-black">{c.leads}</span>
+                    <span className="ml-3">
+                      Leads WA: <span className="font-medium text-black">{c.leadsWa}</span>
+                    </span>
                   </p>
                   {c.cpl !== null ? (
                     <p className="text-sm text-[#7E7C7C]">
