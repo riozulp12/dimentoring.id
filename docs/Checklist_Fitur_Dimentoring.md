@@ -197,6 +197,11 @@ Dipakai saat perlu bukti alur pembayaran di Production (mis. pengajuan aktivasi 
 - [ ] Daftarkan Siswa Manual: siswa yang sudah terdaftar di kelas itu → 409; kelas penuh → tombol nonaktif dan API → 409 (tidak ada override); klik dobel → cuma satu pendaftaran
 - [ ] Daftarkan Siswa Manual: TIDAK ada baris baru di `payments` / Riwayat Transaksi, `kode_promo.jumlah_terpakai` tidak berubah, poin & reward referral siswa/referrer tidak bertambah
 - [ ] Daftarkan Siswa Manual kelas paket: wajib pilih 1–3 subtes; kelas offline: wajib pilih mentor tatap muka (aktif, bersedia tatap muka, mengampu mapel), lokasi opsional
+- [ ] Daftarkan Siswa Manual: siswa yang masih punya checkout "menunggu" < 24 jam untuk kelas itu → 409 (pesan: tunggu link kedaluwarsa atau batalkan dulu); checkout menunggu > 24 jam / kelas lain → tidak menghalangi; tabel `payments` tidak berubah
+- [ ] Daftarkan Siswa Manual & Ubah mentor: akun yang Student + Mentor sekaligus tidak muncul sebagai kandidat mentor untuk dirinya sendiri; memaksa lewat API → 400 "tidak boleh akun siswa itu sendiri"
+- [ ] Daftarkan Siswa Manual: alasan berisi emoji dihitung per karakter (5 emoji = 5 karakter → ditolak, 10 emoji → diterima), tidak pernah 500
+- [ ] `enrollment_manual_log.snapshot` tidak memuat `lokasi_siswa_lat`/`lokasi_siswa_lng` (cek di SQL Editor setelah mendaftarkan siswa kelas offline dengan lokasi)
+- [ ] Manajemen Siswa: daftar siswa tampil (tidak kosong) dan kolom jumlah kelas benar setelah migrasi `db/add_enrollment_manual.sql`
 - [ ] Ubah mentor tatap muka (kelas offline, siswa lunas): alasan wajib → mentor baru langsung melihat siswa di Kelas Saya & bisa menandai sesi, mentor lama tidak lagi; satu baris log `tugaskan_mentor`
 - [ ] Badge "Manual" juga tampil di Manajemen Siswa → detail → Kelas Diikuti
 - [ ] Kelola Konten: Tab Beasiswa/Event CRUD, Tab Review Konten AI (lintas semua mentor/subtes), Tab Katalog Reward CRUD + proses Permintaan Penukaran Poin (Selesai/Tolak, poin dikembalikan kalau ditolak)
