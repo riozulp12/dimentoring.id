@@ -8,6 +8,8 @@
  * Jalankan: npm test
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { before, beforeEach, describe, it } from "node:test";
 import { NextRequest } from "next/server";
 
@@ -442,6 +444,31 @@ describe("POST /api/admin/enrollment-manual", () => {
     assert.deepEqual([a.status, b.status].sort(), [201, 409]);
     assert.equal(db.enrollments.filter((e) => e.user_id === SISWA && e.kelas_id === "K-ON").length, 1);
     assert.equal(db.sesi_kelas.length, 10);
+  });
+});
+
+describe("privasi snapshot log (db/add_enrollment_manual.sql)", () => {
+  const sql = readFileSync(path.join(process.cwd(), "db", "add_enrollment_manual.sql"), "utf8");
+  const schema = readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8");
+
+  for (const [nama, isi] of [
+    ["migrasi", sql],
+    ["schema.sql", schema],
+  ] as const) {
+    it(`${nama}: snapshot enrollment membuang lokasi_siswa_lat & lokasi_siswa_lng`, () => {
+      const pakai = isi.match(/to_jsonb\(v_enrollment\)[^,\n]*/g) ?? [];
+      assert.ok(pakai.length >= 1, "snapshot enrollment tidak ditemukan");
+      for (const expr of pakai) {
+        assert.match(expr, /- 'lokasi_siswa_lat'/);
+        assert.match(expr, /- 'lokasi_siswa_lng'/);
+      }
+    });
+  }
+
+  it("ubah_mentor_offline_manual: snapshot cuma id mentor lama/baru", () => {
+    const fungsi = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION ubah_mentor_offline_manual"));
+    const snapshot = fungsi.slice(fungsi.indexOf("jsonb_build_object("), fungsi.indexOf("RETURN jsonb_build_object("));
+    assert.doesNotMatch(snapshot, /lokasi|to_jsonb/);
   });
 });
 

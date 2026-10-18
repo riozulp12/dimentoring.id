@@ -1055,7 +1055,9 @@ BEGIN
         p_admin_id, 'daftar_siswa', v_enrollment.id, p_kelas_id, p_siswa_id,
         p_metode, p_nominal, btrim(p_alasan),
         jsonb_build_object(
-            'enrollment', to_jsonb(v_enrollment),
+            -- TANPA lokasi siswa: log ini permanen (bertahan walau akun dihapus),
+            -- koordinat anak tidak boleh ikut tersimpan di sini.
+            'enrollment', to_jsonb(v_enrollment) - 'lokasi_siswa_lat' - 'lokasi_siswa_lng',
             'subtes_ids', to_jsonb(v_subtes),
             'jumlah_sesi', v_kelas.jumlah_sesi,
             'kelas', jsonb_build_object(
