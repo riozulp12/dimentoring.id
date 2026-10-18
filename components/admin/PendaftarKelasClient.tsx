@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
+import Modal from "@/components/ui/Modal";
+import DaftarSiswaManualModal from "@/components/admin/DaftarSiswaManualModal";
 import type { PendaftarItem, SlotStatus } from "@/lib/admin/getPendaftarKelas";
 import { formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
 
@@ -11,6 +14,9 @@ import { formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan
  * siswa cuma preferensi: Admin boleh menetapkan slot mana pun dari
  * kelas.jadwal saat ini. Slot yang sudah dihapus dari kelas tetap tampil
  * dengan badge "slot tidak lagi tersedia".
+ *
+ * PRD 7.5.9: tombol "Daftarkan Siswa Manual" (siswa yang bayar di luar
+ * website) + badge "Manual" untuk enrollment sumber='manual'.
  */
 
 const STATUS_LABEL: Record<PendaftarItem["statusPembayaran"], string> = {
@@ -45,15 +51,28 @@ interface RowState extends PendaftarItem {
 
 export default function PendaftarKelasClient({
   kelasId,
+  kelasNama,
+  modePembelajaran,
+  subtesPool,
+  kapasitas,
+  terisi,
   jadwalPilihanAktif,
   slots,
   initialPendaftar,
 }: {
   kelasId: string;
+  kelasNama: string;
+  modePembelajaran: "online" | "offline";
+  subtesPool: { id: string; nama: string }[];
+  kapasitas: number;
+  terisi: number;
   jadwalPilihanAktif: boolean;
   slots: JadwalSlot[];
   initialPendaftar: PendaftarItem[];
 }) {
+  const router = useRouter();
+  const [manualOpen, setManualOpen] = useState(false);
+  const penuh = terisi >= kapasitas;
   const slotOptions = slots.map((s) => ({ label: formatSlot(s), value: slotKey(s) }));
   const tersediaKeys = new Set(slotOptions.map((o) => o.value));
 
@@ -98,16 +117,45 @@ export default function PendaftarKelasClient({
     }
   }
 
+  const header = (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-[#7E7C7C]">
+        Terisi {terisi} dari {kapasitas} kursi{penuh ? " — kelas penuh" : ""}
+      </p>
+      <Button type="button" variant="primary" size="md" disabled={penuh} onClick={() => setManualOpen(true)}>
+        Daftarkan Siswa Manual
+      </Button>
+    </div>
+  );
+
+  const modal = (
+    <Modal open={manualOpen} onClose={() => setManualOpen(false)}>
+      <DaftarSiswaManualModal
+        kelasId={kelasId}
+        kelasNama={kelasNama}
+        modePembelajaran={modePembelajaran}
+        subtesPool={subtesPool}
+        onClose={() => setManualOpen(false)}
+        onSuccess={() => router.refresh()}
+      />
+    </Modal>
+  );
+
   if (rows.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-12 text-center">
-        <p className="text-base text-[#7E7C7C]">Belum ada pendaftar di kelas ini.</p>
+      <div className="flex flex-col gap-3">
+        {header}
+        <div className="flex flex-col items-center justify-center gap-2 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-12 text-center">
+          <p className="text-base text-[#7E7C7C]">Belum ada pendaftar di kelas ini.</p>
+        </div>
+        {modal}
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3">
+      {header}
       {rows.map((row) => (
         <div
           key={row.enrollmentId}
@@ -116,7 +164,12 @@ export default function PendaftarKelasClient({
           <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-4 sm:text-base">
             <div>
               <p className="text-[#7E7C7C]">Siswa</p>
-              <p className="text-black">{row.siswaNama}</p>
+              <p className="flex flex-wrap items-center gap-2 text-black">
+                {row.siswaNama}
+                {row.sumber === "manual" ? (
+                  <span className="rounded-full bg-[#EEF0FF] px-2 py-0.5 text-xs font-medium text-[#081EEA]">Manual</span>
+                ) : null}
+              </p>
               <p className="text-xs text-[#7E7C7C]">Daftar {formatTanggal(row.tanggalDaftar)}</p>
             </div>
             <div>
@@ -169,6 +222,7 @@ export default function PendaftarKelasClient({
           ) : null}
         </div>
       ))}
+      {modal}
     </div>
   );
 }

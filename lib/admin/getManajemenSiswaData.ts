@@ -84,12 +84,15 @@ export interface SiswaKelasItem {
   nama: string;
   statusPembayaran: "menunggu" | "lunas" | "batal";
   progresPersen: number;
+  /** 'manual' = didaftarkan Admin (PRD 7.5.9). */
+  sumber: "checkout" | "manual";
 }
 
 interface SiswaKelasRow {
   id: string;
   status_pembayaran: SiswaKelasItem["statusPembayaran"];
   progres_persen: number;
+  sumber: string | null;
   kelas: { id: string; nama: string } | { id: string; nama: string }[] | null;
 }
 
@@ -102,7 +105,7 @@ function firstOrNull<T>(value: T | T[] | null): T | null {
 export async function getSiswaKelasDiikuti(userId: string): Promise<SiswaKelasItem[]> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, status_pembayaran, progres_persen, kelas:kelas_id(id, nama)")
+    .select("id, status_pembayaran, progres_persen, sumber, kelas:kelas_id(id, nama)")
     .eq("user_id", userId)
     .order("tanggal_daftar", { ascending: false });
 
@@ -121,6 +124,7 @@ export async function getSiswaKelasDiikuti(userId: string): Promise<SiswaKelasIt
         nama: kelas.nama,
         statusPembayaran: row.status_pembayaran,
         progresPersen: row.progres_persen,
+        sumber: row.sumber === "manual" ? ("manual" as const) : ("checkout" as const),
       };
     })
     .filter((item): item is SiswaKelasItem => item !== null);

@@ -7,6 +7,7 @@ import {
   parseJadwalSlots,
   type JadwalSlot,
 } from "@/lib/shared/jadwalPilihan";
+import { getKelasSubtesOptions, type KelasSubtesOption } from "@/lib/payment/getKelasForCheckout";
 
 /**
  * Data layer halaman "Pendaftar" per kelas (Admin, Kelola Kelas) — PRD 7.5.8.
@@ -29,6 +30,10 @@ export interface PendaftarItem {
   pilihan: SlotStatus[];
   ditetapkan: SlotStatus | null;
   ditetapkanAt: string | null;
+  /** 'manual' = didaftarkan Admin (PRD 7.5.9) -> badge "Manual". */
+  sumber: "checkout" | "manual";
+  /** Kelas offline: mentor tatap muka siswa ini (enrollments.mentor_offline_id). */
+  mentorOffline: { id: string; nama: string } | null;
 }
 
 export interface PendaftarKelasData {
@@ -38,6 +43,13 @@ export interface PendaftarKelasData {
     /** Saklar menyala DAN bukan offline — aksi "Tetapkan jadwal" cuma ada kalau true. */
     jadwalPilihanAktif: boolean;
     slots: JadwalSlot[];
+    modePembelajaran: "online" | "offline";
+    kapasitas: number;
+    /** Enrollment lunas — dasar "Kelas Penuh" (sama dengan katalog). */
+    terisi: number;
+    jumlahSesi: number;
+    /** Pool subtes kelas (kelas_subtes) — > 1 = kelas paket, form manual minta pilihan. */
+    subtesPool: KelasSubtesOption[];
   };
   pendaftar: PendaftarItem[];
 }
@@ -51,13 +63,16 @@ interface EnrollmentRow {
   jadwal_pilihan: unknown;
   jadwal_ditetapkan: unknown;
   jadwal_ditetapkan_at: string | null;
+  sumber: string | null;
+  mentor_offline_id: string | null;
   users: NamaOnly | NamaOnly[] | null;
+  mentor_offline: NamaOnly | NamaOnly[] | null;
 }
 
 export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelasData | null> {
   const { data: kelas, error: kelasError } = await supabaseServer
     .from("kelas")
-    .select("id, nama, jadwal, jadwal_pilih_siswa, mode_pembelajaran")
+    .select("id, nama, jadwal, jadwal_pilih_siswa, mode_pembelajaran, kapasitas, jumlah_sesi")
     .eq("id", kelasId)
     .maybeSingle();
   if (kelasError) {
@@ -68,7 +83,9 @@ export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelas
 
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, status_pembayaran, tanggal_daftar, jadwal_pilihan, jadwal_ditetapkan, jadwal_ditetapkan_at, users:user_id(nama)")
+    .select(
+      "id, status_pembayaran, tanggal_daftar, jadwal_pilihan, jadwal_ditetapkan, jadwal_ditetapkan_at, sumber, mentor_offline_id, users:user_id(nama), mentor_offline:mentor_offline_id(nama)",
+    )
     .eq("kelas_id", kelasId)
     .order("tanggal_daftar", { ascending: true });
   if (error) {
@@ -89,8 +106,17 @@ export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelas
       pilihan: parseJadwalSlots(row.jadwal_pilihan).map(toStatus),
       ditetapkan: ditetapkan ? toStatus(ditetapkan) : null,
       ditetapkanAt: row.jadwal_ditetapkan_at,
+      sumber: row.sumber === "manual" ? ("manual" as const) : ("checkout" as const),
+      mentorOffline: row.mentor_offline_id
+        ? {
+            id: row.mentor_offline_id,
+            nama: (Array.isArray(row.mentor_offline) ? row.mentor_offline[0] : row.mentor_offline)?.nama ?? "-",
+          }
+        : null,
     };
   });
+
+  const subtesPool = await getKelasSubtesOptions(kelasId);
 
   return {
     kelas: {
@@ -102,6 +128,11 @@ export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelas
         jadwal: kelas.jadwal,
       }),
       slots: parseJadwalSlots(kelas.jadwal),
+      modePembelajaran: kelas.mode_pembelajaran === "offline" ? "offline" : "online",
+      kapasitas: kelas.kapasitas as number,
+      terisi: pendaftar.filter((p) => p.statusPembayaran === "lunas").length,
+      jumlahSesi: kelas.jumlah_sesi as number,
+      subtesPool,
     },
     pendaftar,
   };

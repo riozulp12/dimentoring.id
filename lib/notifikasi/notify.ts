@@ -376,3 +376,35 @@ export async function notifyJadwalDitetapkan(
     },
   ]);
 }
+
+/**
+ * Pendaftaran manual oleh Admin (PRD 7.5.9) — dipanggil
+ * app/api/admin/enrollment-manual SETELAH daftar_siswa_manual sukses.
+ */
+export async function notifySiswaDidaftarkanAdmin(siswaUserId: string, kelasId: string, kelasNama: string) {
+  await insertNotifikasi([
+    {
+      user_id: siswaUserId,
+      tipe: "sistem",
+      judul: "Kamu sudah terdaftar di kelas baru",
+      pesan: `Kamu telah didaftarkan ke kelas ${kelasNama} oleh Admin.`,
+      link_tujuan: `/kelas/${kelasId}`,
+    },
+  ]);
+}
+
+/**
+ * Mentor tatap muka satu siswa diganti Admin (PRD 7.5.9) — bell ke mentor
+ * BARU saja. TANPA nama siswa (privasi anak), sama seperti notif siswa baru.
+ */
+export async function notifyMentorOfflineDitugaskanAdmin(mentorUserId: string, kelasId: string, kelasNama: string) {
+  await insertNotifikasi([
+    {
+      user_id: mentorUserId,
+      tipe: "sistem",
+      judul: "Kamu ditugaskan ke siswa baru",
+      pesan: `Admin menugaskan kamu sebagai mentor tatap muka untuk satu siswa di kelas ${kelasNama}.`,
+      link_tujuan: `/kelas-saya/${kelasId}`,
+    },
+  ]);
+}
