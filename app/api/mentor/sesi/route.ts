@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
 import { getAksesMentorEnrollment } from "@/lib/mentor/aksesMentor";
+import { getNamaMapelMentor } from "@/lib/mentor/mapelMentor";
 import { notifySesiDitandaiMentor } from "@/lib/notifikasi/notify";
 import { rentangHariWib, tanggalWib } from "@/lib/shared/hariWib";
 
@@ -12,8 +13,12 @@ import { rentangHariWib, tanggalWib } from "@/lib/shared/hariWib";
  * loncat) — dikonfirmasi_mentor=true, tanggal_dilaksanakan=hari ini. BR-7:
  * cuma mentor yang terkait enrollment ini (kelas.mentor_id, kelas_mentor,
  * atau enrollments.mentor_offline_id — lib/mentor/aksesMentor.ts) yang boleh.
- * Maksimal SATU penandaan per enrollment per hari kalender WIB (Asia/Jakarta)
- * — lebih dari itu 409. tanggal_dilaksanakan juga tanggal WIB, bukan UTC.
+ * Multi-mentor: total sesi per siswa tetap kelas.jumlah_sesi (dibagi antar
+ * mentor, belum ada kuota per mentor) — mentor mana pun mengambil sesi
+ * berikutnya yang belum ditandai dan mencatat mentor_id + nama_mapel
+ * (snapshot) di baris itu. Maksimal SATU penandaan per enrollment per MENTOR
+ * per hari kalender WIB (Asia/Jakarta) — mentor yang sama dua kali 409, dua
+ * mentor berbeda boleh di hari yang sama. tanggal_dilaksanakan = tanggal WIB.
  */
 
 interface TandaiSesiBody {
@@ -58,12 +63,14 @@ export async function POST(request: NextRequest) {
 
   const now = new Date();
   const hariIni = rentangHariWib(now);
-  // Sesi yang dibatalkan Admin (dikonfirmasi_mentor_pada di-reset NULL) tidak
-  // ikut terhitung, jadi mentor tetap bisa menandai ulang di hari yang sama.
+  // Per mentor: cuma penandaan mentor INI yang dihitung. Sesi yang dibatalkan
+  // Admin (dikonfirmasi_mentor_pada & mentor_id di-reset NULL) tidak ikut
+  // terhitung, jadi mentor tetap bisa menandai ulang di hari yang sama.
   const { count: ditandaiHariIni, error: hariIniError } = await supabaseServer
     .from("sesi_kelas")
     .select("id", { count: "exact", head: true })
     .eq("enrollment_id", enrollmentId)
+    .eq("mentor_id", session.userId)
     .eq("dikonfirmasi_mentor", true)
     .gte("dikonfirmasi_mentor_pada", hariIni.mulai)
     .lt("dikonfirmasi_mentor_pada", hariIni.akhir);
@@ -74,7 +81,7 @@ export async function POST(request: NextRequest) {
   }
   if ((ditandaiHariIni ?? 0) > 0) {
     return errorResponse(
-      "Sesi siswa ini sudah ditandai hari ini. Maksimal satu sesi per hari — tandai sesi berikutnya besok.",
+      "Kamu sudah menandai sesi siswa ini hari ini. Maksimal satu sesi per hari untuk tiap mentor — tandai sesi berikutnya besok.",
       409,
     );
   }
@@ -96,6 +103,11 @@ export async function POST(request: NextRequest) {
     return errorResponse("Semua sesi kelas ini sudah ditandai selesai.", 400);
   }
 
+  const namaMapel = await getNamaMapelMentor(session.userId, kelas, enrollment.id);
+  if (namaMapel === "gagal") {
+    return errorResponse("Gagal memuat data mapel. Coba lagi nanti.", 500);
+  }
+
   // Kondisional/atomik: cuma baris yang MASIH belum ditandai. Dua request
   // bersamaan (klik dobel, dua tab) memilih baris yang sama — yang kalah
   // mengubah 0 baris dan TIDAK mengirim notifikasi.
@@ -105,6 +117,8 @@ export async function POST(request: NextRequest) {
       dikonfirmasi_mentor: true,
       dikonfirmasi_mentor_pada: now.toISOString(),
       tanggal_dilaksanakan: tanggalWib(now),
+      mentor_id: session.userId,
+      nama_mapel: namaMapel,
     })
     .eq("id", nextSesi.id)
     .eq("dikonfirmasi_mentor", false)
@@ -125,5 +139,5 @@ export async function POST(request: NextRequest) {
     nextSesi.nomor_sesi as number,
   );
 
-  return NextResponse.json({ success: true, nomorSesi: nextSesi.nomor_sesi });
+  return NextResponse.json({ success: true, nomorSesi: nextSesi.nomor_sesi, namaMapel });
 }

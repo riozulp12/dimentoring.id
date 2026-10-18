@@ -1,12 +1,14 @@
 /**
  * Test presensi multi-mentor (PRD 7.5.5) — otorisasi mentor
- * (lib/mentor/aksesMentor.ts) dijalankan terhadap Supabase TIRUAN di memori
+ * (lib/mentor/aksesMentor.ts), snapshot mapel (lib/mentor/mapelMentor.ts),
+ * dan POST /api/mentor/sesi, dijalankan terhadap Supabase TIRUAN di memori
  * (tidak pernah menyentuh database asli).
  *
  * Jalankan: npm test
  */
 import assert from "node:assert/strict";
 import { before, beforeEach, describe, it } from "node:test";
+import { NextRequest } from "next/server";
 
 type Row = Record<string, unknown>;
 type Db = Record<string, Row[]>;
@@ -103,7 +105,17 @@ const MENTOR_OFFLINE = "mentor-offline";
 const MENTOR_LAIN = "mentor-lain";
 
 type AksesModule = typeof import("@/lib/mentor/aksesMentor");
+type MapelModule = typeof import("@/lib/mentor/mapelMentor");
+type SesiRouteModule = typeof import("@/app/api/mentor/sesi/route");
+type SessionModule = typeof import("@/lib/auth/session");
+type ProgresModule = typeof import("@/lib/shared/progresSesi");
+type KelasSayaMentorModule = typeof import("@/lib/mentor/getKelasSayaData");
 let aksesMentor: AksesModule;
+let mapelMentor: MapelModule;
+let sesiRoute: SesiRouteModule;
+let sessionLib: SessionModule;
+let progres: ProgresModule;
+let kelasSayaMentor: KelasSayaMentorModule;
 
 before(async () => {
   // Nilai dummy — client aslinya tidak pernah dipakai, `from` diganti tiruan.
@@ -113,7 +125,53 @@ before(async () => {
   const { supabaseServer } = await import("@/lib/supabase/server");
   (supabaseServer as unknown as { from: typeof fakeFrom }).from = fakeFrom;
   aksesMentor = await import("@/lib/mentor/aksesMentor");
+  mapelMentor = await import("@/lib/mentor/mapelMentor");
+  sesiRoute = await import("@/app/api/mentor/sesi/route");
+  sessionLib = await import("@/lib/auth/session");
+  progres = await import("@/lib/shared/progresSesi");
+  kelasSayaMentor = await import("@/lib/mentor/getKelasSayaData");
 });
+
+function sesiRows(enrollmentId: string, total: number): Row[] {
+  return Array.from({ length: total }, (_, i) => ({
+    id: `${enrollmentId}-s${i + 1}`,
+    enrollment_id: enrollmentId,
+    nomor_sesi: i + 1,
+    tanggal_dilaksanakan: null,
+    dikonfirmasi_mentor: false,
+    dikonfirmasi_mentor_pada: null,
+    status_siswa: "belum",
+    dikonfirmasi_siswa_pada: null,
+    perlu_review_admin: false,
+    mentor_id: null,
+    nama_mapel: null,
+  }));
+}
+
+async function tandai(mentorId: string, enrollmentId: string) {
+  const token = sessionLib.createSessionToken({ userId: mentorId, role: "mentor" });
+  const request = new NextRequest("http://localhost/api/mentor/sesi", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", cookie: `${sessionLib.SESSION_COOKIE_NAME}=${token}` },
+    body: JSON.stringify({ enrollmentId }),
+  });
+  const response = await sesiRoute.POST(request);
+  return { status: response.status, json: (await response.json()) as Record<string, unknown> };
+}
+
+/** Mundurkan semua penandaan sehari — mensimulasikan hari WIB berikutnya. */
+function geserSehari() {
+  for (const row of db.sesi_kelas) {
+    if (typeof row.dikonfirmasi_mentor_pada === "string") {
+      row.dikonfirmasi_mentor_pada = new Date(Date.parse(row.dikonfirmasi_mentor_pada) - 24 * 60 * 60 * 1000).toISOString();
+    }
+  }
+}
+
+const ditandai = (enrollmentId: string) =>
+  db.sesi_kelas
+    .filter((r) => r.enrollment_id === enrollmentId && r.dikonfirmasi_mentor)
+    .sort((a, b) => (a.nomor_sesi as number) - (b.nomor_sesi as number));
 
 beforeEach(() => {
   db = {
@@ -136,6 +194,25 @@ beforeEach(() => {
       { id: "e-off", user_id: "siswa-2", kelas_id: "K-OFF", status_pembayaran: "lunas", mentor_offline_id: MENTOR_OFFLINE },
       { id: "e-off-lain", user_id: "siswa-3", kelas_id: "K-OFF", status_pembayaran: "lunas", mentor_offline_id: MENTOR_LAIN },
     ],
+    // "di kelas ini, Subtes X diajar Mentor Y" — sumber mapel per mentor.
+    kelas_subtes_mentor: [
+      { kelas_id: "K-ON", subtes_id: "s-mtk", mentor_id: MENTOR_UTAMA },
+      { kelas_id: "K-ON", subtes_id: "s-ing", mentor_id: MENTOR_KEDUA },
+    ],
+    enrollment_subtes: [],
+    user_roles: [MENTOR_UTAMA, MENTOR_KEDUA, MENTOR_OFFLINE, MENTOR_LAIN].map((id) => ({
+      user_id: id,
+      role_type: "mentor",
+      status: "active",
+    })),
+    users: [
+      { id: MENTOR_UTAMA, nama: "Budi" },
+      { id: MENTOR_KEDUA, nama: "Citra" },
+      { id: MENTOR_OFFLINE, nama: "Dewi" },
+      { id: "siswa-1", nama: "Siswa Satu", avatar_url: null },
+    ],
+    sesi_kelas: [...sesiRows("e-on", 10), ...sesiRows("e-off", 8)],
+    notifikasi: [],
   };
 });
 
@@ -196,5 +273,100 @@ describe("getKelasAksesMentor (daftar Kelas Saya)", () => {
   it("enrollment offline yang belum lunas tidak membuka kelas", async () => {
     db.enrollments.push({ id: "e-x", user_id: "s", kelas_id: "K-X", status_pembayaran: "menunggu", mentor_offline_id: "mentor-baru" });
     assert.equal((await aksesMentor.getKelasAksesMentor("mentor-baru")).size, 0);
+  });
+});
+
+describe("tentukanNamaMapel (murni)", () => {
+  const pasangan = [
+    { mentorId: "A", subtesId: "s1", subtesNama: "Matematika" },
+    { mentorId: "A", subtesId: "s2", subtesNama: "Fisika" },
+    { mentorId: "B", subtesId: "s3", subtesNama: "Biologi" },
+  ];
+  const input = (mentorId: string, subtesSiswaIds: string[] = [], subtesKelasNama: string | null = null) => ({
+    mentorId,
+    pasanganKelas: pasangan,
+    subtesSiswaIds,
+    subtesKelasNama,
+  });
+
+  it("satu subtes per mentor → nama subtes itu", () => {
+    assert.equal(mapelMentor.tentukanNamaMapel(input("B")), "Biologi");
+  });
+  it("mentor >1 subtes dipersempit ke pilihan siswa; tanpa pilihan → digabung urut abjad", () => {
+    assert.equal(mapelMentor.tentukanNamaMapel(input("A", ["s2"])), "Fisika");
+    assert.equal(mapelMentor.tentukanNamaMapel(input("A")), "Fisika, Matematika");
+  });
+  it("kelas tanpa pasangan (offline / satu subtes) → subtes kelas; kelas tanpa subtes → null", () => {
+    const tanpaPasangan = { mentorId: "X", pasanganKelas: [], subtesSiswaIds: [] };
+    assert.equal(mapelMentor.tentukanNamaMapel({ ...tanpaPasangan, subtesKelasNama: "Penalaran Matematika" }), "Penalaran Matematika");
+    assert.equal(mapelMentor.tentukanNamaMapel({ ...tanpaPasangan, subtesKelasNama: null }), null);
+  });
+  it("mentor generik di kelas berpasangan → null (bukan label kosong)", () => {
+    assert.equal(mapelMentor.tentukanNamaMapel(input("Z", [], "x")), null);
+  });
+});
+
+describe("POST /api/mentor/sesi (multi-mentor)", () => {
+  it("mentor tidak terkait ditolak 403 dan tidak ada sesi yang berubah", async () => {
+    const res = await tandai(MENTOR_LAIN, "e-on");
+    assert.equal(res.status, 403);
+    assert.equal(ditandai("e-on").length, 0);
+  });
+
+  it("mentor A dan B boleh menandai siswa yang sama di hari yang sama; A dua kali → 409", async () => {
+    assert.equal((await tandai(MENTOR_UTAMA, "e-on")).status, 200);
+    assert.equal((await tandai(MENTOR_KEDUA, "e-on")).status, 200);
+    const ulang = await tandai(MENTOR_UTAMA, "e-on");
+    assert.equal(ulang.status, 409);
+    assert.match(String(ulang.json.error), /sudah menandai sesi siswa ini hari ini/);
+    assert.equal(ditandai("e-on").length, 2);
+    assert.equal(db.notifikasi.length, 2, "409 tidak boleh mengirim notifikasi");
+  });
+
+  it("snapshot mentor_id + nama_mapel tersimpan per sesi, urut sesi berikutnya", async () => {
+    await tandai(MENTOR_UTAMA, "e-on");
+    await tandai(MENTOR_KEDUA, "e-on");
+    const [s1, s2] = ditandai("e-on");
+    assert.deepEqual([s1.nomor_sesi, s1.mentor_id, s1.nama_mapel], [1, MENTOR_UTAMA, "Penalaran Matematika"]);
+    assert.deepEqual([s2.nomor_sesi, s2.mentor_id, s2.nama_mapel], [2, MENTOR_KEDUA, "Literasi B. Inggris"]);
+  });
+
+  it("mentor offline mencatat subtes kelas offline", async () => {
+    assert.equal((await tandai(MENTOR_OFFLINE, "e-off")).status, 200);
+    const [s1] = ditandai("e-off");
+    assert.deepEqual([s1.mentor_id, s1.nama_mapel], [MENTOR_OFFLINE, "Penalaran Matematika"]);
+  });
+
+  it("total sesi tetap 10 saat dua mentor menandai bergantian (bukan 10 per mentor)", async () => {
+    for (let hari = 0; hari < 5; hari++) {
+      assert.equal((await tandai(MENTOR_UTAMA, "e-on")).status, 200);
+      assert.equal((await tandai(MENTOR_KEDUA, "e-on")).status, 200);
+      geserSehari();
+    }
+    assert.equal((await tandai(MENTOR_UTAMA, "e-on")).status, 400);
+    assert.equal(db.sesi_kelas.filter((r) => r.enrollment_id === "e-on").length, 10);
+    const semua = ditandai("e-on");
+    assert.deepEqual(
+      semua.map((r) => r.nomor_sesi),
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    );
+    assert.equal(semua.filter((r) => r.mentor_id === MENTOR_UTAMA).length, 5);
+    assert.equal(semua.filter((r) => r.mentor_id === MENTOR_KEDUA).length, 5);
+    const terhitung = progres.hitungSesiTerkonfirmasi(semua as unknown as { dikonfirmasi_mentor: boolean; status_siswa: string }[]);
+    assert.deepEqual(progres.hitungProgresSesi(terhitung, 10), { persen: 100, selesai: true });
+  });
+
+  it("sesi lama tanpa mentor_id tidak error dan tidak memblokir batas harian siapa pun", async () => {
+    Object.assign(db.sesi_kelas[0], {
+      dikonfirmasi_mentor: true,
+      dikonfirmasi_mentor_pada: new Date().toISOString(),
+      status_siswa: "dikonfirmasi",
+    });
+    const res = await tandai(MENTOR_UTAMA, "e-on");
+    assert.equal(res.status, 200);
+    assert.equal(res.json.nomorSesi, 2);
+    const [lama, baru] = ditandai("e-on");
+    assert.equal(lama.mentor_id, null);
+    assert.equal(baru.mentor_id, MENTOR_UTAMA);
   });
 });

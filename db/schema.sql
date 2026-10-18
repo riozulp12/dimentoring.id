@@ -547,10 +547,15 @@ CREATE TABLE sesi_kelas (
     status_siswa status_konfirmasi_sesi NOT NULL DEFAULT 'belum',
     dikonfirmasi_siswa_pada TIMESTAMPTZ,
     perlu_review_admin BOOLEAN NOT NULL DEFAULT false,
+    -- Multi-mentor (db/add_sesi_mentor_mapel.sql): mentor yang MENANDAI sesi
+    -- ini + snapshot nama Subtes-nya saat ditandai. NULL = baris lama / belum ditandai.
+    mentor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    nama_mapel TEXT,
     UNIQUE(enrollment_id, nomor_sesi)
 );
 
 CREATE INDEX idx_sesi_kelas_enrollment ON sesi_kelas(enrollment_id);
+CREATE INDEX idx_sesi_kelas_enrollment_mentor ON sesi_kelas(enrollment_id, mentor_id);
 
 -- Log audit keputusan Admin atas sesi yang disangkal siswa (BR-34, FR-A3) —
 -- db/add_sesi_review_log.sql. snapshot_sebelum = baris sesi_kelas sebelum
@@ -604,7 +609,9 @@ BEGIN
             tanggal_dilaksanakan = NULL,
             status_siswa = 'belum',
             dikonfirmasi_siswa_pada = NULL,
-            perlu_review_admin = false
+            perlu_review_admin = false,
+            mentor_id = NULL,
+            nama_mapel = NULL
         WHERE id = p_sesi_id;
     END IF;
 
