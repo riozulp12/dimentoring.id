@@ -1,9 +1,24 @@
 # Desain — Studio Soal SNBT Tahap 1
 
-> **Status:** DRAF DESAIN — menunggu persetujuan. Belum ada kode/migrasi yang ditulis.
+> **Status:** DISETUJUI (18 Oktober 2026) dengan keputusan final di bawah. Implementasi PR 1 (skema) & PR 2 (modul murni).
 > **Branch:** `feat/studio-soal-v1` (dari `origin/main` 59ffe18) · **Tanggal:** 18 Oktober 2026
 > **Cakupan Tahap 1:** mentor membuat soal manual (3 tipe) + stimulus + paket, tinjau sejawat, publikasi. **Tanpa** poin, impor, AI, dan halaman siswa.
 > **Tidak disentuh:** Payment/Mayar, Referral/gamifikasi (`gamifikasi_profiles.total_poin`), `tryout_attempts`/`immutable_lock` (BR-9), `mentor_soal_reward_*`, enum `soal_ai_status`/`konten_sumber`/`soal_ai_kesulitan`, tabel `soal_ai`, `materi`, `/api/review-konten`.
+
+---
+
+## Keputusan final (menggantikan usulan di bagian mana pun yang berbeda)
+
+| # | Keputusan |
+|---|---|
+| K1 | Pernyataan majemuk kompleks **2–6 baris**. Rumpang isian **1–5**. |
+| K2 | Hak membuat soal: mentor `active` + tercatat di `mentor_subtes_diampu` untuk subtes itu (**exact `subtes_id`**, bukan `mapel_dasar`). Tidak disyaratkan sedang mengampu kelas. |
+| K3 | Versi baru soal/stimulus terpublikasi: **hanya penulis**. Bila penulis nonaktif, Admin menugaskan ulang penulis — dicatat sebagai kebutuhan, **belum ada UI/fungsi** di Tahap 1. |
+| K4 | Atribusi sumber **wajib untuk stimulus** (`sumber_rujukan` NOT NULL: "Buatan sendiri" atau nama sumber), **opsional untuk soal** (`soal_bank.sumber_rujukan` nullable). |
+| K5 | Isian angka: `.5` diterima sebagai 0,5; `5.` ditolak. Pemisah ribuan tidak didukung. |
+| K6 | **Gambar ditunda ke PR 7.** PR 1–2 hanya mengenal blok stimulus `teks` dan `tabel`; validator menolak blok `gambar` sampai PR 7. |
+| K7 | Satu penulis per stimulus: hanya penulis stimulus yang boleh menambah soal ke stimulus itu (dijaga di RPC). |
+| K8 | Revisi PRD 7.7 dan **BR-37** disetujui (BR-37 dicek masih kosong — BR terakhir BR-36). |
 
 ---
 
@@ -85,7 +100,7 @@ menggantikan_id UUID REFERENCES soal_stimulus(id)
 subtes_id       UUID NOT NULL REFERENCES subtes(id)
 judul_internal  VARCHAR(150) NOT NULL    -- hanya untuk mentor, tidak tampil ke siswa
 konten          JSONB NOT NULL           -- lihat bentuk di 1.5
-sumber_rujukan  TEXT                     -- atribusi bacaan (BR-18: wajib kalau kutipan/adaptasi)
+sumber_rujukan  TEXT NOT NULL            -- K4: "Buatan sendiri" atau nama sumber (BR-18), 3–300 karakter
 status          TEXT NOT NULL DEFAULT 'draf'
                 CHECK (status IN ('draf','diajukan','terpublikasi','ditolak','digantikan','diarsipkan'))
 penulis_id      UUID NOT NULL REFERENCES users(id)
@@ -115,6 +130,7 @@ redaksi               TEXT NOT NULL      -- teks + LaTeX \( \); untuk isian beri
 konten                JSONB NOT NULL     -- bagian yang BOLEH dilihat siswa (opsi/pernyataan/rumpang)
 kunci                 JSONB NOT NULL     -- RAHASIA, tidak pernah dikirim ke siswa
 pembahasan            TEXT NOT NULL
+sumber_rujukan        TEXT                -- K4: opsional untuk soal (≤ 300 karakter)
 tingkat_kesulitan     TEXT NOT NULL CHECK (tingkat_kesulitan IN ('mudah','sedang','hots'))
 level_kognitif        SMALLINT CHECK (level_kognitif BETWEEN 1 AND 3)   -- TKA, opsional, tidak tampil di UI Tahap 1
 estimasi_waktu_detik  INT CHECK (estimasi_waktu_detik BETWEEN 10 AND 1800)
@@ -223,7 +239,7 @@ CONSTRAINT soal_bank_bentuk_pg CHECK (tipe <> 'pilihan_ganda' OR (
 CONSTRAINT soal_bank_bentuk_majemuk CHECK (tipe <> 'majemuk_kompleks' OR (
   jsonb_array_length(konten->'label_kolom') = 2
   AND length(btrim(konten->'label_kolom'->>0)) > 0 AND length(btrim(konten->'label_kolom'->>1)) > 0
-  AND jsonb_array_length(konten->'pernyataan') BETWEEN 3 AND 6))
+  AND jsonb_array_length(konten->'pernyataan') BETWEEN 2 AND 6))
 CONSTRAINT soal_bank_bentuk_isian CHECK (tipe <> 'isian' OR
   jsonb_array_length(konten->'rumpang') BETWEEN 1 AND 5)
 CONSTRAINT soal_bank_pembahasan CHECK (length(btrim(pembahasan)) >= 10)
@@ -237,9 +253,9 @@ Pengecualian publikasi Admin: `peninjau_id` = id Admin (≠ penulis), jadi CHECK
 **Lapis aplikasi — `lib/shared/studio-soal/validasiSoal.ts`** (fungsi murni, dipakai API **dan** builder di browser, mengembalikan daftar error per field):
 - Umum: subtes kategori `tps`/`literasi`; redaksi 1–5.000 karakter; pembahasan ≥ 10 karakter; semua rumus `\( \)`/`\[ \]` lolos parse KaTeX (`throwOnError: true` saat simpan).
 - **PG:** tepat 5 opsi berlabel A–E berurutan, tiap opsi tidak kosong (≤ 1.000 karakter), tidak ada dua opsi identik setelah normalisasi, kunci tepat satu dari A–E.
-- **Majemuk:** 2 label kolom wajib, tidak kosong, ≤ 30 karakter, tidak sama; **3–6 pernyataan** (usulan, lihat Bagian 8), id unik, teks tidak kosong; kunci ada untuk **setiap** pernyataan, nilainya 0/1, tidak ada kunci untuk id yang tidak ada.
+- **Majemuk:** 2 label kolom wajib, tidak kosong, ≤ 30 karakter, tidak sama; **2–6 pernyataan** (K1), id unik, teks tidak kosong; kunci ada untuk **setiap** pernyataan, nilainya 0/1, tidak ada kunci untuk id yang tidak ada.
 - **Isian:** setiap `{{id}}` di redaksi muncul tepat sekali dan punya pasangan di `konten.rumpang` (tidak ada yatim di kedua arah); 1–5 rumpang; tiap rumpang **≥ 1 jawaban diterima** (≤ 10, masing-masing ≤ 100 karakter, duplikat setelah normalisasi ditolak); rumpang `angka`: semua jawaban diterima wajib bisa di-parse sebagai angka.
-- **Stimulus:** 1–20 blok; teks ≤ 15.000 karakter per blok; tabel 1–8 kolom × 1–20 baris, kepala wajib; gambar wajib `alt` (aksesibilitas).
+- **Stimulus:** 1–20 blok; teks ≤ 15.000 karakter per blok; tabel 1–8 kolom × 1–20 baris, kepala wajib; `sumber_rujukan` wajib 3–300 karakter (K4); blok `gambar` ditolak sampai PR 7 (K6) — setelah PR 7 wajib `alt`.
 - **Alasan tolak:** `panjangKarakter(alasan.trim()) >= 10` (≤ 1.000).
 - **Paket:** judul ≥ 3 karakter, 1–100 soal, semua soal se-subtes dengan paket, soal yang berbagi stimulus harus **berurutan** (blok utuh).
 
@@ -402,7 +418,7 @@ Skor parsial nanti cukup menambah cabang `aturan_skor === 'parsial_per_bagian'` 
 - PG: benar, salah, kosong, huruf kecil `"c"` (salah — kunci huruf besar dari UI), bentuk rusak.
 - Majemuk: semua benar; satu baris salah → salah; satu baris kosong → salah; id asing diabaikan; urutan pernyataan diacak tetap benar.
 - Isian teks: `"  Jakarta "` = `"jakarta"`; `"JAKARTA"`; spasi ganda; NBSP; alternatif kedua cocok; `"Jakarta."` ≠ `"Jakarta"` (kecuali didaftarkan).
-- Isian angka: `0,5`=`0.5`=`1/2`=`2/4`=`.5`?(**usulan: `.5` diterima**, `5.` ditolak); `-0,5` vs `−0,5`; `+7`=`7`; `1/0` salah; `1.000` = 1; `1.000,5` salah; `50%` salah; toleransi 0,01 untuk 3,14 vs 3,1416; angka sangat panjang tidak overflow (BigInt).
+- Isian angka: `0,5`=`0.5`=`1/2`=`2/4`=`.5` (K5: `.5` diterima, `5.` ditolak); `-0,5` vs `−0,5`; `+7`=`7`; `1/0` salah; `1.000` = 1; `1.000,5` salah; `50%` salah; toleransi 0,01 untuk 3,14 vs 3,1416; angka sangat panjang tidak overflow (BigInt).
 - Multi-rumpang: semua benar → benar; satu salah → salah; `bagian` berisi status per rumpang.
 - `aturan_skor` tak dikenal → throw.
 
@@ -440,7 +456,7 @@ Skor parsial nanti cukup menambah cabang `aturan_skor === 'parsial_per_bagian'` 
 - **Otorisasi:** tanpa session 401; siswa 403; mentor pending 403; mentor tanpa subtes itu 403 saat buat/tinjau; mentor multi-subtes boleh di kedua subtesnya, ditolak di subtes ketiga; subtes TKA ditolak (Tahap 1 hanya SNBT); peran dari session, bukan body.
 - **Review sendiri ditolak:** penulis meninjau soalnya → 403; penulis stimulus meninjau kelompoknya → 403; Admin yang juga penulis tidak bisa publikasi admin.
 - **Batas Admin:** ada 1 mentor eligible lain → `publikasi-admin` 409; 0 eligible → berhasil + log `jumlah_peninjau_eligible=0` + alasan; mentor eligible yang pending/rejected tidak dihitung; Admin tetap bisa menolak.
-- **Validasi tiap tipe:** PG 4 atau 6 opsi, kunci `F`, opsi kosong, opsi duplikat; majemuk 1 label, label sama, 2 pernyataan, 7 pernyataan, kunci kurang satu baris; isian penanda yatim, rumpang tanpa jawaban, rumpang angka dengan jawaban "abc"; rumus LaTeX rusak ditolak saat ajukan.
+- **Validasi tiap tipe:** PG 4 atau 6 opsi, kunci `F`, opsi kosong, opsi duplikat; majemuk 1 label, label sama, 1 pernyataan, 7 pernyataan, kunci kurang satu baris; isian penanda yatim, rumpang tanpa jawaban, rumpang angka dengan jawaban "abc"; rumus LaTeX rusak ditolak saat ajukan.
 - **Alasan tolak:** kosong, 9 karakter, 9 emoji + spasi (dihitung per code point), 10 karakter → hanya yang terakhir lolos.
 - **Status:** edit `diajukan` ditolak; tarik → draf; tinjau soal yang sudah ditinjau → 409; versi baru: versi lama tetap terpublikasi sampai versi baru disetujui, lalu `digantikan`; satu keluarga tidak bisa punya dua draf.
 - **Stimulus dipakai banyak soal:** 3 soal satu stimulus diajukan bersama; disetujui → keempat baris terpublikasi; ditolak → keempatnya ditolak dengan alasan sama; mentor lain tidak bisa menambah soal ke stimulus orang lain.
@@ -463,14 +479,7 @@ Logika di dalam RPC SQL tidak tercakup Supabase tiruan → diuji lewat `db/test_
 6. **Dua tabel soal sementara** (`soal_ai` + `soal_bank`) — membingungkan pembaca kode; dicatat di PRD 13 dan komentar schema.
 7. Hitungan dashboard "menunggu review" yang sekarang membaca `soal_ai` perlu ditambah sumber baru (`lib/mentor/dashboardData.ts`, `lib/admin/dashboardData.ts`) — perubahan kecil, bukan modul terlarang.
 
-**Butuh keputusan kamu**
-1. Jumlah pernyataan majemuk: usulan **3–6**. Jumlah rumpang isian: usulan **1–5**.
-2. Apakah membuat soal mensyaratkan mentor sedang mengampu kelas di subtes itu (tafsir ketat BR-7), atau cukup `mentor_subtes_diampu` (usulan desain ini)?
-3. Siapa yang boleh membuat versi baru soal terpublikasi: hanya penulis (usulan) atau semua mentor eligible?
-4. Kebijakan stimulus dari sumber luar (BR-18) dan apakah `sumber_rujukan` wajib.
-5. `.5` diterima sebagai 0,5? (usulan: ya.)
-6. Gambar masuk Tahap 1 atau ditunda?
-7. Satu penulis per kelompok stimulus (usulan, menyederhanakan) — cukup?
+**Keputusan** — semua sudah diputuskan, lihat tabel "Keputusan final" (K1–K8) di awal dokumen. Kebutuhan terbuka: alur Admin menugaskan ulang penulis bila penulis nonaktif (K3) — belum dirancang.
 
 **Perkiraan & urutan implementasi** (±16 commit, ±50 file; tiap PR bisa dites & di-merge sendiri):
 
