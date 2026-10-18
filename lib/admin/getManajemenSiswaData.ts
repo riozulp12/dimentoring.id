@@ -84,7 +84,7 @@ export interface SiswaKelasItem {
   nama: string;
   statusPembayaran: "menunggu" | "lunas" | "batal";
   progresPersen: number;
-  /** 'manual' = didaftarkan Admin (PRD 7.5.9). */
+  /** 'manual' = didaftarkan Admin (PRD 7.5.10). */
   sumber: "checkout" | "manual";
 }
 

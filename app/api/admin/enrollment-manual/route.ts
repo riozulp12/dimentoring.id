@@ -23,7 +23,7 @@ import {
 import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
 
 /**
- * Daftarkan siswa MANUAL ke kelas — PRD 7.5.9 (Admin, halaman Pendaftar di
+ * Daftarkan siswa MANUAL ke kelas — PRD 7.5.10 (Admin, halaman Pendaftar di
  * Kelola Kelas). Untuk siswa yang sudah bayar di luar website.
  *
  * - Enrollment 'lunas' sumber='manual' + enrollment_subtes + sesi_kelas + log

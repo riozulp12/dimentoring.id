@@ -30,7 +30,7 @@ export interface PendaftarItem {
   pilihan: SlotStatus[];
   ditetapkan: SlotStatus | null;
   ditetapkanAt: string | null;
-  /** 'manual' = didaftarkan Admin (PRD 7.5.9) -> badge "Manual". */
+  /** 'manual' = didaftarkan Admin (PRD 7.5.10) -> badge "Manual". */
   sumber: "checkout" | "manual";
   /** Kelas offline: mentor tatap muka siswa ini (enrollments.mentor_offline_id). */
   mentorOffline: { id: string; nama: string } | null;

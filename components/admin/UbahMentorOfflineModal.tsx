@@ -7,7 +7,7 @@ import { ALASAN_MIN } from "@/lib/shared/enrollmentManual";
 
 /**
  * Ganti mentor tatap muka satu siswa (enrollments.mentor_offline_id) —
- * PRD 7.5.9. Kandidat = mentor aktif, bersedia tatap muka, mengampu mapel
+ * PRD 7.5.10. Kandidat = mentor aktif, bersedia tatap muka, mengampu mapel
  * kelas (sama dengan checkout). Alasan wajib, tercatat di log audit.
  */
 

@@ -1,5 +1,5 @@
 -- Migration: pendaftaran siswa MANUAL oleh Admin & penugasan mentor offline
--- manual (PRD Bagian 7.5.9, Bagian 13 — Enrollment.sumber, EnrollmentManualLog).
+-- manual (PRD Bagian 7.5.10, Bagian 13 — Enrollment.sumber, EnrollmentManualLog).
 --
 -- Kasus: siswa sudah bayar DI LUAR website (transfer/tunai/link Mayar lain/
 -- beasiswa) — Admin mendaftarkan dari halaman Pendaftar (Kelola Kelas) tanpa

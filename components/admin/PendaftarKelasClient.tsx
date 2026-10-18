@@ -16,7 +16,7 @@ import { formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan
  * kelas.jadwal saat ini. Slot yang sudah dihapus dari kelas tetap tampil
  * dengan badge "slot tidak lagi tersedia".
  *
- * PRD 7.5.9: tombol "Daftarkan Siswa Manual" (siswa yang bayar di luar
+ * PRD 7.5.10: tombol "Daftarkan Siswa Manual" (siswa yang bayar di luar
  * website) + badge "Manual" untuk enrollment sumber='manual', dan (kelas
  * offline) aksi "Ubah mentor" per siswa.
  */

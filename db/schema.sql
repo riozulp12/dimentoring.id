@@ -883,7 +883,7 @@ ALTER TABLE enrollments ADD COLUMN jadwal_pilihan JSONB;           -- [{hari, ja
 ALTER TABLE enrollments ADD COLUMN jadwal_ditetapkan JSONB;        -- {hari, jam_mulai} hasil penetapan Admin
 ALTER TABLE enrollments ADD COLUMN jadwal_ditetapkan_at TIMESTAMPTZ;
 
--- Pendaftaran MANUAL oleh Admin (BARU, Oktober 2026 — PRD 7.5.9, migration
+-- Pendaftaran MANUAL oleh Admin (BARU, Oktober 2026 — PRD 7.5.10, migration
 -- db/add_enrollment_manual.sql). Siswa yang bayar di luar website didaftarkan
 -- Admin tanpa baris payments (tanpa promo/poin/referral), tanpa override
 -- kapasitas, alasan wajib, semua aksi tercatat di enrollment_manual_log.

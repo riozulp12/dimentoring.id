@@ -11,7 +11,7 @@ import {
 import { getKelasSubtesOptions } from "@/lib/payment/getKelasForCheckout";
 
 /**
- * Mentor tatap muka per enrollment — PRD 7.5.9.
+ * Mentor tatap muka per enrollment — PRD 7.5.10.
  * GET   : kandidat mentor untuk satu kelas offline (form Daftarkan Siswa
  *         Manual & aksi Ubah Mentor). lat/lng opsional (cuma urutan jarak).
  * PATCH : ganti enrollments.mentor_offline_id satu siswa, alasan wajib.

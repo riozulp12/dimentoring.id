@@ -4,7 +4,7 @@ import { hitungJarakKm } from "@/lib/shared/haversine";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 
 /**
- * Data layer pendaftaran & penugasan mentor MANUAL oleh Admin (PRD 7.5.9).
+ * Data layer pendaftaran & penugasan mentor MANUAL oleh Admin (PRD 7.5.10).
  * Dipakai app/api/admin/enrollment-manual/**. Peran selalu dibaca dari
  * user_roles di DB (CLAUDE.md: role tidak boleh dari input client).
  */

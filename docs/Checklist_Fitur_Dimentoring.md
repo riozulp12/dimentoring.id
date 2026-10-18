@@ -193,6 +193,12 @@ Dipakai saat perlu bukti alur pembayaran di Production (mis. pengajuan aktivasi 
 - [ ] Kelola Assessment: CRUD data PTN (termasuk field Rumpun WAJIB), tolak duplikat kombinasi, Import CSV dengan laporan hasil (berhasil/gagal/duplikat)
 - [ ] Sesi Perlu Ditinjau: kolom "Ditandai oleh" menampilkan "Nama Mentor — Mapel" (sesi lama: mentor kelas); Batalkan mengosongkan mentor & mapel sesi itu (butuh migrasi `db/add_sesi_mentor_mapel.sql`)
 - [ ] Sesi Perlu Ditinjau (`/sesi-review`): tombol Batalkan nonaktif sampai alasan diisi; Setujui/Batalkan menambah satu baris `sesi_review_log` (admin, keputusan, snapshot sebelum, alasan); dua Admin klik bersamaan → yang kedua dapat "sudah tidak menunggu review" (butuh migrasi `db/add_sesi_review_log.sql` sudah dijalankan)
+- [ ] Daftarkan Siswa Manual (halaman Pendaftar, butuh migrasi `db/add_enrollment_manual.sql`): cari siswa nama/email (cuma siswa aktif), metode pembayaran + alasan ≥ 10 karakter wajib, nominal opsional → siswa muncul dengan badge "Manual" + status Lunas, siswa dapat notifikasi "Kamu telah didaftarkan ke kelas X oleh Admin", 10 (sesuai `jumlah_sesi`) baris sesi terbentuk, satu baris `enrollment_manual_log`
+- [ ] Daftarkan Siswa Manual: siswa yang sudah terdaftar di kelas itu → 409; kelas penuh → tombol nonaktif dan API → 409 (tidak ada override); klik dobel → cuma satu pendaftaran
+- [ ] Daftarkan Siswa Manual: TIDAK ada baris baru di `payments` / Riwayat Transaksi, `kode_promo.jumlah_terpakai` tidak berubah, poin & reward referral siswa/referrer tidak bertambah
+- [ ] Daftarkan Siswa Manual kelas paket: wajib pilih 1–3 subtes; kelas offline: wajib pilih mentor tatap muka (aktif, bersedia tatap muka, mengampu mapel), lokasi opsional
+- [ ] Ubah mentor tatap muka (kelas offline, siswa lunas): alasan wajib → mentor baru langsung melihat siswa di Kelas Saya & bisa menandai sesi, mentor lama tidak lagi; satu baris log `tugaskan_mentor`
+- [ ] Badge "Manual" juga tampil di Manajemen Siswa → detail → Kelas Diikuti
 - [ ] Kelola Konten: Tab Beasiswa/Event CRUD, Tab Review Konten AI (lintas semua mentor/subtes), Tab Katalog Reward CRUD + proses Permintaan Penukaran Poin (Selesai/Tolak, poin dikembalikan kalau ditolak)
 
 ### Kode Promo & Undang Admin

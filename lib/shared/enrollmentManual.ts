@@ -1,5 +1,5 @@
 /**
- * Aturan bersama pendaftaran manual Admin (PRD 7.5.9) — dipakai form di
+ * Aturan bersama pendaftaran manual Admin (PRD 7.5.10) — dipakai form di
  * browser DAN route server (server tetap memvalidasi ulang semuanya).
  */
 

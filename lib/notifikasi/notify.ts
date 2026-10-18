@@ -378,7 +378,7 @@ export async function notifyJadwalDitetapkan(
 }
 
 /**
- * Pendaftaran manual oleh Admin (PRD 7.5.9) — dipanggil
+ * Pendaftaran manual oleh Admin (PRD 7.5.10) — dipanggil
  * app/api/admin/enrollment-manual SETELAH daftar_siswa_manual sukses.
  */
 export async function notifySiswaDidaftarkanAdmin(siswaUserId: string, kelasId: string, kelasNama: string) {
@@ -394,7 +394,7 @@ export async function notifySiswaDidaftarkanAdmin(siswaUserId: string, kelasId: 
 }
 
 /**
- * Mentor tatap muka satu siswa diganti Admin (PRD 7.5.9) — bell ke mentor
+ * Mentor tatap muka satu siswa diganti Admin (PRD 7.5.10) — bell ke mentor
  * BARU saja. TANPA nama siswa (privasi anak), sama seperti notif siswa baru.
  */
 export async function notifyMentorOfflineDitugaskanAdmin(mentorUserId: string, kelasId: string, kelasNama: string) {

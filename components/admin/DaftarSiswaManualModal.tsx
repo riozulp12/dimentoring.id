@@ -11,7 +11,7 @@ import {
 } from "@/lib/shared/enrollmentManual";
 
 /**
- * Form "Daftarkan Siswa Manual" — PRD 7.5.9 (Admin, halaman Pendaftar).
+ * Form "Daftarkan Siswa Manual" — PRD 7.5.10 (Admin, halaman Pendaftar).
  * Untuk siswa yang sudah bayar di luar website. Server memvalidasi ulang
  * semuanya (duplikat, kapasitas, mentor offline, subtes); requestId dibuat
  * sekali per pembukaan form supaya klik dobel tidak mendaftarkan dua kali.
