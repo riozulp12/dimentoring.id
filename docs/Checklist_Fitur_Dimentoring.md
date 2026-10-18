@@ -77,6 +77,8 @@
 - [ ] Presensi: setelah mentor menandai sesi, notifikasi bell menyebut "akan terkonfirmasi otomatis dalam 24 jam jika tidak ada respons"; di detail kelas muncul prompt Ya/Tidak + batas jawab (jam WIB)
 - [ ] Presensi: jawab "Ya" → angka Progress Kehadiran TIDAK bertambah (sesi menunggu sudah terhitung); jawab "Tidak" → angka berkurang satu dan sesi masuk antrian Admin
 - [ ] Presensi: sesi yang lewat 24 jam tanpa jawaban → prompt hilang, tetap terhitung di progress; memaksa PATCH `/api/siswa/sesi` untuk sesi itu → 409 "Batas 24 jam untuk menjawab sudah lewat…"
+- [ ] Presensi multi-mentor: riwayat sesi di detail kelas menampilkan "Nama Mentor — Mapel" per sesi (sesi lama tanpa mentor: tanpa label); notifikasi & prompt menyebut mentor + mapel; dua sesi menunggu (beda mentor) → prompt kedua muncul setelah yang pertama dijawab
+- [ ] Presensi multi-mentor: total sesi tetap `jumlah_sesi` kelas (mis. 10) walau ditandai bergantian oleh beberapa mentor — bukan 10 per mentor
 - [ ] Coba akses kelas yang BUKAN diikuti lewat ganti URL → ditolak
 
 ### Referral, Poin & Gamifikasi
@@ -160,7 +162,11 @@ Dipakai saat perlu bukti alur pembayaran di Production (mis. pengajuan aktivasi 
 - [ ] Generate Deskripsi Kelas AI (Kelola Kelas, kalau Mentor punya akses) → hasil beda tiap generate
 - [ ] Materi & Latihan Soal: list draft (soal+materi AI), Setujui/Tolak berfungsi, status berubah + notifikasi terkirim
 - [ ] Presensi: "Tandai Sesi Hari Ini Selesai" menandai sesi berikutnya, info menyebut konfirmasi otomatis 24 jam, progress "Sesi X dari Y" langsung bertambah
-- [ ] Presensi: menandai siswa yang sama dua kali di hari kalender WIB yang sama → tombol berubah "Sudah ditandai hari ini"; memaksa POST `/api/mentor/sesi` → 409. Besoknya (≥ 00:00 WIB) bisa lagi
+- [ ] Presensi: mentor yang SAMA menandai siswa yang sama dua kali di hari kalender WIB yang sama → tombol berubah "Sudah ditandai hari ini"; memaksa POST `/api/mentor/sesi` → 409. Besoknya (≥ 00:00 WIB) bisa lagi
+- [ ] Presensi multi-mentor: mentor kedua (kelas_mentor) boleh menandai siswa yang sama di hari yang sama dengan mentor utama; sesi tercatat dengan nama mentor + mapel masing-masing
+- [ ] Presensi offline: kelas offline muncul di Kelas Saya untuk mentor offline yang ditugaskan (walau kelas tanpa mentor utama), cuma siswa yang ditugaskan ke dia yang tampil, dan dia bisa menandai sesi; mentor offline lain / mentor tidak terkait → 403
+- [ ] Presensi: baris siswa menampilkan "Sesi X dari Y · N ditandai kamu" + "Riwayat sesi" (Nama Mentor — Mapel, "(kamu)" untuk sesi sendiri)
+- [ ] Mentor non-utama (kelas_mentor / offline): tombol Edit Link Meet & Tambah Materi tidak tampil (masih khusus mentor utama)
 - [ ] Presensi: klik dobel / dua tab bersamaan → cuma satu sesi tertandai dan siswa cuma menerima satu notifikasi
 - [ ] Presensi: baris siswa menampilkan jumlah sesi "menunggu konfirmasi siswa" dan "disangkal, ditinjau Admin"
 
@@ -185,6 +191,7 @@ Dipakai saat perlu bukti alur pembayaran di Production (mis. pengajuan aktivasi 
 ### Kelola Kelas, Assessment, Konten
 - [ ] Kelola Kelas: CRUD lengkap, dropdown Mentor terfilter sesuai Subtes, jadwal multi-slot (tambah/hapus slot), Kategori Program wajib diisi, Deskripsi AI generate, popup detail read-only + tombol Edit/Hapus sejajar, cegah hapus kelas yang masih ada siswa aktif
 - [ ] Kelola Assessment: CRUD data PTN (termasuk field Rumpun WAJIB), tolak duplikat kombinasi, Import CSV dengan laporan hasil (berhasil/gagal/duplikat)
+- [ ] Sesi Perlu Ditinjau: kolom "Ditandai oleh" menampilkan "Nama Mentor — Mapel" (sesi lama: mentor kelas); Batalkan mengosongkan mentor & mapel sesi itu (butuh migrasi `db/add_sesi_mentor_mapel.sql`)
 - [ ] Sesi Perlu Ditinjau (`/sesi-review`): tombol Batalkan nonaktif sampai alasan diisi; Setujui/Batalkan menambah satu baris `sesi_review_log` (admin, keputusan, snapshot sebelum, alasan); dua Admin klik bersamaan → yang kedua dapat "sudah tidak menunggu review" (butuh migrasi `db/add_sesi_review_log.sql` sudah dijalankan)
 - [ ] Kelola Konten: Tab Beasiswa/Event CRUD, Tab Review Konten AI (lintas semua mentor/subtes), Tab Katalog Reward CRUD + proses Permintaan Penukaran Poin (Selesai/Tolak, poin dikembalikan kalau ditolak)
 
