@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
+import Modal from "@/components/ui/Modal";
+import DaftarSiswaManualModal from "@/components/admin/DaftarSiswaManualModal";
+import UbahMentorOfflineModal from "@/components/admin/UbahMentorOfflineModal";
 import type { PendaftarItem, SlotStatus } from "@/lib/admin/getPendaftarKelas";
 import { formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
 
@@ -11,6 +15,10 @@ import { formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan
  * siswa cuma preferensi: Admin boleh menetapkan slot mana pun dari
  * kelas.jadwal saat ini. Slot yang sudah dihapus dari kelas tetap tampil
  * dengan badge "slot tidak lagi tersedia".
+ *
+ * PRD 7.5.10: tombol "Daftarkan Siswa Manual" (siswa yang bayar di luar
+ * website) + badge "Manual" untuk enrollment sumber='manual', dan (kelas
+ * offline) aksi "Ubah mentor" per siswa.
  */
 
 const STATUS_LABEL: Record<PendaftarItem["statusPembayaran"], string> = {
@@ -45,15 +53,39 @@ interface RowState extends PendaftarItem {
 
 export default function PendaftarKelasClient({
   kelasId,
+  kelasNama,
+  modePembelajaran,
+  subtesPool,
+  kapasitas,
+  terisi,
   jadwalPilihanAktif,
   slots,
   initialPendaftar,
 }: {
   kelasId: string;
+  kelasNama: string;
+  modePembelajaran: "online" | "offline";
+  subtesPool: { id: string; nama: string }[];
+  kapasitas: number;
+  terisi: number;
   jadwalPilihanAktif: boolean;
   slots: JadwalSlot[];
   initialPendaftar: PendaftarItem[];
 }) {
+  const router = useRouter();
+  const [manualOpen, setManualOpen] = useState(false);
+  // Refresh data setelah modal ditutup (bukan saat sukses) — refresh me-remount
+  // komponen ini (key di page) dan akan menutup layar sukses terlalu cepat.
+  const perluRefresh = useRef(false);
+  function tutupManual() {
+    setManualOpen(false);
+    if (perluRefresh.current) {
+      perluRefresh.current = false;
+      router.refresh();
+    }
+  }
+  const [ubahMentorId, setUbahMentorId] = useState<string | null>(null);
+  const penuh = terisi >= kapasitas;
   const slotOptions = slots.map((s) => ({ label: formatSlot(s), value: slotKey(s) }));
   const tersediaKeys = new Set(slotOptions.map((o) => o.value));
 
@@ -98,16 +130,66 @@ export default function PendaftarKelasClient({
     }
   }
 
+  const header = (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-[#7E7C7C]">
+        Terisi {terisi} dari {kapasitas} kursi{penuh ? " — kelas penuh" : ""}
+      </p>
+      <Button type="button" variant="primary" size="md" disabled={penuh} onClick={() => setManualOpen(true)}>
+        Daftarkan Siswa Manual
+      </Button>
+    </div>
+  );
+
+  const ubahTarget = rows.find((r) => r.enrollmentId === ubahMentorId) ?? null;
+
+  const modal = (
+    <>
+      <Modal open={ubahTarget !== null} onClose={() => setUbahMentorId(null)}>
+        {ubahTarget ? (
+          <UbahMentorOfflineModal
+            kelasId={kelasId}
+            enrollmentId={ubahTarget.enrollmentId}
+            siswaNama={ubahTarget.siswaNama}
+            mentorSekarang={ubahTarget.mentorOffline}
+            onClose={() => setUbahMentorId(null)}
+            onSaved={(mentor) => {
+              updateRow(ubahTarget.enrollmentId, { mentorOffline: mentor });
+              setUbahMentorId(null);
+            }}
+          />
+        ) : null}
+      </Modal>
+      <Modal open={manualOpen} onClose={tutupManual}>
+        <DaftarSiswaManualModal
+          kelasId={kelasId}
+          kelasNama={kelasNama}
+          modePembelajaran={modePembelajaran}
+          subtesPool={subtesPool}
+          onClose={tutupManual}
+          onSuccess={() => {
+            perluRefresh.current = true;
+          }}
+        />
+      </Modal>
+    </>
+  );
+
   if (rows.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-12 text-center">
-        <p className="text-base text-[#7E7C7C]">Belum ada pendaftar di kelas ini.</p>
+      <div className="flex flex-col gap-3">
+        {header}
+        <div className="flex flex-col items-center justify-center gap-2 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-12 text-center">
+          <p className="text-base text-[#7E7C7C]">Belum ada pendaftar di kelas ini.</p>
+        </div>
+        {modal}
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3">
+      {header}
       {rows.map((row) => (
         <div
           key={row.enrollmentId}
@@ -116,7 +198,12 @@ export default function PendaftarKelasClient({
           <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-4 sm:text-base">
             <div>
               <p className="text-[#7E7C7C]">Siswa</p>
-              <p className="text-black">{row.siswaNama}</p>
+              <p className="flex flex-wrap items-center gap-2 text-black">
+                {row.siswaNama}
+                {row.sumber === "manual" ? (
+                  <span className="rounded-full bg-[#EEF0FF] px-2 py-0.5 text-xs font-medium text-[#081EEA]">Manual</span>
+                ) : null}
+              </p>
               <p className="text-xs text-[#7E7C7C]">Daftar {formatTanggal(row.tanggalDaftar)}</p>
             </div>
             <div>
@@ -132,6 +219,20 @@ export default function PendaftarKelasClient({
               <SlotCell value={row.pilihan[1]} />
             </div>
           </div>
+
+          {modePembelajaran === "offline" ? (
+            <div className="flex flex-col gap-2 border-t border-[#E3E3E3] pt-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <p>
+                <span className="text-[#7E7C7C]">Mentor tatap muka: </span>
+                <span className="text-black">{row.mentorOffline?.nama ?? "Belum ada"}</span>
+              </p>
+              {row.statusPembayaran === "lunas" ? (
+                <Button type="button" variant="secondary" size="sm" onClick={() => setUbahMentorId(row.enrollmentId)}>
+                  Ubah mentor
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
 
           {jadwalPilihanAktif ? (
             <div className="flex flex-col gap-2 border-t border-[#E3E3E3] pt-3">
@@ -169,6 +270,7 @@ export default function PendaftarKelasClient({
           ) : null}
         </div>
       ))}
+      {modal}
     </div>
   );
 }

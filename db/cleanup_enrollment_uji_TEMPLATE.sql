@@ -29,11 +29,16 @@
 --      DRY-RUN: penghapusan dicoba lalu dibatalkan. Kalau tidak ada error,
 --      urutan hapusnya aman.
 --   3. Ganti ROLLBACK; di akhir LANGKAH 2 menjadi COMMIT; lalu jalankan lagi.
---   4. Jalankan LANGKAH 1 sekali lagi — semua jumlah harus 0.
+--   4. Jalankan LANGKAH 1 sekali lagi — semua jumlah harus 0, KECUALI
+--      enrollment_manual_log (urut 10): log audit sengaja tetap ada, kolom
+--      enrollment_id-nya jadi NULL (ON DELETE SET NULL).
 --
--- YANG TIDAK DISENTUH: akun uji itu sendiri (users, user_roles), kelas, dan
--- notifikasi "Siswa baru mendaftar" milik mentor (tidak menyimpan rujukan ke
--- siswa, jadi tidak bisa dipilih dengan aman — hapus manual kalau perlu).
+-- YANG TIDAK DISENTUH: akun uji itu sendiri (users, user_roles), kelas,
+-- notifikasi "Siswa baru mendaftar" / "Kamu ditugaskan ke siswa baru" milik
+-- mentor (tidak menyimpan rujukan ke siswa, jadi tidak bisa dipilih dengan
+-- aman — hapus manual kalau perlu), dan enrollment_manual_log (log audit
+-- pendaftaran manual Admin, PRD 7.5.10 — sengaja dipertahankan; ditampilkan
+-- di LANGKAH 1 dan dilaporkan di LANGKAH 2, enrollment_id-nya jadi NULL).
 -- ============================================================================
 
 
@@ -89,6 +94,16 @@ UNION ALL
 SELECT 9, 'notifikasi "Pembayaran berhasil!"', count(*), NULL
 FROM notifikasi n JOIN akun a ON a.id = n.user_id
 WHERE n.tipe = 'sistem' AND n.judul = 'Pembayaran berhasil!'
+UNION ALL
+SELECT 10, 'enrollment_manual_log (TETAP ADA — audit, enrollment_id jadi NULL)', count(*),
+       jsonb_agg(jsonb_build_object(
+           'aksi', l.aksi, 'kelas_id', l.kelas_id, 'enrollment_id', l.enrollment_id,
+           'metode', l.metode_pembayaran, 'created_at', l.created_at) ORDER BY l.created_at)
+FROM enrollment_manual_log l JOIN akun a ON a.id = l.siswa_id
+UNION ALL
+SELECT 11, 'notifikasi "didaftarkan oleh Admin"', count(*), NULL
+FROM notifikasi n JOIN akun a ON a.id = n.user_id
+WHERE n.tipe = 'sistem' AND n.judul = 'Kamu sudah terdaftar di kelas baru'
 ORDER BY urut;
 
 
@@ -179,6 +194,14 @@ BEGIN
     WHERE kp.id = x.kode_promo_id;
 
     -- ---- 4. Anak enrollment → enrollment ------------------------------------
+    -- enrollment_manual_log TIDAK dihapus (log audit Admin): enrollment_id
+    -- otomatis jadi NULL lewat ON DELETE SET NULL. Dilaporkan di sini.
+    SELECT count(*) INTO v_jumlah
+    FROM enrollment_manual_log
+    WHERE siswa_id = v_user_id
+       OR enrollment_id IN (SELECT id FROM enrollments WHERE user_id = v_user_id);
+    RAISE NOTICE 'enrollment_manual_log dipertahankan (enrollment_id jadi NULL): %', v_jumlah;
+
     -- (sesi_kelas & enrollment_subtes sebenarnya ON DELETE CASCADE; dihapus
     -- eksplisit supaya urutannya jelas dan jumlahnya tercatat.)
     DELETE FROM sesi_kelas
@@ -203,9 +226,12 @@ BEGIN
     GET DIAGNOSTICS v_jumlah = ROW_COUNT;
     RAISE NOTICE 'payments dihapus: %', v_jumlah;
 
-    -- ---- 6. Notifikasi pembayaran milik akun uji -----------------------------
+    -- ---- 6. Notifikasi pembayaran & pendaftaran manual milik akun uji -------
     DELETE FROM notifikasi
-    WHERE user_id = v_user_id AND tipe = 'sistem' AND judul = 'Pembayaran berhasil!';
+    WHERE user_id = v_user_id AND tipe = 'sistem'
+      AND judul IN ('Pembayaran berhasil!', 'Kamu sudah terdaftar di kelas baru');
+    GET DIAGNOSTICS v_jumlah = ROW_COUNT;
+    RAISE NOTICE 'notifikasi pembayaran/didaftarkan dihapus: %', v_jumlah;
 
     -- ---- Pastikan benar-benar bersih ----------------------------------------
     SELECT (SELECT count(*) FROM payments WHERE user_id = v_user_id)

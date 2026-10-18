@@ -40,7 +40,14 @@ export default async function PendaftarKelasPage({ params }: { params: Promise<{
           </p>
         </div>
         <PendaftarKelasClient
+          // Remount setelah router.refresh() (pendaftaran manual) — state baris dibuat sekali saat mount.
+          key={data.pendaftar.length}
           kelasId={data.kelas.id}
+          kelasNama={data.kelas.nama}
+          modePembelajaran={data.kelas.modePembelajaran}
+          subtesPool={data.kelas.subtesPool}
+          kapasitas={data.kelas.kapasitas}
+          terisi={data.kelas.terisi}
           jadwalPilihanAktif={data.kelas.jadwalPilihanAktif}
           slots={data.kelas.slots}
           initialPendaftar={data.pendaftar}

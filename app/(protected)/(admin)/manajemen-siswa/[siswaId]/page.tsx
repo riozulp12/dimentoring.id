@@ -188,7 +188,12 @@ export default async function ManajemenSiswaDetailPage({
                   className="flex items-center justify-between gap-3 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4"
                 >
                   <div className="flex flex-col gap-1">
-                    <p className="text-base text-black">{kelas.nama}</p>
+                    <p className="flex flex-wrap items-center gap-2 text-base text-black">
+                      {kelas.nama}
+                      {kelas.sumber === "manual" ? (
+                        <span className="rounded-full bg-[#EEF0FF] px-2 py-0.5 text-xs font-medium text-[#081EEA]">Manual</span>
+                      ) : null}
+                    </p>
                     <p className="text-sm text-[#7E7C7C]">Progress {kelas.progresPersen}%</p>
                   </div>
                   <span

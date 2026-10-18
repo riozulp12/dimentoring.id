@@ -7,7 +7,9 @@ import { supabaseServer } from "@/lib/supabase/server";
  * users<->user_roles WAJIB disambiguasi lewat nama constraint eksplisit
  * (user_roles!user_roles_user_id_fkey) — user_roles punya 2 FK ke users
  * (user_id DAN direview_oleh_id), embed polos "user_roles!inner(...)" gagal
- * dengan PGRST201 "more than one relationship was found".
+ * dengan PGRST201 "more than one relationship was found". Sama untuk
+ * users->enrollments: enrollments punya 3 FK ke users (user_id,
+ * mentor_offline_id, dibuat_oleh) -> WAJIB enrollments!enrollments_user_id_fkey.
  */
 
 export interface SiswaListItem {
@@ -40,7 +42,7 @@ export async function getSiswaList(): Promise<SiswaListItem[]> {
     .select(
       `id, nama, email, nama_sekolah, tingkat_kelas, sub_status, created_at,
        user_roles!user_roles_user_id_fkey!inner(role_type),
-       enrollments(status_pembayaran)`,
+       enrollments!enrollments_user_id_fkey(status_pembayaran)`,
     )
     .eq("user_roles.role_type", "student")
     .order("created_at", { ascending: false });
@@ -84,12 +86,15 @@ export interface SiswaKelasItem {
   nama: string;
   statusPembayaran: "menunggu" | "lunas" | "batal";
   progresPersen: number;
+  /** 'manual' = didaftarkan Admin (PRD 7.5.10). */
+  sumber: "checkout" | "manual";
 }
 
 interface SiswaKelasRow {
   id: string;
   status_pembayaran: SiswaKelasItem["statusPembayaran"];
   progres_persen: number;
+  sumber: string | null;
   kelas: { id: string; nama: string } | { id: string; nama: string }[] | null;
 }
 
@@ -102,7 +107,7 @@ function firstOrNull<T>(value: T | T[] | null): T | null {
 export async function getSiswaKelasDiikuti(userId: string): Promise<SiswaKelasItem[]> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, status_pembayaran, progres_persen, kelas:kelas_id(id, nama)")
+    .select("id, status_pembayaran, progres_persen, sumber, kelas:kelas_id(id, nama)")
     .eq("user_id", userId)
     .order("tanggal_daftar", { ascending: false });
 
@@ -121,6 +126,7 @@ export async function getSiswaKelasDiikuti(userId: string): Promise<SiswaKelasIt
         nama: kelas.nama,
         statusPembayaran: row.status_pembayaran,
         progresPersen: row.progres_persen,
+        sumber: row.sumber === "manual" ? ("manual" as const) : ("checkout" as const),
       };
     })
     .filter((item): item is SiswaKelasItem => item !== null);
