@@ -38,6 +38,17 @@
 - [ ] Card Hasil Prediksi & Rekomendasi Jurusan: Kuota Tahun Berjalan + Peminat Tahun Lalu tampil
 - [ ] Link "Hapus Pilihan 2": ada icon trash, warna merah
 - [ ] Note AI: generate teks yang beda tiap assessment (BUKAN selalu fallback statis), coba 5-8x berturut untuk pastikan konsisten berhasil
+- [ ] Hasil tamu: tombol "Daftar Sekarang" membawa `?pending_assessment=` → setelah daftar, hasil percobaan ke-1/ke-2 ikut tertaut ke akun
+
+### Lead Capture & Atribusi (PRD 7.4.6, BR-38)
+- [ ] Buka `/?utm_source=ig&utm_campaign=tes` lalu `/assessment` → cookie `dm_attr` ada (DevTools → Application → Cookies, httpOnly)
+- [ ] Kunjungan kedua dengan UTM berbeda (`?utm_source=tiktok&utm_campaign=lain`) → isi `dm_attr` TIDAK berubah
+- [ ] Submit Assessment → baris `assessments` punya `utm_source`/`utm_campaign` dari cookie
+- [ ] Kartu "Mau analisis lengkap…" tampil di hasil tamu; hasil tetap terlihat lengkap tanpa mengisi apa pun
+- [ ] Checkbox persetujuan tidak tercentang dari awal; kirim tanpa centang → ditolak (pesan di UI) dan API juga menolak
+- [ ] Kirim `0812…` lalu `+62 812…` (nomor sama) → satu baris di `leads`, `jumlah_submit` = 2, `utm_campaign` tetap dari kiriman pertama
+- [ ] Kirim lebih dari 5x dalam 1 jam dari browser yang sama → ditolak "Terlalu banyak percobaan"
+- [ ] Daftar akun lewat `/daftar` TANPA query UTM setelah datang dari link UTM → `users.utm_source/utm_campaign` terisi dari cookie
 
 ### Beasiswa & Event (`/beasiswa-event`)
 - [ ] List tampil, search + filter tipe + filter status berfungsi
@@ -214,10 +225,18 @@ Dipakai saat perlu bukti alur pembayaran di Production (mis. pengajuan aktivasi 
 - [ ] 4 stat card (Total Pendaftaran, Bulan Ini, Dari Referral, Dari Iklan)
 - [ ] Chart Pendaftaran per Sumber, Sales (mulai terisi sesuai transaksi nyata), Pengeluaran (gabungan manual + budget Campaign Iklan)
 - [ ] CRUD Campaign Iklan, hitung Leads & CPL otomatis dari `utm_campaign` yang cocok
+- [ ] Card campaign menampilkan "Leads WA" (dari tabel `leads`) untuk `utm_campaign_tag` yang cocok
+
+### Leads (`/leads`, PRD 7.4.6)
+- [ ] Lead dengan `utm_campaign` benar tampil; filter status/sumber/campaign & cari nomor (`0812…`) atau nama berfungsi
+- [ ] Ubah status & catatan tersimpan; perubahan status tercatat di `lead_status_log` (siapa Admin-nya)
+- [ ] Tombol "Buka WhatsApp" membuka `wa.me/628…`
+- [ ] Export CSV: nomor format `628…`; lead dengan nama `=HYPERLINK(...)` tampil sebagai teks di Excel/Sheets, bukan rumus
 
 ### Keamanan Lintas Role (WAJIB dicek semua)
 - [ ] Akun Siswa coba akses halaman `/admin/*` dan `/mentor/*` manapun → ditolak semua
 - [ ] Akun Mentor coba akses data Siswa/Mentor lain via ganti ID di URL → ditolak
+- [ ] Akun Siswa/Mentor buka `/leads` atau panggil `/api/admin/leads` (GET/PATCH/export) → ditolak (403)
 - [ ] Semua guard di atas dicek SERVER-SIDE (bukan cuma UI yang disembunyikan)
 
 ---
