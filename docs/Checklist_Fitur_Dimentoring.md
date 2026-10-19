@@ -41,6 +41,8 @@
 - [ ] Hasil tamu: tombol "Daftar Sekarang" membawa `?pending_assessment=` → setelah daftar, hasil percobaan ke-1/ke-2 ikut tertaut ke akun
 
 ### Lead Capture & Atribusi (PRD 7.4.6, BR-38)
+- [ ] Bendera `NEXT_PUBLIC_LEAD_CAPTURE_ENABLED` kosong/selain `"true"` → kartu WhatsApp TIDAK tampil di hasil, `POST /api/leads` ditolak 403, halaman Admin `/leads` tetap bisa dibuka & export
+- [ ] Bendera `"true"` (redeploy setelah ubah env, karena `NEXT_PUBLIC_*` di-inline saat build) → kartu tampil & kirim nomor berhasil (skenario di bawah)
 - [ ] Buka `/?utm_source=ig&utm_campaign=tes` lalu `/assessment` → cookie `dm_attr` ada (DevTools → Application → Cookies, httpOnly)
 - [ ] Kunjungan kedua dengan UTM berbeda (`?utm_source=tiktok&utm_campaign=lain`) → isi `dm_attr` TIDAK berubah
 - [ ] Submit Assessment → baris `assessments` punya `utm_source`/`utm_campaign` dari cookie

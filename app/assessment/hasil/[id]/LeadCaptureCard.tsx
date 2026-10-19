@@ -7,6 +7,7 @@ import InputField from "@/components/ui/InputField";
 import Mascot from "@/components/ui/Mascot";
 import { LEAD_CONSENT_TEXT, LEAD_NAMA_MAX } from "@/lib/shared/leadConsent";
 import { normalisasiNoWa } from "@/lib/shared/noWa";
+import { isLeadCaptureEnabled } from "@/lib/shared/leadCaptureFlag";
 
 /**
  * Kartu Lead Capture di halaman hasil Assessment (PRD 7.4.6, BR-38).
@@ -29,6 +30,10 @@ export default function LeadCaptureCard({
   const [sukses, setSukses] = useState<string | null>(
     sudahTerkirim ? "Nomor WhatsApp kamu sudah kami terima. Tim Dimentoring akan menghubungi kamu." : null,
   );
+
+  // Lapis kedua: halaman hasil sudah tidak merender kartu ini kalau bendera
+  // mati (keputusan utama di server, lihat page.tsx).
+  if (!isLeadCaptureEnabled()) return null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

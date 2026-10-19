@@ -5,6 +5,7 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
 import { bacaAtribusi } from "@/lib/shared/atribusi";
 import { normalisasiNoWa } from "@/lib/shared/noWa";
+import { LEAD_CAPTURE_NONAKTIF_MESSAGE, isLeadCaptureEnabled } from "@/lib/shared/leadCaptureFlag";
 import {
   CONSENT_VERSI,
   LEAD_NAMA_MAX,
@@ -25,6 +26,8 @@ import {
  *   untuk hasil anonim, atau user login yang sama).
  * - Atribusi dari cookie dm_attr di server, bukan dari body.
  * - Respons sukses selalu sama — tidak membocorkan apakah nomor sudah ada.
+ * - Bendera NEXT_PUBLIC_LEAD_CAPTURE_ENABLED bukan persis "true" -> 403
+ *   sebelum apa pun dibaca/ditulis (pola sama dengan checkout internal).
  */
 
 const RATE_WINDOW_MS = 60 * 60 * 1000;
@@ -92,6 +95,8 @@ async function cekRateLimit(kunci: { kunci: string; batas: number }[]): Promise<
 }
 
 export async function POST(request: NextRequest) {
+  if (!isLeadCaptureEnabled()) return errorResponse(LEAD_CAPTURE_NONAKTIF_MESSAGE, 403);
+
   let body: LeadBody;
   try {
     body = await request.json();

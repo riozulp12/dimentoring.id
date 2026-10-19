@@ -21,6 +21,7 @@ import {
 import { buatCsv, selCsvAman } from "@/lib/shared/csv";
 import { CONSENT_VERSI, LEAD_RATE_LIMIT_PER_TRIAL } from "@/lib/shared/leadConsent";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
+import { harusTampilLeadCapture, parseLeadCaptureEnabled } from "@/lib/shared/leadCaptureFlag";
 
 type Row = Record<string, unknown>;
 type Db = Record<string, Row[]>;
@@ -199,6 +200,7 @@ before(async () => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost:54321";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
   process.env.SESSION_SECRET = "test-session-secret";
+  process.env.NEXT_PUBLIC_LEAD_CAPTURE_ENABLED = "true"; // test lain di file ini butuh fitur aktif
   const { supabaseServer } = await import("@/lib/supabase/server");
   Object.assign(supabaseServer as unknown as Record<string, unknown>, {
     from: (table: string) => new FakeQuery(table),
@@ -526,5 +528,65 @@ describe("otorisasi API Admin leads", () => {
       { params: Promise.resolve({ id: leadId }) },
     );
     assert.equal(salah.status, 400);
+  });
+});
+
+describe("bendera NEXT_PUBLIC_LEAD_CAPTURE_ENABLED", () => {
+  async function denganBendera<T>(value: string | undefined, fn: () => Promise<T>): Promise<T> {
+    const semula = process.env.NEXT_PUBLIC_LEAD_CAPTURE_ENABLED;
+    if (value === undefined) delete process.env.NEXT_PUBLIC_LEAD_CAPTURE_ENABLED;
+    else process.env.NEXT_PUBLIC_LEAD_CAPTURE_ENABLED = value;
+    try {
+      return await fn();
+    } finally {
+      if (semula === undefined) delete process.env.NEXT_PUBLIC_LEAD_CAPTURE_ENABLED;
+      else process.env.NEXT_PUBLIC_LEAD_CAPTURE_ENABLED = semula;
+    }
+  }
+
+  it('hanya persis "true" yang mengaktifkan', () => {
+    assert.equal(parseLeadCaptureEnabled("true"), true);
+    for (const v of [undefined, "", "True", "TRUE", "1", "yes", " true", "true "]) {
+      assert.equal(parseLeadCaptureEnabled(v), false, String(v));
+    }
+  });
+
+  it("bendera mati -> API menolak 403 tanpa menyimpan apa pun (termasuk rate limit)", async () => {
+    for (const value of [undefined, "", "1", "True"]) {
+      const res = await denganBendera(value, () =>
+        postLead({ noWa: "081234567890", consent: true, assessmentId: ASSESSMENT_A }),
+      );
+      assert.equal(res.status, 403, String(value));
+      assert.equal((await res.json()).success, false);
+    }
+    assert.equal(db.leads.length, 0);
+    assert.equal(db.lead_rate_limit.length, 0);
+  });
+
+  it("bendera mati -> kartu tidak dirender (tamu maupun user tanpa no_wa)", () => {
+    assert.equal(harusTampilLeadCapture({ enabled: false, milikUserLogin: false, userPunyaNoWa: false }), false);
+    assert.equal(harusTampilLeadCapture({ enabled: false, milikUserLogin: true, userPunyaNoWa: false }), false);
+  });
+
+  it('bendera "true" -> kartu tampil untuk tamu & user tanpa no_wa, API berjalan normal', async () => {
+    assert.equal(harusTampilLeadCapture({ enabled: true, milikUserLogin: false, userPunyaNoWa: false }), true);
+    assert.equal(harusTampilLeadCapture({ enabled: true, milikUserLogin: true, userPunyaNoWa: false }), true);
+    assert.equal(harusTampilLeadCapture({ enabled: true, milikUserLogin: true, userPunyaNoWa: true }), false);
+    const res = await denganBendera("true", () =>
+      postLead({ noWa: "081234567890", consent: true, assessmentId: ASSESSMENT_A }),
+    );
+    assert.equal(res.status, 200);
+    assert.equal(db.leads.length, 1);
+  });
+
+  it("bendera mati -> API Admin leads tetap aktif", async () => {
+    await postLead({ noWa: "081234567890", consent: true });
+    await denganBendera(undefined, async () => {
+      const list = await adminList.GET(adminRequest("http://localhost/api/admin/leads", "admin", ADMIN));
+      assert.equal(list.status, 200);
+      assert.equal((await list.json()).leads.length, 1);
+      const csv = await adminExport.GET(adminRequest("http://localhost/api/admin/leads/export", "admin", ADMIN));
+      assert.equal(csv.status, 200);
+    });
   });
 });

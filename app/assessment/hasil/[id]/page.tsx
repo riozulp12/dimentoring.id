@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
+import { harusTampilLeadCapture, isLeadCaptureEnabled } from "@/lib/shared/leadCaptureFlag";
 import { getNavbarProps, type NavbarSessionProps } from "@/lib/dashboard/getNavbarProps";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
@@ -263,17 +264,25 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
         : "Direkomendasikan untuk membantu memperbesar Peluang kamu.",
     }));
 
-  // ---- Lead Capture (PRD 7.4.6, BR-38): tamu, atau user login yang belum
+  // ---- Lead Capture (PRD 7.4.6, BR-38): hanya kalau bendera
+  // NEXT_PUBLIC_LEAD_CAPTURE_ENABLED aktif; tamu, atau user login yang belum
   // punya no_wa. "Sudah terkirim" = sudah ada lead untuk assessment ini. ----
-  let showLeadCapture = !assessmentUserId;
-  if (assessmentUserId) {
+  const leadCaptureEnabled = isLeadCaptureEnabled();
+  let userPunyaNoWa = false;
+  if (leadCaptureEnabled && assessmentUserId) {
     const { data: userRow } = await supabaseServer
       .from("users")
       .select("no_wa")
       .eq("id", assessmentUserId)
       .maybeSingle();
-    showLeadCapture = Boolean(userRow) && !userRow?.no_wa;
+    // Baris user tidak ditemukan -> jangan tampilkan (sama seperti punya nomor).
+    userPunyaNoWa = !userRow || Boolean(userRow.no_wa);
   }
+  const showLeadCapture = harusTampilLeadCapture({
+    enabled: leadCaptureEnabled,
+    milikUserLogin: Boolean(assessmentUserId),
+    userPunyaNoWa,
+  });
   let leadSudahTerkirim = false;
   if (showLeadCapture) {
     const { data: leadRow, error: leadError } = await supabaseServer
