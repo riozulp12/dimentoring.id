@@ -50,6 +50,8 @@
 - [ ] Checkbox persetujuan tidak tercentang dari awal; kirim tanpa centang → ditolak (pesan di UI) dan API juga menolak
 - [ ] Kirim `0812…` lalu `+62 812…` (nomor sama) → satu baris di `leads`, `jumlah_submit` = 2, `utm_campaign` tetap dari kiriman pertama
 - [ ] Kirim lebih dari 5x dalam 1 jam dari browser yang sama → ditolak "Terlalu banyak percobaan"
+- [ ] Teks persetujuan di kartu WhatsApp = teks final v1 (menyebut izin orang tua/wali & email penarikan persetujuan); lead baru tersimpan dengan `consent_versi = 'v1'`, baris lama `v1-draf` tidak berubah
+- [ ] Tautan "Kebijakan Privasi" di kartu WhatsApp dan di `/daftar` membuka `/kebijakan-privasi` tanpa login (coba di jendela incognito)
 - [ ] Daftar akun lewat `/daftar` TANPA query UTM setelah datang dari link UTM → `users.utm_source/utm_campaign` terisi dari cookie
 
 ### Beasiswa & Event (`/beasiswa-event`)
@@ -68,7 +70,7 @@
 - [ ] Isi wizard `/lengkapi-profil` sampai selesai → redirect dashboard sesuai role
 - [ ] Login (akun lama) → langsung ke dashboard, TIDAK diminta lengkapi profil ulang
 - [ ] Lupa Password → cek `email_simulasi_log` di Supabase, link reset berfungsi
-- [ ] Kebijakan Privasi (`/kebijakan-privasi`) bisa diakses, link dari Footer/Daftar/Pengaturan berfungsi
+- [ ] Kebijakan Privasi (`/kebijakan-privasi`) bisa diakses tanpa login, link dari Footer/Daftar/Pengaturan berfungsi; tampil "Berlaku sejak: 23 Oktober 2026 · Versi: v1", tanpa banner draf dan tanpa nama brand pihak ketiga
 
 ---
 
