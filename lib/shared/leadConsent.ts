@@ -1,18 +1,19 @@
 /**
  * Teks persetujuan Lead Capture (PRD 7.4.6 / BR-38).
  *
- * ⚠️ DRAF — WAJIB ditinjau pihak yang paham hukum (UU PDP, data anak di
- * bawah 18 tahun) sebelum dirilis ke publik. Begitu teks diubah, NAIKKAN
- * CONSENT_VERSI supaya setiap baris leads tetap tahu versi teks mana yang
- * disetujui. Kebijakan Privasi (/kebijakan-privasi) juga masih DRAF.
+ * Teks final v1, sama persis dengan bagian "Teks persetujuan formulir
+ * WhatsApp (v1)" di docs/legal/kebijakan-privasi-v1.md. Begitu teks diubah,
+ * NAIKKAN CONSENT_VERSI supaya setiap baris leads tetap tahu versi teks mana
+ * yang disetujui. Baris lama tetap menyimpan versinya sendiri (mis. "v1-draf")
+ * dan tidak diubah.
  *
  * Versi yang tersimpan di leads.consent_versi SELALU diambil dari konstanta
  * ini di server, tidak pernah dari body request.
  */
-export const CONSENT_VERSI = "v1-draf";
+export const CONSENT_VERSI = "v1";
 
 export const LEAD_CONSENT_TEXT =
-  "Saya setuju nomor WhatsApp ini dihubungi tim Dimentoring untuk membahas hasil Assessment saya dan informasi layanan belajar Dimentoring. Saya bisa meminta berhenti dihubungi kapan saja.";
+  "Saya setuju nomor WhatsApp ini dihubungi tim pengelola dimentoring.id untuk membahas hasil Assessment saya dan informasi layanan belajar kami. Jika usia saya di bawah 18 tahun, saya sudah mendapat izin orang tua atau wali. Saya bisa menarik persetujuan kapan saja dengan menghubungi info.dimentoring@gmail.com.";
 
 export const LEAD_SUMBER = ["assessment_snbp"] as const;
 export type LeadSumber = (typeof LEAD_SUMBER)[number];

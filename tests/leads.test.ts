@@ -19,7 +19,8 @@ import {
   pilihUtmPendaftaran,
 } from "@/lib/shared/atribusi";
 import { buatCsv, selCsvAman } from "@/lib/shared/csv";
-import { CONSENT_VERSI, LEAD_RATE_LIMIT_PER_TRIAL } from "@/lib/shared/leadConsent";
+import { CONSENT_VERSI, LEAD_CONSENT_TEXT, LEAD_RATE_LIMIT_PER_TRIAL } from "@/lib/shared/leadConsent";
+import { readFileSync } from "node:fs";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
 import { harusTampilLeadCapture, parseLeadCaptureEnabled } from "@/lib/shared/leadCaptureFlag";
 
@@ -265,6 +266,16 @@ function adminRequest(url: string, role: "admin" | "student" | "mentor", userId:
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
 }
+
+describe("teks persetujuan final v1", () => {
+  it("versi = v1 dan teks sama persis dengan docs/legal/kebijakan-privasi-v1.md", () => {
+    assert.equal(CONSENT_VERSI, "v1");
+    const dok = readFileSync("docs/legal/kebijakan-privasi-v1.md", "utf8");
+    const bagian = dok.split("## Teks persetujuan formulir WhatsApp (v1)")[1];
+    assert.ok(bagian, "bagian teks persetujuan tidak ditemukan di dokumen");
+    assert.equal(bagian.trim().replace(/^"|"$/g, ""), LEAD_CONSENT_TEXT);
+  });
+});
 
 describe("normalisasiNoWa", () => {
   it("08xx, 628xx, +628xx, spasi & tanda hubung -> 628…", () => {
