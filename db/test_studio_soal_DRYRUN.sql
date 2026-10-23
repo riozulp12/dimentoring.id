@@ -31,15 +31,36 @@
 --     bentrok dengan nomor asli). Semua pengecekan memakai id baris tiruan,
 --     bukan jumlah baris tabel.
 --
+-- Setiap pesan gagal diawali penanda versi berkas, mis. "DRY-RUN GAGAL [v3]".
+-- Kalau penanda itu tidak muncul, yang dijalankan adalah salinan berkas lama.
+-- Pesan pg_temp.cek selalu memuat nilai sebenarnya ("diharapkan X, dapat Y").
+--
 -- Butuh subtes 'Penalaran Umum', 'Pengetahuan Kuantitatif' (tps) dan
 -- 'Matematika' (tka_wajib) di tabel subtes (db/seed_subtes.sql).
 
-CREATE FUNCTION pg_temp.cek(p_kondisi BOOLEAN, p_pesan TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
+-- Bandingkan nilai sebenarnya (p_dapat) dengan harapan, keduanya teks.
+-- Pesan gagal selalu memuat keduanya supaya error langsung informatif.
+CREATE FUNCTION pg_temp.cek(p_dapat TEXT, p_harap TEXT, p_pesan TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
-    IF p_kondisi IS DISTINCT FROM true THEN
-        RAISE EXCEPTION 'DRY-RUN GAGAL: %', p_pesan;
+    IF p_dapat IS DISTINCT FROM p_harap THEN
+        RAISE EXCEPTION 'DRY-RUN GAGAL [v3]: % — diharapkan %, dapat %',
+            p_pesan, coalesce(p_harap, '<NULL>'), coalesce(p_dapat, '<NULL>');
     END IF;
 END $$;
+
+-- Daftar mentor eligible untuk subtes (kecuali p_kecuali), untuk pesan gagal.
+-- Akun tiruan tampil dengan namanya (DRYRUN m1/m2/...); akun asli hanya
+-- sebagai "asli:<user_id>" supaya nama orang tidak ikut tercetak.
+CREATE FUNCTION pg_temp.daftar_eligible(p_subtes UUID, p_kecuali UUID[]) RETURNS TEXT LANGUAGE sql AS $$
+    SELECT coalesce(string_agg(DISTINCT CASE WHEN u.nama LIKE 'DRYRUN %' THEN u.nama
+                                             ELSE 'asli:' || u.id::text END, ', '), '(kosong)')
+    FROM user_roles ur
+    JOIN users u ON u.id = ur.user_id
+    JOIN mentor_profiles mp ON mp.user_id = ur.user_id
+    JOIN mentor_subtes_diampu msd ON msd.mentor_profile_id = mp.id
+    WHERE ur.role_type = 'mentor' AND ur.status = 'active' AND msd.subtes_id = p_subtes
+      AND NOT (ur.user_id = ANY (coalesce(p_kecuali, ARRAY[]::UUID[])));
+$$;
 
 -- p_sql harus GAGAL (exception). Perubahannya dibatalkan (subtransaksi).
 CREATE FUNCTION pg_temp.harus_gagal(p_sql TEXT, p_pesan TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
@@ -52,14 +73,14 @@ BEGIN
         v_gagal := true;
     END;
     IF NOT v_gagal THEN
-        RAISE EXCEPTION 'DRY-RUN GAGAL: seharusnya ditolak — %', p_pesan;
+        RAISE EXCEPTION 'DRY-RUN GAGAL [v3]: seharusnya ditolak — %', p_pesan;
     END IF;
 END $$;
 
 CREATE FUNCTION pg_temp.status_rpc(p_hasil JSONB, p_harapan TEXT, p_pesan TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
     IF p_hasil->>'status' IS DISTINCT FROM p_harapan THEN
-        RAISE EXCEPTION 'DRY-RUN GAGAL: % — harapan %, hasil %', p_pesan, p_harapan, p_hasil;
+        RAISE EXCEPTION 'DRY-RUN GAGAL [v3]: % — diharapkan status %, dapat %', p_pesan, p_harapan, p_hasil;
     END IF;
 END $$;
 
@@ -121,10 +142,11 @@ DECLARE
 BEGIN
   -- Sub-transaksi: SELALU dibatalkan oleh RAISE 'SSDR0' di akhir (lihat header).
   BEGIN
-    PERFORM pg_temp.cek((SELECT count(*) FROM subtes WHERE nama = 'Penalaran Umum' AND kategori = 'tps') = 1
-                        AND (SELECT count(*) FROM subtes WHERE nama = 'Pengetahuan Kuantitatif' AND kategori = 'tps') = 1
-                        AND (SELECT count(*) FROM subtes WHERE nama = 'Matematika' AND kategori = 'tka_wajib') = 1,
-        'subtes referensi ada tepat satu (nama + kategori)');
+    PERFORM pg_temp.cek(format('PU=%s PK=%s MTK=%s',
+            (SELECT count(*) FROM subtes WHERE nama = 'Penalaran Umum' AND kategori = 'tps'),
+            (SELECT count(*) FROM subtes WHERE nama = 'Pengetahuan Kuantitatif' AND kategori = 'tps'),
+            (SELECT count(*) FROM subtes WHERE nama = 'Matematika' AND kategori = 'tka_wajib')),
+        'PU=1 PK=1 MTK=1', 'jumlah baris subtes referensi (nama + kategori)');
     SELECT id INTO pu FROM subtes WHERE nama = 'Penalaran Umum' AND kategori = 'tps';
     SELECT id INTO pk FROM subtes WHERE nama = 'Pengetahuan Kuantitatif' AND kategori = 'tps';
     SELECT id INTO mtk FROM subtes WHERE nama = 'Matematika' AND kategori = 'tka_wajib';
@@ -133,15 +155,26 @@ BEGIN
     DELETE FROM mentor_subtes_diampu WHERE subtes_id IN (pu, pk, mtk);
     GET DIAGNOSTICS n_netral = ROW_COUNT;
     RAISE NOTICE 'DRY-RUN: % baris mentor_subtes_diampu asli dinetralkan sementara (dibatalkan di akhir)', n_netral;
-    PERFORM pg_temp.cek(studio_soal_hitung_peninjau_eligible(pu, NULL) = 0
-                        AND studio_soal_hitung_peninjau_eligible(pk, NULL) = 0,
-        'tidak ada mentor asli eligible untuk PU/PK setelah dinetralkan');
+    PERFORM pg_temp.cek(format('PU=%s PK=%s', studio_soal_hitung_peninjau_eligible(pu, NULL),
+                               studio_soal_hitung_peninjau_eligible(pk, NULL)),
+        'PU=0 PK=0', format('mentor asli eligible setelah dinetralkan (PU: %s; PK: %s)',
+                            pg_temp.daftar_eligible(pu, NULL), pg_temp.daftar_eligible(pk, NULL)));
 
     m1 := pg_temp.buat_user('m1');  PERFORM pg_temp.jadikan_mentor(m1, ARRAY[pu]);
     m2 := pg_temp.buat_user('m2');  PERFORM pg_temp.jadikan_mentor(m2, ARRAY[pu, mtk]);
     m3 := pg_temp.buat_user('m3');  PERFORM pg_temp.jadikan_mentor(m3, ARRAY[pk]);
     adm := pg_temp.buat_user('adm');
     INSERT INTO user_roles (user_id, role_type, status) VALUES (adm, 'admin', 'active');
+
+    -- Fixture sesuai syarat studio_soal_mentor_eligible (role mentor active +
+    -- mentor_profiles + mentor_subtes_diampu subtes persis). Dicek di sini supaya
+    -- salah fixture langsung terlihat, bukan baru di langkah ajukan.
+    PERFORM pg_temp.cek(format('m1=%s m2=%s m3=%s',
+            studio_soal_mentor_eligible(m1, pu), studio_soal_mentor_eligible(m2, pu),
+            studio_soal_mentor_eligible(m3, pu)),
+        'm1=true m2=true m3=false', 'kelayakan fixture untuk PU');
+    PERFORM pg_temp.cek(studio_soal_hitung_peninjau_eligible(pu, ARRAY[m1])::text, '1',
+        format('peninjau eligible PU selain m1 sebelum ajukan (daftar: %s)', pg_temp.daftar_eligible(pu, ARRAY[m1])));
 
     -- ---- 1. Kelayakan pembuat & subtes SNBT ----
     s1 := pg_temp.buat_pg(m1, pu, NULL, NULL);
@@ -163,7 +196,8 @@ BEGIN
     -- ---- 3. Ajukan & tinjau ----
     r := studio_soal_ajukan_soal(s1, m2);  PERFORM pg_temp.status_rpc(r, 'bukan_penulis', 'ajukan oleh bukan penulis');
     r := studio_soal_ajukan_soal(s1, m1);  PERFORM pg_temp.status_rpc(r, 'diajukan', 'ajukan oleh penulis');
-    PERFORM pg_temp.cek((r->>'jumlah_peninjau_eligible')::int = 1, 'peninjau eligible PU selain m1 = 1 (m2)');
+    PERFORM pg_temp.cek(r->>'jumlah_peninjau_eligible', '1',
+        format('peninjau eligible PU selain m1 dari RPC ajukan (daftar: %s)', pg_temp.daftar_eligible(pu, ARRAY[m1])));
 
     PERFORM pg_temp.matikan_rpc();
     PERFORM pg_temp.harus_gagal(format('UPDATE soal_bank SET redaksi = ''ubah'' WHERE id = %L', s1),
@@ -177,16 +211,18 @@ BEGIN
     PERFORM pg_temp.status_rpc(r, 'alasan_kurang', 'alasan tolak 9 karakter');
     r := studio_soal_tinjau('soal', s1, m2, 'mentor', 'tolak', '   1234567890   ');
     PERFORM pg_temp.status_rpc(r, 'ditolak', 'tolak dengan alasan 10 karakter');
-    PERFORM pg_temp.cek((SELECT status = 'ditolak' AND alasan_tolak = '1234567890' FROM soal_bank WHERE id = s1),
-        'status & alasan tolak tersimpan (trim)');
+    PERFORM pg_temp.cek((SELECT format('%s/%s', status, coalesce(alasan_tolak, '<NULL>')) FROM soal_bank WHERE id = s1),
+        'ditolak/1234567890', 'status & alasan tolak tersimpan (trim)');
 
     PERFORM pg_temp.matikan_rpc();
     UPDATE soal_bank SET redaksi = 'Berapakah \(2+3\)? (revisi)' WHERE id = s1;  -- edit soal ditolak boleh
     r := studio_soal_ajukan_soal(s1, m1);  PERFORM pg_temp.status_rpc(r, 'diajukan', 'ajukan ulang setelah ditolak');
     r := studio_soal_tinjau('soal', s1, m2, 'mentor', 'setujui', NULL);
     PERFORM pg_temp.status_rpc(r, 'terpublikasi', 'peninjau sejawat menyetujui');
-    PERFORM pg_temp.cek((SELECT status = 'terpublikasi' AND peninjau_id = m2 FROM soal_bank WHERE id = s1),
-        'soal terbit dengan peninjau m2');
+    PERFORM pg_temp.cek((SELECT format('%s/%s', status, CASE WHEN peninjau_id = m2 THEN 'm2'
+                                                              ELSE coalesce(peninjau_id::text, '<NULL>') END)
+                         FROM soal_bank WHERE id = s1),
+        'terpublikasi/m2', 'soal terbit dengan peninjau m2');
 
     PERFORM pg_temp.matikan_rpc();
     PERFORM pg_temp.harus_gagal(format('UPDATE soal_bank SET redaksi = ''ubah'' WHERE id = %L', s1),
@@ -216,8 +252,10 @@ BEGIN
     PERFORM pg_temp.status_rpc(r, 'alasan_kurang', 'publikasi admin dengan alasan pendek');
     r := studio_soal_publikasi_admin('soal', s2, adm, 'Tidak ada mentor PU lain yang aktif');
     PERFORM pg_temp.status_rpc(r, 'terpublikasi', 'publikasi admin saat 0 peninjau eligible');
-    PERFORM pg_temp.cek(EXISTS (SELECT 1 FROM soal_tinjauan_log WHERE objek_id = s2 AND aksi = 'publikasi_admin'
-                                AND jumlah_peninjau_eligible = 0 AND aktor_id = adm), 'log publikasi admin');
+    PERFORM pg_temp.cek((SELECT string_agg(format('eligible=%s aktor=%s', coalesce(jumlah_peninjau_eligible::text, '<NULL>'),
+                                                  CASE WHEN aktor_id = adm THEN 'adm' ELSE aktor_id::text END), '; ')
+                         FROM soal_tinjauan_log WHERE objek_id = s2 AND aksi = 'publikasi_admin'),
+        'eligible=0 aktor=adm', 'log publikasi admin (satu baris)');
     UPDATE user_roles SET status = 'active' WHERE user_id = m2 AND role_type = 'mentor';
 
     -- Admin boleh menolak kapan saja (dengan alasan).
@@ -248,26 +286,31 @@ BEGIN
     PERFORM pg_temp.status_rpc(r, 'ajukan_lewat_stimulus', 'soal di stimulus draf diajukan sendiri');
     r := studio_soal_ajukan_stimulus(st, m1);
     PERFORM pg_temp.status_rpc(r, 'diajukan', 'ajukan kelompok stimulus');
-    PERFORM pg_temp.cek((r->>'jumlah_soal')::int = 3, 'kelompok berisi 3 soal');
+    PERFORM pg_temp.cek(r->>'jumlah_soal', '3', 'jumlah soal dalam kelompok stimulus');
     PERFORM pg_temp.harus_gagal(format('SELECT pg_temp.buat_pg(%L::uuid, %L::uuid, %L::uuid, 4::smallint)', m1, pu, st),
         'menambah soal ke stimulus yang sedang ditinjau');
     r := studio_soal_tinjau('soal', g1, m2, 'mentor', 'setujui', NULL);
     PERFORM pg_temp.status_rpc(r, 'tinjau_sebagai_kelompok', 'soal kelompok ditinjau sendiri');
     r := studio_soal_tinjau('stimulus', st, m2, 'mentor', 'setujui', NULL);
     PERFORM pg_temp.status_rpc(r, 'terpublikasi', 'kelompok stimulus disetujui');
-    PERFORM pg_temp.cek((SELECT count(*) FROM soal_bank WHERE stimulus_id = st AND status = 'terpublikasi') = 3
-                        AND (SELECT status FROM soal_stimulus WHERE id = st) = 'terpublikasi', 'stimulus + 3 soal terbit');
+    PERFORM pg_temp.cek(format('stimulus=%s soal_terbit=%s',
+            (SELECT status FROM soal_stimulus WHERE id = st),
+            (SELECT count(*) FROM soal_bank WHERE stimulus_id = st AND status = 'terpublikasi')),
+        'stimulus=terpublikasi soal_terbit=3', 'stimulus + 3 soal terbit');
 
     -- ---- 7. Versi baru (hanya penulis, satu versi terbuka) ----
     r := studio_soal_buat_versi_soal(s1, m2);  PERFORM pg_temp.status_rpc(r, 'bukan_penulis', 'versi baru oleh bukan penulis');
     r := studio_soal_buat_versi_soal(s1, m1);  PERFORM pg_temp.status_rpc(r, 'versi_dibuat', 'versi baru oleh penulis');
     s_baru := (r->>'soal_id')::uuid;
     r := studio_soal_buat_versi_soal(s1, m1);  PERFORM pg_temp.status_rpc(r, 'ada_versi_terbuka', 'versi kedua saat ada versi terbuka');
-    PERFORM pg_temp.cek((SELECT versi = 2 AND menggantikan_id = s1 FROM soal_bank WHERE id = s_baru), 'versi 2 menunjuk versi 1');
+    PERFORM pg_temp.cek((SELECT format('versi=%s menggantikan=%s', versi,
+                                CASE WHEN menggantikan_id = s1 THEN 's1' ELSE coalesce(menggantikan_id::text, '<NULL>') END)
+                         FROM soal_bank WHERE id = s_baru),
+        'versi=2 menggantikan=s1', 'versi 2 menunjuk versi 1');
     r := studio_soal_ajukan_soal(s_baru, m1);
     r := studio_soal_tinjau('soal', s_baru, m2, 'mentor', 'setujui', NULL);
     PERFORM pg_temp.status_rpc(r, 'terpublikasi', 'versi baru disetujui');
-    PERFORM pg_temp.cek((SELECT status FROM soal_bank WHERE id = s1) = 'digantikan', 'versi lama digantikan');
+    PERFORM pg_temp.cek((SELECT status::text FROM soal_bank WHERE id = s1), 'digantikan', 'status versi lama');
 
     -- ---- 8. Paket ----
     s_m2 := pg_temp.buat_pg(m2, pu, NULL, NULL);                -- draf milik m2
@@ -302,9 +345,9 @@ BEGIN
     r := studio_soal_simpan_item_paket(pk2, m1, ARRAY[s2, s_p2]);
     r := studio_soal_ajukan_paket(pk2, m1);
     PERFORM pg_temp.status_rpc(r, 'menunggu_soal', 'paket dengan draf sendiri menunggu soal');
-    PERFORM pg_temp.cek((SELECT status FROM soal_bank WHERE id = s_p2) = 'diajukan', 'draf di paket ikut diajukan');
+    PERFORM pg_temp.cek((SELECT status::text FROM soal_bank WHERE id = s_p2), 'diajukan', 'draf di paket ikut diajukan');
     r := studio_soal_tinjau('soal', s_p2, m2, 'mentor', 'setujui', NULL);
-    PERFORM pg_temp.cek((SELECT status FROM paket_soal WHERE id = pk2) = 'terpublikasi', 'paket terbit otomatis');
+    PERFORM pg_temp.cek((SELECT status::text FROM paket_soal WHERE id = pk2), 'terpublikasi', 'paket terbit otomatis');
 
     -- Paket menunggu soal -> kembali draf bila soalnya ditolak
     s_p3 := pg_temp.buat_pg(m1, pu, NULL, NULL);
@@ -312,12 +355,12 @@ BEGIN
     r := studio_soal_simpan_item_paket(pk3, m1, ARRAY[s_p3]);
     r := studio_soal_ajukan_paket(pk3, m1);
     r := studio_soal_tinjau('soal', s_p3, m2, 'mentor', 'tolak', 'Pembahasan kurang jelas.');
-    PERFORM pg_temp.cek((SELECT status FROM paket_soal WHERE id = pk3) = 'draf', 'paket kembali draf');
+    PERFORM pg_temp.cek((SELECT status::text FROM paket_soal WHERE id = pk3), 'draf', 'paket kembali draf');
 
     -- ---- 9. Hapus draf ----
     s_hapus := pg_temp.buat_pg(m1, pu, NULL, NULL);
     DELETE FROM soal_bank WHERE id = s_hapus;                 -- draf belum pernah diajukan: boleh
-    PERFORM pg_temp.cek(NOT EXISTS (SELECT 1 FROM soal_bank WHERE id = s_hapus), 'draf terhapus');
+    PERFORM pg_temp.cek((SELECT count(*) FROM soal_bank WHERE id = s_hapus)::text, '0', 'baris draf tersisa setelah dihapus');
     r := studio_soal_tarik('soal', s3, m1);                   -- s3 berstatus ditolak -> tidak bisa ditarik
     PERFORM pg_temp.status_rpc(r, 'status_tidak_valid', 'tarik soal yang tidak sedang diajukan');
     PERFORM pg_temp.harus_gagal(format('DELETE FROM soal_bank WHERE id = %L', s3), 'hapus soal yang pernah diajukan');
