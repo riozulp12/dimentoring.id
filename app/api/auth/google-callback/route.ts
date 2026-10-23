@@ -10,6 +10,7 @@ import { resolveSessionForUser } from "@/lib/auth/resolveSession";
 import { generateReferralCode } from "@/lib/auth/generateReferralCode";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
 import { writeReturnToCookie } from "@/lib/auth/returnToCookie";
+import { bacaAtribusi, pilihUtmPendaftaran } from "@/lib/shared/atribusi";
 
 /**
  * Bridge "Google OAuth sukses -> session aplikasi kita" — dipanggil dari
@@ -79,8 +80,12 @@ export async function POST(request: NextRequest) {
     // ---- Belum pernah daftar -> buat akun baru (register implisit). ----
     const namaLengkap = body.nama?.trim() || email.split("@")[0];
     // Kosong = NULL di database (dianggap "organic"), bukan default string.
-    const utmSource = body.utmSource?.trim() || null;
-    const utmCampaign = body.utmCampaign?.trim() || null;
+    // Query kosong -> cadangan dari cookie first-touch dm_attr (BR-38).
+    const { utmSource, utmCampaign } = pilihUtmPendaftaran(
+      body.utmSource,
+      body.utmCampaign,
+      bacaAtribusi(request.cookies),
+    );
 
     const MAX_REFERRAL_ATTEMPTS = 5;
     let newUser: { id: string } | null = null;

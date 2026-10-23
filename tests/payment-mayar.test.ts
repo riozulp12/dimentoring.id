@@ -163,11 +163,17 @@ describe("file statis", () => {
     }
   });
 
-  it(".env.example cuma 4 placeholder tanpa nilai, tanpa variabel Midtrans", () => {
+  it(".env.example cuma placeholder tanpa nilai (4 payment + bendera Lead Capture), tanpa variabel Midtrans", () => {
     const lines = readFileSync(".env.example", "utf8")
       .split(/\r?\n/)
       .filter((line) => line.trim() && !line.trim().startsWith("#"));
-    assert.deepEqual(lines, ["PAYMENT_PROVIDER=", "MAYAR_API_KEY=", "MAYAR_BASE_URL=", "APP_BASE_URL="]);
+    assert.deepEqual(lines, [
+      "PAYMENT_PROVIDER=",
+      "MAYAR_API_KEY=",
+      "MAYAR_BASE_URL=",
+      "APP_BASE_URL=",
+      "NEXT_PUBLIC_LEAD_CAPTURE_ENABLED=",
+    ]);
   });
 });
 

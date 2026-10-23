@@ -4,6 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { ANONYMOUS_FREE_RESULT_LIMIT, TRIAL_COOKIE_MAX_AGE_SECONDS, TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
 import { generateAssessmentNote } from "@/lib/ai/generateNote";
+import { bacaAtribusi } from "@/lib/shared/atribusi";
 import {
   calculateKeketatan,
   calculateNilaiAkhir,
@@ -222,27 +223,47 @@ export async function POST(request: NextRequest) {
   });
 
   // ---- Simpan header assessments (user_id XOR anonymous_trial_id) ----
-  const { data: assessment, error: assessmentError } = await supabaseServer
+  // BR-38: atribusi first-touch dari cookie dm_attr (bukan dari body).
+  const atribusi = bacaAtribusi(request.cookies);
+  const assessmentRow = {
+    user_id: userId,
+    anonymous_trial_id: userId ? null : trialId,
+    jalur: "snbp",
+    input_data: {
+      nilaiRapor: body.nilaiRapor,
+      prestasi: body.prestasi
+        ? { jenisPrestasi, tingkatKejuaraan, juaraBerapa }
+        : null,
+      pilihan: ptnJurusanIds,
+    },
+    rata_rata_rapor: rataRataRapor,
+    nilai_prestasi: nilaiPrestasi,
+    nilai_akhir: nilaiAkhir,
+    nilai_akhir_label: nilaiAkhirLabel,
+    hasil_breakdown: { provinsi: provinsiSiswa },
+  };
+  const utmRow = {
+    utm_source: atribusi?.utm_source ?? null,
+    utm_medium: atribusi?.utm_medium ?? null,
+    utm_campaign: atribusi?.utm_campaign ?? null,
+  };
+  let { data: assessment, error: assessmentError } = await supabaseServer
     .from("assessments")
-    .insert({
-      user_id: userId,
-      anonymous_trial_id: userId ? null : trialId,
-      jalur: "snbp",
-      input_data: {
-        nilaiRapor: body.nilaiRapor,
-        prestasi: body.prestasi
-          ? { jenisPrestasi, tingkatKejuaraan, juaraBerapa }
-          : null,
-        pilihan: ptnJurusanIds,
-      },
-      rata_rata_rapor: rataRataRapor,
-      nilai_prestasi: nilaiPrestasi,
-      nilai_akhir: nilaiAkhir,
-      nilai_akhir_label: nilaiAkhirLabel,
-      hasil_breakdown: { provinsi: provinsiSiswa },
-    })
+    .insert({ ...assessmentRow, ...utmRow })
     .select("id")
     .single();
+
+  // Kolom utm_* datang dari db/add_leads.sql. Kalau kode ini sudah ter-deploy
+  // sebelum migrasi dijalankan, simpan tanpa atribusi daripada menggagalkan
+  // Assessment gratis.
+  if (assessmentError?.code === "PGRST204" && /utm_/.test(assessmentError.message ?? "")) {
+    console.error("[assessment/snbp] kolom utm_* belum ada (jalankan db/add_leads.sql):", assessmentError.message);
+    ({ data: assessment, error: assessmentError } = await supabaseServer
+      .from("assessments")
+      .insert(assessmentRow)
+      .select("id")
+      .single());
+  }
 
   if (assessmentError || !assessment) {
     console.error("[assessment/snbp] insert assessments failed:", assessmentError);

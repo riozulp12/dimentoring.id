@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
+import { harusTampilLeadCapture, isLeadCaptureEnabled } from "@/lib/shared/leadCaptureFlag";
 import { getNavbarProps, type NavbarSessionProps } from "@/lib/dashboard/getNavbarProps";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
@@ -263,6 +264,37 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
         : "Direkomendasikan untuk membantu memperbesar Peluang kamu.",
     }));
 
+  // ---- Lead Capture (PRD 7.4.6, BR-38): hanya kalau bendera
+  // NEXT_PUBLIC_LEAD_CAPTURE_ENABLED aktif; tamu, atau user login yang belum
+  // punya no_wa. "Sudah terkirim" = sudah ada lead untuk assessment ini. ----
+  const leadCaptureEnabled = isLeadCaptureEnabled();
+  let userPunyaNoWa = false;
+  if (leadCaptureEnabled && assessmentUserId) {
+    const { data: userRow } = await supabaseServer
+      .from("users")
+      .select("no_wa")
+      .eq("id", assessmentUserId)
+      .maybeSingle();
+    // Baris user tidak ditemukan -> jangan tampilkan (sama seperti punya nomor).
+    userPunyaNoWa = !userRow || Boolean(userRow.no_wa);
+  }
+  const showLeadCapture = harusTampilLeadCapture({
+    enabled: leadCaptureEnabled,
+    milikUserLogin: Boolean(assessmentUserId),
+    userPunyaNoWa,
+  });
+  let leadSudahTerkirim = false;
+  if (showLeadCapture) {
+    const { data: leadRow, error: leadError } = await supabaseServer
+      .from("leads")
+      .select("id")
+      .eq("assessment_id", id)
+      .limit(1)
+      .maybeSingle();
+    if (leadError) console.error("[assessment/hasil] query leads failed:", leadError);
+    leadSudahTerkirim = Boolean(leadRow);
+  }
+
   // ---- CTA Daftar (item 4): tampil kalau hasil ini masih anonim (sudah pasti
   // trial 1/2 karena akses control di atas sudah memvalidasi cookie trial cocok). ----
   const hasilData: AssessmentHasilData = {
@@ -277,6 +309,9 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
     kelasRekomendasi,
     tryoutRekomendasi,
     showDaftarCta: !assessmentUserId,
+    assessmentId: id,
+    showLeadCapture,
+    leadSudahTerkirim,
   };
 
   return (

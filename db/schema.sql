@@ -85,8 +85,8 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nama VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
-    no_wa VARCHAR(20) NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
+    no_wa VARCHAR(20) UNIQUE,                     -- NULLABLE: baru diisi di /lengkapi-profil (db/make_no_wa_password_nullable.sql)
+    password_hash TEXT,                           -- NULLABLE: NULL permanen untuk akun yang hanya login lewat Google
     status_verifikasi_akun status_verifikasi_akun NOT NULL DEFAULT 'unverified',
     sub_status sub_status_student,               -- NULL jika bukan Student
     tingkat_kelas tingkat_kelas,                  -- Kelas 10/11/12/Gap Year, diisi saat onboarding (7.0.2 Langkah 2)
@@ -394,6 +394,9 @@ CREATE TABLE assessments (
     nilai_akhir_label VARCHAR(30),       -- 'Sangat Tinggi'/'Tinggi'/'Sedang'/'Rendah'/'Sangat Rendah' (FR-3.8)
     note_ai TEXT,                        -- hasil generate Gemini untuk section "Note" (BR-30), NULL jika belum/gagal generate
     hasil_breakdown JSONB,               -- catatan/insight tambahan
+    utm_source TEXT,                     -- BARU (BR-38): atribusi first-touch dari cookie dm_attr saat submit
+    utm_medium TEXT,
+    utm_campaign TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -1278,6 +1281,132 @@ CREATE TABLE materi (
 CREATE INDEX idx_materi_kelas ON materi(kelas_id);
 CREATE INDEX idx_materi_status ON materi(status) WHERE status = 'draft';
 CREATE INDEX idx_soal_ai_status ON soal_ai(status) WHERE status = 'draft';
+
+-- Lead Capture tahap 1 (BARU, Oktober 2026 — PRD 7.4.6 / BR-38, migration
+-- db/add_leads.sql). Nomor WhatsApp pengunjung Assessment gratis yang setuju
+-- dihubungi. Kolom utm_* assessments ada di CREATE TABLE assessments di atas.
+-- ---- leads -------------------------------------------------------------------
+CREATE TABLE leads (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    no_wa VARCHAR(20) NOT NULL UNIQUE,              -- selalu 628xxxxxxxxx (lib/shared/noWa.ts)
+    nama VARCHAR(100),                              -- opsional, diisi pengunjung sendiri
+    sumber TEXT NOT NULL,
+    -- SET NULL: lead tetap ada walau assessment/akun dihapus.
+    assessment_id UUID REFERENCES assessments(id) ON DELETE SET NULL,
+    anonymous_trial_id UUID,                        -- cookie dm_trial_id saat submit (tamu)
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    -- Atribusi first-touch (cookie dm_attr) dari submit PERTAMA — tidak ditimpa.
+    utm_source TEXT,
+    utm_medium TEXT,
+    utm_campaign TEXT,
+    utm_content TEXT,
+    fbclid TEXT,
+    -- Persetujuan dihubungi via WhatsApp (BR-38): wajib true, versi teks dari server.
+    consent_wa BOOLEAN NOT NULL,
+    consent_versi TEXT NOT NULL,
+    consent_at TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL DEFAULT 'baru',
+    catatan TEXT,
+    jumlah_submit INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE leads ADD CONSTRAINT leads_no_wa_format CHECK (no_wa ~ '^628[0-9]{8,12}$');
+ALTER TABLE leads ADD CONSTRAINT leads_sumber_valid CHECK (sumber IN ('assessment_snbp'));
+ALTER TABLE leads ADD CONSTRAINT leads_consent_wa_wajib CHECK (consent_wa = true);
+ALTER TABLE leads ADD CONSTRAINT leads_status_valid
+    CHECK (status IN ('baru', 'dihubungi', 'daftar', 'tidak_tertarik'));
+ALTER TABLE leads ADD CONSTRAINT leads_jumlah_submit_positif CHECK (jumlah_submit >= 1);
+
+CREATE INDEX idx_leads_status ON leads(status);
+CREATE INDEX idx_leads_created_at ON leads(created_at DESC);
+CREATE INDEX idx_leads_utm_campaign ON leads(utm_campaign) WHERE utm_campaign IS NOT NULL;
+CREATE INDEX idx_leads_assessment ON leads(assessment_id) WHERE assessment_id IS NOT NULL;
+
+-- ---- Audit perubahan status lead ---------------------------------------------
+CREATE TABLE lead_status_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lead_id UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+    admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    status_lama TEXT NOT NULL,
+    status_baru TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_lead_status_log_lead ON lead_status_log(lead_id, created_at DESC);
+
+-- ---- Rate limit POST /api/leads -----------------------------------------
+-- kunci: 'trial:<uuid>' atau 'ip:<hmac-sha256>' — IP mentah tidak disimpan.
+-- Baris > 1 hari dibersihkan oleh aplikasi saat ada percobaan baru.
+CREATE TABLE lead_rate_limit (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kunci TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_lead_rate_limit_kunci ON lead_rate_limit(kunci, created_at DESC);
+
+-- RLS wajib aktif di semua tabel (CLAUDE.md) — tanpa policy: cuma service_role.
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lead_status_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lead_rate_limit ENABLE ROW LEVEL SECURITY;
+
+-- ---- simpan_lead: insert-or-update atomik --------------------------------
+-- Nomor baru  -> baris baru (consent_at = now()).
+-- Nomor lama  -> jumlah_submit + 1, updated_at = now(), assessment_id terbaru
+--                (kalau dikirim). UTM, fbclid, consent, sumber, status TIDAK
+--                diubah. nama / user_id / anonymous_trial_id cuma diisi kalau
+--                sebelumnya kosong.
+-- Mengembalikan {"baru": true|false}; aplikasi TIDAK meneruskannya ke klien.
+CREATE OR REPLACE FUNCTION simpan_lead(
+    p_no_wa TEXT,
+    p_nama TEXT,
+    p_sumber TEXT,
+    p_assessment_id UUID,
+    p_anonymous_trial_id UUID,
+    p_user_id UUID,
+    p_utm_source TEXT,
+    p_utm_medium TEXT,
+    p_utm_campaign TEXT,
+    p_utm_content TEXT,
+    p_fbclid TEXT,
+    p_consent_versi TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+    v_baru BOOLEAN;
+BEGIN
+    INSERT INTO leads (
+        no_wa, nama, sumber, assessment_id, anonymous_trial_id, user_id,
+        utm_source, utm_medium, utm_campaign, utm_content, fbclid,
+        consent_wa, consent_versi, consent_at
+    ) VALUES (
+        p_no_wa, NULLIF(btrim(p_nama), ''), p_sumber, p_assessment_id, p_anonymous_trial_id, p_user_id,
+        p_utm_source, p_utm_medium, p_utm_campaign, p_utm_content, p_fbclid,
+        true, p_consent_versi, now()
+    )
+    ON CONFLICT (no_wa) DO UPDATE SET
+        assessment_id      = COALESCE(EXCLUDED.assessment_id, leads.assessment_id),
+        nama               = COALESCE(leads.nama, EXCLUDED.nama),
+        user_id            = COALESCE(leads.user_id, EXCLUDED.user_id),
+        anonymous_trial_id = COALESCE(leads.anonymous_trial_id, EXCLUDED.anonymous_trial_id),
+        jumlah_submit      = leads.jumlah_submit + 1,
+        updated_at         = now()
+    RETURNING (xmax = 0) INTO v_baru;
+
+    RETURN jsonb_build_object('baru', v_baru);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION simpan_lead(TEXT, TEXT, TEXT, UUID, UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT)
+    FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION simpan_lead(TEXT, TEXT, TEXT, UUID, UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT)
+    TO service_role;
 
 -- ============================================================================
 -- ROW LEVEL SECURITY (WAJIB — Supabase mengekspos setiap tabel lewat API publik

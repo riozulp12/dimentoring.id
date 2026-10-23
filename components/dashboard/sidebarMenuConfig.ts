@@ -93,6 +93,7 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
         { icon: "referral", label: "Riwayat Transaksi", href: "/riwayat-transaksi" },
         { icon: "promo", label: "Kode Promo", href: "/kode-promo" },
         { icon: "analytics", label: "Analytics", href: "/analytics" },
+        { icon: "referral", label: "Leads", href: "/leads" },
       ],
     },
   ],
