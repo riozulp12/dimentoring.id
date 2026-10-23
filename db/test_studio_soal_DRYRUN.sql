@@ -1,19 +1,38 @@
--- Skenario uji DRY-RUN untuk db/add_studio_soal.sql — HANYA untuk dijalankan
--- di dalam transaksi yang di-ROLLBACK. JANGAN jalankan tanpa BEGIN/ROLLBACK:
--- skrip ini membuat akun & soal tiruan.
+-- Skenario uji DRY-RUN untuk db/add_studio_soal.sql. Aman dijalankan di
+-- database yang SUDAH berisi data asli (termasuk produksi).
 --
 -- Cara pakai (SQL Editor Supabase, satu kali eksekusi):
 --     BEGIN;
---     <isi db/add_studio_soal.sql>
+--     <isi db/add_studio_soal.sql>   -- lewati kalau migrasi sudah dijalankan
 --     <isi file ini>
 --     ROLLBACK;
 --
 -- Hasil yang diharapkan: NOTICE "STUDIO SOAL DRY-RUN: SEMUA SKENARIO LULUS".
 -- Satu skenario gagal = RAISE EXCEPTION "DRY-RUN GAGAL: ..." dan seluruh
--- transaksi batal (tidak ada yang tersimpan).
+-- transaksi batal.
 --
--- Butuh subtes 'Penalaran Umum', 'Pengetahuan Kuantitatif' (SNBT) dan
--- 'Matematika' (TKA) di tabel subtes (db/seed_subtes.sql).
+-- TIDAK ADA TULISAN PERMANEN KE DATA ASLI — dua lapis pengaman:
+--   1. Seluruh skenario berjalan di dalam blok BEGIN ... EXCEPTION (sub-
+--      transaksi) yang SELALU diakhiri RAISE dengan kode 'SSDR0'. Semua
+--      perubahan di blok itu dibatalkan Postgres, bahkan kalau BEGIN/ROLLBACK
+--      di luar lupa ditulis. Hanya fungsi pg_temp.* yang tersisa, dan itu
+--      hilang sendiri saat sesi ditutup.
+--   2. BEGIN/ROLLBACK di luar tetap dianjurkan sebagai lapis kedua.
+--
+-- Tahan terhadap data asli:
+--   * Mentor asli yang mengampu subtes uji (PU, PK, Matematika) DINETRALKAN
+--     sementara: baris mentor_subtes_diampu mereka untuk subtes itu dihapus
+--     di dalam sub-transaksi (ikut dibatalkan). Tabel ini tabel ujung (tidak
+--     dirujuk tabel lain), jadi tidak ada efek berantai. Dengan begitu semua
+--     hitungan peninjau eligible pasti (m1/m2/m3 tiruan saja), termasuk batas
+--     publikasi Admin "0 peninjau eligible".
+--   * Subtes dicari berdasarkan nama + kategori dan wajib tepat satu baris.
+--   * Akun tiruan: email unik acak di domain .invalid, no_wa NULL (tidak bisa
+--     bentrok dengan nomor asli). Semua pengecekan memakai id baris tiruan,
+--     bukan jumlah baris tabel.
+--
+-- Butuh subtes 'Penalaran Umum', 'Pengetahuan Kuantitatif' (tps) dan
+-- 'Matematika' (tka_wajib) di tabel subtes (db/seed_subtes.sql).
 
 CREATE FUNCTION pg_temp.cek(p_kondisi BOOLEAN, p_pesan TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
@@ -55,9 +74,12 @@ CREATE FUNCTION pg_temp.buat_user(p_kode TEXT) RETURNS UUID LANGUAGE plpgsql AS 
 DECLARE
     v_id UUID;
 BEGIN
+    -- Email diberi akhiran acak supaya tidak bentrok dengan baris mana pun;
+    -- no_wa NULL (kolom nullable) supaya tidak mungkin bentrok dengan nomor asli.
     INSERT INTO users (nama, email, no_wa, password_hash)
-    VALUES ('DRYRUN ' || p_kode, 'dryrun-studio-' || p_kode || '@example.invalid',
-            'dryrun-' || p_kode, 'x')
+    VALUES ('DRYRUN ' || p_kode,
+            'dryrun-studio-' || p_kode || '-' || replace(gen_random_uuid()::text, '-', '') || '@example.invalid',
+            NULL, 'x')
     RETURNING id INTO v_id;
     RETURN v_id;
 END $$;
@@ -95,11 +117,25 @@ DECLARE
     s1 UUID; s2 UUID; s3 UUID; s_kurang UUID; s_m2 UUID; s_pk UUID; s_baru UUID; s_hapus UUID;
     st UUID; g1 UUID; g2 UUID; g3 UUID;
     pk1 UUID; pk2 UUID; pk3 UUID; s_p2 UUID; s_p3 UUID;
+    n_netral INT;
 BEGIN
-    SELECT id INTO pu FROM subtes WHERE nama = 'Penalaran Umum';
-    SELECT id INTO pk FROM subtes WHERE nama = 'Pengetahuan Kuantitatif';
-    SELECT id INTO mtk FROM subtes WHERE nama = 'Matematika';
-    PERFORM pg_temp.cek(pu IS NOT NULL AND pk IS NOT NULL AND mtk IS NOT NULL, 'subtes referensi ada');
+  -- Sub-transaksi: SELALU dibatalkan oleh RAISE 'SSDR0' di akhir (lihat header).
+  BEGIN
+    PERFORM pg_temp.cek((SELECT count(*) FROM subtes WHERE nama = 'Penalaran Umum' AND kategori = 'tps') = 1
+                        AND (SELECT count(*) FROM subtes WHERE nama = 'Pengetahuan Kuantitatif' AND kategori = 'tps') = 1
+                        AND (SELECT count(*) FROM subtes WHERE nama = 'Matematika' AND kategori = 'tka_wajib') = 1,
+        'subtes referensi ada tepat satu (nama + kategori)');
+    SELECT id INTO pu FROM subtes WHERE nama = 'Penalaran Umum' AND kategori = 'tps';
+    SELECT id INTO pk FROM subtes WHERE nama = 'Pengetahuan Kuantitatif' AND kategori = 'tps';
+    SELECT id INTO mtk FROM subtes WHERE nama = 'Matematika' AND kategori = 'tka_wajib';
+
+    -- Netralkan mentor asli untuk subtes uji (dibatalkan bersama sub-transaksi).
+    DELETE FROM mentor_subtes_diampu WHERE subtes_id IN (pu, pk, mtk);
+    GET DIAGNOSTICS n_netral = ROW_COUNT;
+    RAISE NOTICE 'DRY-RUN: % baris mentor_subtes_diampu asli dinetralkan sementara (dibatalkan di akhir)', n_netral;
+    PERFORM pg_temp.cek(studio_soal_hitung_peninjau_eligible(pu, NULL) = 0
+                        AND studio_soal_hitung_peninjau_eligible(pk, NULL) = 0,
+        'tidak ada mentor asli eligible untuk PU/PK setelah dinetralkan');
 
     m1 := pg_temp.buat_user('m1');  PERFORM pg_temp.jadikan_mentor(m1, ARRAY[pu]);
     m2 := pg_temp.buat_user('m2');  PERFORM pg_temp.jadikan_mentor(m2, ARRAY[pu, mtk]);
@@ -286,5 +322,9 @@ BEGIN
     PERFORM pg_temp.status_rpc(r, 'status_tidak_valid', 'tarik soal yang tidak sedang diajukan');
     PERFORM pg_temp.harus_gagal(format('DELETE FROM soal_bank WHERE id = %L', s3), 'hapus soal yang pernah diajukan');
 
+    -- Semua skenario lulus: batalkan seluruh perubahan sub-transaksi.
+    RAISE EXCEPTION USING ERRCODE = 'SSDR0', MESSAGE = 'dry-run selesai, batalkan semua perubahan';
+  EXCEPTION WHEN SQLSTATE 'SSDR0' THEN
     RAISE NOTICE 'STUDIO SOAL DRY-RUN: SEMUA SKENARIO LULUS';
+  END;
 END $$;
