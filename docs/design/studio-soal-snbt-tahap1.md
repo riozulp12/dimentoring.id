@@ -407,7 +407,7 @@ Skor parsial nanti cukup menambah cabang `aturan_skor === 'parsial_per_bagian'` 
 5. Bandingkan persis dengan setiap `diterima` yang dinormalkan sama. **Tidak** menghapus tanda baca lain, aksen, atau titik akhir (mentor menambah alternatif kalau perlu) — supaya tidak ada "benar" yang tidak disengaja.
 
 **Rumpang `angka`:**
-1. Normalisasi seperti teks lalu hapus semua spasi; `−` (minus unicode) → `-`; `+` di depan diizinkan.
+1. NFKC; `−` (minus unicode) → `-`; `+` di depan diizinkan. Spasi di sekitar tanda/pemisah/garis miring diabaikan (`0 , 5`, `1 / 2`), tapi **spasi di antara dua digit membuat input tidak valid** (`1 1/2`, `1 000`) — supaya bilangan campuran/pemisah ribuan tidak diam-diam dibaca `11/2` atau `1000`.
 2. Bentuk yang diterima: bilangan bulat (`12`, `-3`), desimal dengan **satu** pemisah `,` atau `.` (`0,5` = `0.5`), pecahan `a/b` (`1/2`, `-3/4`, b ≠ 0).
 3. **Tidak** didukung (dianggap salah): pemisah ribuan / lebih dari satu pemisah (`1.000,5`, `1,000.5`), persen (`50%`), bilangan campuran (`1 1/2`), notasi ilmiah, akar/π. Konsekuensi: `1.000` dibaca **satu** (desimal), bukan seribu → builder menampilkan petunjuk "tulis tanpa pemisah ribuan" di bawah rumpang angka, dan mentor menambahkan alternatif bila perlu.
 4. Bandingkan sebagai **pecahan eksak** (BigInt pembilang/penyebut, disederhanakan): `1/2` = `0,5` = `2/4` = `0.50`. Tanpa floating point.
