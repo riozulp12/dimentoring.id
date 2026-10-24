@@ -31,7 +31,7 @@
 --     bentrok dengan nomor asli). Semua pengecekan memakai id baris tiruan,
 --     bukan jumlah baris tabel.
 --
--- Setiap pesan gagal diawali penanda versi berkas, mis. "DRY-RUN GAGAL [v3]".
+-- Setiap pesan gagal diawali penanda versi berkas, mis. "DRY-RUN GAGAL [v4]".
 -- Kalau penanda itu tidak muncul, yang dijalankan adalah salinan berkas lama.
 -- Pesan pg_temp.cek selalu memuat nilai sebenarnya ("diharapkan X, dapat Y").
 --
@@ -43,7 +43,7 @@
 CREATE FUNCTION pg_temp.cek(p_dapat TEXT, p_harap TEXT, p_pesan TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
     IF p_dapat IS DISTINCT FROM p_harap THEN
-        RAISE EXCEPTION 'DRY-RUN GAGAL [v3]: % — diharapkan %, dapat %',
+        RAISE EXCEPTION 'DRY-RUN GAGAL [v4]: % — diharapkan %, dapat %',
             p_pesan, coalesce(p_harap, '<NULL>'), coalesce(p_dapat, '<NULL>');
     END IF;
 END $$;
@@ -73,14 +73,14 @@ BEGIN
         v_gagal := true;
     END;
     IF NOT v_gagal THEN
-        RAISE EXCEPTION 'DRY-RUN GAGAL [v3]: seharusnya ditolak — %', p_pesan;
+        RAISE EXCEPTION 'DRY-RUN GAGAL [v4]: seharusnya ditolak — %', p_pesan;
     END IF;
 END $$;
 
 CREATE FUNCTION pg_temp.status_rpc(p_hasil JSONB, p_harapan TEXT, p_pesan TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
     IF p_hasil->>'status' IS DISTINCT FROM p_harapan THEN
-        RAISE EXCEPTION 'DRY-RUN GAGAL [v3]: % — diharapkan status %, dapat %', p_pesan, p_harapan, p_hasil;
+        RAISE EXCEPTION 'DRY-RUN GAGAL [v4]: % — diharapkan status %, dapat %', p_pesan, p_harapan, p_hasil;
     END IF;
 END $$;
 
@@ -172,7 +172,7 @@ BEGIN
     PERFORM pg_temp.cek(format('m1=%s m2=%s m3=%s',
             studio_soal_mentor_eligible(m1, pu), studio_soal_mentor_eligible(m2, pu),
             studio_soal_mentor_eligible(m3, pu)),
-        'm1=true m2=true m3=false', 'kelayakan fixture untuk PU');
+        'm1=t m2=t m3=f', 'kelayakan fixture untuk PU');
     PERFORM pg_temp.cek(studio_soal_hitung_peninjau_eligible(pu, ARRAY[m1])::text, '1',
         format('peninjau eligible PU selain m1 sebelum ajukan (daftar: %s)', pg_temp.daftar_eligible(pu, ARRAY[m1])));
 
