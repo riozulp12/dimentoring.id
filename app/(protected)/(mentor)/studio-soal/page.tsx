@@ -3,10 +3,11 @@ import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
 import { getStudioSoalMentor } from "@/lib/mentor/getStudioSoalData";
+import { getStimulusMentor } from "@/lib/mentor/studioSoal";
 import PageTitle from "@/components/dashboard/PageTitle";
 import StudioSoalMentor from "@/components/mentor/StudioSoalMentor";
 
-/** "Studio Soal" (Mentor) — PR 3a: subtes yang ditugaskan Admin + daftar soal. Form soal menyusul (PR 3b). */
+/** "Studio Soal" (Mentor) — subtes yang ditugaskan Admin, daftar soal & stimulus (PR 3a), tulis soal/stimulus (PR 3b). */
 export default async function StudioSoalPage() {
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
@@ -20,18 +21,18 @@ export default async function StudioSoalPage() {
     redirect("/dashboard/mentor");
   }
 
-  const data = await getStudioSoalMentor(session.userId);
+  const [data, stimulus] = await Promise.all([getStudioSoalMentor(session.userId), getStimulusMentor(session.userId)]);
 
   return (
     <>
       <PageTitle value="Studio Soal" />
       <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-10">
-        {data === "gagal" ? (
+        {data === "gagal" || stimulus === "gagal" ? (
           <div className="rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-12 text-center">
             <p className="text-base text-[#7E7C7C]">Gagal memuat Studio Soal. Coba muat ulang halaman.</p>
           </div>
         ) : (
-          <StudioSoalMentor data={data} />
+          <StudioSoalMentor data={data} stimulus={stimulus} />
         )}
       </div>
     </>

@@ -34,6 +34,19 @@
 - Mentor nonaktif yang masih punya baris penugasan otomatis tidak eligible; Admin tetap bisa mencabutnya.
 - Menjalankan ulang `db/add_studio_soal.sql` setelah migrasi ini aman: bagian fungsi izin di sana dilewati bila tabel penugasan sudah ada.
 
+### PR 3b — form soal & stimulus mentor (25 Oktober 2026)
+
+**Disetujui pemilik produk sebelum kode ditulis:** rumus ditampilkan dengan KaTeX (`katex` dikunci versi 0.16.22) + format **tebal**/*miring*; topik soal **ditunda** (kolom `topik_id` dibiarkan kosong); tombol **Tarik pengajuan** ikut; field opsional yang tampil: estimasi waktu, sumber rujukan soal, level kognitif.
+
+**Keputusan teknis (disetujui 25 Oktober 2026):**
+- `db/add_studio_soal.sql` belum punya fungsi membuat/mengedit/menghapus draf → migrasi baru `db/add_studio_soal_draf.sql`: RPC `studio_soal_simpan_soal`, `studio_soal_simpan_stimulus`, `studio_soal_hapus_draf` (kode aplikasi tidak menulis langsung ke tabel). Uji: `db/test_studio_soal_draf_DRYRUN.sql`.
+- Simpan dobel: id soal/stimulus ditentukan server saat halaman "Tulis soal" dibuka; API `PUT /api/studio-soal/{soal|stimulus}/[id]` = buat-atau-ubah (idempoten, `ON CONFLICT (id) DO NOTHING`). Menggantikan pasangan `POST` + `PATCH` di Bagian 3.1.
+- Trigger baru `studio_soal_jaga_penulis_eligible`: mengubah ISI soal/stimulus mewajibkan penulis MASIH ditugaskan (sebelumnya hanya dicek saat INSERT). Perubahan status (tinjau/tarik/arsip) tidak terpengaruh.
+- Subtes, tipe, dan stimulus soal tidak bisa diganti setelah draf pertama disimpan (`identitas_berubah`); urutan soal di stimulus dihitung server (terakhir + 1).
+- Stimulus hanya bisa dihapus bila kosong; draf yang pernah diajukan tidak bisa dihapus (sesuai trigger lama). Semua aksi (simpan, hapus, ajukan, tarik, versi baru) butuh penugasan aktif.
+- Rumus digambar `katex.render` ke elemen milik KaTeX — **tidak ada `dangerouslySetInnerHTML`**. Perintah tak tepercaya (`\href`, `\url`, `\htmlClass`, `\includegraphics`) tidak membuat error di KaTeX (`trust:false` hanya menampilkannya sebagai teks merah), jadi `cekRumus` mencatatnya lewat fungsi `trust` dan menolaknya saat Ajukan.
+- Error rumus = "kelengkapan" (draf boleh disimpan, Ajukan ditolak).
+
 ---
 
 ## 0. Hasil verifikasi awal

@@ -13,7 +13,7 @@ export async function getStudioSoalMentor(mentorId: string): Promise<StudioSoalM
     supabaseServer.from("studio_soal_penugasan").select("subtes_id, subtes:subtes_id(id, nama)").eq("mentor_id", mentorId),
     supabaseServer
       .from("soal_bank")
-      .select("id, subtes_id, tipe, status, versi, redaksi, updated_at")
+      .select("id, subtes_id, stimulus_id, tipe, status, versi, redaksi, updated_at")
       .eq("penulis_id", mentorId)
       .order("updated_at", { ascending: false }),
   ]);
@@ -38,6 +38,7 @@ export async function getStudioSoalMentor(mentorId: string): Promise<StudioSoalM
     versi: row.versi as number,
     redaksi: (row.redaksi as string) ?? "",
     updatedAt: row.updated_at as string,
+    stimulusId: (row.stimulus_id as string | null | undefined) ?? null,
   }));
 
   // Nama subtes untuk soal di subtes yang penugasannya sudah dicabut.
