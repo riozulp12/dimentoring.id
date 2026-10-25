@@ -12,13 +12,27 @@
 | # | Keputusan |
 |---|---|
 | K1 | Pernyataan majemuk kompleks **2–6 baris**. Rumpang isian **1–5**. |
-| K2 | Hak membuat soal: mentor `active` + tercatat di `mentor_subtes_diampu` untuk subtes itu (**exact `subtes_id`**, bukan `mapel_dasar`). Tidak disyaratkan sedang mengampu kelas. |
+| K2 | ~~Hak membuat soal: mentor `active` + tercatat di `mentor_subtes_diampu` untuk subtes itu.~~ **DIREVISI 25 Oktober 2026 (PR 3a):** hak menulis **dan** meninjau soal = mentor `active` + **ditugaskan Admin** ke subtes itu di `studio_soal_penugasan` (**exact `subtes_id`**, bukan `mapel_dasar`). Tidak disyaratkan sedang mengampu kelas. Lihat "Revisi K2" di bawah tabel. |
 | K3 | Versi baru soal/stimulus terpublikasi: **hanya penulis**. Bila penulis nonaktif, Admin menugaskan ulang penulis — dicatat sebagai kebutuhan, **belum ada UI/fungsi** di Tahap 1. |
 | K4 | Atribusi sumber **wajib untuk stimulus** (`sumber_rujukan` NOT NULL: "Buatan sendiri" atau nama sumber), **opsional untuk soal** (`soal_bank.sumber_rujukan` nullable). |
 | K5 | Isian angka: `.5` diterima sebagai 0,5; `5.` ditolak. Pemisah ribuan tidak didukung. |
 | K6 | **Gambar ditunda ke PR 7.** PR 1–2 hanya mengenal blok stimulus `teks` dan `tabel`; validator menolak blok `gambar` sampai PR 7. |
 | K7 | Satu penulis per stimulus: hanya penulis stimulus yang boleh menambah soal ke stimulus itu (dijaga di RPC). |
 | K8 | Revisi PRD 7.7 dan **BR-37** disetujui (BR-37 dicek masih kosong — BR terakhir BR-36). |
+
+### Revisi K2 — penugasan penulis soal dipisah dari profil mengajar (25 Oktober 2026, PR 3a)
+
+**Alasan:** `mentor_subtes_diampu` adalah **profil mengajar** yang diisi mentor sendiri (registrasi; Edit Profil menghapus lalu menulis ulang seluruh isinya) dan dipakai fitur lain (landing page, pencocokan mentor offline, validasi Kelola Kelas & Pendaftaran Manual, notifikasi/antrean review konten AI, dashboard). Memakainya sebagai hak menulis soal berarti mentor bisa memberi hak itu ke dirinya sendiri, dan setiap perubahan oleh Admin ikut mengubah fitur-fitur tadi tanpa log.
+
+**Keputusan:**
+- Tabel baru `studio_soal_penugasan` (mentor × subtes, PK ganda → tidak ada duplikat) + `studio_soal_penugasan_log` (admin, mentor, subtes, aksi `tugaskan`/`cabut`, waktu). Migrasi `db/add_studio_soal_penugasan.sql`, uji `db/test_studio_soal_penugasan_DRYRUN.sql`.
+- Hanya Admin aktif yang mengubah, lewat RPC `studio_soal_atur_penugasan` (ubah + log dalam satu transaksi; tulis langsung ditolak trigger; log tidak bisa diubah/dihapus). Idempotent: penugasan yang sama dua kali tidak membuat duplikat dan tidak menambah log.
+- `studio_soal_mentor_eligible` dan `studio_soal_hitung_peninjau_eligible` didefinisikan ulang (signature sama) membaca tabel baru. Aturan lain **tidak berubah**: penulis tidak boleh meninjau soalnya sendiri; Admin hanya boleh mempublikasikan bila 0 mentor eligible selain penulis.
+- Admin memilih sendiri; **tidak ada seleksi otomatis** dan **penugasan awal kosong** (tidak disalin dari profil). Halaman Admin menampilkan isi `mentor_subtes_diampu` sebagai petunjuk baca-saja ("mengajar subtes ini"); keduanya tidak diikat dan fitur ini tidak mengubah `mentor_subtes_diampu`.
+- Peringatan per subtes bila mentor aktif yang ditugaskan < 2 (peer review butuh mentor lain; bila hanya 1, Admin yang mempublikasikan).
+- **Mencabut penugasan tidak menghapus/mengubah soal**; statusnya tetap. Akibatnya hanya: mentor itu tidak bisa lagi menulis, mengajukan, atau meninjau di subtes tersebut sampai ditugaskan lagi (soal `diajukan` miliknya tetap bisa ditinjau mentor lain).
+- Mentor nonaktif yang masih punya baris penugasan otomatis tidak eligible; Admin tetap bisa mencabutnya.
+- Menjalankan ulang `db/add_studio_soal.sql` setelah migrasi ini aman: bagian fungsi izin di sana dilewati bila tabel penugasan sudah ada.
 
 ---
 
@@ -283,7 +297,7 @@ Sama dengan tabel lain: `ALTER TABLE … ENABLE ROW LEVEL SECURITY` untuk keenam
 
 ## 2. Aturan hak akses
 
-Definisi: **mentor eligible untuk subtes S** = `user_roles(role_type='mentor', status='active')` **dan** baris `mentor_subtes_diampu` dengan `subtes_id = S` (exact match). Peran diambil dari `session.role` di server (bukan input client); user multi-role harus berpindah peran lewat role switcher.
+Definisi: **mentor eligible untuk subtes S** = `user_roles(role_type='mentor', status='active')` **dan** baris `studio_soal_penugasan` dengan `subtes_id = S` (exact match) — *revisi K2; sebelumnya `mentor_subtes_diampu`*. Peran diambil dari `session.role` di server (bukan input client); user multi-role harus berpindah peran lewat role switcher.
 
 | Aksi | Siapa | Syarat |
 |---|---|---|

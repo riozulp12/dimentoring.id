@@ -642,6 +642,7 @@ Mentor **juga bisa upload materi manual sendiri** (bukan cuma AI) — **materi**
 - **Wajib:** tingkat kesulitan (mudah/sedang/hots), pembahasan. `level_kognitif` (1/2/3, TKA) opsional dan belum tampil di UI.
 - **Stimulus** (bacaan/tabel; gambar menyusul) dipakai banyak soal; atribusi sumber **wajib** untuk stimulus ("Buatan sendiri" atau nama sumber, BR-18), opsional untuk soal. Satu penulis per stimulus; stimulus + soalnya ditinjau sebagai satu kesatuan.
 - **Bank & paket:** soal disimpan di bank per subtes; **paket** (judul, deskripsi, durasi opsional) menyusun soal terbit secara berurutan dan bisa memakai ulang soal siapa pun di subtes itu. Paket tidak ditinjau ulang — hanya bisa terbit bila semua soalnya terbit.
+- **Penugasan (PR 3a):** Admin menugaskan mentor ke subtes di halaman "Penugasan Studio Soal" (satu mentor boleh banyak subtes, satu subtes banyak mentor; peringatan bila < 2 mentor). Mentor melihat subtes yang ditugaskan & daftar soalnya di menu "Studio Soal" (form pembuat soal menyusul, PR 3b).
 - **Versi:** soal/stimulus/paket terbit tidak diedit di tempat; edit = versi baru (hanya penulis), versi lama tetap dipakai sampai versi baru lolos tinjau. Bila penulis nonaktif, Admin menugaskan ulang penulis (kebutuhan, belum ada UI).
 - **Penilaian (dipakai Tahap 2):** benar hanya bila semua bagian benar (majemuk: semua baris; isian: semua rumpang). Isian teks dicocokkan tanpa beda huruf besar-kecil & spasi; isian angka dicocokkan nilainya (koma/titik desimal, `.5`, pecahan eksak setara; pemisah ribuan tidak didukung).
 - Tabel lama `soal_ai`/`materi` dan alur review AI di bawah **tidak berubah**.
@@ -702,7 +703,7 @@ Diimplementasikan konsisten di: Empty state, Loading, Achievement/Badge, **AI Me
 ### AI Pembuat Soal
 - **BR-17**: Soal AI tidak dapat tayang ke siswa tanpa approval eksplisit Mentor/Admin.
 - **BR-18**: Soal AI dilarang mereplikasi teks sumber berhak cipta; hanya menyimpan referensi konsep.
-- **BR-37 (baru, Oktober 2026)**: Soal manual Studio Soal (7.7 revisi) **wajib tinjau sejawat** sebelum terbit. Peninjau = Mentor berstatus Active yang tercatat mengampu subtes itu (`mentor_subtes_diampu`, `subtes_id` persis — bukan `mapel_dasar`), dan **bukan penulis** soal/stimulus tersebut. **Admin hanya boleh mempublikasikan** bila tidak ada satu pun Mentor eligible selain penulis (dihitung saat aksi), dengan alasan min. 10 karakter, tercatat di `SoalTinjauanLog`. Admin boleh menolak kapan saja. **Alasan tolak wajib** (min. 10 karakter, dihitung per karakter). Perubahan status hanya lewat fungsi database `studio_soal_*` (bukan UPDATE langsung); isi yang sudah diajukan/terbit terkunci.
+- **BR-37 (baru, Oktober 2026)**: Soal manual Studio Soal (7.7 revisi) **wajib tinjau sejawat** sebelum terbit. Peninjau = Mentor berstatus Active yang **ditugaskan Admin** ke subtes itu (`studio_soal_penugasan`, `subtes_id` persis — bukan `mapel_dasar`), dan **bukan penulis** soal/stimulus tersebut. *Revisi 25 Oktober 2026 (K2):* hak menulis & meninjau soal dipisah dari profil mengajar (`mentor_subtes_diampu`, diisi mentor sendiri dan dipakai fitur lain); hanya Admin yang menugaskan/mencabut, tercatat di `StudioSoalPenugasanLog`, tanpa seleksi otomatis. Mencabut penugasan tidak menghapus atau mengubah status soal yang sudah ditulis. **Admin hanya boleh mempublikasikan** bila tidak ada satu pun Mentor eligible selain penulis (dihitung saat aksi), dengan alasan min. 10 karakter, tercatat di `SoalTinjauanLog`. Admin boleh menolak kapan saja. **Alasan tolak wajib** (min. 10 karakter, dihitung per karakter). Perubahan status hanya lewat fungsi database `studio_soal_*` (bukan UPDATE langsung); isi yang sudah diajukan/terbit terkunci.
 
 ### Payment
 - **BR-19**: Perubahan status pembayaran hanya dari payment gateway (webhook) atau override manual Admin dengan log audit.
@@ -981,6 +982,8 @@ Dipicu oleh fitur Upgrade Role (Bagian 7.0.6) — komponen ini **hanya muncul ji
   - **PaketSoal** — id, keluarga_id, versi, menggantikan_id, subtes_id, judul, deskripsi (≤ 500), durasi_menit (opsional), status (`draf`/`menunggu_soal`/`terpublikasi`/`digantikan`/`diarsipkan`), pembuat_id, dipublikasikan_pada.
   - **PaketSoalItem** — paket_id, soal_id (versi spesifik), urutan (unik per paket). Soal satu stimulus wajib berurutan.
   - **SoalTinjauanLog** — id, objek_jenis (`soal`/`stimulus`/`paket`), objek_id, aktor_id, peran (`mentor`/`admin`), aksi (`ajukan`/`tarik`/`setujui`/`tolak`/`publikasi_admin`/`arsipkan`/`publikasi_paket`/`versi_baru`), alasan, jumlah_peninjau_eligible, snapshot (JSONB), dibuat_pada.
+  - **StudioSoalPenugasan** (baru, 25 Oktober 2026 — revisi K2; `db/add_studio_soal_penugasan.sql`) — mentor_id, subtes_id (PK ganda), ditugaskan_oleh (Admin), ditugaskan_pada. Sumber hak menulis & meninjau soal (menggantikan `mentor_subtes_diampu` untuk Studio Soal); hanya diubah lewat RPC `studio_soal_atur_penugasan`. Penugasan awal kosong.
+  - **StudioSoalPenugasanLog** — id, admin_id, mentor_id, subtes_id, aksi (`tugaskan`/`cabut`), created_at. Satu baris per perubahan nyata (permintaan yang tidak mengubah apa pun tidak dicatat); tidak bisa diubah/dihapus.
 
 ---
 
