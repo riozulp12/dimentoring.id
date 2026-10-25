@@ -933,6 +933,22 @@ CREATE UNIQUE INDEX idx_enrollment_manual_log_request
 -- RLS wajib aktif di semua tabel (CLAUDE.md) — tanpa policy: cuma service_role.
 ALTER TABLE enrollment_manual_log ENABLE ROW LEVEL SECURITY;
 
+-- Fondasi data honor mentor — Tahap A (BARU, Oktober 2026, migration
+-- db/add_honor_fondasi.sql). Aditif saja. UI/API pengisinya BELUM dibangun
+-- (Tahap B): penanda dibayar diisi lewat tandai-dibayar.sql hasil
+-- scripts/laporan-honor-v2.ts (dijalankan SETELAH transfer), kolom keluar &
+-- diskon lewat SQL Editor.
+ALTER TABLE sesi_kelas ADD COLUMN dibayar_pada TIMESTAMPTZ;  -- NULL = honor sesi belum ditandai dibayar
+ALTER TABLE sesi_kelas ADD COLUMN dibayar_batch TEXT;        -- periode bayar 'YYYY-MM', mis. '2026-10'
+CREATE INDEX idx_sesi_kelas_dibayar_batch ON sesi_kelas(dibayar_batch) WHERE dibayar_pada IS NOT NULL;
+
+ALTER TABLE enrollments ADD COLUMN tanggal_keluar TIMESTAMPTZ;  -- NULL = tidak (tercatat) keluar
+ALTER TABLE enrollments ADD COLUMN alasan_keluar TEXT;
+ALTER TABLE enrollments ADD COLUMN diskon_dari_mentor BOOLEAN NOT NULL DEFAULT false;  -- true = dasar honor = harga dibayar
+ALTER TABLE enrollments ADD CONSTRAINT enrollments_alasan_keluar_valid
+    CHECK (alasan_keluar IS NULL
+           OR alasan_keluar IN ('refund', 'pindah_kelas', 'pindah_mode', 'dikeluarkan_admin', 'lainnya'));
+
 -- ---- 3. Daftarkan siswa manual (SATU transaksi) ----------------------------
 -- enrollment 'lunas' (sumber='manual') + enrollment_subtes + sesi_kelas
 -- 1..jumlah_sesi + log. Gagal di langkah mana pun = semuanya batal.

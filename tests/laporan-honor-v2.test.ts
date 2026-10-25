@@ -17,13 +17,17 @@ import {
   hitungDasarHonor,
   hitungHonorPertemuan,
   hitungNilaiSesi,
+  buatSqlTandaiDibayar,
   kategoriPeriode,
+  petaBermasalah,
   pisahkanLaporan,
+  statusAktifPada,
   statusConfirmed,
   susunPertemuan,
   tentukanPersen,
   type EnrollmentData,
   type KelasData,
+  type Pertemuan,
   type SesiData,
 } from "../scripts/laporan-honor-v2/hitung";
 import { diDalamRepo, tulisKeluaran } from "../scripts/laporan-honor-v2/keluaran";
@@ -45,7 +49,7 @@ function enr(id: string, extra: Partial<EnrollmentData> = {}): EnrollmentData {
     id, kelas_id: "kelas-1", status_pembayaran: "lunas", tanggal_daftar: "2026-09-01T00:00:00.000Z",
     sumber: "checkout", nominal_dibayar: null, mentor_offline_id: null,
     pembayaran: { status: "berhasil", jumlah: 1_000_000, jumlah_sebelum_diskon: 1_000_000 },
-    subtes_ids: [], diskon_dari_mentor: false, ...extra,
+    subtes_ids: [], diskon_dari_mentor: false, tanggal_keluar: null, alasan_keluar: null, ...extra,
   };
 }
 
@@ -144,7 +148,7 @@ describe("rumus honor", () => {
   });
 
   it("pendaftaran manual dengan nominal < harga (tanpa penanda) masuk PERLU DICEK", () => {
-    const c = cekPendaftaran(enr("m3", { sumber: "manual", nominal_dibayar: 500_000, pembayaran: null }), kelas());
+    const c = cekPendaftaran(enr("m3", { sumber: "manual", nominal_dibayar: 500_000, pembayaran: null }), kelas(), { penandaDiskonAda: false });
     assert.ok(c.some((x) => x.includes("pendaftaran manual")));
     assert.ok(c.some((x) => x.includes("dipakai kelas.harga")));
     assert.ok(c.some((x) => x.includes("selisih harga")));
@@ -338,5 +342,155 @@ describe("--env & read-only", () => {
   it("projectRef & parseEnv", () => {
     assert.equal(projectRef("https://abcdef123.supabase.co"), "abcdef123");
     assert.deepEqual(parseEnv('A=1\nB="dua"\n# c\n'), { A: "1", B: "dua" });
+  });
+});
+
+describe("fondasi data: tanggal_keluar", () => {
+  // Keluar 5 Okt 2026 09:00 WIB.
+  const KELUAR = "2026-10-05T02:00:00.000Z";
+  const es = () => [grupEnr("g1"), grupEnr("g2"), grupEnr("g3"), grupEnr("g4", { tanggal_keluar: KELUAR, alasan_keluar: "pindah_kelas" })];
+  const honorPada = (tanggal: string) => {
+    const daftar = es();
+    const hasil = susunPertemuan({ kelas: new Map([["grup-1", KELAS_GRUP]]), enrollments: daftar, sesi: daftar.slice(0, 3).map((e) => sesi(e.id, tanggal)), now: NOW });
+    return hasil[0];
+  };
+
+  it("sebelum tanggal_keluar masih aktif (4 siswa = Rp135.000)", () => {
+    const p = honorPada("2026-10-04");
+    assert.equal(p.jumlahAktif, 4);
+    assert.equal(p.honor, 135_000);
+  });
+
+  it("pada & sesudah tanggal_keluar tidak dihitung aktif (3 siswa = Rp112.500), tanpa PERLU DICEK", () => {
+    for (const t of ["2026-10-05", "2026-10-20"]) {
+      const p = honorPada(t);
+      assert.equal(p.jumlahAktif, 3, t);
+      assert.equal(p.honor, 112_500, t);
+      assert.deepEqual(p.cek, [], t);
+      assert.equal(p.honorAlternatif, null, t);
+    }
+  });
+
+  it("status batal TAPI ada tanggal_keluar: aktif sebelum tanggal itu", () => {
+    const e = grupEnr("g9", { status_pembayaran: "batal", tanggal_keluar: KELUAR, alasan_keluar: "refund" });
+    assert.equal(statusAktifPada(e, "2026-10-04").aktif, true);
+    assert.equal(statusAktifPada(e, "2026-10-05").aktif, false);
+    assert.equal(statusAktifPada(e, "2026-10-05").tanpaTanggalKeluar, false);
+  });
+
+  it("batal/refunded TANPA tanggal_keluar tetap PERLU DICEK MANUAL", () => {
+    const batal = grupEnr("g8", { status_pembayaran: "batal" });
+    const refund = grupEnr("g7", { pembayaran: { status: "refunded", jumlah: 750_000, jumlah_sebelum_diskon: 750_000 } });
+    for (const e of [batal, refund]) {
+      assert.equal(statusAktifPada(e, "2026-10-04").tanpaTanggalKeluar, true);
+      assert.ok(cekPendaftaran(e, KELAS_GRUP).some((c) => c.includes("tanpa tanggal_keluar")));
+    }
+    const hasil = susunPertemuan({ kelas: new Map([["grup-1", KELAS_GRUP]]), enrollments: [grupEnr("g1"), batal], sesi: [sesi("g1", "2026-10-04")], now: NOW });
+    assert.ok(hasil[0].cek.some((c) => c.includes("tanpa tanggal keluar")));
+  });
+
+  it("sesi confirmed sesudah siswa itu keluar → PERLU DICEK", () => {
+    const e = grupEnr("g1", { tanggal_keluar: KELUAR });
+    const hasil = susunPertemuan({ kelas: new Map([["grup-1", KELAS_GRUP]]), enrollments: [e, grupEnr("g2")], sesi: [sesi("g1", "2026-10-06"), sesi("g2", "2026-10-06")], now: NOW });
+    assert.equal(hasil[0].jumlahAktif, 1);
+    assert.ok(hasil[0].cek.some((c) => c.includes("sesudah keluar")));
+  });
+});
+
+describe("fondasi data: diskon_dari_mentor", () => {
+  const susun = (e: EnrollmentData) => susunPertemuan({ kelas: new Map([["kelas-1", kelas()]]), enrollments: [e], sesi: [sesi(e.id, "2026-10-02")], now: NOW })[0];
+  const bayar800 = { status: "berhasil", jumlah: 800_000, jumlah_sebelum_diskon: 1_000_000 };
+
+  it("checkout + diskon_dari_mentor = true → dasar = payments.jumlah (Rp52.000)", () => {
+    const p = susun(enr("c1", { pembayaran: bayar800, diskon_dari_mentor: true }));
+    assert.equal(p.peserta[0].dasar, 800_000);
+    assert.equal(p.honor, 52_000);
+  });
+
+  it("checkout + diskon Dimentoring (false) → dasar = kelas.harga (Rp65.000)", () => {
+    assert.equal(susun(enr("c2", { pembayaran: bayar800 })).honor, 65_000);
+  });
+
+  it("manual + diskon_dari_mentor = true → nominal_dibayar; kolom ada & false → tanpa catatan 'penanda tidak ada'", () => {
+    assert.equal(susun(enr("m1", { sumber: "manual", nominal_dibayar: 600_000, pembayaran: null, diskon_dari_mentor: true })).honor, 39_000);
+    const c = cekPendaftaran(enr("m2", { sumber: "manual", nominal_dibayar: 600_000, pembayaran: null }), kelas(), { penandaDiskonAda: true });
+    assert.ok(!c.some((x) => x.includes("tidak ada di schema")));
+  });
+
+  it("diskon_dari_mentor = true tapi harga dibayar tidak diketahui → PERLU DICEK", () => {
+    const c = cekPendaftaran(enr("c3", { pembayaran: null, diskon_dari_mentor: true }), kelas());
+    assert.ok(c.some((x) => x.includes("harga dibayar tidak diketahui")));
+  });
+});
+
+describe("tandai-dibayar.sql", () => {
+  const INFO = { batch: "2026-10", projectRef: "refuji", dibuatPada: "2026-10-25 10:00 WIB", namaMentor: (id: string | null) => (id ? `Mentor ${id.slice(0, 4)}` : "(tanpa mentor_id)") };
+  const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  const ids = { bersih: uuid(1), cek: uuid(2), manual: uuid(3), dibayar: uuid(4), tanpaMentor: uuid(5), lama: uuid(6) };
+
+  function siapkan() {
+    const k = new Map([["kelas-1", kelas()]]);
+    const enrollments = [enr("e1"), enr("e2"), enr("m1", { sumber: "manual", nominal_dibayar: 1_000_000, pembayaran: null })];
+    const ss: SesiData[] = [
+      sesi("e1", "2026-10-01", { id: ids.bersih, sudah_dibayar: false }),
+      sesi("e2", "2026-10-02", { id: ids.cek, sudah_dibayar: false, tanggal_dilaksanakan: null }), // → PERLU DICEK (tanpa tanggal)
+      sesi("m1", "2026-10-03", { id: ids.manual, sudah_dibayar: false }), // pendaftaran manual → PERLU DICEK
+      sesi("e1", "2026-10-04", { id: ids.dibayar, sudah_dibayar: true }), // sudah ditandai
+      sesi("e1", "2026-10-05", { id: ids.tanpaMentor, sudah_dibayar: false, mentor_id: null }),
+      sesi("e1", "2026-09-10", { id: ids.lama, sudah_dibayar: false }), // periode sebelumnya
+    ];
+    const lap = pisahkanLaporan(susunPertemuan({ kelas: k, enrollments, sesi: ss, now: NOW }));
+    const cekEnr = new Map<string, string[]>();
+    for (const e of enrollments) {
+      const c = cekPendaftaran(e, kelas());
+      if (c.length > 0) cekEnr.set(e.id, c);
+    }
+    return { lap, bermasalah: petaBermasalah(lap.periodeIni, cekEnr, new Map()) };
+  }
+
+  it("hanya sesi bersih periode ini yang masuk UPDATE; yang PERLU DICEK hanya komentar", () => {
+    const { lap, bermasalah } = siapkan();
+    const hasil = buatSqlTandaiDibayar(lap.periodeIni, bermasalah, INFO);
+    const update = hasil.sql.slice(hasil.sql.indexOf("UPDATE"), hasil.sql.indexOf(") AND dibayar_pada IS NULL;"));
+    assert.ok(update.includes(ids.bersih));
+    for (const id of [ids.cek, ids.manual, ids.dibayar, ids.tanpaMentor, ids.lama]) assert.ok(!update.includes(id), id);
+    assert.equal(hasil.jumlahSesi, 1);
+    assert.equal(hasil.totalHonor, 65_000);
+    // Sesi bermasalah tertulis sebagai komentar, tidak di luar komentar.
+    const bagianMasalah = hasil.sql.slice(hasil.sql.lastIndexOf("\n", hasil.sql.indexOf("SESI BERMASALAH")) + 1);
+    for (const id of [ids.cek, ids.manual, ids.tanpaMentor]) assert.ok(bagianMasalah.includes(id), id);
+    for (const baris of bagianMasalah.split("\n").filter((b) => b.trim())) assert.ok(baris.startsWith("--"), baris);
+  });
+
+  it("header 'jalankan SETELAH transfer', idempoten (dibayar_pada IS NULL), batch & project ref", () => {
+    const { lap, bermasalah } = siapkan();
+    const { sql } = buatSqlTandaiDibayar(lap.periodeIni, bermasalah, INFO);
+    assert.match(sql.split("\n").slice(0, 3).join("\n"), /jalankan SETELAH transfer/);
+    assert.match(sql, /UPDATE sesi_kelas SET dibayar_pada = now\(\), dibayar_batch = '2026-10'/);
+    assert.match(sql, /\) AND dibayar_pada IS NULL;/);
+    assert.match(sql, /project ref refuji/);
+    assert.equal((sql.match(/^UPDATE /gm) ?? []).length, 1);
+    assert.doesNotMatch(sql, /\b(DELETE|INSERT|DROP|TRUNCATE)\b/);
+  });
+
+  it("dibuat ulang sesudah ditandai → tidak ada UPDATE (idempoten di tingkat laporan)", () => {
+    const sudah: Pertemuan[] = siapkan().lap.periodeIni.map((p) => ({ ...p, sudahDibayar: true }));
+    const hasil = buatSqlTandaiDibayar(sudah, new Map(), INFO);
+    assert.equal(hasil.jumlahSesi, 0);
+    assert.doesNotMatch(hasil.sql, /^UPDATE /m);
+  });
+
+  it("menolak batch atau id sesi yang bukan format aman", () => {
+    const { lap, bermasalah } = siapkan();
+    assert.throws(() => buatSqlTandaiDibayar(lap.periodeIni, bermasalah, { ...INFO, batch: "2026-10'; DROP" }), /batch/);
+    const jahat = lap.periodeIni.map((p) => ({ ...p, sesiIds: ["x'); DELETE FROM users; --"] }));
+    assert.throws(() => buatSqlTandaiDibayar(jahat, new Map(), INFO), /UUID/);
+  });
+
+  it("nama kelas dengan baris baru tidak keluar dari komentar", () => {
+    const { lap, bermasalah } = siapkan();
+    const aneh = lap.periodeIni.map((p) => ({ ...p, kelas: { ...p.kelas, nama: "Kelas\nUPDATE users SET nama='x';" } }));
+    const { sql } = buatSqlTandaiDibayar(aneh, bermasalah, INFO);
+    assert.doesNotMatch(sql, /^UPDATE users/m);
   });
 });
