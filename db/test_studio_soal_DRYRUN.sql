@@ -22,7 +22,10 @@
 -- Tahan terhadap data asli:
 --   * Mentor asli yang mengampu subtes uji (PU, PK, Matematika) DINETRALKAN
 --     sementara: baris mentor_subtes_diampu mereka untuk subtes itu dihapus
---     di dalam sub-transaksi (ikut dibatalkan). Tabel ini tabel ujung (tidak
+--     di dalam sub-transaksi (ikut dibatalkan). Bila db/add_studio_soal_penugasan.sql
+--     sudah dijalankan (revisi K2), baris studio_soal_penugasan untuk subtes uji
+--     juga dinetralkan dan mentor tiruan ditugaskan di kedua tabel — berkas ini
+--     berlaku sebelum maupun sesudah migrasi penugasan. Tabel ini tabel ujung (tidak
 --     dirujuk tabel lain), jadi tidak ada efek berantai. Dengan begitu semua
 --     hitungan peninjau eligible pasti (m1/m2/m3 tiruan saja), termasuk batas
 --     publikasi Admin "0 peninjau eligible".
@@ -31,7 +34,7 @@
 --     bentrok dengan nomor asli). Semua pengecekan memakai id baris tiruan,
 --     bukan jumlah baris tabel.
 --
--- Setiap pesan gagal diawali penanda versi berkas, mis. "DRY-RUN GAGAL [v4]".
+-- Setiap pesan gagal diawali penanda versi berkas, mis. "DRY-RUN GAGAL [v5]".
 -- Kalau penanda itu tidak muncul, yang dijalankan adalah salinan berkas lama.
 -- Pesan pg_temp.cek selalu memuat nilai sebenarnya ("diharapkan X, dapat Y").
 --
@@ -43,7 +46,7 @@
 CREATE FUNCTION pg_temp.cek(p_dapat TEXT, p_harap TEXT, p_pesan TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
     IF p_dapat IS DISTINCT FROM p_harap THEN
-        RAISE EXCEPTION 'DRY-RUN GAGAL [v4]: % — diharapkan %, dapat %',
+        RAISE EXCEPTION 'DRY-RUN GAGAL [v5]: % — diharapkan %, dapat %',
             p_pesan, coalesce(p_harap, '<NULL>'), coalesce(p_dapat, '<NULL>');
     END IF;
 END $$;
@@ -56,9 +59,8 @@ CREATE FUNCTION pg_temp.daftar_eligible(p_subtes UUID, p_kecuali UUID[]) RETURNS
                                              ELSE 'asli:' || u.id::text END, ', '), '(kosong)')
     FROM user_roles ur
     JOIN users u ON u.id = ur.user_id
-    JOIN mentor_profiles mp ON mp.user_id = ur.user_id
-    JOIN mentor_subtes_diampu msd ON msd.mentor_profile_id = mp.id
-    WHERE ur.role_type = 'mentor' AND ur.status = 'active' AND msd.subtes_id = p_subtes
+    WHERE ur.role_type = 'mentor' AND ur.status = 'active'
+      AND studio_soal_mentor_eligible(ur.user_id, p_subtes)
       AND NOT (ur.user_id = ANY (coalesce(p_kecuali, ARRAY[]::UUID[])));
 $$;
 
@@ -73,14 +75,14 @@ BEGIN
         v_gagal := true;
     END;
     IF NOT v_gagal THEN
-        RAISE EXCEPTION 'DRY-RUN GAGAL [v4]: seharusnya ditolak — %', p_pesan;
+        RAISE EXCEPTION 'DRY-RUN GAGAL [v5]: seharusnya ditolak — %', p_pesan;
     END IF;
 END $$;
 
 CREATE FUNCTION pg_temp.status_rpc(p_hasil JSONB, p_harapan TEXT, p_pesan TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
     IF p_hasil->>'status' IS DISTINCT FROM p_harapan THEN
-        RAISE EXCEPTION 'DRY-RUN GAGAL [v4]: % — diharapkan status %, dapat %', p_pesan, p_harapan, p_hasil;
+        RAISE EXCEPTION 'DRY-RUN GAGAL [v5]: % — diharapkan status %, dapat %', p_pesan, p_harapan, p_hasil;
     END IF;
 END $$;
 
@@ -114,6 +116,16 @@ BEGIN
     VALUES (p_user, 'DRYRUN', 1, 'DRYRUN') RETURNING id INTO v_profil;
     INSERT INTO mentor_subtes_diampu (mentor_profile_id, subtes_id)
     SELECT v_profil, s FROM unnest(p_subtes) AS s;
+    -- Sesudah revisi K2: hak menulis/meninjau = studio_soal_penugasan. Ditulis
+    -- langsung (bukan lewat RPC Admin) karena fixture memakai subtes TKA juga;
+    -- RPC penugasan diuji terpisah di db/test_studio_soal_penugasan_DRYRUN.sql.
+    IF to_regclass('public.studio_soal_penugasan') IS NOT NULL THEN
+        PERFORM studio_soal_mulai_rpc();
+        EXECUTE 'INSERT INTO studio_soal_penugasan (mentor_id, subtes_id, ditugaskan_oleh)
+                 SELECT $1, s, $1 FROM unnest($2) AS s'
+            USING p_user, p_subtes;
+        PERFORM set_config('studio_soal.rpc', 'off', true);
+    END IF;
 END $$;
 
 CREATE FUNCTION pg_temp.buat_pg(p_penulis UUID, p_subtes UUID, p_stimulus UUID, p_urutan SMALLINT)
@@ -155,6 +167,13 @@ BEGIN
     DELETE FROM mentor_subtes_diampu WHERE subtes_id IN (pu, pk, mtk);
     GET DIAGNOSTICS n_netral = ROW_COUNT;
     RAISE NOTICE 'DRY-RUN: % baris mentor_subtes_diampu asli dinetralkan sementara (dibatalkan di akhir)', n_netral;
+    IF to_regclass('public.studio_soal_penugasan') IS NOT NULL THEN
+        PERFORM studio_soal_mulai_rpc();
+        EXECUTE 'DELETE FROM studio_soal_penugasan WHERE subtes_id = ANY ($1)' USING ARRAY[pu, pk, mtk];
+        GET DIAGNOSTICS n_netral = ROW_COUNT;
+        PERFORM set_config('studio_soal.rpc', 'off', true);
+        RAISE NOTICE 'DRY-RUN: % baris studio_soal_penugasan asli dinetralkan sementara (dibatalkan di akhir)', n_netral;
+    END IF;
     PERFORM pg_temp.cek(format('PU=%s PK=%s', studio_soal_hitung_peninjau_eligible(pu, NULL),
                                studio_soal_hitung_peninjau_eligible(pk, NULL)),
         'PU=0 PK=0', format('mentor asli eligible setelah dinetralkan (PU: %s; PK: %s)',
@@ -167,7 +186,8 @@ BEGIN
     INSERT INTO user_roles (user_id, role_type, status) VALUES (adm, 'admin', 'active');
 
     -- Fixture sesuai syarat studio_soal_mentor_eligible (role mentor active +
-    -- mentor_profiles + mentor_subtes_diampu subtes persis). Dicek di sini supaya
+    -- penugasan subtes persis: mentor_subtes_diampu sebelum revisi K2,
+    -- studio_soal_penugasan sesudahnya). Dicek di sini supaya
     -- salah fixture langsung terlihat, bukan baru di langkah ajukan.
     PERFORM pg_temp.cek(format('m1=%s m2=%s m3=%s',
             studio_soal_mentor_eligible(m1, pu), studio_soal_mentor_eligible(m2, pu),

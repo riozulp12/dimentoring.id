@@ -81,6 +81,8 @@
 --     Isi yang sudah diajukan/terbit terkunci; edit = versi baru (copy-on-write).
 --   * Peninjau != penulis (CHECK + RPC). Peninjau = mentor active dengan
 --     mentor_subtes_diampu untuk subtes_id PERSIS (bukan mapel_dasar).
+--     REVISI K2 (PR 3a): sumbernya kini studio_soal_penugasan (ditetapkan
+--     Admin) — lihat db/add_studio_soal_penugasan.sql.
 --   * Admin hanya boleh MEMPUBLIKASIKAN bila 0 mentor eligible selain penulis
 --     (dihitung di RPC saat aksi, tercatat di log). Admin boleh MENOLAK kapan saja.
 --   * Stimulus + soalnya ditinjau sebagai satu kelompok; satu penulis per
@@ -478,14 +480,26 @@ AS $$
     );
 $$;
 
--- Mentor eligible untuk subtes = role mentor ACTIVE + mentor_subtes_diampu
--- dengan subtes_id PERSIS (bukan mapel_dasar: PU & PPU ber-mapel_dasar
--- "Bahasa Indonesia", jadi pencocokan mapel_dasar akan salah).
+-- VERSI AWAL fungsi izin (K2 lama: mentor_subtes_diampu). Sejak
+-- db/add_studio_soal_penugasan.sql (revisi K2), kedua fungsi ini didefinisikan
+-- ulang di sana dan membaca studio_soal_penugasan. Supaya menjalankan ulang
+-- file ini TIDAK mengembalikan versi lama, blok ini dilewati bila tabel
+-- studio_soal_penugasan sudah ada.
+DO $penugasan$
+BEGIN
+    IF to_regclass('public.studio_soal_penugasan') IS NOT NULL THEN
+        RAISE NOTICE 'studio_soal: fungsi izin dari add_studio_soal_penugasan.sql dipertahankan';
+        RETURN;
+    END IF;
+    -- Mentor eligible untuk subtes = role mentor ACTIVE + mentor_subtes_diampu
+    -- dengan subtes_id PERSIS (bukan mapel_dasar: PU & PPU ber-mapel_dasar
+    -- "Bahasa Indonesia", jadi pencocokan mapel_dasar akan salah).
+    EXECUTE $def$
 CREATE OR REPLACE FUNCTION studio_soal_mentor_eligible(p_user_id UUID, p_subtes_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql STABLE
 SET search_path = public
-AS $$
+AS $fn$
     SELECT EXISTS (
         SELECT 1
         FROM user_roles ur
@@ -496,16 +510,18 @@ AS $$
           AND ur.status = 'active'
           AND msd.subtes_id = p_subtes_id
     );
-$$;
+$fn$;
+    $def$;
 
--- Jumlah mentor eligible untuk subtes, KECUALI user di p_kecuali (penulis).
--- Dipakai: peringatan "belum ada peninjau" saat ajukan, dan syarat publikasi
--- Admin (harus 0).
+    -- Jumlah mentor eligible untuk subtes, KECUALI user di p_kecuali (penulis).
+    -- Dipakai: peringatan "belum ada peninjau" saat ajukan, dan syarat publikasi
+    -- Admin (harus 0).
+    EXECUTE $def$
 CREATE OR REPLACE FUNCTION studio_soal_hitung_peninjau_eligible(p_subtes_id UUID, p_kecuali UUID[])
 RETURNS INT
 LANGUAGE sql STABLE
 SET search_path = public
-AS $$
+AS $fn$
     SELECT count(DISTINCT ur.user_id)::int
     FROM user_roles ur
     JOIN mentor_profiles mp ON mp.user_id = ur.user_id
@@ -514,7 +530,9 @@ AS $$
       AND ur.status = 'active'
       AND msd.subtes_id = p_subtes_id
       AND NOT (ur.user_id = ANY (coalesce(p_kecuali, ARRAY[]::UUID[])));
-$$;
+$fn$;
+    $def$;
+END $penugasan$;
 
 CREATE OR REPLACE FUNCTION studio_soal_admin_aktif(p_user_id UUID)
 RETURNS BOOLEAN
