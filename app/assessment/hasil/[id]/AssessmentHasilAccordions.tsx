@@ -381,6 +381,9 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
             <Button size="sm">{data.tryoutAksi.label}</Button>
           </Link>
         </div>
+        {/* Latihan soal untuk siswa belum ada (Studio Soal masih sisi mentor),
+            jadi cukup info teks tanpa tautan atau tombol. */}
+        <p className="text-sm text-[#7E7C7C] sm:text-base">Latihan soal sedang kami siapkan.</p>
       </AccordionSection>
 
       <AccordionSection title="Note" open={openSections.note} onToggle={() => toggle("note")}>
