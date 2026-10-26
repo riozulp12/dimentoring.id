@@ -70,7 +70,12 @@ export interface AssessmentHasilData {
 // dari draf awal supaya muat rapi di kolom sempit (card Keketatan|Peluang
 // berdampingan) tanpa mendominasi visual, tapi tetap menyampaikan dua inti:
 // bukan ramalan pasti + tetap butuh usaha sendiri.
-const PELUANG_MICRO_NOTE = "Bukan ramalan pasti, cuma gambaran kasar. Lolos atau nggak tetap tergantung usahamu.";
+const PELUANG_MICRO_NOTE =
+  "Perkiraan kasar dari nilaimu dan keketatan prodi. Bukan ramalan pasti, lolos atau nggak tetap tergantung usahamu.";
+
+// Keterangan di bawah angka Keketatan — menegaskan metrik ini publik (sama
+// untuk semua pendaftar), beda dari Peluang yang personal.
+const KEKETATAN_KETERANGAN = "Seberapa ramai peminat prodi ini, sama untuk semua pendaftar.";
 
 function formatNilai(value: number | null): string {
   if (value === null) return "-";
@@ -157,6 +162,9 @@ function PilihanCard({ pilihan, label, keterangan }: { pilihan: PilihanCardData;
             <p className={`text-center text-base font-semibold tracking-[-0.02em] sm:text-lg ${labelColorClass(pilihan.keketatanLabel)}`}>
               {formatNilai(pilihan.keketatanScore)}% - {pilihan.keketatanLabel}
             </p>
+            <p className="max-w-[8.5rem] text-center text-[10px] leading-snug text-[#7E7C7C] sm:max-w-[11rem] sm:text-[11px]">
+              {KEKETATAN_KETERANGAN}
+            </p>
           </div>
           <div className="flex flex-col items-center gap-2 sm:gap-4">
             <p className="text-sm text-[#7E7C7C] sm:text-base">Peluang</p>
@@ -199,6 +207,9 @@ function MainPilihanCard({ pilihan, label }: { pilihan: PilihanCardData; label: 
             className={`text-center text-base font-semibold tracking-[-0.02em] sm:text-lg ${labelColorClass(pilihan.keketatanLabel)}`}
           >
             {formatNilai(pilihan.keketatanScore)}% - {pilihan.keketatanLabel}
+          </p>
+          <p className="max-w-[8.5rem] text-center text-[10px] leading-snug text-[#7E7C7C] sm:max-w-[11rem] sm:text-[11px]">
+            {KEKETATAN_KETERANGAN}
           </p>
         </div>
         <div className="flex flex-col items-center gap-1 sm:gap-2">
