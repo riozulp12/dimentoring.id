@@ -4,6 +4,15 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
 import { harusTampilLeadCapture, isLeadCaptureEnabled } from "@/lib/shared/leadCaptureFlag";
+import { kalimatSaran, kalimatTanpaSaran, tingkatKeketatan, URUTAN_TINGKAT } from "@/lib/shared/saranJurusan";
+import { CATATAN_CADANGAN, rapikanCatatan } from "@/lib/shared/catatanAssessment";
+import {
+  aksiKartuKelas,
+  aksiTryout,
+  pilihKelasUmum,
+  type StatusKelasPengguna,
+} from "@/lib/shared/saranProdukAssessment";
+import { hitungHargaSetelahDiskon, normalizeDiskonPersen } from "@/lib/shared/kelasDiskon";
 import { getNavbarProps, type NavbarSessionProps } from "@/lib/dashboard/getNavbarProps";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
@@ -13,7 +22,6 @@ import AssessmentHasilAccordions, {
   type KelasRekomendasiData,
   type PilihanCardData,
   type RekomendasiJurusanGroup,
-  type TryoutRekomendasiData,
 } from "./AssessmentHasilAccordions";
 
 /**
@@ -28,6 +36,17 @@ import AssessmentHasilAccordions, {
  * sesungguhnya dikontrol manual di bawah (cek user_id/trial cookie), bukan
  * lewat middleware/layout auth guard.
  */
+
+const KELAS_SELECT = "id, nama, harga, diskon_persen, program_kategori, tingkat_kelas";
+
+interface KelasQueryRow {
+  id: string;
+  nama: string;
+  harga: number | string;
+  diskon_persen: number | null;
+  program_kategori: string;
+  tingkat_kelas: string;
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -160,8 +179,6 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
     );
   }
 
-  const isLoggedInOwner = Boolean(assessmentUserId);
-
   const [{ data: pilihanRows }, { data: rekomendasiRows }] = await Promise.all([
     supabaseServer
       .from("assessment_pilihan")
@@ -197,10 +214,19 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
       .filter((row): row is PilihanCardData => row !== null)
       .map((row) => [row.urutanPilihan, row]),
   );
-  const rekomendasiJurusan: RekomendasiJurusanGroup[] = hasilPrediksi.map((pilihan) => ({
-    pilihanAsalUrutan: pilihan.urutanPilihan,
-    rekomendasi: rekomendasiByAsal.get(pilihan.urutanPilihan) ?? null,
-  }));
+  const rekomendasiJurusan: RekomendasiJurusanGroup[] = hasilPrediksi.map((pilihan) => {
+    const rekomendasi = rekomendasiByAsal.get(pilihan.urutanPilihan) ?? null;
+    // Alasan kosong diturunkan dari tingkat keketatan pilihan itu sendiri
+    // (lib/shared/saranJurusan.ts): paling longgar = memang tidak dicarikan.
+    const sudahPalingLonggar = tingkatKeketatan(pilihan.keketatanScore) >= URUTAN_TINGKAT.length - 1;
+    return {
+      pilihanAsalUrutan: pilihan.urutanPilihan,
+      rekomendasi,
+      keterangan: rekomendasi
+        ? kalimatSaran(pilihan, rekomendasi)
+        : kalimatTanpaSaran(sudahPalingLonggar ? "sudah_paling_longgar" : "tidak_ada_kandidat"),
+    };
+  });
 
   // Disclaimer (BR-4/FR-3.6) wajib tampilkan tahun data — ambil tahun TERBARU
   // di antara seluruh ptn_jurusan yang dipakai di hasil ini.
@@ -211,9 +237,13 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
       return latest === null || tahun > latest ? tahun : latest;
     }, null);
 
-  // ---- Accordion 2: Rekomendasi Kelas — hanya untuk assessment yang sudah
-  // ditautkan ke akun (butuh mapel_tersulit dari profil siswa). ----
-  let kelasRekomendasi: KelasRekomendasiData[] = [];
+  // ---- Accordion 2: Saran Kelas (revisi v2) — tampil untuk SEMUA pengunjung.
+  // Personal (mapel tersulit) kalau hasil ini milik akun dan ada kecocokan;
+  // selain itu kelas umum persiapan PTN dari katalog. Kartu hanya membuka
+  // detail publik (alur beli & login ada di sana), lihat
+  // lib/shared/saranProdukAssessment.ts. ----
+  let kelasRows: KelasQueryRow[] = [];
+  let kelasPersonal = false;
   if (assessmentUserId) {
     const { data: mapelRows } = await supabaseServer
       .from("user_mapel_tersulit")
@@ -222,47 +252,71 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
 
     const subtesIds = (mapelRows ?? []).map((row) => row.subtes_id as string);
     if (subtesIds.length > 0) {
-      const { data: kelasRows } = await supabaseServer
+      const { data } = await supabaseServer
         .from("kelas")
-        .select("id, nama, harga")
+        .select(KELAS_SELECT)
         .eq("tampil_di_katalog", true)
         .in("subtes_id", subtesIds)
         .order("nama", { ascending: true })
         .limit(3);
+      kelasRows = (data ?? []) as KelasQueryRow[];
+      kelasPersonal = kelasRows.length > 0;
+    }
+  }
+  if (kelasRows.length === 0) {
+    const { data, error } = await supabaseServer
+      .from("kelas")
+      .select(KELAS_SELECT)
+      .eq("tampil_di_katalog", true)
+      .limit(50);
+    if (error) console.error("[assessment/hasil] query kelas umum failed:", error);
+    kelasRows = pilihKelasUmum(
+      ((data ?? []) as KelasQueryRow[]).map((row) => ({
+        ...row,
+        programKategori: row.program_kategori,
+        tingkatKelas: row.tingkat_kelas,
+      })),
+    );
+  }
 
-      kelasRekomendasi = (kelasRows ?? []).map((row) => ({
-        id: row.id as string,
-        nama: row.nama as string,
-        harga: Number(row.harga),
-      }));
+  // Status kepemilikan PENGUNJUNG (bukan pemilik hasil) supaya kelas yang
+  // sudah dibeli tidak ditawarkan ulang.
+  const statusKelasById = new Map<string, StatusKelasPengguna>();
+  if (session && kelasRows.length > 0) {
+    const { data: enrollmentRows, error: enrollmentError } = await supabaseServer
+      .from("enrollments")
+      .select("kelas_id, status_pembayaran")
+      .eq("user_id", session.userId)
+      .in(
+        "kelas_id",
+        kelasRows.map((row) => row.id),
+      );
+    if (enrollmentError) console.error("[assessment/hasil] query enrollments failed:", enrollmentError);
+    for (const row of enrollmentRows ?? []) {
+      statusKelasById.set(row.kelas_id as string, row.status_pembayaran as StatusKelasPengguna);
     }
   }
 
-  // ---- Accordion 3: Rekomendasi Paket Tryout ----
-  // PLACEHOLDER FASE 1: skema belum punya pemetaan eksplisit ptn_jurusan/jurusan_tujuan
-  // -> subtes tryout (tryout_kategori tidak punya nilai 'snbp'). Sebagai proxy yang
-  // relevan lintas jalur, ambil paket tryout kategori 'tka' (kesiapan materi umum) —
-  // perlu divalidasi/diganti tim akademik begitu pemetaan resmi tersedia.
-  const keketatanLabelUtama = hasilPrediksi[0]?.keketatanLabel ?? rekomendasiJurusan[0]?.rekomendasi?.keketatanLabel ?? null;
-  const { data: tryoutRows } = await supabaseServer
-    .from("tryouts")
-    .select("id, nama, tipe_akses")
-    .eq("kategori", "tka")
-    .order("created_at", { ascending: false })
-    .limit(6);
+  const kelasRekomendasi: KelasRekomendasiData[] = kelasRows.map((row) => {
+    const harga = Number(row.harga);
+    const aksi = aksiKartuKelas(row.id, statusKelasById.get(row.id) ?? null);
+    return {
+      id: row.id,
+      nama: row.nama,
+      harga: hitungHargaSetelahDiskon(harga, normalizeDiskonPersen(row.diskon_persen)),
+      href: aksi.href,
+      labelAksi: aksi.label,
+      status: aksi.status,
+    };
+  });
 
-  const tryoutRekomendasi: TryoutRekomendasiData[] = (tryoutRows ?? [])
-    .slice()
-    .sort((a, b) => (a.tipe_akses === b.tipe_akses ? 0 : a.tipe_akses === "free" ? -1 : 1))
-    .slice(0, 3)
-    .map((row) => ({
-      id: row.id as string,
-      nama: row.nama as string,
-      tipeAkses: row.tipe_akses as "free" | "premium",
-      alasan: keketatanLabelUtama
-        ? `Direkomendasikan karena Keketatan pilihan ini ${keketatanLabelUtama} — latihan tryout membantu memperbesar Peluang.`
-        : "Direkomendasikan untuk membantu memperbesar Peluang kamu.",
-    }));
+  // ---- Accordion 3: Try Out (revisi v2). Try Out berjalan di portal partner
+  // lewat /tryout (SSO); tabel `tryouts` di sini belum dipakai dan tidak ada
+  // halaman detail per paket, jadi yang ditampilkan satu kartu jujur menuju
+  // /tryout. Tamu diarahkan ke login lalu kembali ke /tryout. Dimentoring
+  // belum menyimpan data kepemilikan paket tryout, jadi status beli tidak
+  // bisa ditampilkan di sini. ----
+  const tryoutAksi = aksiTryout(Boolean(session));
 
   // ---- Lead Capture (PRD 7.4.6, BR-38): hanya kalau bendera
   // NEXT_PUBLIC_LEAD_CAPTURE_ENABLED aktif; tamu, atau user login yang belum
@@ -302,12 +356,15 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
     nilaiPrestasi: assessment.nilai_prestasi as number | null,
     nilaiAkhir: assessment.nilai_akhir as number | null,
     nilaiAkhirLabel: assessment.nilai_akhir_label as string | null,
-    noteAi: assessment.note_ai as string | null,
+    // Penyaring gaya juga dijalankan saat tampil, supaya catatan lama (dibuat
+    // sebelum penyaring ada) ikut rapi. Aman dijalankan berulang.
+    noteAi: rapikanCatatan((assessment.note_ai as string | null) ?? CATATAN_CADANGAN),
     hasilPrediksi,
     rekomendasiJurusan,
-    isLoggedInOwner,
     kelasRekomendasi,
-    tryoutRekomendasi,
+    kelasPersonal,
+    tryoutAksi,
+    isGuest: !session,
     showDaftarCta: !assessmentUserId,
     assessmentId: id,
     showLeadCapture,

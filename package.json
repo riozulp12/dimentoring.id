@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --conditions=react-server --test tests/kelas-saya.test.ts tests/payment-mayar.test.ts tests/presensi.test.ts tests/presensi-mentor.test.ts tests/enrollment-manual.test.ts tests/leads.test.ts tests/studio-soal-validasi.test.ts tests/studio-soal-nilai.test.ts tests/laporan-honor-v2.test.ts tests/studio-soal-penugasan.test.ts",
+    "test": "tsx --conditions=react-server --test tests/kelas-saya.test.ts tests/payment-mayar.test.ts tests/presensi.test.ts tests/presensi-mentor.test.ts tests/enrollment-manual.test.ts tests/leads.test.ts tests/studio-soal-validasi.test.ts tests/studio-soal-nilai.test.ts tests/laporan-honor-v2.test.ts tests/studio-soal-penugasan.test.ts tests/assessment-saran.test.ts tests/assessment-tamu.test.ts",
     "tarik-ptn": "tsx scripts/tarik-data-ptn.ts jawa",
     "tarik-ptn:luar-jawa": "tsx scripts/tarik-data-ptn.ts luar-jawa",
     "tarik-ptn:vokasi-ptkin": "tsx scripts/tarik-data-ptn.ts vokasi-ptkin"
