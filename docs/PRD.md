@@ -365,6 +365,8 @@ Ini memenuhi BR-3 dan sudah diimplementasikan di desain — pertahankan pola ini
 
 **1. "Rekomendasi Jurusan"** — alternatif jurusan/universitas dengan keketatan lebih realistis dibanding pilihan awal siswa, format sama (Jenjang + Jurusan, Keketatan, Peluang).
 
+*Aturan saran (revisi v2, Oktober 2026, logika di `lib/shared/saranJurusan.ts`):* saran dihitung per pilihan, relatif terhadap tingkat keketatan pilihan itu sendiri. (a) Pilihan 1 & 2 satu universitas: universitas yang sama, jurusan di luar kedua input, diutamakan serumpun (boleh rumpun lain bila serumpun tidak ada dalam batas). (b) Jurusan sama, universitas beda: jurusan yang sama di universitas lain. (c) Beda keduanya, atau cuma 1 pilihan: serumpun dengan pilihan itu; diutamakan jurusan yang sama di kampus lain, lalu kampus yang sama. (d) Dua pilihan identik diperlakukan seperti (a). Tidak pernah menyarankan prodi yang sudah diinput. Saran hanya 1 sampai 2 tingkat lebih longgar (skala FR-3.2b); bila tidak ada kandidat dalam batas itu, tampilkan kalimat jujur, jangan loncat ke yang jauh lebih longgar. Pilihan yang sudah "Sangat Longgar" tidak dicarikan saran. Jenjang yang sama diutamakan.
+
 **2. "Rekomendasi Kelas"** — rekomendasi program bimbingan yang relevan (cross-sell natural ke Bagian 7.5).
 
 **3. "Rekomendasi Paket Tryout"** — Menampilkan paket tryout yang relevan dengan hasil assessment siswa:
@@ -383,6 +385,7 @@ Catatan interpretatif/motivasional 2-4 kalimat, digenerate sekali oleh Gemini AP
 - **Tidak boleh memberi kepastian palsu** ("pasti keterima", "dijamin lolos", dsb.) — tetap dalam kerangka estimasi, sejalan disclaimer utama halaman.
 - Nada: hangat, mendorong, tapi jujur — sesuai brand voice Dimentoring (approachable tapi kredibel, bukan generik/kaku).
 - Referensikan angka spesifik siswa (Nilai Akhir, Keketatan/Peluang pilihannya) supaya terasa personal, bukan template kosong.
+- Gaya bahasa (revisi v2): bahasa sehari-hari, kalimat pendek, tanpa tanda pisah/strip sebagai jeda kalimat, tanpa bullet, tanpa pembuka klise. Server menjalankan penyaring pasca-proses (`lib/shared/catatanAssessment.ts`) pada hasil AI dan teks cadangan; strip pada kata ulang, nama, dan rentang angka tetap aman.
 
 **Privasi (WAJIB, ini yang membedakan dari AI Mentor biasa):** prompt yang dikirim ke Gemini **hanya berisi data numerik/kategorikal anonim** (nilai_akhir, nilai_akhir_label, keketatan_score+label, peluang_score+label, nama jurusan+jenjang) — **TIDAK PERNAH** menyertakan nama, email, no. WA, atau identitas siswa apa pun. Ini berlaku untuk assessment anonim maupun yang sudah login, tanpa kecuali.
 

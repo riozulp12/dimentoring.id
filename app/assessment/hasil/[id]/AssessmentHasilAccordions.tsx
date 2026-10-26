@@ -26,19 +26,20 @@ export interface PilihanCardData {
 export interface RekomendasiJurusanGroup {
   pilihanAsalUrutan: number;
   rekomendasi: PilihanCardData | null;
+  /** Kalimat pendek: alasan saran, atau penjelasan jujur kenapa kosong. */
+  keterangan: string;
 }
 
 export interface KelasRekomendasiData {
   id: string;
   nama: string;
+  /** Harga setelah diskon kelas (kalau ada). */
   harga: number;
-}
-
-export interface TryoutRekomendasiData {
-  id: string;
-  nama: string;
-  tipeAkses: "free" | "premium";
-  alasan: string;
+  /** Detail publik, atau halaman kelas siswa kalau sudah dimiliki. */
+  href: string;
+  labelAksi: string;
+  /** "Sudah kamu ikuti" / "Menunggu pembayaran", null = belum punya. */
+  status: string | null;
 }
 
 export interface AssessmentHasilData {
@@ -46,12 +47,16 @@ export interface AssessmentHasilData {
   nilaiPrestasi: number | null;
   nilaiAkhir: number | null;
   nilaiAkhirLabel: string | null;
-  noteAi: string | null;
+  /** Sudah disaring (rapikanCatatan) dan sudah diganti teks cadangan kalau kosong. */
+  noteAi: string;
   hasilPrediksi: PilihanCardData[];
   rekomendasiJurusan: RekomendasiJurusanGroup[];
-  isLoggedInOwner: boolean;
   kelasRekomendasi: KelasRekomendasiData[];
-  tryoutRekomendasi: TryoutRekomendasiData[];
+  /** true = dipilih dari mapel tersulit; false = kelas umum persiapan PTN. */
+  kelasPersonal: boolean;
+  tryoutAksi: { href: string; label: string };
+  /** Pengunjung halaman belum login. */
+  isGuest: boolean;
   showDaftarCta: boolean;
   /** Dipakai CTA Daftar (pending_assessment) & Lead Capture. */
   assessmentId: string;
@@ -60,18 +65,17 @@ export interface AssessmentHasilData {
   leadSudahTerkirim: boolean;
 }
 
-// Sama dengan FALLBACK_NOTE di lib/ai/generateNote.ts — dipakai kalau note_ai
-// masih NULL (mis. data lama sebelum BR-30 aktif, atau update sempat gagal).
-const NOTE_FALLBACK =
-  "Angka-angka di atas adalah gambaran, bukan keputusan akhir — banyak siswa yang keketatannya terlihat berat tetap berhasil lolos karena persiapan yang tepat, dan sebaliknya. Yang paling penting sekarang bukan cuma melihat hasilnya, tapi memakainya sebagai peta: kalau ada subtes yang masih terasa berat, itu titik yang paling worth dilatih dulu. Coba mulai dari Try Out gratis buat lihat sejauh mana pemahamanmu sekarang, atau ikut kelas bimbingan yang sesuai kebutuhanmu. Perjalanan ke PTN impian itu proses, bukan satu kali tes — dan kamu masih punya waktu buat memperbesar peluang itu.";
-
 // Catatan kecil pelengkap di bawah tiap angka Peluang — TERPISAH dari
 // disclaimer besar di atas halaman (BR-4, tidak diganti/dihapus). Diringkas
 // dari draf awal supaya muat rapi di kolom sempit (card Keketatan|Peluang
 // berdampingan) tanpa mendominasi visual, tapi tetap menyampaikan dua inti:
 // bukan ramalan pasti + tetap butuh usaha sendiri.
 const PELUANG_MICRO_NOTE =
-  "Bukan ramalan pasti — cuma gambaran kasar. Lolos-nggaknya tetap tergantung usahamu sendiri.";
+  "Perkiraan kasar dari nilaimu dan keketatan prodi. Bukan ramalan pasti, lolos atau nggak tetap tergantung usahamu.";
+
+// Keterangan di bawah angka Keketatan — menegaskan metrik ini publik (sama
+// untuk semua pendaftar), beda dari Peluang yang personal.
+const KEKETATAN_KETERANGAN = "Seberapa ramai peminat prodi ini, sama untuk semua pendaftar.";
 
 function formatNilai(value: number | null): string {
   if (value === null) return "-";
@@ -136,10 +140,13 @@ function AccordionSection({
   );
 }
 
-function PilihanCard({ pilihan, label }: { pilihan: PilihanCardData; label: string }) {
+function PilihanCard({ pilihan, label, keterangan }: { pilihan: PilihanCardData; label: string; keterangan?: string }) {
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
-      <span className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">{label}</span>
+      <div className="flex flex-col gap-1">
+        <span className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">{label}</span>
+        {keterangan ? <p className="text-sm text-[#7E7C7C] sm:text-base">{keterangan}</p> : null}
+      </div>
       <div className="flex w-full flex-col gap-5 rounded-[20px] border border-[#CAC9C9] bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-8 sm:py-5">
         <div className="flex flex-col gap-2 sm:gap-3">
           <p className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">
@@ -154,6 +161,9 @@ function PilihanCard({ pilihan, label }: { pilihan: PilihanCardData; label: stri
             <p className="text-sm text-[#7E7C7C] sm:text-base">Keketatan</p>
             <p className={`text-center text-base font-semibold tracking-[-0.02em] sm:text-lg ${labelColorClass(pilihan.keketatanLabel)}`}>
               {formatNilai(pilihan.keketatanScore)}% - {pilihan.keketatanLabel}
+            </p>
+            <p className="max-w-[8.5rem] text-center text-[10px] leading-snug text-[#7E7C7C] sm:max-w-[11rem] sm:text-[11px]">
+              {KEKETATAN_KETERANGAN}
             </p>
           </div>
           <div className="flex flex-col items-center gap-2 sm:gap-4">
@@ -197,6 +207,9 @@ function MainPilihanCard({ pilihan, label }: { pilihan: PilihanCardData; label: 
             className={`text-center text-base font-semibold tracking-[-0.02em] sm:text-lg ${labelColorClass(pilihan.keketatanLabel)}`}
           >
             {formatNilai(pilihan.keketatanScore)}% - {pilihan.keketatanLabel}
+          </p>
+          <p className="max-w-[8.5rem] text-center text-[10px] leading-snug text-[#7E7C7C] sm:max-w-[11rem] sm:text-[11px]">
+            {KEKETATAN_KETERANGAN}
           </p>
         </div>
         <div className="flex flex-col items-center gap-1 sm:gap-2">
@@ -298,19 +311,20 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
               <PilihanCard
                 key={group.pilihanAsalUrutan}
                 pilihan={group.rekomendasi}
-                label={`Rekomendasi untuk Pilihan ${group.pilihanAsalUrutan}`}
+                label={`Saran untuk Pilihan ${group.pilihanAsalUrutan}`}
+                keterangan={group.keterangan}
               />
             ) : (
               <div key={group.pilihanAsalUrutan} className="flex flex-col gap-3 sm:gap-4">
                 <span className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">
-                  Rekomendasi untuk Pilihan {group.pilihanAsalUrutan}
+                  Saran untuk Pilihan {group.pilihanAsalUrutan}
                 </span>
-                <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada rekomendasi tersedia untuk pilihan ini.</p>
+                <p className="text-base text-[#7E7C7C] sm:text-lg">{group.keterangan}</p>
               </div>
             ),
           )
         ) : (
-          <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada rekomendasi tersedia untuk saat ini</p>
+          <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada saran untuk saat ini.</p>
         )}
       </AccordionSection>
 
@@ -319,74 +333,74 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
         open={openSections.rekomendasiKelas}
         onToggle={() => toggle("rekomendasiKelas")}
       >
-        {!data.isLoggedInOwner ? (
-          <p className="text-base text-[#7E7C7C] sm:text-lg">
-            Login untuk lihat rekomendasi kelas personal berdasarkan mapel tersulitmu.
-          </p>
-        ) : data.kelasRekomendasi.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 sm:gap-6">
-            {data.kelasRekomendasi.map((kelas) => (
-              <div
-                key={kelas.id}
-                className="flex flex-col gap-4 rounded-[20px] border border-[#CAC9C9] bg-white px-5 py-4 sm:px-6 sm:py-5"
-              >
-                <p className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">{kelas.nama}</p>
-                <p className="text-lg font-semibold tracking-[-0.02em] text-[#081EEA] sm:text-xl">
-                  {formatRupiah(kelas.harga)}
-                </p>
-                <Link href={`/kelas/${kelas.id}`} className="self-start">
-                  <Button size="sm">Lihat Kelas</Button>
-                </Link>
-              </div>
-            ))}
-          </div>
+        {data.kelasRekomendasi.length > 0 ? (
+          <>
+            <p className="text-sm text-[#7E7C7C] sm:text-base">
+              {data.kelasPersonal
+                ? "Dipilih dari mapel yang menurutmu paling sulit."
+                : data.isGuest
+                  ? "Kelas persiapan masuk PTN yang bisa kamu lihat dulu. Masuk untuk dapat saran yang lebih pas buatmu."
+                  : "Kelas persiapan masuk PTN yang bisa kamu lihat dulu."}
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 sm:gap-6">
+              {data.kelasRekomendasi.map((kelas) => (
+                <div
+                  key={kelas.id}
+                  className="flex flex-col gap-4 rounded-[20px] border border-[#CAC9C9] bg-white px-5 py-4 sm:px-6 sm:py-5"
+                >
+                  <div className="flex flex-col gap-2">
+                    {kelas.status ? (
+                      <span
+                        className={`w-fit rounded-full px-3 py-1 text-xs font-medium sm:text-sm ${
+                          kelas.status === "Sudah kamu ikuti" ? "bg-[#E7FBE5] text-[#0CBA00]" : "bg-[#FFF5BA] text-[#988101]"
+                        }`}
+                      >
+                        {kelas.status}
+                      </span>
+                    ) : null}
+                    <p className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">{kelas.nama}</p>
+                  </div>
+                  {kelas.status === "Sudah kamu ikuti" ? null : (
+                    <p className="text-lg font-semibold tracking-[-0.02em] text-[#081EEA] sm:text-xl">
+                      {formatRupiah(kelas.harga)}
+                    </p>
+                  )}
+                  <Link href={kelas.href} className="self-start">
+                    <Button size="sm">{kelas.labelAksi}</Button>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
-          <p className="text-base text-[#7E7C7C] sm:text-lg">
-            Belum ada rekomendasi kelas yang cocok dengan mapel tersulitmu saat ini.
-          </p>
+          <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada kelas yang bisa disarankan saat ini.</p>
         )}
       </AccordionSection>
 
       <AccordionSection
-        title="Rekomendasi Paket Tryout"
+        title="Rekomendasi Try Out"
         open={openSections.rekomendasiTryout}
         onToggle={() => toggle("rekomendasiTryout")}
       >
-        {data.tryoutRekomendasi.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 sm:gap-6">
-            {data.tryoutRekomendasi.map((tryout) => (
-              <div
-                key={tryout.id}
-                className="flex flex-col gap-3 rounded-[20px] border border-[#CAC9C9] bg-white px-5 py-4 sm:px-6 sm:py-5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">{tryout.nama}</p>
-                  <span
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium sm:text-sm ${
-                      tryout.tipeAkses === "premium"
-                        ? "bg-[#FFF5BA] text-[#988101]"
-                        : "bg-[#E7FBE5] text-[#0CBA00]"
-                    }`}
-                  >
-                    {tryout.tipeAkses === "premium" ? "Premium" : "Free"}
-                  </span>
-                </div>
-                <p className="text-sm text-[#7E7C7C] sm:text-base">{tryout.alasan}</p>
-                <Link href={`/tryout/${tryout.id}`} className="self-start">
-                  <Button size="sm">{tryout.tipeAkses === "premium" ? "Lihat Paket" : "Mulai Tryout Gratis"}</Button>
-                </Link>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada paket tryout yang relevan saat ini.</p>
-        )}
+        <div className="flex flex-col gap-3 rounded-[20px] border border-[#CAC9C9] bg-white px-5 py-4 sm:max-w-xl sm:px-6 sm:py-5">
+          <p className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Try Out SNBT dan TKA</p>
+          <p className="text-sm text-[#7E7C7C] sm:text-base">
+            Simulasi ujian biar kamu tahu posisimu sekarang dan bagian mana yang perlu dikejar.
+            {data.isGuest ? " Masuk dulu, nanti kamu langsung diarahkan ke halaman Try Out." : ""}
+          </p>
+          <Link href={data.tryoutAksi.href} className="self-start">
+            <Button size="sm">{data.tryoutAksi.label}</Button>
+          </Link>
+        </div>
+        {/* Latihan soal untuk siswa belum ada (Studio Soal masih sisi mentor),
+            jadi cukup info teks tanpa tautan atau tombol. */}
+        <p className="text-sm text-[#7E7C7C] sm:text-base">Latihan soal sedang kami siapkan.</p>
       </AccordionSection>
 
       <AccordionSection title="Note" open={openSections.note} onToggle={() => toggle("note")}>
         <div className="flex flex-col gap-2">
           <p className="text-base leading-[1.5] tracking-[-0.02em] text-black sm:text-xl">
-            {data.noteAi ?? NOTE_FALLBACK}
+            {data.noteAi}
           </p>
           <p className="text-xs text-[#7E7C7C] sm:text-sm">Catatan dibuat otomatis</p>
         </div>

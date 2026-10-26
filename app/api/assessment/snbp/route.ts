@@ -5,8 +5,10 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { ANONYMOUS_FREE_RESULT_LIMIT, TRIAL_COOKIE_MAX_AGE_SECONDS, TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
 import { generateAssessmentNote } from "@/lib/ai/generateNote";
 import { bacaAtribusi } from "@/lib/shared/atribusi";
+import { filterKandidat, hitungSaranJurusan, type ProdiSaran } from "@/lib/shared/saranJurusan";
 import {
   calculateKeketatan,
+  getKeketatanLabel,
   calculateNilaiAkhir,
   calculatePeluang,
   convertPrestasiToNilai,
@@ -64,6 +66,28 @@ function errorResponse(message: string, status: number, extra?: Record<string, u
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+const HALAMAN_KANDIDAT = 1000;
+
+/** Kandidat saran jurusan (jalur SNBP) sesuai filter dari filterKandidat().
+ * Dibaca per halaman 1000 baris karena PostgREST membatasi jumlah baris per
+ * request, dan filter rumpun bisa mencakup ribuan prodi. */
+async function ambilKandidatSaran(kolom: string, nilai: string[]) {
+  const hasil: Record<string, unknown>[] = [];
+  for (let dari = 0; ; dari += HALAMAN_KANDIDAT) {
+    const { data, error } = await supabaseServer
+      .from("ptn_jurusan")
+      .select("id, nama_universitas, nama_jurusan, jenjang, rumpun, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu")
+      .eq("jalur", "snbp")
+      .in(kolom, nilai)
+      .order("id", { ascending: true })
+      .range(dari, dari + HALAMAN_KANDIDAT - 1);
+    if (error) throw error;
+    hasil.push(...(data ?? []));
+    if (!data || data.length < HALAMAN_KANDIDAT) break;
+  }
+  return hasil;
 }
 
 export async function POST(request: NextRequest) {
@@ -293,83 +317,59 @@ export async function POST(request: NextRequest) {
     return errorResponse("Gagal menyimpan pilihan program studi. Coba lagi nanti.", 500);
   }
 
-  // ---- Accordion "Rekomendasi Jurusan" (PRD 7.4.3 #1, DIREVISI): PER-PILIHAN,
-  // bukan lagi rata-rata gabungan semua pilihan. Tiap pilihan siswa (1 atau 2,
-  // loop di bawah) dicari SATU kandidat alternatif serumpun (Saintek/Soshum)
-  // dengan pilihan itu SENDIRI (bukan rumpun Pilihan 1 dipaksakan ke semua),
-  // dan keketatannya wajib lebih longgar dari keketatan pilihan itu sendiri
-  // (bukan avg semua pilihan) — supaya siswa Saintek dapat rekomendasi Saintek
-  // dan siswa Soshum dapat rekomendasi Soshum, masing-masing independen.
+  // ---- Accordion "Rekomendasi Jurusan" (PRD 7.4.3 #1, revisi v2): aturan
+  // lengkapnya di lib/shared/saranJurusan.ts (fungsi murni, ada tesnya).
+  // Ringkasnya: saran per pilihan, hanya 1 sampai 2 tingkat keketatan lebih
+  // longgar, tidak pernah prodi yang sudah diinput, dan kalau tidak ada yang
+  // pas dibiarkan kosong (bukan loncat ke yang paling longgar).
   //
   // Baris rekomendasi disimpan dengan urutan_pilihan = urutan PILIHAN ASAL-nya
-  // (bukan index rekomendasi sendiri 1..N) — karena maksimal 1 rekomendasi per
-  // pilihan asal, ini tetap unik terhadap UNIQUE(assessment_id, urutan_pilihan,
-  // is_rekomendasi) sekaligus jadi referensi eksplisit "rekomendasi ini untuk
-  // Pilihan berapa" yang dipakai frontend buat grouping label yang benar
-  // (bukan kolom terpisah — sengaja reuse urutan_pilihan yang sudah ada,
-  // supaya tidak nambah kolom yang isinya selalu sama dengan urutan asal).
+  // (maksimal 1 saran per pilihan), jadi tetap unik terhadap
+  // UNIQUE(assessment_id, urutan_pilihan, is_rekomendasi) dan dipakai frontend
+  // untuk mengelompokkan saran ke pilihan yang benar.
   //
-  // Kegagalan di sini tidak menggagalkan submit. Kalau salah satu pilihan
-  // tidak dapat kandidat qualify, pilihan itu cukup tidak punya baris
-  // rekomendasi (frontend tampilkan "belum ada rekomendasi" HANYA untuk
-  // pilihan itu) — pilihan lain yang masih dapat kandidat tetap tersimpan. ----
+  // Kegagalan di sini tidak menggagalkan submit.
   try {
-    const chosenIdSet = new Set(resolvedPilihan.map((p) => p.id as string));
-    const rekomendasiInserts: {
-      assessment_id: string;
-      urutan_pilihan: number;
-      ptn_jurusan_id: string;
-      keketatan_score: number;
-      keketatan_label: string;
-      peluang_score: number;
-      peluang_label: string;
-      is_rekomendasi: true;
-    }[] = [];
+    const pilihanSaran: ProdiSaran[] = pilihanResults.map(({ ptnJurusan, keketatan }) => ({
+      id: ptnJurusan.id as string,
+      namaUniversitas: ptnJurusan.nama_universitas as string,
+      namaJurusan: ptnJurusan.nama_jurusan as string,
+      jenjang: ptnJurusan.jenjang as string,
+      rumpun: ptnJurusan.rumpun as string,
+      keketatanScore: keketatan.score,
+    }));
 
-    for (let i = 0; i < pilihanResults.length; i++) {
-      const { ptnJurusan, keketatan: keketatanAsal } = pilihanResults[i];
-      const urutanAsal = i + 1;
+    const filter = filterKandidat(pilihanSaran);
+    const kandidatRows = await ambilKandidatSaran(filter.kolom, filter.nilai);
+    const kandidat: ProdiSaran[] = kandidatRows.map((row) => ({
+      id: row.id as string,
+      namaUniversitas: row.nama_universitas as string,
+      namaJurusan: row.nama_jurusan as string,
+      jenjang: row.jenjang as string,
+      rumpun: row.rumpun as string,
+      keketatanScore: calculateKeketatan(
+        row.kuota_tahun_berjalan as number,
+        row.jumlah_peminat_tahun_lalu as number,
+      ).score,
+    }));
 
-      const { data: kandidatRows, error: kandidatError } = await supabaseServer
-        .from("ptn_jurusan")
-        .select("id, kuota_tahun_berjalan, jumlah_peminat_tahun_lalu")
-        .eq("jalur", "snbp")
-        .eq("rumpun", ptnJurusan.rumpun as string);
-
-      if (kandidatError) {
-        console.error(
-          `[assessment/snbp] query kandidat rekomendasi jurusan (Pilihan ${urutanAsal}) failed:`,
-          kandidatError,
-        );
-        continue;
-      }
-
-      const terbaik = (kandidatRows ?? [])
-        .filter((row) => !chosenIdSet.has(row.id as string))
-        .map((row) => ({
-          row,
-          keketatan: calculateKeketatan(
-            row.kuota_tahun_berjalan as number,
-            row.jumlah_peminat_tahun_lalu as number,
-          ),
-        }))
-        .filter(({ keketatan }) => keketatan.score > keketatanAsal.score)
-        .sort((a, b) => b.keketatan.score - a.keketatan.score)[0];
-
-      if (!terbaik) continue; // Tidak ada kandidat serumpun yang lebih longgar untuk pilihan ini — biarkan kosong.
-
-      const peluang = calculatePeluang(nilaiAkhir, terbaik.keketatan.score);
-      rekomendasiInserts.push({
-        assessment_id: assessmentId,
-        urutan_pilihan: urutanAsal,
-        ptn_jurusan_id: terbaik.row.id as string,
-        keketatan_score: terbaik.keketatan.score,
-        keketatan_label: terbaik.keketatan.label,
-        peluang_score: peluang.score,
-        peluang_label: peluang.label,
-        is_rekomendasi: true,
+    const rekomendasiInserts = hitungSaranJurusan(pilihanSaran, kandidat)
+      .filter((hasil) => hasil.saran !== null)
+      .map((hasil) => {
+        const saran = hasil.saran as ProdiSaran;
+        const keketatan = { score: saran.keketatanScore, label: getKeketatanLabel(saran.keketatanScore) };
+        const peluang = calculatePeluang(nilaiAkhir, keketatan.score);
+        return {
+          assessment_id: assessmentId,
+          urutan_pilihan: hasil.urutanPilihan,
+          ptn_jurusan_id: saran.id,
+          keketatan_score: keketatan.score,
+          keketatan_label: keketatan.label,
+          peluang_score: peluang.score,
+          peluang_label: peluang.label,
+          is_rekomendasi: true,
+        };
       });
-    }
 
     if (rekomendasiInserts.length > 0) {
       const { error: rekomendasiError } = await supabaseServer.from("assessment_pilihan").insert(rekomendasiInserts);
