@@ -34,6 +34,19 @@ export interface SoalRingkas {
   versi: number;
   redaksi: string;
   updatedAt: string;
+  /** Soal di dalam stimulus (PR 3b) — null/absen = soal mandiri. */
+  stimulusId?: string | null;
+}
+
+/** Stimulus tulisan mentor untuk halaman daftar (PR 3b). */
+export interface StimulusRingkas {
+  id: string;
+  subtesId: string;
+  judul: string;
+  status: string;
+  versi: number;
+  jumlahSoal: number;
+  updatedAt: string;
 }
 
 export interface KelompokSubtes {
