@@ -4,6 +4,8 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { TRIAL_COOKIE_NAME } from "@/lib/assessment/trial";
 import { harusTampilLeadCapture, isLeadCaptureEnabled } from "@/lib/shared/leadCaptureFlag";
+import { kalimatSaran, kalimatTanpaSaran, tingkatKeketatan, URUTAN_TINGKAT } from "@/lib/shared/saranJurusan";
+import { CATATAN_CADANGAN, rapikanCatatan } from "@/lib/shared/catatanAssessment";
 import { getNavbarProps, type NavbarSessionProps } from "@/lib/dashboard/getNavbarProps";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
@@ -197,10 +199,19 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
       .filter((row): row is PilihanCardData => row !== null)
       .map((row) => [row.urutanPilihan, row]),
   );
-  const rekomendasiJurusan: RekomendasiJurusanGroup[] = hasilPrediksi.map((pilihan) => ({
-    pilihanAsalUrutan: pilihan.urutanPilihan,
-    rekomendasi: rekomendasiByAsal.get(pilihan.urutanPilihan) ?? null,
-  }));
+  const rekomendasiJurusan: RekomendasiJurusanGroup[] = hasilPrediksi.map((pilihan) => {
+    const rekomendasi = rekomendasiByAsal.get(pilihan.urutanPilihan) ?? null;
+    // Alasan kosong diturunkan dari tingkat keketatan pilihan itu sendiri
+    // (lib/shared/saranJurusan.ts): paling longgar = memang tidak dicarikan.
+    const sudahPalingLonggar = tingkatKeketatan(pilihan.keketatanScore) >= URUTAN_TINGKAT.length - 1;
+    return {
+      pilihanAsalUrutan: pilihan.urutanPilihan,
+      rekomendasi,
+      keterangan: rekomendasi
+        ? kalimatSaran(pilihan, rekomendasi)
+        : kalimatTanpaSaran(sudahPalingLonggar ? "sudah_paling_longgar" : "tidak_ada_kandidat"),
+    };
+  });
 
   // Disclaimer (BR-4/FR-3.6) wajib tampilkan tahun data — ambil tahun TERBARU
   // di antara seluruh ptn_jurusan yang dipakai di hasil ini.
@@ -302,7 +313,9 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
     nilaiPrestasi: assessment.nilai_prestasi as number | null,
     nilaiAkhir: assessment.nilai_akhir as number | null,
     nilaiAkhirLabel: assessment.nilai_akhir_label as string | null,
-    noteAi: assessment.note_ai as string | null,
+    // Penyaring gaya juga dijalankan saat tampil, supaya catatan lama (dibuat
+    // sebelum penyaring ada) ikut rapi. Aman dijalankan berulang.
+    noteAi: rapikanCatatan((assessment.note_ai as string | null) ?? CATATAN_CADANGAN),
     hasilPrediksi,
     rekomendasiJurusan,
     isLoggedInOwner,

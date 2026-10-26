@@ -26,6 +26,8 @@ export interface PilihanCardData {
 export interface RekomendasiJurusanGroup {
   pilihanAsalUrutan: number;
   rekomendasi: PilihanCardData | null;
+  /** Kalimat pendek: alasan saran, atau penjelasan jujur kenapa kosong. */
+  keterangan: string;
 }
 
 export interface KelasRekomendasiData {
@@ -46,7 +48,8 @@ export interface AssessmentHasilData {
   nilaiPrestasi: number | null;
   nilaiAkhir: number | null;
   nilaiAkhirLabel: string | null;
-  noteAi: string | null;
+  /** Sudah disaring (rapikanCatatan) dan sudah diganti teks cadangan kalau kosong. */
+  noteAi: string;
   hasilPrediksi: PilihanCardData[];
   rekomendasiJurusan: RekomendasiJurusanGroup[];
   isLoggedInOwner: boolean;
@@ -60,18 +63,12 @@ export interface AssessmentHasilData {
   leadSudahTerkirim: boolean;
 }
 
-// Sama dengan FALLBACK_NOTE di lib/ai/generateNote.ts — dipakai kalau note_ai
-// masih NULL (mis. data lama sebelum BR-30 aktif, atau update sempat gagal).
-const NOTE_FALLBACK =
-  "Angka-angka di atas adalah gambaran, bukan keputusan akhir — banyak siswa yang keketatannya terlihat berat tetap berhasil lolos karena persiapan yang tepat, dan sebaliknya. Yang paling penting sekarang bukan cuma melihat hasilnya, tapi memakainya sebagai peta: kalau ada subtes yang masih terasa berat, itu titik yang paling worth dilatih dulu. Coba mulai dari Try Out gratis buat lihat sejauh mana pemahamanmu sekarang, atau ikut kelas bimbingan yang sesuai kebutuhanmu. Perjalanan ke PTN impian itu proses, bukan satu kali tes — dan kamu masih punya waktu buat memperbesar peluang itu.";
-
 // Catatan kecil pelengkap di bawah tiap angka Peluang — TERPISAH dari
 // disclaimer besar di atas halaman (BR-4, tidak diganti/dihapus). Diringkas
 // dari draf awal supaya muat rapi di kolom sempit (card Keketatan|Peluang
 // berdampingan) tanpa mendominasi visual, tapi tetap menyampaikan dua inti:
 // bukan ramalan pasti + tetap butuh usaha sendiri.
-const PELUANG_MICRO_NOTE =
-  "Bukan ramalan pasti — cuma gambaran kasar. Lolos-nggaknya tetap tergantung usahamu sendiri.";
+const PELUANG_MICRO_NOTE = "Bukan ramalan pasti, cuma gambaran kasar. Lolos atau nggak tetap tergantung usahamu.";
 
 function formatNilai(value: number | null): string {
   if (value === null) return "-";
@@ -136,10 +133,13 @@ function AccordionSection({
   );
 }
 
-function PilihanCard({ pilihan, label }: { pilihan: PilihanCardData; label: string }) {
+function PilihanCard({ pilihan, label, keterangan }: { pilihan: PilihanCardData; label: string; keterangan?: string }) {
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
-      <span className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">{label}</span>
+      <div className="flex flex-col gap-1">
+        <span className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">{label}</span>
+        {keterangan ? <p className="text-sm text-[#7E7C7C] sm:text-base">{keterangan}</p> : null}
+      </div>
       <div className="flex w-full flex-col gap-5 rounded-[20px] border border-[#CAC9C9] bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-8 sm:py-5">
         <div className="flex flex-col gap-2 sm:gap-3">
           <p className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">
@@ -298,19 +298,20 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
               <PilihanCard
                 key={group.pilihanAsalUrutan}
                 pilihan={group.rekomendasi}
-                label={`Rekomendasi untuk Pilihan ${group.pilihanAsalUrutan}`}
+                label={`Saran untuk Pilihan ${group.pilihanAsalUrutan}`}
+                keterangan={group.keterangan}
               />
             ) : (
               <div key={group.pilihanAsalUrutan} className="flex flex-col gap-3 sm:gap-4">
                 <span className="text-base font-medium tracking-[-0.02em] text-black sm:text-lg">
-                  Rekomendasi untuk Pilihan {group.pilihanAsalUrutan}
+                  Saran untuk Pilihan {group.pilihanAsalUrutan}
                 </span>
-                <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada rekomendasi tersedia untuk pilihan ini.</p>
+                <p className="text-base text-[#7E7C7C] sm:text-lg">{group.keterangan}</p>
               </div>
             ),
           )
         ) : (
-          <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada rekomendasi tersedia untuk saat ini</p>
+          <p className="text-base text-[#7E7C7C] sm:text-lg">Belum ada saran untuk saat ini.</p>
         )}
       </AccordionSection>
 
@@ -386,7 +387,7 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
       <AccordionSection title="Note" open={openSections.note} onToggle={() => toggle("note")}>
         <div className="flex flex-col gap-2">
           <p className="text-base leading-[1.5] tracking-[-0.02em] text-black sm:text-xl">
-            {data.noteAi ?? NOTE_FALLBACK}
+            {data.noteAi}
           </p>
           <p className="text-xs text-[#7E7C7C] sm:text-sm">Catatan dibuat otomatis</p>
         </div>
