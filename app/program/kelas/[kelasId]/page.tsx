@@ -14,6 +14,10 @@ import { PROGRAM_KATEGORI_SLUG } from "@/lib/shared/kelasLabels";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import KelasDaftarButton from "@/components/program/KelasDaftarButton";
+import { buttonClassName } from "@/components/ui/buttonClassName";
+import { isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
+import { hrefKelasDimiliki } from "@/lib/shared/kelasHref";
+import { hrefLoginKembali } from "@/lib/shared/saranProdukAssessment";
 import Avatar from "@/components/ui/Avatar";
 import KelasCardVisual from "@/components/ui/KelasCardVisual";
 import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
@@ -65,14 +69,14 @@ function DocumentIcon(props: SVGProps<SVGSVGElement>) {
 
 /** Teaser gated: batasi tinggi + tutup pakai rectangle gradient putih
  * (100% -> 0%) buat visitor belum login, ajak login untuk lihat semua. */
-function GatedTeaser({ isGated, children }: { isGated: boolean; children: ReactNode }) {
+function GatedTeaser({ isGated, loginHref, children }: { isGated: boolean; loginHref: string; children: ReactNode }) {
   if (!isGated) return <>{children}</>;
   return (
     <div className="relative max-h-[210px] overflow-hidden">
       {children}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white to-white/0" />
       <div className="absolute inset-x-0 bottom-0 flex justify-center pb-1">
-        <Link href="/login" className="pointer-events-auto text-sm font-medium text-[#081EEA] hover:underline">
+        <Link href={loginHref} className="pointer-events-auto text-sm font-medium text-[#081EEA] hover:underline">
           Login untuk lihat semua
         </Link>
       </div>
@@ -116,6 +120,12 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
   const navbarProps = await getNavbarProps(session);
   const isLoggedIn = Boolean(session);
+  // Tamu yang login dari teaser kembali ke halaman ini (returnTo divalidasi
+  // safeInternalPath di hrefLoginKembali & di halaman login).
+  const loginHref = hrefLoginKembali(`/program/kelas/${kelas.id}`);
+  // Siswa yang sudah lunas tidak ditawari membeli ulang: tombol diganti
+  // "Buka Kelas" ke halaman kelas siswa.
+  const sudahLunas = session?.role === "student" ? await isKelasSudahLunas(session.userId, kelas.id) : false;
 
   return (
     <div className="flex w-full flex-col">
@@ -191,7 +201,7 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
               {kelas.mentors.length > 0 ? (
                 <div className="flex flex-col gap-3 border-t border-[#E3E3E3] pt-5">
                   <p className="text-sm text-[#7E7C7C]">Mentor Kelas Ini</p>
-                  <GatedTeaser isGated={!isLoggedIn}>
+                  <GatedTeaser isGated={!isLoggedIn} loginHref={loginHref}>
                     <div className="flex flex-col gap-3">
                       {kelas.mentors.map((mentor) => (
                         <MentorListItem key={mentor.nama} mentor={mentor} />
@@ -208,7 +218,7 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
               {materi.length === 0 ? (
                 <p className="text-sm text-[#7E7C7C]">Materi untuk kelas ini akan segera tersedia.</p>
               ) : (
-                <GatedTeaser isGated={!isLoggedIn}>
+                <GatedTeaser isGated={!isLoggedIn} loginHref={loginHref}>
                   <div className="flex flex-col gap-2">
                     {materi.map((item) => (
                       <MateriListItem key={item.id} item={item} />
@@ -224,13 +234,22 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
             {/* Aturan tujuan tombol (penuh / link pendaftaran / login / checkout /
                 role lain / pengaman NEXT_PUBLIC_CHECKOUT_INTERNAL_READY) SAMA PERSIS
                 dengan card /program — lihat lib/shared/kelasDaftarTarget.ts. */}
-            <KelasDaftarButton
-              kelasId={kelas.id}
-              sisaSlot={kelas.sisaSlot}
-              sessionRole={session?.role ?? null}
-              linkLynkid={kelas.linkLynkid}
-              variant="detail"
-            />
+            {sudahLunas ? (
+              <>
+                <Link href={hrefKelasDimiliki(kelas.id)} className={buttonClassName({ variant: "primary", size: "lg", className: "w-full" })}>
+                  Buka Kelas
+                </Link>
+                <p className="text-center text-sm text-[#7E7C7C]">Kamu sudah terdaftar di kelas ini.</p>
+              </>
+            ) : (
+              <KelasDaftarButton
+                kelasId={kelas.id}
+                sisaSlot={kelas.sisaSlot}
+                sessionRole={session?.role ?? null}
+                linkLynkid={kelas.linkLynkid}
+                variant="detail"
+              />
+            )}
           </div>
         </div>
       </main>
