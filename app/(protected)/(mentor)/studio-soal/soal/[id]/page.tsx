@@ -26,7 +26,7 @@ export default async function EditSoalPage({ params }: { params: Promise<{ id: s
   const [soal, subtes] = await Promise.all([getSoalMilik(mentorId, id), getSubtesDitugaskan(mentorId)]);
   let isi: ReactNode;
   if (soal === "gagal" || subtes === "gagal") {
-    isi = <KartuPesan judul="Gagal memuat soal" isi="Coba muat ulang halaman." />;
+    isi = <KartuPesan judul="Soal gagal dimuat" isi="Coba muat ulang halaman." />;
   } else if (!soal) {
     notFound();
   } else {
@@ -37,7 +37,7 @@ export default async function EditSoalPage({ params }: { params: Promise<{ id: s
       ditugaskan ? Promise.resolve(null) : getSubtesById(soal.subtes_id),
     ]);
     if (stimulusRow === "gagal" || sudahDiajukan === "gagal" || subtesSoal === "gagal") {
-      isi = <KartuPesan judul="Gagal memuat soal" isi="Coba muat ulang halaman." />;
+      isi = <KartuPesan judul="Soal gagal dimuat" isi="Coba muat ulang halaman." />;
     } else {
       const stimulus: StimulusKonteks | null = stimulusRow
         ? { id: stimulusRow.id, judul: stimulusRow.judul_internal, status: stimulusRow.status, blok: stimulusRow.konten.blok }

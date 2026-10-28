@@ -31,7 +31,7 @@ function Rumus({ tex, blok }: { tex: string; blok: boolean }) {
   return (
     <span
       ref={ref}
-      className={[blok ? "block max-w-full overflow-x-auto py-1" : "", galat ? "font-mono text-sm text-[#E70A0A]" : ""].join(" ")}
+      className={[blok ? "block max-w-full overflow-x-auto py-1" : "", galat ? "font-mono text-sm text-danger" : ""].join(" ")}
     />
   );
 }
@@ -42,7 +42,7 @@ function RenderSegmen({ s, rumpang }: { s: Segmen; rumpang?: (id: string) => Rea
     return rumpang ? (
       <>{rumpang(s.id)}</>
     ) : (
-      <span className="mx-0.5 inline-block min-w-12 border-b-2 border-dashed border-[#7E7C7C] px-1 text-center text-xs text-[#7E7C7C]">
+      <span className="mx-0.5 inline-block min-w-12 border-b-2 border-dashed border-muted px-1 text-center text-xs text-muted">
         {s.id}
       </span>
     );
@@ -73,7 +73,7 @@ export default function TeksKaya({
   const Wadah = sebaris ? "span" : "div";
   const Paragraf = sebaris ? "span" : "p";
   if (paragraf.length === 0) {
-    return kosong ? <Paragraf className={`block italic text-[#AFAFAF] ${className}`}>{kosong}</Paragraf> : null;
+    return kosong ? <Paragraf className={`block italic text-subtle ${className}`}>{kosong}</Paragraf> : null;
   }
   return (
     <Wadah className={`flex min-w-0 flex-col gap-2 break-words ${className}`}>

@@ -191,6 +191,25 @@ export async function pernahDiajukan(jenis: "soal" | "stimulus", id: string): Pr
   return (data ?? []).length > 0;
 }
 
+/**
+ * Id yang pernah dikirim untuk dicek (ada log 'ajukan') dari daftar `ids` —
+ * dipakai halaman daftar untuk menjelaskan kenapa draf tidak bisa dihapus.
+ */
+export async function getIdPernahDiajukan(jenis: "soal" | "stimulus", ids: string[]): Promise<Set<string> | "gagal"> {
+  if (ids.length === 0) return new Set();
+  const { data, error } = await supabaseServer
+    .from("soal_tinjauan_log")
+    .select("objek_id")
+    .eq("objek_jenis", jenis)
+    .eq("aksi", "ajukan")
+    .in("objek_id", ids);
+  if (error) {
+    console.error("[studioSoal] query log daftar failed:", error);
+    return "gagal";
+  }
+  return new Set((data ?? []).map((r) => r.objek_id as string));
+}
+
 /** Stimulus tulisan mentor ini (tanpa versi lama) untuk halaman daftar. */
 export async function getStimulusMentor(mentorId: string): Promise<StimulusRingkas[] | "gagal"> {
   const [stRes, soalRes] = await Promise.all([
@@ -210,9 +229,13 @@ export async function getStimulusMentor(mentorId: string): Promise<StimulusRingk
     if (!s.stimulus_id || s.status === "digantikan") continue;
     jumlah.set(s.stimulus_id as string, (jumlah.get(s.stimulus_id as string) ?? 0) + 1);
   }
-  return (stRes.data ?? [])
-    .filter((s) => s.status !== "digantikan")
-    .map((s) => ({
+  const tampil = (stRes.data ?? []).filter((s) => s.status !== "digantikan");
+  const pernah = await getIdPernahDiajukan(
+    "stimulus",
+    tampil.filter((s) => s.status === "draf").map((s) => s.id as string),
+  );
+  if (pernah === "gagal") return "gagal";
+  return tampil.map((s) => ({
       id: s.id as string,
       subtesId: s.subtes_id as string,
       judul: (s.judul_internal as string) ?? "",
@@ -220,5 +243,6 @@ export async function getStimulusMentor(mentorId: string): Promise<StimulusRingk
       versi: s.versi as number,
       jumlahSoal: jumlah.get(s.id as string) ?? 0,
       updatedAt: s.updated_at as string,
+      pernahDiajukan: pernah.has(s.id as string),
     }));
 }

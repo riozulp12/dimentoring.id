@@ -27,14 +27,14 @@ export default async function EditStimulusPage({ params }: { params: Promise<{ i
   ]);
   let isi: ReactNode;
   if (stimulus === "gagal" || subtes === "gagal" || soal === "gagal" || sudahDiajukan === "gagal") {
-    isi = <KartuPesan judul="Gagal memuat stimulus" isi="Coba muat ulang halaman." />;
+    isi = <KartuPesan judul="Bacaan gagal dimuat" isi="Coba muat ulang halaman." />;
   } else if (!stimulus) {
     notFound();
   } else {
     const ditugaskan = subtes.some((s) => s.id === stimulus.subtes_id);
     const subtesStimulus = ditugaskan ? null : await getSubtesById(stimulus.subtes_id);
     if (subtesStimulus === "gagal") {
-      isi = <KartuPesan judul="Gagal memuat stimulus" isi="Coba muat ulang halaman." />;
+      isi = <KartuPesan judul="Bacaan gagal dimuat" isi="Coba muat ulang halaman." />;
     } else {
       isi = (
         <FormStimulus

@@ -21,6 +21,7 @@ import {
   terjemahkanHasilRpc,
   type ObjekStudio,
 } from "@/lib/shared/studio-soal/formSoal";
+import { pesanBacaanMasihDipakai } from "@/lib/shared/studio-soal/hapusDraf";
 import { validasiRumusSoal, validasiRumusStimulus } from "@/lib/shared/studio-soal/rumus";
 import { validasiSoal, validasiStimulus, type ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
 
@@ -69,8 +70,8 @@ function balasRpc(objek: ObjekStudio, hasil: HasilRpc, extra: Record<string, unk
   return jawab(200, { success: true, pesan: t.pesan, ...extra });
 }
 
-const TIDAK_DITUGASKAN = "Anda tidak ditugaskan Admin ke subtes ini.";
-const GAGAL_SERVER = "Gagal memproses permintaan. Coba lagi nanti.";
+const TIDAK_DITUGASKAN = "Anda tidak ditugaskan ke subtes ini. Minta Admin menugaskan Anda dulu.";
+const GAGAL_SERVER = "Ada gangguan di server. Coba lagi sebentar lagi.";
 
 // ============================================================================
 // PUT simpan draf (buat atau ubah, idempoten per id)
@@ -79,7 +80,7 @@ const GAGAL_SERVER = "Gagal memproses permintaan. Coba lagi nanti.";
 export async function simpanSoal(request: NextRequest, id: string) {
   const auth = await requireMentorAktif(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   if (!auth.ok) return gagal(auth.status, auth.error);
-  if (!isUuid(id)) return gagal(400, "Id soal tidak valid.");
+  if (!isUuid(id)) return gagal(400, "Alamat soal tidak valid. Buka lagi dari halaman Studio Soal.");
 
   const json = await bacaJson(request);
   if (!json.ok) return gagal(400, "Body request harus JSON yang valid.");
@@ -92,7 +93,7 @@ export async function simpanSoal(request: NextRequest, id: string) {
   if (!subtes) return gagal(403, TIDAK_DITUGASKAN);
 
   const errors = validasiSoal(inputValidasiSoal(data, subtes.kategori), "draf");
-  if (errors.length > 0) return gagal(400, "Periksa kembali isian yang ditandai.", { errors });
+  if (errors.length > 0) return gagal(400, "Ada isian yang perlu dibetulkan (ditandai merah).", { errors });
 
   const rapi = rapikanKontenKunci(data.tipe, data.konten, data.kunci);
   const hasil = await panggilRpc("studio_soal_simpan_soal", {
@@ -100,14 +101,14 @@ export async function simpanSoal(request: NextRequest, id: string) {
     p_aktor_id: auth.mentorId,
     p_data: { ...data, ...rapi, sumber_rujukan: data.sumber_rujukan.trim() || null },
   });
-  if (hasil === "gagal") return gagal(500, "Gagal menyimpan draf. Coba lagi nanti.");
+  if (hasil === "gagal") return gagal(500, "Draf belum tersimpan. Coba lagi sebentar lagi.");
   return balasRpc("soal", hasil, { id, dibuat: hasil.dibuat === true, updatedAt: hasil.updated_at ?? null });
 }
 
 export async function simpanStimulus(request: NextRequest, id: string) {
   const auth = await requireMentorAktif(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   if (!auth.ok) return gagal(auth.status, auth.error);
-  if (!isUuid(id)) return gagal(400, "Id stimulus tidak valid.");
+  if (!isUuid(id)) return gagal(400, "Alamat bacaan tidak valid. Buka lagi dari halaman Studio Soal.");
 
   const json = await bacaJson(request);
   if (!json.ok) return gagal(400, "Body request harus JSON yang valid.");
@@ -120,14 +121,14 @@ export async function simpanStimulus(request: NextRequest, id: string) {
   if (!subtes) return gagal(403, TIDAK_DITUGASKAN);
 
   const errors = validasiStimulus(inputValidasiStimulus(data, subtes.kategori), "draf");
-  if (errors.length > 0) return gagal(400, "Periksa kembali isian yang ditandai.", { errors });
+  if (errors.length > 0) return gagal(400, "Ada isian yang perlu dibetulkan (ditandai merah).", { errors });
 
   const hasil = await panggilRpc("studio_soal_simpan_stimulus", {
     p_id: id,
     p_aktor_id: auth.mentorId,
     p_data: { ...data, konten: rapikanKontenStimulus(data.konten) },
   });
-  if (hasil === "gagal") return gagal(500, "Gagal menyimpan draf. Coba lagi nanti.");
+  if (hasil === "gagal") return gagal(500, "Draf belum tersimpan. Coba lagi sebentar lagi.");
   return balasRpc("stimulus", hasil, { id, dibuat: hasil.dibuat === true, updatedAt: hasil.updated_at ?? null });
 }
 
@@ -142,7 +143,7 @@ type Milik =
 async function muatMilik(request: NextRequest, objek: ObjekStudio, id: string): Promise<Milik> {
   const auth = await requireMentorAktif(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   if (!auth.ok) return { ok: false, res: gagal(auth.status, auth.error) };
-  const nama = objek === "soal" ? "Soal" : "Stimulus";
+  const nama = objek === "soal" ? "Soal" : "Bacaan";
   if (!isUuid(id)) return { ok: false, res: gagal(404, `${nama} tidak ditemukan.`) };
 
   const baris = objek === "soal" ? await getSoalMilik(auth.mentorId, id) : await getStimulusMilik(auth.mentorId, id);
@@ -159,7 +160,12 @@ export async function hapusDraf(request: NextRequest, objek: ObjekStudio, id: st
   const milik = await muatMilik(request, objek, id);
   if (!milik.ok) return milik.res;
   const hasil = await panggilRpc("studio_soal_hapus_draf", { p_objek_jenis: objek, p_id: id, p_aktor_id: milik.mentorId });
-  if (hasil === "gagal") return gagal(500, "Gagal menghapus draf. Coba lagi nanti.");
+  if (hasil === "gagal") return gagal(500, "Draf belum terhapus. Coba lagi sebentar lagi.");
+  if (hasil.status === "masih_ada_soal") {
+    // Sebutkan jumlahnya supaya mentor tahu apa yang harus dihapus dulu.
+    const soal = await getSoalDiStimulus(milik.mentorId, id);
+    return gagal(409, pesanBacaanMasihDipakai(soal === "gagal" ? 0 : soal.length));
+  }
   return balasRpc(objek, hasil);
 }
 
@@ -205,7 +211,7 @@ export async function aksi(request: NextRequest, objek: ObjekStudio, id: string,
     if (soal === "gagal") return gagal(500, GAGAL_SERVER);
     if (!soal) return gagal(404, "Soal tidak ditemukan.");
     const errors = [...validasiSoal(inputValidasiSoal(soal, subtesKategori), "ajukan"), ...validasiRumusSoal(soal)];
-    if (errors.length > 0) return gagal(400, "Soal belum lengkap. Perbaiki isian yang ditandai lalu ajukan lagi.", { errors });
+    if (errors.length > 0) return gagal(400, "Soal belum lengkap. Lengkapi yang ditandai merah, lalu kirim lagi.", { errors });
     const hasil = await panggilRpc("studio_soal_ajukan_soal", { p_soal_id: id, p_aktor_id: mentorId });
     if (hasil === "gagal") return gagal(500, GAGAL_SERVER);
     return balasRpc("soal", hasil);
@@ -213,7 +219,7 @@ export async function aksi(request: NextRequest, objek: ObjekStudio, id: string,
 
   const [stimulus, daftarSoal] = await Promise.all([getStimulusMilik(mentorId, id), getSoalDiStimulus(mentorId, id)]);
   if (stimulus === "gagal" || daftarSoal === "gagal") return gagal(500, GAGAL_SERVER);
-  if (!stimulus) return gagal(404, "Stimulus tidak ditemukan.");
+  if (!stimulus) return gagal(404, "Bacaan tidak ditemukan.");
   const errors = [
     ...validasiStimulus(inputValidasiStimulus(stimulus, subtesKategori), "ajukan"),
     ...validasiRumusStimulus(stimulus),
@@ -228,7 +234,7 @@ export async function aksi(request: NextRequest, objek: ObjekStudio, id: string,
     }))
     .filter((s) => s.errors.length > 0);
   if (errors.length > 0 || errorsSoal.length > 0) {
-    return gagal(400, "Stimulus atau soalnya belum lengkap. Perbaiki yang ditandai lalu ajukan lagi.", { errors, errorsSoal });
+    return gagal(400, "Bacaan atau soalnya belum lengkap. Lengkapi yang ditandai merah, lalu kirim lagi.", { errors, errorsSoal });
   }
   const hasil = await panggilRpc("studio_soal_ajukan_stimulus", { p_stimulus_id: id, p_aktor_id: mentorId });
   if (hasil === "gagal") return gagal(500, GAGAL_SERVER);

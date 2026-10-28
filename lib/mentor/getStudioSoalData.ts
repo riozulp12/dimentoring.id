@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { getIdPernahDiajukan } from "@/lib/mentor/studioSoal";
 import { susunStudioSoalMentor, type SoalRingkas, type StudioSoalMentorView } from "@/lib/shared/studio-soal/studioMentor";
 
 /**
@@ -30,6 +31,13 @@ export async function getStudioSoalMentor(mentorId: string): Promise<StudioSoalM
     })
     .filter((s): s is SubtesJoin => s !== null);
 
+  // Hanya draf yang perlu dicek: status lain memang tidak bisa dihapus.
+  const pernah = await getIdPernahDiajukan(
+    "soal",
+    (soalRes.data ?? []).filter((r) => r.status === "draf").map((r) => r.id as string),
+  );
+  if (pernah === "gagal") return "gagal";
+
   const soal: SoalRingkas[] = (soalRes.data ?? []).map((row) => ({
     id: row.id as string,
     subtesId: row.subtes_id as string,
@@ -39,6 +47,7 @@ export async function getStudioSoalMentor(mentorId: string): Promise<StudioSoalM
     redaksi: (row.redaksi as string) ?? "",
     updatedAt: row.updated_at as string,
     stimulusId: (row.stimulus_id as string | null | undefined) ?? null,
+    pernahDiajukan: pernah.has(row.id as string),
   }));
 
   // Nama subtes untuk soal di subtes yang penugasannya sudah dicabut.

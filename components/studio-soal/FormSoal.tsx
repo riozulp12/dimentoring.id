@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Button from "@/components/ui/Button";
+import InputField from "@/components/ui/InputField";
+import SelectField from "@/components/ui/SelectField";
 import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
+import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
+import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas, pilihan } from "@/components/studio-soal/gaya";
 import TextareaKaya, { ContekanRumus, PesanError } from "@/components/studio-soal/TextareaKaya";
 import { LABEL_STATUS, errorDi, isBolehEdit, panggilApi, petaError } from "@/components/studio-soal/klien";
 import {
@@ -22,6 +27,7 @@ import {
   type FormSoal as DataFormSoal,
 } from "@/lib/shared/studio-soal/formSoal";
 import { parseAngka } from "@/lib/shared/studio-soal/angka";
+import { alasanTidakBisaHapus, tampilkanTombolHapus } from "@/lib/shared/studio-soal/hapusDraf";
 import { validasiRumusSoal } from "@/lib/shared/studio-soal/rumus";
 import { LABEL_OPSI, TIPE_SOAL, type BlokStimulus, type TipeSoal } from "@/lib/shared/studio-soal/tipe";
 import { validasiSoal, type ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
@@ -57,14 +63,9 @@ const LABEL_LEVEL: Record<number, string> = {
   3: "L3 — Penalaran",
 };
 
-const kartu = "flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white p-4 sm:p-5";
-const inputKelas = (error?: string[]) =>
-  [
-    "w-full rounded-[12px] border bg-white px-3 py-2 text-sm text-black outline-none transition-colors focus:border-black disabled:bg-[#F6F6F6] disabled:text-[#7E7C7C]",
-    error ? "border-[#E70A0A]" : "border-[#AFAFAF]",
-  ].join(" ");
-const tombolKecil =
-  "rounded-[8px] border border-[#CAC9C9] bg-white px-2.5 py-1 text-xs font-medium text-black hover:border-[#081EEA] disabled:cursor-not-allowed disabled:opacity-50";
+const kartu = KARTU;
+const inputKelas = inputKecil;
+const tombolKecil = TOMBOL_KECIL;
 
 type Sibuk = null | "simpan" | "ajukan" | "tarik" | "versi" | "hapus";
 
@@ -102,7 +103,6 @@ export default function FormSoal({
   const [errorServer, setErrorServer] = useState<ErrorValidasi[]>([]);
   const [tampilSemua, setTampilSemua] = useState(false);
   const [tab, setTab] = useState<"tulis" | "pratinjau">("tulis");
-  const [konfirmasiHapus, setKonfirmasiHapus] = useState(false);
   // Pernah diajukan di sesi ini -> tidak bisa dihapus lagi (DB juga menolak).
   const [sudahPernahDiajukan, setSudahPernahDiajukan] = useState(pernahDiajukan);
   const redaksiRef = useRef<HTMLTextAreaElement | null>(null);
@@ -142,11 +142,11 @@ export default function FormSoal({
   async function simpan(): Promise<boolean> {
     if (sibukRef.current) return false;
     if (!form.subtes_id) {
-      setPesan({ jenis: "gagal", teks: "Pilih subtes dulu." });
+      setPesan({ jenis: "gagal", teks: "Pilih subtes dulu sebelum menyimpan." });
       return false;
     }
     if (errorsBentuk.length > 0) {
-      setPesan({ jenis: "gagal", teks: "Perbaiki isian yang ditandai merah sebelum menyimpan." });
+      setPesan({ jenis: "gagal", teks: "Ada isian yang ditandai merah. Betulkan dulu, lalu simpan." });
       return false;
     }
     sibukRef.current = true;
@@ -156,7 +156,7 @@ export default function FormSoal({
     sibukRef.current = false;
     setSibuk(null);
     if (!r.ok) {
-      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Gagal menyimpan draf.") });
+      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Draf belum tersimpan. Coba lagi.") });
       setErrorServer(Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : []);
       return false;
     }
@@ -182,7 +182,7 @@ export default function FormSoal({
     if (sibukRef.current) return;
     setTampilSemua(true);
     if (errorsAjukan.length > 0) {
-      setPesan({ jenis: "gagal", teks: `Masih ada ${errorsAjukan.length} hal yang perlu dilengkapi sebelum diajukan (ditandai merah).` });
+      setPesan({ jenis: "gagal", teks: `Masih ada ${errorsAjukan.length} hal yang perlu dilengkapi sebelum dikirim (ditandai merah).` });
       return;
     }
     if (kotor || !sudahDisimpan) {
@@ -190,21 +190,21 @@ export default function FormSoal({
     }
     const r = await jalankan("ajukan", `/api/studio-soal/soal/${id}/ajukan`, "POST");
     if (!r.ok) {
-      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Gagal mengajukan soal.") });
+      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Soal belum terkirim. Coba lagi.") });
       setErrorServer(Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : []);
       return;
     }
     setStatus("diajukan");
     setSudahPernahDiajukan(true);
-    setPesan({ jenis: "ok", teks: String(r.json.pesan ?? "Soal diajukan untuk ditinjau.") });
+    setPesan({ jenis: "ok", teks: String(r.json.pesan ?? "Soal sudah dikirim untuk dicek.") });
   }
 
   async function tarik() {
     if (sibukRef.current) return;
     const r = await jalankan("tarik", `/api/studio-soal/soal/${id}/tarik`, "POST");
-    if (!r.ok) return setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Gagal menarik pengajuan.") });
+    if (!r.ok) return setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Kiriman belum dibatalkan. Coba lagi.") });
     setStatus("draf");
-    setPesan({ jenis: "ok", teks: String(r.json.pesan ?? "Pengajuan ditarik.") });
+    setPesan({ jenis: "ok", teks: String(r.json.pesan ?? "Kiriman dibatalkan.") });
   }
 
   async function versiBaru() {
@@ -212,18 +212,9 @@ export default function FormSoal({
     const r = await jalankan("versi", `/api/studio-soal/soal/${id}/versi-baru`, "POST");
     if (!r.ok) {
       const terbuka = typeof r.json.idTerbuka === "string" ? `/studio-soal/soal/${r.json.idTerbuka}` : undefined;
-      return setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Gagal membuat versi baru."), tautan: terbuka });
+      return setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Versi baru belum dibuat. Coba lagi."), tautan: terbuka });
     }
     router.push(`/studio-soal/soal/${String(r.json.id)}`);
-  }
-
-  async function hapus() {
-    if (sibukRef.current) return;
-    const r = await jalankan("hapus", `/api/studio-soal/soal/${id}`, "DELETE");
-    setKonfirmasiHapus(false);
-    if (!r.ok) return setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Gagal menghapus draf.") });
-    router.push(stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal");
-    router.refresh();
   }
 
   // ---------------------------------------------------------------- bagian per tipe
@@ -262,17 +253,15 @@ export default function FormSoal({
   return (
     <div className="flex flex-col gap-4 pb-24 sm:gap-5">
       <div className="flex flex-col gap-2">
-        <Link href={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"} className="w-fit text-sm text-[#081EEA] hover:underline">
-          ← {stimulus ? `Stimulus: ${stimulus.judul || "tanpa judul"}` : "Studio Soal"}
+        <Link href={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"} className="w-fit text-sm text-primary hover:underline">
+          ← {stimulus ? `Bacaan: ${stimulus.judul || "tanpa judul"}` : "Studio Soal"}
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-medium text-black sm:text-2xl">{judul}</h1>
-          <span className="rounded-full bg-[#F1F1F1] px-2.5 py-0.5 text-xs font-medium text-black">
-            {LABEL_STATUS[status] ?? status}
-          </span>
-          {versi > 1 ? <span className="text-xs text-[#7E7C7C]">versi {versi}</span> : null}
+          <span className={CHIP}>{LABEL_STATUS[status] ?? status}</span>
+          {versi > 1 ? <span className="text-xs text-muted">versi {versi}</span> : null}
           {sudahDisimpan && bolehEdit ? (
-            <span className={["text-xs", kotor ? "text-amber-700" : "text-[#7E7C7C]"].join(" ")}>
+            <span className={["text-xs", kotor ? "text-amber-700" : "text-muted"].join(" ")}>
               {kotor ? "Ada perubahan belum disimpan" : "Semua perubahan tersimpan"}
             </span>
           ) : null}
@@ -281,29 +270,29 @@ export default function FormSoal({
 
       {!ditugaskan ? (
         <Banner jenis="peringatan">
-          Anda tidak lagi ditugaskan ke subtes ini. Soal tetap tersimpan, tetapi tidak bisa diubah atau diajukan sampai Admin
+          Anda tidak lagi ditugaskan ke subtes ini. Soal tetap tersimpan, tapi tidak bisa diubah atau dikirim sampai Admin
           menugaskan Anda lagi.
         </Banner>
       ) : null}
       {status === "ditolak" && alasanTolak ? (
         <Banner jenis="peringatan">
-          <span className="font-medium">Ditolak peninjau:</span> {alasanTolak}
+          <span className="font-medium">Catatan dari pengecek:</span> {alasanTolak}
           <br />
-          Perbaiki soal lalu ajukan lagi.
+          Perbaiki soalnya, lalu kirim lagi.
         </Banner>
       ) : null}
       {status === "diajukan" ? (
         <Banner jenis="info">
-          Soal sedang menunggu tinjauan mentor lain, jadi isinya terkunci.{" "}
+          Soal sedang dicek mentor lain, jadi isinya dikunci dulu.{" "}
           {stimulus && stimulus.status === "diajukan"
-            ? "Soal ini diajukan bersama stimulusnya — tarik dari halaman stimulus bila perlu mengubahnya."
-            : "Tarik pengajuan bila perlu mengubahnya."}
+            ? "Soal ini dikirim bersama bacaannya — batalkan kirim dari halaman bacaan kalau mau mengubahnya."
+            : "Tekan “Batalkan kirim” kalau mau mengubahnya."}
         </Banner>
       ) : null}
       {status === "terpublikasi" ? (
         <Banner jenis="info">
-          Soal sudah terbit dan isinya terkunci. Untuk mengubah, buat versi baru — versi ini tetap dipakai sampai versi baru lolos
-          tinjauan.
+          Soal sudah terbit, jadi isinya dikunci. Untuk mengubah, buat versi baru — versi ini tetap dipakai sampai versi baru lolos
+          dicek.
         </Banner>
       ) : null}
       {status === "digantikan" || status === "diarsipkan" ? (
@@ -311,13 +300,7 @@ export default function FormSoal({
       ) : null}
 
       {pesan ? (
-        <div
-          role={pesan.jenis === "gagal" ? "alert" : "status"}
-          className={[
-            "rounded-[12px] px-4 py-2.5 text-sm",
-            pesan.jenis === "ok" ? "bg-[#F2FAF4] text-[#0A7D2C]" : "bg-[#FDEEEE] text-[#E70A0A]",
-          ].join(" ")}
-        >
+        <div role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
           {pesan.teks}
           {pesan.tautan ? (
             <>
@@ -341,7 +324,7 @@ export default function FormSoal({
             onClick={() => setTab(t)}
             className={[
               "flex-1 rounded-full border px-4 py-2 text-sm font-medium",
-              tab === t ? "border-black bg-black text-white" : "border-[#CAC9C9] bg-white text-black",
+              tab === t ? "border-black bg-black text-white" : "border-line-strong bg-white text-black",
             ].join(" ")}
           >
             {t === "tulis" ? "Tulis" : "Pratinjau & uji kunci"}
@@ -355,31 +338,27 @@ export default function FormSoal({
           <section className={kartu}>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="subtes" className="text-sm font-medium text-black">
-                Subtes <span className="text-[#E70A0A]">*</span>
+                Subtes <span className="text-danger">*</span>
               </label>
               {sudahDisimpan || stimulus ? (
                 <p className="text-sm text-black">{subtesNama ?? "Subtes tidak dikenal"}</p>
               ) : (
-                <select
+                <SelectField
                   id="subtes"
+                  size="md"
                   value={form.subtes_id}
                   onChange={(e) => ubah({ subtes_id: e.target.value })}
-                  className={inputKelas(errorDi(peta, "subtes_id"))}
-                >
-                  <option value="">Pilih subtes yang ditugaskan</option>
-                  {subtesPilihan.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nama}
-                    </option>
-                  ))}
-                </select>
+                  status={errorDi(peta, "subtes_id") ? "error" : "default"}
+                  placeholder="Pilih subtes yang ditugaskan"
+                  options={subtesPilihan.map((s) => ({ value: s.id, label: s.nama }))}
+                />
               )}
               <PesanError pesan={errorDi(peta, "subtes_id")} />
             </div>
 
             <fieldset className="flex flex-col gap-1.5">
               <legend className="mb-1.5 text-sm font-medium text-black">
-                Tipe soal <span className="text-[#E70A0A]">*</span>
+                Tipe soal <span className="text-danger">*</span>
               </legend>
               {sudahDisimpan ? (
                 <p className="text-sm text-black">{LABEL_TIPE[form.tipe]}</p>
@@ -391,13 +370,10 @@ export default function FormSoal({
                       type="button"
                       aria-pressed={form.tipe === t}
                       onClick={() => gantiTipe(t)}
-                      className={[
-                        "flex flex-col items-start gap-0.5 rounded-[12px] border px-3 py-2 text-left text-sm transition-colors",
-                        form.tipe === t ? "border-[#081EEA] bg-[#081EEA] text-white" : "border-[#CAC9C9] bg-white text-black hover:border-[#081EEA]",
-                      ].join(" ")}
+                      className={`flex flex-col items-start gap-0.5 rounded-[12px] px-3 py-2 text-left ${pilihan(form.tipe === t)}`}
                     >
                       <span className="font-medium">{LABEL_TIPE[t]}</span>
-                      <span className={["text-xs", form.tipe === t ? "text-white/80" : "text-[#7E7C7C]"].join(" ")}>
+                      <span className={["text-xs", form.tipe === t ? "text-white/80" : "text-muted"].join(" ")}>
                         {KETERANGAN_TIPE[t]}
                       </span>
                     </button>
@@ -405,13 +381,13 @@ export default function FormSoal({
                 </div>
               )}
               {!sudahDisimpan ? (
-                <p className="text-xs text-[#7E7C7C]">Subtes dan tipe tidak bisa diganti setelah draf pertama disimpan.</p>
+                <p className="text-xs text-muted">Subtes dan tipe soal tidak bisa diganti setelah draf pertama disimpan.</p>
               ) : null}
             </fieldset>
 
             <fieldset className="flex flex-col gap-1.5">
               <legend className="mb-1.5 text-sm font-medium text-black">
-                Tingkat kesulitan <span className="text-[#E70A0A]">*</span>
+                Tingkat kesulitan <span className="text-danger">*</span>
               </legend>
               <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Tingkat kesulitan">
                 {PILIHAN_KESULITAN.map((k) => (
@@ -422,10 +398,7 @@ export default function FormSoal({
                     aria-checked={form.tingkat_kesulitan === k}
                     disabled={!bolehEdit}
                     onClick={() => ubah({ tingkat_kesulitan: k })}
-                    className={[
-                      "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed",
-                      form.tingkat_kesulitan === k ? "border-[#081EEA] bg-[#081EEA] text-white" : "border-[#CAC9C9] bg-white text-black",
-                    ].join(" ")}
+                    className={`rounded-full px-4 py-1.5 ${pilihan(form.tingkat_kesulitan === k)}`}
                   >
                     {LABEL_KESULITAN[k]}
                   </button>
@@ -435,11 +408,11 @@ export default function FormSoal({
             </fieldset>
           </section>
 
-          {/* ---- Redaksi ---- */}
+          {/* ---- Teks soal (redaksi) ---- */}
           <section className={kartu}>
             <TextareaKaya
               id="redaksi"
-              label="Redaksi soal"
+              label="Teks soal"
               wajib
               value={form.redaksi}
               onChange={(v) => ubah({ redaksi: v })}
@@ -450,7 +423,7 @@ export default function FormSoal({
               error={errorDi(peta, "redaksi")}
               petunjuk={
                 form.tipe === "isian"
-                  ? "Taruh kursor di tempat jawaban, lalu tekan \"Sisipkan rumpang\". Penanda {{r1}} menjadi kotak jawaban."
+                  ? "Taruh kursor di tempat jawaban, lalu tekan “Sisipkan kotak jawaban”. Tanda {{r1}} nanti tampil sebagai kotak isian untuk siswa."
                   : undefined
               }
               tombolTambahan={
@@ -460,9 +433,9 @@ export default function FormSoal({
                     onClick={sisipkanRumpang}
                     disabled={rumpang.length >= BATAS.rumpangMaks}
                     className={tombolKecil}
-                    title={`Maksimal ${BATAS.rumpangMaks} rumpang`}
+                    title={`Maksimal ${BATAS.rumpangMaks} kotak jawaban`}
                   >
-                    + Sisipkan rumpang
+                    + Sisipkan kotak jawaban
                   </button>
                 ) : null
               }
@@ -473,13 +446,13 @@ export default function FormSoal({
           {/* ---- Pilihan ganda ---- */}
           {form.tipe === "pilihan_ganda" ? (
             <section className={kartu}>
-              <h2 className="text-base font-medium text-black">Opsi jawaban</h2>
+              <h2 className="text-base font-medium text-black">Pilihan jawaban</h2>
               <PesanError pesan={errorDi(peta, "konten.opsi")} />
               {opsi.map((o, i) => (
                 <TextareaKaya
                   key={o.label ?? i}
                   id={`opsi-${i}`}
-                  label={`Opsi ${o.label ?? LABEL_OPSI[i]}`}
+                  label={`Pilihan ${o.label ?? LABEL_OPSI[i]}`}
                   value={o.teks ?? ""}
                   onChange={(v) => ubahKonten({ opsi: opsi.map((x, j) => (j === i ? { ...x, teks: v } : x)) })}
                   maks={BATAS.opsiTeksMaks}
@@ -490,9 +463,9 @@ export default function FormSoal({
               ))}
               <fieldset className="flex flex-col gap-1.5">
                 <legend className="mb-1.5 text-sm font-medium text-black">
-                  Kunci jawaban <span className="text-[#E70A0A]">*</span>
+                  Jawaban benar <span className="text-danger">*</span>
                 </legend>
-                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Kunci jawaban">
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Jawaban benar">
                   {LABEL_OPSI.map((l) => (
                     <button
                       key={l}
@@ -501,10 +474,7 @@ export default function FormSoal({
                       aria-checked={form.kunci.opsi === l}
                       disabled={!bolehEdit}
                       onClick={() => ubahKunci({ opsi: l })}
-                      className={[
-                        "h-10 w-10 rounded-full border text-sm font-medium transition-colors disabled:cursor-not-allowed",
-                        form.kunci.opsi === l ? "border-[#0A7D2C] bg-[#0A7D2C] text-white" : "border-[#CAC9C9] bg-white text-black",
-                      ].join(" ")}
+                      className={`h-10 w-10 rounded-full ${pilihan(form.kunci.opsi === l, "success")}`}
                     >
                       {l}
                     </button>
@@ -523,8 +493,9 @@ export default function FormSoal({
                 <label htmlFor="preset-label" className="text-sm font-medium text-black">
                   Label kolom jawaban
                 </label>
-                <select
+                <SelectField
                   id="preset-label"
+                  size="md"
                   disabled={!bolehEdit}
                   value={labelSendiri ? "sendiri" : String(Math.max(presetCocok, 0))}
                   onChange={(e) => {
@@ -532,15 +503,11 @@ export default function FormSoal({
                     setLabelSendiri(false);
                     ubahKonten({ label_kolom: [...PRESET_LABEL_KOLOM[Number(e.target.value)]] });
                   }}
-                  className={inputKelas()}
-                >
-                  {PRESET_LABEL_KOLOM.map(([a, b], i) => (
-                    <option key={a} value={i}>
-                      {a} / {b}
-                    </option>
-                  ))}
-                  <option value="sendiri">Tulis sendiri…</option>
-                </select>
+                  options={[
+                    ...PRESET_LABEL_KOLOM.map(([a, b], i) => ({ value: String(i), label: `${a} / ${b}` })),
+                    { value: "sendiri", label: "Tulis sendiri…" },
+                  ]}
+                />
                 {labelSendiri ? (
                   <div className="grid grid-cols-2 gap-2">
                     {[0, 1].map((k) => (
@@ -566,7 +533,7 @@ export default function FormSoal({
 
               <PesanError pesan={errorDi(peta, "konten.pernyataan")} />
               {pernyataan.map((p, i) => (
-                <div key={p.id} className="flex flex-col gap-2 rounded-[16px] border border-[#E3E3E3] p-3">
+                <div key={p.id} className="flex flex-col gap-2 rounded-[16px] border border-line p-3">
                   <TextareaKaya
                     id={`pernyataan-${p.id}`}
                     label={`Pernyataan ${i + 1}`}
@@ -578,7 +545,7 @@ export default function FormSoal({
                     error={errorDi(peta, `konten.pernyataan.${i}`, true)}
                   />
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-[#7E7C7C]">Kunci:</span>
+                    <span className="text-xs text-muted">Jawaban benar:</span>
                     {[0, 1].map((k) => (
                       <button
                         key={k}
@@ -586,10 +553,7 @@ export default function FormSoal({
                         aria-pressed={perBaris[p.id] === k}
                         disabled={!bolehEdit}
                         onClick={() => ubahKunci({ per_baris: { ...perBaris, [p.id]: k } })}
-                        className={[
-                          "rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed",
-                          perBaris[p.id] === k ? "border-[#0A7D2C] bg-[#0A7D2C] text-white" : "border-[#CAC9C9] bg-white text-black",
-                        ].join(" ")}
+                        className={`rounded-full px-3 py-1 ${pilihan(perBaris[p.id] === k, "success", "text-xs")}`}
                       >
                         {labelKolom[k] || `Kolom ${k + 1}`}
                       </button>
@@ -606,7 +570,7 @@ export default function FormSoal({
                             kunci: { ...f.kunci, per_baris: kunciBaru },
                           }));
                         }}
-                        className="ml-auto text-xs text-[#E70A0A] hover:underline"
+                        className="ml-auto text-xs text-danger hover:underline"
                       >
                         Hapus pernyataan
                       </button>
@@ -634,21 +598,21 @@ export default function FormSoal({
           {/* ---- Isian ---- */}
           {form.tipe === "isian" ? (
             <section className={kartu}>
-              <h2 className="text-base font-medium text-black">Rumpang & jawaban diterima</h2>
+              <h2 className="text-base font-medium text-black">Kotak jawaban & jawaban yang diterima</h2>
               <PesanError pesan={errorDi(peta, "konten.rumpang", true)} />
               {rumpang.length === 0 ? (
-                <p className="text-sm text-[#7E7C7C]">Belum ada rumpang. Sisipkan dari kotak redaksi (1–5 rumpang).</p>
+                <p className="text-sm text-muted">Belum ada kotak jawaban. Sisipkan dari kotak teks soal (1–5 kotak).</p>
               ) : null}
               {rumpang.map((r) => {
                 const k = objek(kunciRumpang[r.id]);
                 const diterima = daftar<string>(k.diterima);
                 const adaDiRedaksi = penanda.includes(r.id);
                 return (
-                  <div key={r.id} className="flex flex-col gap-2 rounded-[16px] border border-[#E3E3E3] p-3">
+                  <div key={r.id} className="flex flex-col gap-2 rounded-[16px] border border-line p-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-medium">{`{{${r.id}}}`}</span>
-                      <span className={["text-xs", adaDiRedaksi ? "text-[#0A7D2C]" : "text-[#E70A0A]"].join(" ")}>
-                        {adaDiRedaksi ? "ada di redaksi" : "belum ada di redaksi"}
+                      <span className={["text-xs", adaDiRedaksi ? "text-success" : "text-danger"].join(" ")}>
+                        {adaDiRedaksi ? "sudah ada di teks soal" : "belum ada di teks soal"}
                       </span>
                       <select
                         aria-label={`Jenis jawaban ${r.id}`}
@@ -668,21 +632,21 @@ export default function FormSoal({
                             };
                           });
                         }}
-                        className="rounded-[8px] border border-[#AFAFAF] bg-white px-2 py-1 text-xs"
+                        className="rounded-[8px] border border-subtle bg-white px-2 py-1 text-xs hover:border-primary"
                       >
                         <option value="teks">Teks</option>
                         <option value="angka">Angka</option>
                       </select>
                       {bolehEdit ? (
-                        <button type="button" onClick={() => setForm((f) => hapusRumpang(f, r.id))} className="ml-auto text-xs text-[#E70A0A] hover:underline">
-                          Hapus rumpang
+                        <button type="button" onClick={() => setForm((f) => hapusRumpang(f, r.id))} className="ml-auto text-xs text-danger hover:underline">
+                          Hapus kotak ini
                         </button>
                       ) : null}
                     </div>
-                    <p className="text-xs text-[#7E7C7C]">
+                    <p className="text-xs text-muted">
                       {r.jenis === "angka"
                         ? "Jawaban dicocokkan sebagai nilai: 0,5 = 0.5 = 1/2. Tulis tanpa pemisah ribuan (1.000 dibaca satu)."
-                        : "Huruf besar/kecil dan spasi berlebih diabaikan; tanda baca tidak. Tambahkan ejaan lain sebagai jawaban alternatif."}
+                        : "Huruf besar/kecil dan spasi berlebih tidak dihitung, tapi tanda baca dihitung. Kalau ada ejaan lain yang benar, tambahkan sebagai jawaban lain."}
                     </p>
                     {diterima.map((d, j) => {
                       const nilai = r.jenis === "angka" && d.trim() ? parseAngka(d) : null;
@@ -694,7 +658,7 @@ export default function FormSoal({
                               disabled={!bolehEdit}
                               inputMode={r.jenis === "angka" ? "decimal" : "text"}
                               aria-label={`Jawaban diterima ${j + 1} untuk ${r.id}`}
-                              placeholder={j === 0 ? "Jawaban benar" : "Jawaban alternatif"}
+                              placeholder={j === 0 ? "Jawaban benar" : "Jawaban lain yang juga benar"}
                               onChange={(e) => ubahKunciRumpang(r.id, { diterima: diterima.map((x, n) => (n === j ? e.target.value : x)) })}
                               className={inputKelas(errorDi(peta, `kunci.rumpang.${r.id}.diterima.${j}`))}
                             />
@@ -703,14 +667,14 @@ export default function FormSoal({
                                 type="button"
                                 aria-label="Hapus jawaban ini"
                                 onClick={() => ubahKunciRumpang(r.id, { diterima: diterima.filter((_, n) => n !== j) })}
-                                className="shrink-0 text-xs text-[#E70A0A] hover:underline"
+                                className="shrink-0 text-xs text-danger hover:underline"
                               >
                                 Hapus
                               </button>
                             ) : null}
                           </div>
                           {r.jenis === "angka" && d.trim() ? (
-                            <span className={["text-xs", nilai ? "text-[#7E7C7C]" : "text-[#E70A0A]"].join(" ")}>
+                            <span className={["text-xs", nilai ? "text-muted" : "text-danger"].join(" ")}>
                               {nilai ? `dibaca ${nilai.q === BigInt(1) ? nilai.p : `${nilai.p}/${nilai.q}`}` : "bukan angka yang dikenali"}
                             </span>
                           ) : null}
@@ -725,13 +689,13 @@ export default function FormSoal({
                         onClick={() => ubahKunciRumpang(r.id, { diterima: [...diterima, ""] })}
                         className={`${tombolKecil} w-fit`}
                       >
-                        + Jawaban alternatif
+                        + Jawaban lain yang juga benar
                       </button>
                     ) : null}
                     {r.jenis === "angka" ? (
                       <div className="flex flex-col gap-1">
                         <label htmlFor={`toleransi-${r.id}`} className="text-xs font-medium text-black">
-                          Toleransi (opsional, untuk jawaban hasil pembulatan)
+                          Batas selisih (opsional, untuk jawaban hasil pembulatan)
                         </label>
                         <input
                           id={`toleransi-${r.id}`}
@@ -774,64 +738,63 @@ export default function FormSoal({
             />
             <div className="flex flex-col gap-1.5">
               <label htmlFor="sumber" className="text-sm font-medium text-black">
-                Sumber rujukan <span className="font-normal text-[#7E7C7C]">(opsional)</span>
+                Sumber soal <span className="font-normal text-muted">(opsional)</span>
               </label>
-              <input
+              <InputField
+                type="text"
+                size="md"
                 id="sumber"
                 value={form.sumber_rujukan}
                 disabled={!bolehEdit}
+                status={errorDi(peta, "sumber_rujukan") ? "error" : "default"}
                 placeholder="mis. Buatan sendiri, atau nama buku/situs yang diadaptasi"
                 onChange={(e) => ubah({ sumber_rujukan: e.target.value })}
-                className={inputKelas(errorDi(peta, "sumber_rujukan"))}
               />
               <PesanError pesan={errorDi(peta, "sumber_rujukan")} />
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="estimasi" className="text-sm font-medium text-black">
-                  Estimasi waktu (detik) <span className="font-normal text-[#7E7C7C]">(opsional)</span>
+                  Perkiraan waktu mengerjakan (detik) <span className="font-normal text-muted">(opsional)</span>
                 </label>
-                <input
+                <InputField
+                  type="text"
+                  size="md"
                   id="estimasi"
-                  type="number"
                   inputMode="numeric"
-                  min={BATAS.estimasiDetikMin}
-                  max={BATAS.estimasiDetikMaks}
                   value={form.estimasi_waktu_detik ?? ""}
                   disabled={!bolehEdit}
+                  status={errorDi(peta, "estimasi_waktu_detik") ? "error" : "default"}
                   placeholder={`${BATAS.estimasiDetikMin}–${BATAS.estimasiDetikMaks}`}
-                  onChange={(e) => ubah({ estimasi_waktu_detik: e.target.value === "" ? null : Number(e.target.value) })}
-                  className={inputKelas(errorDi(peta, "estimasi_waktu_detik"))}
+                  onChange={(e) => {
+                    const angka = e.target.value.replace(/\D/g, "");
+                    ubah({ estimasi_waktu_detik: angka === "" ? null : Number(angka) });
+                  }}
                 />
                 <PesanError pesan={errorDi(peta, "estimasi_waktu_detik")} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="level" className="text-sm font-medium text-black">
-                  Level kognitif <span className="font-normal text-[#7E7C7C]">(opsional)</span>
+                  Level berpikir <span className="font-normal text-muted">(opsional)</span>
                 </label>
-                <select
+                <SelectField
                   id="level"
-                  value={form.level_kognitif ?? ""}
+                  size="md"
+                  value={form.level_kognitif ? String(form.level_kognitif) : ""}
                   disabled={!bolehEdit}
+                  status={errorDi(peta, "level_kognitif") ? "error" : "default"}
                   onChange={(e) => ubah({ level_kognitif: e.target.value === "" ? null : Number(e.target.value) })}
-                  className={inputKelas(errorDi(peta, "level_kognitif"))}
-                >
-                  <option value="">Tidak diisi</option>
-                  {[1, 2, 3].map((l) => (
-                    <option key={l} value={l}>
-                      {LABEL_LEVEL[l]}
-                    </option>
-                  ))}
-                </select>
+                  options={[{ value: "", label: "Tidak diisi" }, ...[1, 2, 3].map((l) => ({ value: String(l), label: LABEL_LEVEL[l] }))]}
+                />
                 <PesanError pesan={errorDi(peta, "level_kognitif")} />
               </div>
             </div>
           </section>
 
           {tampilSemua && errorsAjukan.length > 0 ? (
-            <section className="flex flex-col gap-2 rounded-[20px] border border-[#F5C2C2] bg-[#FDEEEE] p-4">
-              <p className="text-sm font-medium text-[#E70A0A]">Yang perlu dilengkapi sebelum diajukan:</p>
-              <ul className="list-disc pl-5 text-sm text-[#E70A0A]">
+            <section className="flex flex-col gap-2 rounded-[20px] border border-danger-line bg-danger-soft p-4">
+              <p className="text-sm font-medium text-danger">Yang perlu dilengkapi sebelum dikirim:</p>
+              <ul className="list-disc pl-5 text-sm text-danger">
                 {[...new Set(errorsAjukan.map((e) => e.pesan))].map((p) => (
                   <li key={p}>{p}</li>
                 ))}
@@ -839,32 +802,13 @@ export default function FormSoal({
             </section>
           ) : null}
 
-          {bolehEdit && !sudahPernahDiajukan && sudahDisimpan && status === "draf" ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {konfirmasiHapus ? (
-                <>
-                  <span className="text-sm text-black">Hapus draf ini? Tidak bisa dibatalkan.</span>
-                  <button type="button" onClick={hapus} disabled={sibuk !== null} className="rounded-full bg-[#E70A0A] px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-                    {sibuk === "hapus" ? "Menghapus…" : "Ya, hapus"}
-                  </button>
-                  <button type="button" onClick={() => setKonfirmasiHapus(false)} className="rounded-full border border-[#CAC9C9] px-4 py-1.5 text-sm">
-                    Batal
-                  </button>
-                </>
-              ) : (
-                <button type="button" onClick={() => setKonfirmasiHapus(true)} className="text-sm text-[#E70A0A] hover:underline">
-                  Hapus draf
-                </button>
-              )}
-            </div>
-          ) : null}
         </div>
 
         <aside className={["min-w-0", tab === "pratinjau" ? "" : "hidden lg:block"].join(" ")}>
           <div className={`${kartu} lg:sticky lg:top-4`}>
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-base font-medium text-black">Pratinjau</h2>
-              <span className="text-xs text-[#7E7C7C]">Tampilan seperti yang dilihat siswa</span>
+              <span className="text-xs text-muted">Tampilan seperti yang dilihat siswa</span>
             </div>
             <SoalPratinjau soal={form} stimulus={stimulus?.blok ?? null} />
           </div>
@@ -872,56 +816,46 @@ export default function FormSoal({
       </div>
 
       {/* ---- Bilah aksi (menempel di bawah, nyaman di HP) ---- */}
-      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-t border-[#E3E3E3] bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:mx-0 lg:rounded-[16px] lg:border">
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-t border-line bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:mx-0 lg:rounded-[16px] lg:border">
         {bolehEdit ? (
           <>
-            <button
-              type="button"
-              onClick={simpan}
-              disabled={sibuk !== null}
-              className="rounded-full border border-black bg-white px-5 py-2 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            <Button variant="secondary" size="sm" onClick={simpan} disabled={sibuk !== null}>
               {sibuk === "simpan" ? "Menyimpan…" : "Simpan draf"}
-            </button>
+            </Button>
             {bisaAjukanSendiri ? (
-              <button
-                type="button"
-                onClick={ajukan}
-                disabled={sibuk !== null}
-                className="rounded-full bg-[#081EEA] px-5 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {sibuk === "ajukan" ? "Mengajukan…" : "Ajukan untuk ditinjau"}
-              </button>
+              <Button size="sm" onClick={ajukan} disabled={sibuk !== null}>
+                {sibuk === "ajukan" ? "Mengirim…" : "Kirim untuk dicek"}
+              </Button>
             ) : (
-              <span className="text-xs text-[#7E7C7C]">Soal ini diajukan bersama stimulusnya dari halaman stimulus.</span>
+              <span className="text-xs text-muted">Soal ini dikirim bersama bacaannya dari halaman bacaan.</span>
             )}
-            <span className="ml-auto text-xs text-[#7E7C7C]">
-              {jumlahBelumLengkap === 0 ? "Siap diajukan" : `${jumlahBelumLengkap} hal belum lengkap`}
+            <span className="text-xs text-muted">
+              {jumlahBelumLengkap === 0 ? "Siap dikirim" : `${jumlahBelumLengkap} hal belum lengkap`}
             </span>
           </>
         ) : null}
         {status === "diajukan" && ditugaskan && !(stimulus && stimulus.status === "diajukan") ? (
-          <button
-            type="button"
-            onClick={tarik}
-            disabled={sibuk !== null}
-            className="rounded-full border border-black bg-white px-5 py-2 text-sm font-medium text-black disabled:opacity-50"
-          >
-            {sibuk === "tarik" ? "Menarik…" : "Tarik pengajuan"}
-          </button>
+          <Button variant="secondary" size="sm" onClick={tarik} disabled={sibuk !== null}>
+            {sibuk === "tarik" ? "Membatalkan…" : "Batalkan kirim"}
+          </Button>
         ) : null}
         {status === "terpublikasi" && ditugaskan ? (
-          <button
-            type="button"
-            onClick={versiBaru}
-            disabled={sibuk !== null}
-            className="rounded-full bg-[#081EEA] px-5 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
+          <Button size="sm" onClick={versiBaru} disabled={sibuk !== null}>
             {sibuk === "versi" ? "Membuat…" : "Buat versi baru"}
-          </button>
+          </Button>
         ) : null}
         {!bolehEdit && status !== "diajukan" && status !== "terpublikasi" ? (
-          <span className="text-xs text-[#7E7C7C]">Soal ini hanya bisa dilihat.</span>
+          <span className="text-xs text-muted">Soal ini hanya bisa dilihat.</span>
+        ) : null}
+        {sudahDisimpan && tampilkanTombolHapus(status) ? (
+          <TombolHapusDraf
+            objek="soal"
+            id={id}
+            versi={versi}
+            className="ml-auto"
+            sesudahHapus={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"}
+            alasan={alasanTidakBisaHapus("soal", { status, pernahDiajukan: sudahPernahDiajukan, ditugaskan })}
+          />
         ) : null}
       </div>
     </div>
@@ -933,7 +867,7 @@ function Banner({ jenis, children }: { jenis: "info" | "peringatan"; children: R
     <div
       className={[
         "rounded-[12px] border px-4 py-3 text-sm",
-        jenis === "info" ? "border-[#D6DBFD] bg-[#EEF0FE] text-black" : "border-amber-200 bg-amber-50 text-amber-900",
+        jenis === "info" ? "border-primary-line bg-primary-soft text-black" : "border-amber-200 bg-amber-50 text-amber-900",
       ].join(" ")}
     >
       {children}

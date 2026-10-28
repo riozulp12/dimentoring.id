@@ -1,5 +1,6 @@
 "use client";
 
+import { LABEL_STATUS_SOAL } from "@/lib/shared/studio-soal/studioMentor";
 import type { ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
 
 /** Panggilan API Studio Soal dari browser. Tidak pernah melempar error. */
@@ -17,7 +18,7 @@ export async function panggilApi(
     const json = ((await res.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
     return { ok: res.ok && json.success === true, status: res.status, json };
   } catch {
-    return { ok: false, status: 0, json: { error: "Gagal terhubung ke server. Periksa koneksi lalu coba lagi." } };
+    return { ok: false, status: 0, json: { error: "Tidak tersambung ke server. Cek koneksi internet lalu coba lagi." } };
   }
 }
 
@@ -41,13 +42,7 @@ export function errorDi(peta: Map<string, string[]>, field: string, termasukAnak
   return hasil.length ? hasil : undefined;
 }
 
-export const LABEL_STATUS: Record<string, string> = {
-  draf: "Draf",
-  diajukan: "Menunggu tinjauan",
-  terpublikasi: "Terpublikasi",
-  ditolak: "Ditolak",
-  digantikan: "Versi lama",
-  diarsipkan: "Diarsipkan",
-};
+/** Satu sumber label status (sama dengan halaman daftar). */
+export const LABEL_STATUS: Record<string, string> = LABEL_STATUS_SOAL;
 
 export const isBolehEdit = (status: string) => status === "draf" || status === "ditolak";
