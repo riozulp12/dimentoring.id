@@ -254,6 +254,25 @@ export default function FormStimulus({
         </Banner>
       ) : null}
 
+      {/* UX-2: ajakan menambah soal, selalu di atas supaya tidak perlu menggulir. */}
+      {bolehTambahSoal ? (
+        <div className="flex flex-col gap-3 rounded-[16px] border border-primary-line bg-primary-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-black">
+            {soal.length === 0
+              ? "Bacaan tersimpan. Langkah berikutnya: tambah soal yang merujuk ke bacaan ini."
+              : `Bacaan ini dipakai ${soal.length} soal. Tambah lagi kalau perlu.`}
+          </p>
+          <Link
+            href={`/studio-soal/soal/baru?stimulus=${id}`}
+            className={buttonClassName({ size: "sm", className: "w-fit shrink-0" })}
+          >
+            + Tambah soal untuk bacaan ini
+          </Link>
+        </div>
+      ) : !sudahDisimpan ? (
+        <p className="text-sm text-muted">Simpan bacaan dulu, lalu tambahkan soal-soalnya.</p>
+      ) : null}
+
       {pesan ? (
         <div
           role={pesan.jenis === "gagal" ? "alert" : "status"}
@@ -455,7 +474,7 @@ export default function FormStimulus({
                 href={`/studio-soal/soal/baru?stimulus=${id}`}
                 className={buttonClassName({ variant: "secondary", size: "sm", className: "w-fit" })}
               >
-                + Tambah soal ke bacaan ini
+                + Tambah soal untuk bacaan ini
               </Link>
             ) : !sudahDisimpan ? (
               <p className="text-xs text-muted">Simpan bacaan dulu, baru bisa menambah soal.</p>
