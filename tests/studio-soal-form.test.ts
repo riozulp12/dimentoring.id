@@ -39,7 +39,13 @@ import {
 } from "@/lib/shared/studio-soal/formSoal";
 import { validasiSoal, validasiStimulus } from "@/lib/shared/studio-soal/validasi";
 import { nilaiJawaban } from "@/lib/shared/studio-soal/nilaiJawaban";
-import { alasanDariJawaban, ringkasHasilKirim, type HasilKirimSatu } from "@/lib/shared/studio-soal/kirimBanyak";
+import {
+  alasanDariJawaban,
+  alasanDariJawabanBacaan,
+  ringkasHasilKirim,
+  uraiKunci,
+  type HasilKirimSatu,
+} from "@/lib/shared/studio-soal/kirimBanyak";
 
 const ROOT = path.resolve(__dirname, "..");
 const baca = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -790,6 +796,65 @@ describe("API studio-soal — kirim banyak (UX-2, loop klien atas endpoint ajuka
     const r = await kirimBanyak([u(731)]);
     assert.equal(r.terkirim.length, 0);
     assert.match(r.gagal[0].alasan, /bacaan/);
+  });
+});
+
+describe("API studio-soal — kirim banyak bacaan (UX-3, endpoint /stimulus/:id/ajukan yang sudah ada)", () => {
+  /** Tiruan loop di StudioSoalMentor dengan kunci "soal:<id>" / "bacaan:<id>". */
+  async function kirimCampur(kunci: string[], userId: string = M1) {
+    const hasil: HasilKirimSatu[] = [];
+    for (const k of kunci) {
+      const item = uraiKunci(k);
+      if (!item) continue;
+      const r = item.jenis === "soal" ? await aksiSoal(item.id, "ajukan", userId) : await aksiStimulus(item.id, "ajukan", userId);
+      const ok = r.status === 200 && r.json.success === true;
+      const alasan = ok ? undefined : item.jenis === "bacaan" ? alasanDariJawabanBacaan(r.json) : alasanDariJawaban(r.json);
+      hasil.push({ id: item.id, jenis: item.jenis, ok, alasan });
+    }
+    return ringkasHasilKirim(hasil);
+  }
+  const statusSoal = (id: string) => db.soal_bank.find((s) => s.id === id)?.status;
+  const statusBacaan = (id: string) => db.soal_stimulus.find((s) => s.id === id)?.status;
+
+  it("bacaan draf lengkap terkirim bersama semua soalnya; campur dengan soal biasa dalam satu kirim", async () => {
+    await putStimulus(ST1, stimulusLengkap());
+    await putSoal(u(801), soalPg({ stimulus_id: ST1 }));
+    await putSoal(u(802), soalPg({ stimulus_id: ST1 }));
+    await putSoal(u(803), soalPg());
+    const r = await kirimCampur([`bacaan:${ST1}`, `soal:${u(803)}`]);
+    assert.equal(r.judul, "1 soal dan 1 bacaan terkirim.");
+    assert.equal(statusBacaan(ST1), "diajukan");
+    assert.deepEqual([u(801), u(802), u(803)].map(statusSoal), ["diajukan", "diajukan", "diajukan"]);
+  });
+
+  it("satu soal di bacaan belum lengkap: semua ditolak dengan alasan biasa, tidak ada status berubah", async () => {
+    await putStimulus(ST1, stimulusLengkap());
+    await putSoal(u(811), soalPg({ stimulus_id: ST1 }));
+    await putSoal(u(812), soalPg({ stimulus_id: ST1, kunci: { v: 1 } }));
+    await putSoal(u(813), soalPg());
+    const r = await kirimCampur([`bacaan:${ST1}`, `soal:${u(813)}`]);
+    assert.equal(r.judul, "1 soal terkirim. 1 belum terkirim:");
+    assert.deepEqual(r.gagal.map((g) => [g.id, g.jenis]), [[ST1, "bacaan"]]);
+    assert.match(r.gagal[0].alasan, /^Soal ke-2: Pilih satu jawaban benar/);
+    assert.equal(statusBacaan(ST1), "draf");
+    assert.deepEqual([u(811), u(812)].map(statusSoal), ["draf", "draf"]);
+    assert.equal(rpcCalls.some((c) => c.name === "studio_soal_ajukan_stimulus"), false);
+  });
+
+  it("bacaan milik mentor lain ditolak server (404) dan tidak berubah", async () => {
+    await putStimulus(ST1, stimulusLengkap());
+    await putSoal(u(821), soalPg({ stimulus_id: ST1 }));
+    const r = await kirimCampur([`bacaan:${ST1}`], M2);
+    assert.equal(r.terkirim.length, 0);
+    assert.match(r.gagal[0].alasan, /tidak ditemukan/);
+    assert.equal(statusBacaan(ST1), "draf");
+    assert.equal(statusSoal(u(821)), "draf");
+  });
+
+  it("bacaan tanpa soal draf ditolak dengan alasan jelas", async () => {
+    await putStimulus(ST1, stimulusLengkap());
+    const r = await kirimCampur([`bacaan:${ST1}`]);
+    assert.match(r.gagal[0].alasan, /belum berisi soal/);
   });
 });
 
