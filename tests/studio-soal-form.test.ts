@@ -39,6 +39,7 @@ import {
 } from "@/lib/shared/studio-soal/formSoal";
 import { validasiSoal, validasiStimulus } from "@/lib/shared/studio-soal/validasi";
 import { nilaiJawaban } from "@/lib/shared/studio-soal/nilaiJawaban";
+import { simpanSemua, terapkanHasilSimpan, type KartuSoal } from "@/lib/shared/studio-soal/bacaanSoal";
 import {
   alasanDariJawaban,
   alasanDariJawabanBacaan,
@@ -855,6 +856,120 @@ describe("API studio-soal — kirim banyak bacaan (UX-3, endpoint /stimulus/:id/
     await putStimulus(ST1, stimulusLengkap());
     const r = await kirimCampur([`bacaan:${ST1}`]);
     assert.match(r.gagal[0].alasan, /belum berisi soal/);
+  });
+});
+
+describe("UX-3 — bacaan + soal dalam satu halaman ('Simpan semua' lewat route yang sudah ada)", () => {
+  type Panggilan = { url: string; body: unknown };
+  let panggilan: Panggilan[];
+  /** Adaptor `put` ke route asli; `gagalkan` meniru putus koneksi untuk url tertentu. */
+  const putRoute = (gagalkan: (url: string) => boolean = () => false) => async (url: string, body: unknown) => {
+    panggilan.push({ url, body });
+    if (gagalkan(url)) return { ok: false, json: { error: "Tidak tersambung ke server. Cek koneksi internet lalu coba lagi." } };
+    const [, , , jenis, id] = url.split("/");
+    const r = jenis === "stimulus" ? await putStimulus(id, body) : await putSoal(id, body);
+    return { ok: r.status === 200 && r.json.success === true, json: r.json };
+  };
+  const kartu = (id: string, form: FormSoal): KartuSoal => ({
+    id,
+    form,
+    status: "draf",
+    versi: 1,
+    alasanTolak: null,
+    pernahDiajukan: false,
+    jejakTersimpan: null,
+    terbuka: true,
+    hasil: null,
+  });
+  const bacaan = { id: ST1, subtes_id: PU };
+  beforeEach(() => {
+    panggilan = [];
+  });
+
+  it("bacaan + 3 soal tersimpan dengan satu 'Simpan semua': bacaan dulu, lalu soal berurutan", async () => {
+    const daftar = [u(901), u(902), u(903)].map((id) => kartu(id, soalPg({ stimulus_id: null })));
+    const h = await simpanSemua({ bacaan: { id: ST1, form: stimulusLengkap(), perlu: true }, kartu: daftar, soalBolehEdit: true, put: putRoute() });
+    assert.equal(h.bacaan, "tersimpan");
+    assert.deepEqual(panggilan.map((p) => p.url), [
+      `/api/studio-soal/stimulus/${ST1}`,
+      `/api/studio-soal/soal/${u(901)}`,
+      `/api/studio-soal/soal/${u(902)}`,
+      `/api/studio-soal/soal/${u(903)}`,
+    ]);
+    assert.equal(db.soal_stimulus.length, 1);
+    assert.deepEqual(db.soal_bank.map((s) => [s.stimulus_id, s.urutan_dalam_stimulus]), [[ST1, 1], [ST1, 2], [ST1, 3]]);
+    // Setelah diterapkan, tidak ada yang perlu disimpan lagi.
+    const sesudah = terapkanHasilSimpan(daftar, h, bacaan);
+    panggilan = [];
+    await simpanSemua({ bacaan: { id: ST1, form: stimulusLengkap(), perlu: false }, kartu: sesudah, soalBolehEdit: true, put: putRoute() });
+    assert.equal(panggilan.length, 0);
+  });
+
+  it("soal ke-2 gagal lalu dicoba ulang: tidak ada yang tergandakan, bacaan tidak dikirim ulang", async () => {
+    let daftar = [u(911), u(912), u(913)].map((id) => kartu(id, soalPg()));
+    const h1 = await simpanSemua({
+      bacaan: { id: ST1, form: stimulusLengkap(), perlu: true },
+      kartu: daftar,
+      soalBolehEdit: true,
+      put: putRoute((url) => url.endsWith(u(912))),
+    });
+    daftar = terapkanHasilSimpan(daftar, h1, bacaan);
+    assert.deepEqual(daftar.map((k) => k.hasil?.ok), [true, false, true]);
+    const gagal = daftar[1].hasil;
+    assert.ok(gagal && !gagal.ok && /Tidak tersambung/.test(gagal.alasan));
+    assert.equal(db.soal_bank.length, 2);
+
+    // Coba ulang: hanya kartu ke-2 yang dikirim, dengan id yang sama.
+    panggilan = [];
+    const h2 = await simpanSemua({ bacaan: { id: ST1, form: stimulusLengkap(), perlu: false }, kartu: daftar, soalBolehEdit: true, put: putRoute() });
+    assert.deepEqual(panggilan.map((p) => p.url), [`/api/studio-soal/soal/${u(912)}`]);
+    daftar = terapkanHasilSimpan(daftar, h2, bacaan);
+    assert.ok(daftar.every((k) => k.hasil?.ok));
+    assert.equal(db.soal_stimulus.length, 1);
+    assert.deepEqual(db.soal_bank.map((s) => s.id).sort(), [u(911), u(912), u(913)]);
+  });
+
+  it("isian ditolak server (mis. tingkat kesulitan kosong) -> alasan server per kartu; soal lain tetap tersimpan", async () => {
+    const daftar = [kartu(u(921), soalPg()), kartu(u(922), soalPg({ tingkat_kesulitan: "" }))];
+    const h = await simpanSemua({ bacaan: { id: ST1, form: stimulusLengkap(), perlu: true }, kartu: daftar, soalBolehEdit: true, put: putRoute() });
+    const r = h.soal.get(u(922));
+    assert.ok(r && !r.ok && r.errors.length > 0);
+    assert.equal(db.soal_bank.length, 1);
+  });
+
+  it("kartu yang sama sekali belum diisi dilewati", async () => {
+    const daftar = [kartu(u(931), soalPg()), kartu(u(932), formAwal(PU, "isian", ST1)), kartu(u(933), formAwal(PU, "pilihan_ganda", ST1))];
+    await simpanSemua({ bacaan: { id: ST1, form: stimulusLengkap(), perlu: true }, kartu: daftar, soalBolehEdit: true, put: putRoute() });
+    assert.deepEqual(db.soal_bank.map((s) => s.id), [u(931)]);
+  });
+
+  it("bacaan gagal disimpan -> soal tidak dikirim sama sekali", async () => {
+    const h = await simpanSemua({
+      bacaan: { id: ST1, form: stimulusLengkap(), perlu: true },
+      kartu: [kartu(u(941), soalPg())],
+      soalBolehEdit: true,
+      put: putRoute((url) => url.includes("/stimulus/")),
+    });
+    assert.equal(typeof h.bacaan, "object");
+    assert.equal(panggilan.length, 1);
+    assert.equal(db.soal_bank.length, 0);
+  });
+
+  it("soal di bacaan mentor lain tidak bisa disimpan lewat halaman ini (server menolak)", async () => {
+    await putStimulus(ST1, stimulusLengkap());
+    const h = await simpanSemua({
+      bacaan: { id: ST1, form: stimulusLengkap(), perlu: false },
+      kartu: [kartu(u(951), soalPg())],
+      soalBolehEdit: true,
+      put: async (url, body) => {
+        const id = url.split("/")[4];
+        const r = await putSoal(id, body, M2);
+        return { ok: r.status === 200 && r.json.success === true, json: r.json };
+      },
+    });
+    const r = h.soal.get(u(951));
+    assert.ok(r && !r.ok);
+    assert.equal(db.soal_bank.length, 0);
   });
 });
 

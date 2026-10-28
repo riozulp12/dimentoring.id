@@ -4,6 +4,7 @@
  *   B. kirim bacaan lewat kirim banyak — fungsi murni
  *      lib/shared/studio-soal/kirimBanyak.ts. Skenario API ada di
  *      studio-soal-form.test.ts ("kirim banyak bacaan").
+ *   C ada di studio-soal-ux3-bacaan.test.ts.
  *
  * Jalankan: npm test
  */

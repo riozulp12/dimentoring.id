@@ -169,8 +169,8 @@ describe("statis UX-2", () => {
     }
   });
 
-  it("form bacaan menampilkan ajakan 'Tambah soal untuk bacaan ini'", () => {
-    assert.match(baca("components/studio-soal/FormStimulus.tsx"), /\+ Tambah soal untuk bacaan ini/);
+  it("halaman bacaan punya tombol tambah soal (UX-3: kartu soal di halaman yang sama)", () => {
+    assert.match(baca("components/studio-soal/FormStimulus.tsx"), /\+ Tambah soal/);
   });
 
   it("kirim banyak memakai endpoint ajukan yang sudah ada; tidak ada endpoint baru", () => {

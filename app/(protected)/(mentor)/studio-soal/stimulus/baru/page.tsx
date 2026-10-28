@@ -7,7 +7,12 @@ import { mentorHalamanStudio } from "@/lib/mentor/studioSoalHalaman";
 import { getSubtesDitugaskan } from "@/lib/mentor/studioSoal";
 import { stimulusAwal } from "@/lib/shared/studio-soal/formSoal";
 
-/** "Buat stimulus" (Mentor) — PR 3b. Pilihan subtes hanya yang ditugaskan Admin. */
+/**
+ * "Soal dengan bacaan" baru (Mentor) — PR 3b, UX-3: bacaan + kartu soal pertama
+ * dalam satu halaman. Pilihan subtes hanya yang ditugaskan Admin. Id bacaan &
+ * id kartu soal pertama dibuat di server per kunjungan, jadi simpan berulang
+ * selalu menuju baris yang sama.
+ */
 export default async function StimulusBaruPage({
   searchParams,
 }: {
@@ -42,6 +47,7 @@ export default async function StimulusBaruPage({
         subtesPilihan={subtes}
         ditugaskan
         soal={[]}
+        idKartuBaru={randomUUID()}
       />
     );
   }

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { randomUUID } from "node:crypto";
 import { notFound } from "next/navigation";
 import PageTitle from "@/components/dashboard/PageTitle";
 import FormStimulus from "@/components/studio-soal/FormStimulus";
@@ -13,10 +14,21 @@ import {
 } from "@/lib/mentor/studioSoal";
 import { isUuid } from "@/lib/shared/studio-soal/formSoal";
 
-/** Edit / lihat stimulus (Mentor) — PR 3b. Stimulus mentor lain = 404. */
-export default async function EditStimulusPage({ params }: { params: Promise<{ id: string }> }) {
+/**
+ * Edit / lihat bacaan beserta soal-soalnya dalam satu halaman (Mentor) — PR 3b,
+ * UX-3. Stimulus mentor lain = 404. ?tambah=1 membuka satu kartu soal baru
+ * (dipakai route lama soal/baru?stimulus=<id>).
+ */
+export default async function EditStimulusPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const mentorId = await mentorHalamanStudio();
   const { id } = await params;
+  const sp = await searchParams;
   if (!isUuid(id)) notFound();
 
   const [stimulus, subtes, soal, sudahDiajukan] = await Promise.all([
@@ -52,7 +64,26 @@ export default async function EditStimulusPage({ params }: { params: Promise<{ i
           pernahDiajukan={sudahDiajukan}
           subtesPilihan={subtesStimulus ? [...subtes, subtesStimulus] : subtes}
           ditugaskan={ditugaskan}
-          soal={soal.map((s) => ({ id: s.id, tipe: s.tipe, status: s.status, urutan: s.urutan_dalam_stimulus, redaksi: s.redaksi }))}
+          soal={soal.map((s) => ({
+            id: s.id,
+            status: s.status,
+            versi: s.versi,
+            alasanTolak: s.alasan_tolak,
+            form: {
+              subtes_id: s.subtes_id,
+              tipe: s.tipe,
+              stimulus_id: s.stimulus_id,
+              redaksi: s.redaksi,
+              konten: s.konten,
+              kunci: s.kunci,
+              pembahasan: s.pembahasan,
+              sumber_rujukan: s.sumber_rujukan,
+              tingkat_kesulitan: s.tingkat_kesulitan,
+              level_kognitif: s.level_kognitif,
+              estimasi_waktu_detik: s.estimasi_waktu_detik,
+            },
+          }))}
+          idKartuBaru={sp.tambah === "1" && ditugaskan && ["draf", "ditolak", "terpublikasi"].includes(stimulus.status) ? randomUUID() : null}
         />
       );
     }
