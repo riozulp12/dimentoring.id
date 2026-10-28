@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { buttonClassName } from "@/components/ui/buttonClassName";
@@ -219,6 +219,7 @@ export default function StudioSoalMentor({
   const [ringkasan, setRingkasan] = useState<RingkasanKirim | null>(null);
   const sibukRef = useRef(false);
   const ringkasanRef = useRef<HTMLDivElement | null>(null);
+  const idJudulKirim = useId();
 
   const bacaanSemua = useMemo(() => stimulus.map((b) => denganStatus(b, statusLokal)), [stimulus, statusLokal]);
   const bacaanDi = (subtesId: string) => bacaanSemua.filter((s) => s.subtesId === subtesId);
@@ -450,9 +451,9 @@ export default function StudioSoalMentor({
         </div>
       ) : null}
 
-      <Modal open={konfirmasi} onClose={() => (proses ? undefined : setKonfirmasi(false))}>
+      <Modal open={konfirmasi} onClose={() => (proses ? undefined : setKonfirmasi(false))} labelledBy={idJudulKirim}>
         <div className="flex flex-col gap-4">
-          <h2 className="pr-8 text-lg font-medium text-black">Kirim {teksPilihan} untuk dicek?</h2>
+          <h2 id={idJudulKirim} className="pr-8 text-lg font-medium text-black">Kirim {teksPilihan} untuk dicek?</h2>
           <p className="text-sm text-black">
             Yang terkirim dikunci sampai selesai dicek. Yang belum lengkap tidak ikut terkirim — alasannya akan
             ditampilkan supaya bisa diperbaiki.

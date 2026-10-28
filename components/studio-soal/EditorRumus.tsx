@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { MathfieldElement } from "mathlive";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
@@ -54,6 +54,7 @@ export default function EditorRumus({
   const [tex, setTex] = useState(awal);
   const [blok, setBlok] = useState(blokAwal);
   const [status, setStatus] = useState<"memuat" | "siap" | "gagal">("memuat");
+  const idJudul = useId();
 
   useEffect(() => {
     let batal = false;
@@ -89,9 +90,9 @@ export default function EditorRumus({
   const bolehSisip = status === "siap" && galat === null;
 
   return (
-    <Modal open onClose={onBatal}>
+    <Modal open onClose={onBatal} labelledBy={idJudul}>
       <div className="flex flex-col gap-4">
-        <h2 className="pr-8 text-lg font-medium text-black">{mengubah ? "Ubah rumus" : "Sisipkan rumus"}</h2>
+        <h2 id={idJudul} className="pr-8 text-lg font-medium text-black">{mengubah ? "Ubah rumus" : "Sisipkan rumus"}</h2>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="kolom-rumus" className="text-sm font-medium text-black">
             Tulis rumusnya
