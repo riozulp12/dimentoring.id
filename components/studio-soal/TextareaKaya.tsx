@@ -1,18 +1,24 @@
 "use client";
 
-import { useRef, type ReactNode, type RefObject } from "react";
-import TeksKaya from "@/components/studio-soal/TeksKaya";
+import { useRef, useState, type ReactNode, type RefObject } from "react";
+import EditorRumus from "@/components/studio-soal/EditorRumus";
+import { rumusDiPosisi, sisipkanRumus, type RentangRumus } from "@/lib/shared/studio-soal/sisipRumus";
 import { panjangKarakter } from "@/lib/shared/studio-soal/teks";
 
 /**
- * Textarea dengan tombol sisip format (rumus sebaris/blok, tebal, miring),
- * penghitung karakter (per karakter = sama dengan batas database), dan pesan
- * error per field. Dipakai form soal & stimulus.
+ * Textarea dengan tombol "Sisipkan rumus" (editor rumus visual, UX-3 D),
+ * tombol sisip format (kode rumus sebaris/blok, tebal, miring), penghitung
+ * karakter (per karakter = sama dengan batas database), dan pesan error per
+ * field. Dipakai form soal & stimulus (teks soal, pilihan jawaban, pernyataan,
+ * pembahasan, teks bacaan).
+ *
+ * Bila kursor berada di dalam rumus yang sudah ada, "Sisipkan rumus" membuka
+ * editor dengan rumus itu terisi dan menggantinya saat disimpan.
  */
 
 const FORMAT: { label: string; judul: string; buka: string; tutup: string }[] = [
-  { label: "Rumus", judul: "Sisipkan rumus sebaris \\( … \\)", buka: "\\(", tutup: "\\)" },
-  { label: "Rumus blok", judul: "Sisipkan rumus blok \\[ … \\]", buka: "\\[", tutup: "\\]" },
+  { label: "Kode rumus", judul: "Tulis kode rumus sebaris \\( … \\)", buka: "\\(", tutup: "\\)" },
+  { label: "Kode rumus blok", judul: "Tulis kode rumus di baris sendiri \\[ … \\]", buka: "\\[", tutup: "\\]" },
   { label: "Tebal", judul: "Tebal **…**", buka: "**", tutup: "**" },
   { label: "Miring", judul: "Miring *…*", buka: "*", tutup: "*" },
 ];
@@ -63,6 +69,29 @@ export default function TextareaKaya({
   const refSendiri = useRef<HTMLTextAreaElement | null>(null);
   const ref = inputRef ?? refSendiri;
   const panjang = panjangKarakter(value);
+  const [editor, setEditor] = useState<{
+    pilihan: { awal: number; akhir: number };
+    ganti: RentangRumus | null;
+  } | null>(null);
+
+  function bukaEditor() {
+    const el = ref.current;
+    const awal = el?.selectionStart ?? value.length;
+    const akhir = el?.selectionEnd ?? awal;
+    setEditor({ pilihan: { awal, akhir }, ganti: rumusDiPosisi(value, awal) });
+  }
+
+  function sisip(tex: string, blok: boolean) {
+    if (!editor) return;
+    const hasil = sisipkanRumus(value, editor.pilihan, tex, blok, editor.ganti);
+    onChange(hasil.teks);
+    setEditor(null);
+    const el = ref.current;
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(hasil.kursor, hasil.kursor);
+    });
+  }
 
   function bungkus(buka: string, tutup: string) {
     const el = ref.current;
@@ -94,6 +123,16 @@ export default function TextareaKaya({
       </div>
       {(format || tombolTambahan) && !disabled ? (
         <div className="flex flex-wrap gap-1.5">
+          {format ? (
+            <button
+              type="button"
+              onClick={bukaEditor}
+              title="Buka editor rumus. Taruh kursor di dalam rumus yang ada untuk mengubahnya."
+              className="rounded-[8px] border border-primary bg-primary-soft px-2.5 py-1 text-xs font-medium text-primary hover:bg-white"
+            >
+              Sisipkan rumus
+            </button>
+          ) : null}
           {format
             ? FORMAT.map((f) => (
                 <button
@@ -125,41 +164,32 @@ export default function TextareaKaya({
       />
       {petunjuk ? <div className="text-xs text-muted">{petunjuk}</div> : null}
       <PesanError pesan={error} />
+      {editor ? (
+        <EditorRumus
+          awal={editor.ganti?.tex ?? ""}
+          blokAwal={editor.ganti?.blok ?? false}
+          mengubah={editor.ganti !== null}
+          onSisip={sisip}
+          onBatal={() => setEditor(null)}
+        />
+      ) : null}
     </div>
   );
 }
 
-const CONTOH: [string, string][] = [
-  ["Pangkat", "\\(x^2 + y^3\\)"],
-  ["Pecahan", "\\(\\frac{a}{b}\\)"],
-  ["Akar", "\\(\\sqrt{2}\\), \\(\\sqrt[3]{x}\\)"],
-  ["Kali, bagi", "\\(3 \\times 4 \\div 2\\)"],
-  ["Pertidaksamaan", "\\(x \\le 5\\), \\(y \\ge 1\\), \\(a \\ne b\\)"],
-  ["Simbol", "\\(\\pi\\), \\(\\alpha\\), \\(\\infty\\), \\(\\pm\\)"],
-  ["Indeks bawah", "\\(U_n\\), \\(\\log_2 8\\)"],
-  ["Tebal / miring", "**penting**, *istilah*"],
-];
-
-/** Contekan singkat cara menulis rumus & format. */
+/** Petunjuk singkat rumus & format (menggantikan contekan panjang, UX-3 D). */
 export function ContekanRumus() {
   return (
-    <details className="rounded-[12px] border border-line bg-white px-3 py-2 text-sm">
-      <summary className="cursor-pointer font-medium text-black">Cara menulis rumus & format</summary>
-      <div className="mt-2 flex flex-col gap-2 text-foreground">
-        <p className="text-xs text-muted">
-          Rumus ditulis di antara <code>\(</code> dan <code>\)</code> (sebaris) atau <code>\[</code> dan <code>\]</code> (baris
-          sendiri). Tanda <code>$</code> tidak dipakai. Baris kosong = paragraf baru. Tulis <code>\*</code> untuk bintang biasa.
-        </p>
-        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          {CONTOH.map(([nama, kode]) => (
-            <div key={nama} className="flex flex-col rounded-[8px] bg-surface px-2 py-1.5">
-              <span className="text-xs text-muted">{nama}</span>
-              <code className="break-all text-xs">{kode}</code>
-              <TeksKaya teks={kode} className="text-sm" />
-            </div>
-          ))}
-        </div>
-      </div>
-    </details>
+    <div className="flex flex-col gap-1 rounded-[12px] bg-surface px-3 py-2 text-xs text-muted">
+      <p>
+        <span className="font-medium text-black">Rumus:</span> tekan “Sisipkan rumus”, lalu ketik seperti di kalkulator —{" "}
+        <code>/</code> untuk pecahan, <code>^</code> untuk pangkat, <code>sqrt</code> untuk akar. Taruh kursor di rumus yang
+        sudah ada untuk mengubahnya.
+      </p>
+      <p>
+        Sudah biasa menulis kode? Tulis di antara <code>{"\\("}</code> dan <code>{"\\)"}</code>, mis.{" "}
+        <code>{"\\(\\frac{a}{b}\\)"}</code>. Format lain: **tebal**, *miring*, baris kosong = paragraf baru.
+      </p>
+    </div>
   );
 }

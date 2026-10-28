@@ -1,18 +1,22 @@
 import type { ReactNode } from "react";
 import { randomUUID } from "node:crypto";
+import { redirect } from "next/navigation";
 import PageTitle from "@/components/dashboard/PageTitle";
-import FormSoal, { type StimulusKonteks } from "@/components/studio-soal/FormSoal";
+import FormSoal from "@/components/studio-soal/FormSoal";
 import KartuPesan from "@/components/studio-soal/KartuPesan";
 import { mentorHalamanStudio } from "@/lib/mentor/studioSoalHalaman";
-import { getStimulusMilik, getSubtesDitugaskan } from "@/lib/mentor/studioSoal";
+import { getSubtesDitugaskan } from "@/lib/mentor/studioSoal";
 import { formAwal, isUuid } from "@/lib/shared/studio-soal/formSoal";
 import { TIPE_SOAL, type TipeSoal } from "@/lib/shared/studio-soal/tipe";
 
 /**
  * "Tulis soal" (Mentor) — PR 3b. Pilihan subtes hanya subtes yang DITUGASKAN
- * Admin. ?subtes= memilih subtes awal; ?stimulus= menambah soal ke stimulus
- * milik sendiri (K7). Id soal dibuat di server per kunjungan halaman, jadi
- * simpan berulang dari form ini selalu menuju soal yang sama.
+ * Admin. ?subtes= memilih subtes awal. Id soal dibuat di server per kunjungan
+ * halaman, jadi simpan berulang dari form ini selalu menuju soal yang sama.
+ *
+ * UX-3: route lama ?stimulus=<id> diarahkan ke halaman bacaan itu dengan satu
+ * kartu soal baru terbuka (bacaan & soalnya ditulis dalam satu halaman).
+ * Pemeriksaan pemilik/penugasan/status dilakukan halaman bacaan.
  */
 export default async function SoalBaruPage({
   searchParams,
@@ -21,6 +25,9 @@ export default async function SoalBaruPage({
 }) {
   const mentorId = await mentorHalamanStudio();
   const sp = await searchParams;
+  if (typeof sp.stimulus === "string" && isUuid(sp.stimulus)) {
+    redirect(`/studio-soal/stimulus/${sp.stimulus}?tambah=1`);
+  }
   const subtes = await getSubtesDitugaskan(mentorId);
 
   let isi: ReactNode;
@@ -34,26 +41,13 @@ export default async function SoalBaruPage({
       />
     );
   } else {
-    let stimulus: StimulusKonteks | null = null;
-    let gagal: ReactNode = null;
     const paramSubtes = typeof sp.subtes === "string" ? sp.subtes : "";
-    let subtesId = subtes.some((s) => s.id === paramSubtes) ? paramSubtes : subtes.length === 1 ? subtes[0].id : "";
-
-    if (typeof sp.stimulus === "string") {
-      const st = isUuid(sp.stimulus) ? await getStimulusMilik(mentorId, sp.stimulus) : null;
-      if (st === "gagal") {
-        gagal = <KartuPesan judul="Bacaan gagal dimuat" isi="Coba muat ulang halaman." />;
-      } else if (!st) {
-        gagal = <KartuPesan judul="Bacaan tidak ditemukan" isi="Soal hanya bisa ditambahkan ke bacaan yang Anda tulis sendiri." />;
-      } else if (!subtes.some((s) => s.id === st.subtes_id)) {
-        gagal = <KartuPesan judul="Anda tidak lagi ditugaskan ke subtes bacaan ini" />;
-      } else if (!["draf", "ditolak", "terpublikasi"].includes(st.status)) {
-        gagal = <KartuPesan judul="Bacaan ini belum bisa ditambah soal" isi="Bacaan ini sedang dicek atau sudah tidak aktif." />;
-      } else {
-        stimulus = { id: st.id, judul: st.judul_internal, status: st.status, blok: st.konten.blok };
-        subtesId = st.subtes_id;
-      }
-    }
+    const subtesId = subtes.some((s) => s.id === paramSubtes) ? paramSubtes : subtes.length === 1 ? subtes[0].id : "";
+    // Alamat bacaan rusak (bukan UUID): sama dengan bacaan yang tidak ada.
+    const gagal: ReactNode =
+      typeof sp.stimulus === "string" ? (
+        <KartuPesan judul="Bacaan tidak ditemukan" isi="Soal hanya bisa ditambahkan ke bacaan yang Anda tulis sendiri." />
+      ) : null;
 
     const tipe: TipeSoal = (TIPE_SOAL as readonly string[]).includes(String(sp.tipe)) ? (sp.tipe as TipeSoal) : "pilihan_ganda";
     isi =
@@ -62,13 +56,13 @@ export default async function SoalBaruPage({
         <FormSoal
           id={randomUUID()}
           baru
-          awal={formAwal(subtesId, tipe, stimulus?.id ?? null)}
+          awal={formAwal(subtesId, tipe, null)}
           status="draf"
           versi={1}
           alasanTolak={null}
           pernahDiajukan={false}
           subtesPilihan={subtes}
-          stimulus={stimulus}
+          stimulus={null}
           ditugaskan
         />
       );

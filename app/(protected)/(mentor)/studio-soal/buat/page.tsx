@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import PageTitle from "@/components/dashboard/PageTitle";
 import KartuPesan from "@/components/studio-soal/KartuPesan";
+import { buttonClassName } from "@/components/ui/buttonClassName";
 import { mentorHalamanStudio } from "@/lib/mentor/studioSoalHalaman";
 import { getSubtesDitugaskan } from "@/lib/mentor/studioSoal";
 
@@ -39,11 +40,13 @@ export default async function BuatSoalPage({
         href: `/studio-soal/soal/baru${q}`,
         judul: "Soal biasa",
         teks: "Satu soal berdiri sendiri.",
+        tombol: "Pilih soal biasa",
       },
       {
         href: `/studio-soal/stimulus/baru${q}`,
         judul: "Soal dengan bacaan",
         teks: "Satu bacaan atau teks, lalu beberapa soal yang merujuk ke bacaan itu.",
+        tombol: "Pilih soal dengan bacaan",
       },
     ];
     isi = (
@@ -57,17 +60,18 @@ export default async function BuatSoalPage({
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {pilihan.map((p) => (
-            <Link
+            <div
               key={p.href}
-              href={p.href}
-              className="group flex min-h-40 flex-col justify-between gap-4 rounded-[20px] border-[0.8px] border-line bg-white p-5 transition-colors hover:border-primary hover:bg-primary-soft sm:p-6"
+              className="flex min-h-40 flex-col justify-between gap-5 rounded-[20px] border-[0.8px] border-line bg-white p-5 transition-colors hover:border-primary sm:p-6"
             >
               <div className="flex flex-col gap-2">
-                <h2 className="text-lg font-medium text-black group-hover:text-primary sm:text-xl">{p.judul}</h2>
+                <h2 className="text-lg font-medium text-black sm:text-xl">{p.judul}</h2>
                 <p className="text-sm text-muted sm:text-base">{p.teks}</p>
               </div>
-              <span className="text-sm font-medium text-primary">Pilih →</span>
-            </Link>
+              <Link href={p.href} className={buttonClassName({ variant: "primary", className: "w-full" })}>
+                {p.tombol}
+              </Link>
+            </div>
           ))}
         </div>
       </div>

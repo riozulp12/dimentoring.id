@@ -126,8 +126,8 @@ describe("antrean & ringkasan kirim", () => {
     ]);
     assert.equal(campur.judul, "1 soal terkirim. 2 belum terkirim:");
     assert.deepEqual(campur.gagal, [
-      { id: "b", alasan: "Pilih satu jawaban benar (A–E)." },
-      { id: "c", alasan: "Belum terkirim. Coba lagi." },
+      { id: "b", jenis: "soal", alasan: "Pilih satu jawaban benar (A–E)." },
+      { id: "c", jenis: "soal", alasan: "Belum terkirim. Coba lagi." },
     ]);
     assert.equal(ringkasHasilKirim([{ id: "b", ok: false, alasan: "x" }]).judul, "1 belum terkirim:");
   });
@@ -169,8 +169,8 @@ describe("statis UX-2", () => {
     }
   });
 
-  it("form bacaan menampilkan ajakan 'Tambah soal untuk bacaan ini'", () => {
-    assert.match(baca("components/studio-soal/FormStimulus.tsx"), /\+ Tambah soal untuk bacaan ini/);
+  it("halaman bacaan punya tombol tambah soal (UX-3: kartu soal di halaman yang sama)", () => {
+    assert.match(baca("components/studio-soal/FormStimulus.tsx"), /\+ Tambah soal/);
   });
 
   it("kirim banyak memakai endpoint ajukan yang sudah ada; tidak ada endpoint baru", () => {

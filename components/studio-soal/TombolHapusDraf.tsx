@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { panggilApi } from "@/components/studio-soal/klien";
@@ -36,6 +36,7 @@ export default function TombolHapusDraf({
 }) {
   const router = useRouter();
   const [buka, setBuka] = useState(false);
+  const idJudul = useId();
   const [sibuk, setSibuk] = useState(false);
   const [gagal, setGagal] = useState<string | null>(null);
   const nama = objek === "soal" ? "soal" : "bacaan";
@@ -70,11 +71,11 @@ export default function TombolHapusDraf({
       >
         Hapus draf
       </button>
-      <Modal open={buka} onClose={tutup}>
+      <Modal open={buka} onClose={tutup} labelledBy={idJudul}>
         <div className="flex flex-col gap-4">
           {alasan ? (
             <>
-              <h2 className="pr-8 text-lg font-medium text-black">Draf ini tidak bisa dihapus</h2>
+              <h2 id={idJudul} className="pr-8 text-lg font-medium text-black">Draf ini tidak bisa dihapus</h2>
               <p className="text-sm text-black">{alasan}</p>
               <div className="flex justify-end">
                 <Button variant="secondary" size="sm" onClick={tutup}>
@@ -84,7 +85,7 @@ export default function TombolHapusDraf({
             </>
           ) : (
             <>
-              <h2 className="pr-8 text-lg font-medium text-black">Hapus {nama} ini?</h2>
+              <h2 id={idJudul} className="pr-8 text-lg font-medium text-black">Hapus {nama} ini?</h2>
               <p className="text-sm text-black">
                 Tidak bisa dibatalkan.
                 {versi > 1 ? ` Ini versi baru — ${nama} versi sebelumnya yang sudah terbit tetap dipakai.` : ""}

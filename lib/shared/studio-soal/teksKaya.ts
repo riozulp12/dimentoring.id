@@ -46,7 +46,7 @@ type Token =
 const POLA_RUMPANG = /^\{\{([^{}]*)\}\}/;
 
 /** Posisi penutup rumus (`\)` atau `\]`) mulai dari `dari`, atau -1. "\\" dilewati. */
-function cariPenutup(s: string, dari: number, penutup: ")" | "]"): number {
+export function cariPenutup(s: string, dari: number, penutup: ")" | "]"): number {
   for (let j = dari; j < s.length - 1; j++) {
     if (s[j] !== "\\") continue;
     if (s[j + 1] === "\\") {

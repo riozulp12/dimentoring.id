@@ -13,6 +13,12 @@
  *   - soal di bacaan yang masih draf/ditolak/sedang dicek TIDAK bisa dikirim
  *     sendiri — ikut terkirim saat bacaannya dikirim (dari halaman bacaan);
  *   - bacaan yang tidak ada di daftar (versi lama/diarsipkan) -> tidak dipilih.
+ *
+ * UX-3: bacaan draf/ditolak juga bisa dicentang. Kirim bacaan memanggil
+ * endpoint yang SUDAH ADA (POST /api/studio-soal/stimulus/:id/ajukan):
+ * bacaan + semua soal draf/ditolak di dalamnya terkirim bersama, atau semuanya
+ * ditolak bila ada yang belum lengkap. Satu bacaan = 1 item untuk batas 50.
+ * Pilihan disimpan sebagai kunci "soal:<id>" / "bacaan:<id>".
  */
 import type { SoalRingkas, StimulusRingkas } from "./studioMentor";
 
@@ -66,7 +72,7 @@ export function kelayakanKirim(
     const st = statusBacaan.get(soal.stimulusId);
     if (st === "terpublikasi") return { boleh: true };
     if (st === "draf" || st === "ditolak" || st === "diajukan") {
-      return { boleh: false, alasan: "Ikut terkirim bersama bacaannya — kirim dari halaman bacaan." };
+      return { boleh: false, alasan: "Ikut terkirim bersama bacaannya." };
     }
     return { boleh: false, alasan: "Bacaan soal ini sudah tidak aktif." };
   }
@@ -134,6 +140,8 @@ export function keadaanPilihSemua(
 export interface HasilKirimSatu {
   id: string;
   ok: boolean;
+  /** Bawaan "soal" (UX-2). */
+  jenis?: JenisItem;
   /** Alasan dalam bahasa biasa bila gagal. */
   alasan?: string;
 }
@@ -154,16 +162,20 @@ export function alasanDariJawaban(json: Record<string, unknown>): string {
 
 export interface RingkasanKirim {
   terkirim: string[];
-  gagal: { id: string; alasan: string }[];
-  /** Kalimat pembuka, mis. "5 soal terkirim. 2 belum terkirim:" */
+  gagal: { id: string; jenis: JenisItem; alasan: string }[];
+  /** Kalimat pembuka, mis. "5 soal terkirim. 2 belum terkirim:" / "3 soal dan 1 bacaan terkirim." */
   judul: string;
 }
 
 export function ringkasHasilKirim(hasil: HasilKirimSatu[]): RingkasanKirim {
-  const terkirim = hasil.filter((h) => h.ok).map((h) => h.id);
-  const gagal = hasil.filter((h) => !h.ok).map((h) => ({ id: h.id, alasan: h.alasan ?? "Belum terkirim. Coba lagi." }));
+  const ok = hasil.filter((h) => h.ok);
+  const terkirim = ok.map((h) => h.id);
+  const gagal = hasil
+    .filter((h) => !h.ok)
+    .map((h) => ({ id: h.id, jenis: h.jenis ?? ("soal" as const), alasan: h.alasan ?? "Belum terkirim. Coba lagi." }));
+  const nBacaan = ok.filter((h) => h.jenis === "bacaan").length;
   const bagian: string[] = [];
-  if (terkirim.length > 0 || gagal.length === 0) bagian.push(`${terkirim.length} soal terkirim.`);
+  if (ok.length > 0 || gagal.length === 0) bagian.push(`${teksJumlah(ok.length - nBacaan, nBacaan)} terkirim.`);
   if (gagal.length > 0) bagian.push(`${gagal.length} belum terkirim:`);
   return { terkirim, gagal, judul: bagian.join(" ") };
 }
@@ -180,4 +192,113 @@ export function antreanKirim(
   batas = BATAS_KIRIM,
 ): string[] {
   return [...new Set(terpilih)].filter((id) => !sudahTerkirim.has(id) && boleh(id)).slice(0, batas);
+}
+
+// ---------------------------------------------------------------------------
+// UX-3: bacaan ikut kirim banyak
+// ---------------------------------------------------------------------------
+
+export type JenisItem = "soal" | "bacaan";
+
+export const kunciItem = (jenis: JenisItem, id: string) => `${jenis}:${id}`;
+
+export function uraiKunci(kunci: string): { jenis: JenisItem; id: string } | null {
+  const i = kunci.indexOf(":");
+  const jenis = kunci.slice(0, i);
+  const id = kunci.slice(i + 1);
+  if (i < 1 || !id || (jenis !== "soal" && jenis !== "bacaan")) return null;
+  return { jenis, id };
+}
+
+/** "3 soal dan 2 bacaan" / "2 bacaan" / "3 soal" (0 & 0 -> "0 soal"). */
+export function teksJumlah(nSoal: number, nBacaan: number): string {
+  if (nBacaan === 0) return `${nSoal} soal`;
+  if (nSoal === 0) return `${nBacaan} bacaan`;
+  return `${nSoal} soal dan ${nBacaan} bacaan`;
+}
+
+/** Hitung soal & bacaan dari kumpulan kunci pilihan. */
+export function hitungPilihan(kunci: Iterable<string>): { soal: number; bacaan: number } {
+  const n = { soal: 0, bacaan: 0 };
+  for (const k of kunci) {
+    const u = uraiKunci(k);
+    if (u) n[u.jenis] += 1;
+  }
+  return n;
+}
+
+const bisaDikirim = (status: string) => status === "draf" || status === "ditolak";
+
+/**
+ * Bacaan boleh dicentang? Aturan sama dengan RPC studio_soal_ajukan_stimulus:
+ * bacaan draf/ditolak yang berisi minimal satu soal draf/ditolak. Kelengkapan
+ * isi tetap diperiksa server (semua-atau-tidak sama sekali).
+ */
+export function kelayakanKirimBacaan(
+  bacaan: { status: string },
+  soalDiBacaan: { status: string }[],
+  ditugaskan = true,
+): KelayakanKirim {
+  if (!ditugaskan) return { boleh: false, alasan: "Anda tidak lagi ditugaskan ke subtes ini." };
+  if (!bisaDikirim(bacaan.status)) {
+    return { boleh: false, alasan: bacaan.status === "diajukan" ? "Sudah dikirim." : "Bukan draf." };
+  }
+  if (!soalDiBacaan.some((s) => bisaDikirim(s.status))) {
+    return { boleh: false, alasan: "Belum ada soal di bacaan ini. Tambahkan soal dulu sebelum mengirim." };
+  }
+  return { boleh: true };
+}
+
+/**
+ * Alasan penolakan kirim bacaan dalam bahasa biasa: error bacaan ("Bacaan: …")
+ * dan error per soal ("Soal ke-2: …"). Maksimal 2 pesan, sisanya dihitung.
+ */
+export function alasanDariJawabanBacaan(json: Record<string, unknown>): string {
+  const pesanDari = (errors: unknown) =>
+    (Array.isArray(errors) ? (errors as { pesan?: unknown }[]) : [])
+      .map((e) => (typeof e?.pesan === "string" ? e.pesan : ""))
+      .filter(Boolean);
+  const daftar: string[] = pesanDari(json.errors).map((p) => `Bacaan: ${p}`);
+  const perSoal = Array.isArray(json.errorsSoal) ? (json.errorsSoal as { urutan?: unknown; errors?: unknown }[]) : [];
+  for (const s of perSoal) {
+    const nama = typeof s?.urutan === "number" ? `Soal ke-${s.urutan}` : "Salah satu soal";
+    for (const p of pesanDari(s?.errors)) daftar.push(`${nama}: ${p}`);
+  }
+  const unik = [...new Set(daftar)];
+  if (unik.length === 0) return alasanDariJawaban(json);
+  const sisa = unik.length - 2;
+  return unik.slice(0, 2).join(" ") + (sisa > 0 ? ` (+${sisa} hal lain)` : "");
+}
+
+export interface GrupBacaan<S, B> {
+  bacaan: B;
+  /** Soal di bacaan ini yang lolos filter. */
+  soal: S[];
+}
+
+/**
+ * Susunan daftar satu subtes: bacaan (dengan soalnya menjorok di bawahnya)
+ * lalu soal berdiri sendiri. Soal yang bacaannya tidak ada di daftar (versi
+ * lama/diarsipkan) tampil sebagai soal biasa.
+ *
+ * Filter status: bacaan tampil bila statusnya sendiri cocok ATAU ada soalnya
+ * yang cocok; di bawahnya hanya soal yang cocok. Jadi soal tidak pernah
+ * tampil tanpa bacaannya, dan bacaan draf tetap terlihat di filter "Draf"
+ * walau soalnya sudah lain status.
+ */
+export function susunDaftar<S extends { status: string; stimulusId?: string | null }, B extends { id: string; status: string }>(
+  soal: S[],
+  bacaan: B[],
+  filter: FilterStatus,
+): { grup: GrupBacaan<S, B>[]; mandiri: S[] } {
+  const cocok = (status: string) => filter === "semua" || status === filter;
+  const idBacaan = new Set(bacaan.map((b) => b.id));
+  const grup: GrupBacaan<S, B>[] = [];
+  for (const b of bacaan) {
+    const semua = soal.filter((s) => s.stimulusId === b.id);
+    const lolos = semua.filter((s) => cocok(s.status));
+    if (cocok(b.status) || lolos.length > 0) grup.push({ bacaan: b, soal: lolos });
+  }
+  const mandiri = soal.filter((s) => !(s.stimulusId && idBacaan.has(s.stimulusId)) && cocok(s.status));
+  return { grup, mandiri };
 }
