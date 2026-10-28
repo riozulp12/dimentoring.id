@@ -13,9 +13,9 @@ export type StatusSoal = (typeof STATUS_SOAL)[number];
 
 export const LABEL_STATUS_SOAL: Record<StatusSoal, string> = {
   draf: "Draf",
-  diajukan: "Menunggu tinjauan",
-  terpublikasi: "Terpublikasi",
-  ditolak: "Ditolak",
+  diajukan: "Sedang dicek",
+  terpublikasi: "Terbit",
+  ditolak: "Perlu diperbaiki",
   digantikan: "Versi lama",
   diarsipkan: "Diarsipkan",
 };
@@ -36,6 +36,8 @@ export interface SoalRingkas {
   updatedAt: string;
   /** Soal di dalam stimulus (PR 3b) — null/absen = soal mandiri. */
   stimulusId?: string | null;
+  /** Pernah dikirim untuk dicek -> tidak bisa dihapus (UX-1). */
+  pernahDiajukan?: boolean;
 }
 
 /** Stimulus tulisan mentor untuk halaman daftar (PR 3b). */
@@ -47,6 +49,8 @@ export interface StimulusRingkas {
   versi: number;
   jumlahSoal: number;
   updatedAt: string;
+  /** Pernah dikirim untuk dicek -> tidak bisa dihapus (UX-1). */
+  pernahDiajukan?: boolean;
 }
 
 export interface KelompokSubtes {

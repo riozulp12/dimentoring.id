@@ -19,12 +19,12 @@ export default async function StimulusBaruPage({
 
   let isi: ReactNode;
   if (subtes === "gagal") {
-    isi = <KartuPesan judul="Gagal memuat Studio Soal" isi="Coba muat ulang halaman." />;
+    isi = <KartuPesan judul="Studio Soal gagal dimuat" isi="Coba muat ulang halaman." />;
   } else if (subtes.length === 0) {
     isi = (
       <KartuPesan
-        judul="Anda belum ditugaskan ke subtes mana pun"
-        isi="Admin yang menentukan subtes yang bisa Anda tulis soalnya. Hubungi Admin bila ingin ikut menulis soal."
+        judul="Anda belum ditugaskan menulis soal"
+        isi="Admin yang memilih subtes yang bisa Anda tulis. Hubungi Admin kalau ingin ikut menulis soal."
       />
     );
   } else {

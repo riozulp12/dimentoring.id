@@ -62,23 +62,23 @@ export interface HasilPenugasan {
 export function terjemahkanHasilRpc(status: unknown): HasilPenugasan {
   switch (status) {
     case "ditugaskan":
-      return { httpStatus: 200, success: true, berubah: true, pesan: "Mentor ditugaskan." };
+      return { httpStatus: 200, success: true, berubah: true, pesan: "Tersimpan. Mentor ini sekarang bisa menulis dan mengecek soal di subtes ini." };
     case "dicabut":
-      return { httpStatus: 200, success: true, berubah: true, pesan: "Penugasan dicabut. Soal yang sudah ditulis tetap ada." };
+      return { httpStatus: 200, success: true, berubah: true, pesan: "Tugas dicabut. Soal yang sudah ditulis tetap ada." };
     case "sudah_ditugaskan":
-      return { httpStatus: 200, success: true, berubah: false, pesan: "Mentor sudah ditugaskan ke subtes ini." };
+      return { httpStatus: 200, success: true, berubah: false, pesan: "Mentor ini memang sudah ditugaskan di subtes ini." };
     case "tidak_ditugaskan":
-      return { httpStatus: 200, success: true, berubah: false, pesan: "Mentor memang tidak ditugaskan ke subtes ini." };
+      return { httpStatus: 200, success: true, berubah: false, pesan: "Mentor ini memang belum ditugaskan di subtes ini." };
     case "bukan_admin":
       return { httpStatus: 403, success: false, berubah: false, pesan: "Cuma Admin yang bisa mengubah penugasan." };
     case "subtes_tidak_valid":
-      return { httpStatus: 400, success: false, berubah: false, pesan: "Subtes bukan subtes SNBT." };
+      return { httpStatus: 400, success: false, berubah: false, pesan: "Subtes ini belum bisa dipakai di Studio Soal (baru SNBT)." };
     case "bukan_mentor_aktif":
-      return { httpStatus: 400, success: false, berubah: false, pesan: "Akun ini bukan mentor aktif." };
+      return { httpStatus: 400, success: false, berubah: false, pesan: "Akun ini bukan mentor aktif, jadi belum bisa diberi tugas." };
     case "input_tidak_valid":
-      return { httpStatus: 400, success: false, berubah: false, pesan: "Permintaan tidak valid." };
+      return { httpStatus: 400, success: false, berubah: false, pesan: "Permintaan tidak terbaca. Muat ulang halaman lalu coba lagi." };
     default:
-      return { httpStatus: 500, success: false, berubah: false, pesan: "Gagal menyimpan penugasan. Coba lagi nanti." };
+      return { httpStatus: 500, success: false, berubah: false, pesan: "Penugasan belum tersimpan. Coba lagi sebentar lagi." };
   }
 }
 
@@ -116,8 +116,8 @@ export function peringatanUntuk(jumlahMentor: number): PeringatanSubtes {
 }
 
 export const PESAN_PERINGATAN: Record<Exclude<PeringatanSubtes, null>, string> = {
-  kosong: "Belum ada mentor. Belum ada yang bisa menulis soal subtes ini.",
-  satu: "Baru 1 mentor. Soalnya tidak bisa ditinjau sejawat, jadi Admin yang mempublikasikan.",
+  kosong: "Belum ada mentor yang ditugaskan di subtes ini.",
+  satu: "Baru 1 mentor, jadi belum ada mentor lain yang bisa mengecek soalnya. Sementara Admin yang menerbitkan.",
 };
 
 /** Urutkan subtes mengikuti URUTAN_SUBTES_SNBT; nama lain di belakang (abjad). */

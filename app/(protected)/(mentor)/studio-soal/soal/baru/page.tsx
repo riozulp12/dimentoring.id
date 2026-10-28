@@ -25,12 +25,12 @@ export default async function SoalBaruPage({
 
   let isi: ReactNode;
   if (subtes === "gagal") {
-    isi = <KartuPesan judul="Gagal memuat Studio Soal" isi="Coba muat ulang halaman." />;
+    isi = <KartuPesan judul="Studio Soal gagal dimuat" isi="Coba muat ulang halaman." />;
   } else if (subtes.length === 0) {
     isi = (
       <KartuPesan
-        judul="Anda belum ditugaskan ke subtes mana pun"
-        isi="Admin yang menentukan subtes yang bisa Anda tulis soalnya. Hubungi Admin bila ingin ikut menulis soal."
+        judul="Anda belum ditugaskan menulis soal"
+        isi="Admin yang memilih subtes yang bisa Anda tulis. Hubungi Admin kalau ingin ikut menulis soal."
       />
     );
   } else {
@@ -42,13 +42,13 @@ export default async function SoalBaruPage({
     if (typeof sp.stimulus === "string") {
       const st = isUuid(sp.stimulus) ? await getStimulusMilik(mentorId, sp.stimulus) : null;
       if (st === "gagal") {
-        gagal = <KartuPesan judul="Gagal memuat stimulus" isi="Coba muat ulang halaman." />;
+        gagal = <KartuPesan judul="Bacaan gagal dimuat" isi="Coba muat ulang halaman." />;
       } else if (!st) {
-        gagal = <KartuPesan judul="Stimulus tidak ditemukan" isi="Soal hanya bisa ditambahkan ke stimulus yang Anda tulis sendiri." />;
+        gagal = <KartuPesan judul="Bacaan tidak ditemukan" isi="Soal hanya bisa ditambahkan ke bacaan yang Anda tulis sendiri." />;
       } else if (!subtes.some((s) => s.id === st.subtes_id)) {
-        gagal = <KartuPesan judul="Anda tidak lagi ditugaskan ke subtes stimulus ini" />;
+        gagal = <KartuPesan judul="Anda tidak lagi ditugaskan ke subtes bacaan ini" />;
       } else if (!["draf", "ditolak", "terpublikasi"].includes(st.status)) {
-        gagal = <KartuPesan judul="Stimulus ini belum bisa ditambah soal" isi="Stimulus sedang ditinjau atau sudah tidak aktif." />;
+        gagal = <KartuPesan judul="Bacaan ini belum bisa ditambah soal" isi="Bacaan ini sedang dicek atau sudah tidak aktif." />;
       } else {
         stimulus = { id: st.id, judul: st.judul_internal, status: st.status, blok: st.konten.blok };
         subtesId = st.subtes_id;

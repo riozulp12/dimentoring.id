@@ -16,6 +16,30 @@ html {
   --font-mono: var(--font-geist-mono);
 
   /*
+   * Token warna (Studio Soal UX-1). Nilainya SAMA dengan hex yang sudah dipakai
+   * di components/ui (Button, InputField) — bukan warna baru, cuma diberi nama
+   * supaya halaman tidak menulis hex sendiri. Pakai: bg-primary, text-muted,
+   * border-line, dst. Secondary = varian tombol (putih + garis primary), bukan
+   * warna tersendiri.
+   */
+  --color-primary: #081EEA;
+  --color-primary-soft: #EEF0FE;
+  --color-primary-line: #D6DBFD;
+  --color-muted: #7E7C7C;
+  --color-subtle: #AFAFAF;
+  --color-line: #E3E3E3;
+  --color-line-strong: #CAC9C9;
+  --color-surface: #FAFAFA;
+  --color-surface-muted: #F6F6F6;
+  --color-chip: #F1F1F1;
+  --color-danger: #E70A0A;
+  --color-danger-soft: #FDEEEE;
+  --color-danger-line: #F5C2C2;
+  --color-success: #0A7D2C;
+  --color-success-soft: #F2FAF4;
+  --color-success-line: #CFE9D6;
+
+  /*
    * Skala tipografi terpusat (Design Audit) — REDEFINISI token font-size
    * default Tailwind supaya SEMUA pemakaian `text-xs`/`text-lg`/`text-3xl`/dst.
    * di seluruh app otomatis ikut skala baru ini, tanpa perlu edit satu-satu

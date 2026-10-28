@@ -69,7 +69,7 @@ function cekTeks(
   opsi: { label: string; maks: number; min?: number; wajib?: boolean },
 ): string | null {
   if (value === undefined || value === null) {
-    if (opsi.wajib !== false) e.lengkap(field, `${opsi.label} wajib diisi.`);
+    if (opsi.wajib !== false) e.lengkap(field, `${opsi.label} belum diisi.`);
     return null;
   }
   if (typeof value !== "string") {
@@ -77,13 +77,13 @@ function cekTeks(
     return null;
   }
   if (panjangKarakter(value) > opsi.maks) {
-    e.bentuk(field, `${opsi.label} maksimal ${opsi.maks} karakter.`);
+    e.bentuk(field, `${opsi.label} terlalu panjang (maks. ${opsi.maks} karakter).`);
   }
   const panjang = panjangTrim(value);
   if (opsi.wajib !== false && panjang === 0) {
-    e.lengkap(field, `${opsi.label} wajib diisi.`);
+    e.lengkap(field, `${opsi.label} belum diisi.`);
   } else if (opsi.min && panjang > 0 && panjang < opsi.min) {
-    e.lengkap(field, `${opsi.label} minimal ${opsi.min} karakter.`);
+    e.lengkap(field, `${opsi.label} terlalu pendek (min. ${opsi.min} karakter).`);
   }
   const rumus = cekPembatasRumus(value);
   if (rumus) e.lengkap(field, rumus);
@@ -98,15 +98,15 @@ function cekArray(
   opsi: { label: string; min: number; maks: number },
 ): unknown[] | null {
   if (value === undefined || value === null) {
-    e.lengkap(field, `${opsi.label} wajib diisi (minimal ${opsi.min}).`);
+    e.lengkap(field, `${opsi.label} belum diisi (minimal ${opsi.min}).`);
     return null;
   }
   if (!Array.isArray(value)) {
     e.bentuk(field, `${opsi.label} harus berupa daftar.`);
     return null;
   }
-  if (value.length > opsi.maks) e.bentuk(field, `${opsi.label} maksimal ${opsi.maks}.`);
-  if (value.length < opsi.min) e.lengkap(field, `${opsi.label} minimal ${opsi.min}.`);
+  if (value.length > opsi.maks) e.bentuk(field, `${opsi.label} terlalu banyak (maks. ${opsi.maks}).`);
+  if (value.length < opsi.min) e.lengkap(field, `${opsi.label} kurang (minimal ${opsi.min}).`);
   return value;
 }
 
@@ -136,7 +136,7 @@ export function validasiSoal(input: unknown, mode: ModeValidasi = "ajukan"): Err
   }
 
   if (input.subtes_kategori !== undefined && !isSubtesSnbt(input.subtes_kategori)) {
-    e.bentuk("subtes_id", "Studio Soal Tahap 1 hanya untuk subtes SNBT.");
+    e.bentuk("subtes_id", "Studio Soal baru bisa dipakai untuk subtes SNBT.");
   }
 
   const tipe = input.tipe;
@@ -145,7 +145,7 @@ export function validasiSoal(input: unknown, mode: ModeValidasi = "ajukan"): Err
     return e.hasil(mode);
   }
 
-  const redaksi = cekTeks(e, "redaksi", input.redaksi, { label: "Redaksi soal", maks: BATAS.redaksiMaks });
+  const redaksi = cekTeks(e, "redaksi", input.redaksi, { label: "Teks soal", maks: BATAS.redaksiMaks });
   cekTeks(e, "pembahasan", input.pembahasan, {
     label: "Pembahasan",
     maks: BATAS.pembahasanMaks,
@@ -156,7 +156,7 @@ export function validasiSoal(input: unknown, mode: ModeValidasi = "ajukan"): Err
     typeof input.tingkat_kesulitan !== "string" ||
     !(TINGKAT_KESULITAN as readonly string[]).includes(input.tingkat_kesulitan)
   ) {
-    e.bentuk("tingkat_kesulitan", "Tingkat kesulitan wajib dipilih (mudah/sedang/hots).");
+    e.bentuk("tingkat_kesulitan", "Pilih tingkat kesulitan.");
   }
   if (
     input.level_kognitif !== undefined &&
@@ -172,12 +172,12 @@ export function validasiSoal(input: unknown, mode: ModeValidasi = "ajukan"): Err
   ) {
     e.bentuk(
       "estimasi_waktu_detik",
-      `Estimasi waktu ${BATAS.estimasiDetikMin}–${BATAS.estimasiDetikMaks} detik (bilangan bulat).`,
+      `Perkiraan waktu harus angka bulat ${BATAS.estimasiDetikMin}–${BATAS.estimasiDetikMaks} detik.`,
     );
   }
   if (input.sumber_rujukan !== undefined && input.sumber_rujukan !== null) {
     cekTeks(e, "sumber_rujukan", input.sumber_rujukan, {
-      label: "Sumber rujukan",
+      label: "Sumber soal",
       maks: BATAS.sumberRujukanMaks,
       min: BATAS.sumberRujukanMin,
       wajib: false,
@@ -207,7 +207,7 @@ export function validasiSoal(input: unknown, mode: ModeValidasi = "ajukan"): Err
 
 function validasiPilihanGanda(e: Pengumpul, konten: Record<string, unknown>, kunci: Record<string, unknown>) {
   const opsi = cekArray(e, "konten.opsi", konten.opsi, {
-    label: "Opsi jawaban",
+    label: "Pilihan jawaban",
     min: LABEL_OPSI.length,
     maks: LABEL_OPSI.length,
   });
@@ -223,14 +223,14 @@ function validasiPilihanGanda(e: Pengumpul, konten: Record<string, unknown>, kun
         e.bentuk(`${field}.label`, `Opsi ke-${i + 1} harus berlabel ${LABEL_OPSI[i] ?? "A–E"}.`);
       }
       const teks = cekTeks(e, `${field}.teks`, item.teks, {
-        label: `Opsi ${LABEL_OPSI[i] ?? i + 1}`,
+        label: `Pilihan ${LABEL_OPSI[i] ?? i + 1}`,
         maks: BATAS.opsiTeksMaks,
       });
       if (teks && panjangTrim(teks) > 0) {
         const kunciTeks = normalisasiTeks(teks);
         const sebelumnya = terlihat.get(kunciTeks);
         if (sebelumnya !== undefined) {
-          e.lengkap(`${field}.teks`, `Opsi ${LABEL_OPSI[i]} sama dengan opsi ${LABEL_OPSI[sebelumnya]}.`);
+          e.lengkap(`${field}.teks`, `Pilihan ${LABEL_OPSI[i]} sama dengan pilihan ${LABEL_OPSI[sebelumnya]}.`);
         } else {
           terlihat.set(kunciTeks, i);
         }
@@ -239,16 +239,16 @@ function validasiPilihanGanda(e: Pengumpul, konten: Record<string, unknown>, kun
   }
 
   if (kunci.opsi === undefined || kunci.opsi === null) {
-    e.lengkap("kunci.opsi", "Pilih satu kunci jawaban (A–E).");
+    e.lengkap("kunci.opsi", "Pilih satu jawaban benar (A–E).");
   } else if (typeof kunci.opsi !== "string" || !(LABEL_OPSI as readonly string[]).includes(kunci.opsi)) {
-    e.bentuk("kunci.opsi", "Kunci jawaban harus salah satu dari A–E.");
+    e.bentuk("kunci.opsi", "Jawaban benar harus salah satu dari A–E.");
   }
 }
 
 function validasiMajemuk(e: Pengumpul, konten: Record<string, unknown>, kunci: Record<string, unknown>) {
   const label = konten.label_kolom;
   if (label === undefined || label === null) {
-    e.lengkap("konten.label_kolom", "Dua label kolom jawaban wajib diisi.");
+    e.lengkap("konten.label_kolom", "Isi kedua label kolom jawaban.");
   } else if (!Array.isArray(label) || label.length !== 2) {
     e.bentuk("konten.label_kolom", "Label kolom harus tepat dua.");
   } else {
@@ -282,7 +282,7 @@ function validasiMajemuk(e: Pengumpul, konten: Record<string, unknown>, kunci: R
 
   const perBaris = kunci.per_baris;
   if (perBaris === undefined || perBaris === null) {
-    if (ids.length > 0) e.lengkap("kunci.per_baris", "Tentukan kunci untuk setiap pernyataan.");
+    if (ids.length > 0) e.lengkap("kunci.per_baris", "Pilih jawaban benar untuk setiap pernyataan.");
     return;
   }
   if (!isObjek(perBaris)) {
@@ -294,7 +294,7 @@ function validasiMajemuk(e: Pengumpul, konten: Record<string, unknown>, kunci: R
     if (!ids.includes(id)) e.lengkap(`kunci.per_baris.${id}`, "Ada kunci untuk pernyataan yang sudah tidak ada.");
   }
   ids.forEach((id) => {
-    if (!(id in perBaris)) e.lengkap(`kunci.per_baris.${id}`, "Kunci pernyataan ini belum dipilih.");
+    if (!(id in perBaris)) e.lengkap(`kunci.per_baris.${id}`, "Jawaban benar pernyataan ini belum dipilih.");
   });
 }
 
@@ -308,7 +308,7 @@ function validasiIsian(
   kunci: Record<string, unknown>,
 ) {
   const rumpang = cekArray(e, "konten.rumpang", konten.rumpang, {
-    label: "Rumpang",
+    label: "Kotak jawaban",
     min: BATAS.rumpangMin,
     maks: BATAS.rumpangMaks,
   });
@@ -318,12 +318,12 @@ function validasiIsian(
     rumpang.forEach((item, i) => {
       const field = `konten.rumpang.${i}`;
       if (!isObjek(item)) {
-        e.bentuk(field, "Rumpang tidak valid.");
+        e.bentuk(field, "Kotak jawaban tidak valid.");
         return;
       }
       const id = cekIdBagian(e, `${field}.id`, item.id, sudahAda);
       if (typeof item.jenis !== "string" || !(JENIS_RUMPANG as readonly string[]).includes(item.jenis)) {
-        e.bentuk(`${field}.jenis`, "Jenis rumpang harus teks atau angka.");
+        e.bentuk(`${field}.jenis`, "Jenis kotak jawaban harus teks atau angka.");
       } else if (id) {
         jenisPerId.set(id, item.jenis as JenisRumpang);
       }
@@ -335,35 +335,35 @@ function validasiIsian(
   for (const cocok of redaksi.matchAll(POLA_PENANDA)) {
     const id = cocok[1];
     if (!POLA_ID_BAGIAN.test(id)) {
-      e.lengkap("redaksi", `Penanda rumpang "{{${id}}}" tidak valid.`);
+      e.lengkap("redaksi", `Tanda kotak jawaban "{{${id}}}" tidak valid.`);
       continue;
     }
     hitungPenanda.set(id, (hitungPenanda.get(id) ?? 0) + 1);
   }
   const sisa = redaksi.replace(POLA_PENANDA, "");
   if (sisa.includes("{{") || sisa.includes("}}")) {
-    e.lengkap("redaksi", "Ada penanda rumpang yang tidak lengkap ({{ atau }} tanpa pasangan).");
+    e.lengkap("redaksi", "Ada tanda kotak jawaban yang tidak lengkap: {{ atau }} tanpa pasangannya.");
   }
   for (const [id, jumlah] of hitungPenanda) {
-    if (!jenisPerId.has(id)) e.lengkap("redaksi", `Penanda {{${id}}} tidak punya rumpang.`);
-    if (jumlah > 1) e.lengkap("redaksi", `Penanda {{${id}}} muncul ${jumlah} kali (harus sekali).`);
+    if (!jenisPerId.has(id)) e.lengkap("redaksi", `Tanda {{${id}}} tidak punya kotak jawaban.`);
+    if (jumlah > 1) e.lengkap("redaksi", `Tanda {{${id}}} muncul ${jumlah} kali, harusnya sekali.`);
   }
   for (const id of jenisPerId.keys()) {
-    if (!hitungPenanda.has(id)) e.lengkap("redaksi", `Rumpang "${id}" belum ditempatkan di redaksi ({{${id}}}).`);
+    if (!hitungPenanda.has(id)) e.lengkap("redaksi", `Kotak jawaban "${id}" belum ditaruh di teks soal ({{${id}}}).`);
   }
 
   // Kunci per rumpang.
   const kunciRumpang = kunci.rumpang;
   if (kunciRumpang === undefined || kunciRumpang === null) {
-    if (jenisPerId.size > 0) e.lengkap("kunci.rumpang", "Isi jawaban yang diterima untuk setiap rumpang.");
+    if (jenisPerId.size > 0) e.lengkap("kunci.rumpang", "Isi jawaban benar untuk setiap kotak jawaban.");
     return;
   }
   if (!isObjek(kunciRumpang)) {
-    e.bentuk("kunci.rumpang", "Kunci rumpang tidak valid.");
+    e.bentuk("kunci.rumpang", "Jawaban kotak tidak valid.");
     return;
   }
   for (const id of Object.keys(kunciRumpang)) {
-    if (!jenisPerId.has(id)) e.lengkap(`kunci.rumpang.${id}`, "Ada kunci untuk rumpang yang sudah tidak ada.");
+    if (!jenisPerId.has(id)) e.lengkap(`kunci.rumpang.${id}`, "Ada jawaban untuk kotak yang sudah dihapus.");
   }
   for (const [id, jenis] of jenisPerId) {
     validasiKunciRumpang(e, `kunci.rumpang.${id}`, jenis, kunciRumpang[id]);
@@ -372,15 +372,15 @@ function validasiIsian(
 
 function validasiKunciRumpang(e: Pengumpul, field: string, jenis: JenisRumpang, kunci: unknown) {
   if (kunci === undefined || kunci === null) {
-    e.lengkap(field, "Isi minimal satu jawaban yang diterima.");
+    e.lengkap(field, "Isi minimal satu jawaban benar.");
     return;
   }
   if (!isObjek(kunci)) {
-    e.bentuk(field, "Kunci rumpang tidak valid.");
+    e.bentuk(field, "Jawaban kotak tidak valid.");
     return;
   }
   const diterima = cekArray(e, `${field}.diterima`, kunci.diterima, {
-    label: "Jawaban diterima",
+    label: "Jawaban benar",
     min: BATAS.jawabanDiterimaMin,
     maks: BATAS.jawabanDiterimaMaks,
   });
@@ -403,7 +403,7 @@ function validasiKunciRumpang(e: Pengumpul, field: string, jenis: JenisRumpang, 
       if (jenis === "angka") {
         const nilai = parseAngka(jawaban);
         if (!nilai) {
-          e.lengkap(f, "Bukan angka yang didukung (bulat, desimal dengan koma/titik, atau pecahan a/b; tanpa pemisah ribuan).");
+          e.lengkap(f, "Angka tidak terbaca. Pakai bilangan bulat, desimal (koma/titik), atau pecahan a/b, tanpa titik ribuan.");
         } else if (angkaTerlihat.some((x) => samaPecahan(x, nilai))) {
           e.lengkap(f, "Nilai jawaban ini sama dengan jawaban lain.");
         } else {
@@ -419,10 +419,10 @@ function validasiKunciRumpang(e: Pengumpul, field: string, jenis: JenisRumpang, 
 
   if (kunci.toleransi !== undefined && kunci.toleransi !== null) {
     if (jenis !== "angka") {
-      e.bentuk(`${field}.toleransi`, "Toleransi hanya untuk rumpang angka.");
+      e.bentuk(`${field}.toleransi`, "Batas selisih hanya untuk kotak jawaban angka.");
     } else {
       const t = parseAngka(kunci.toleransi);
-      if (!t || !isNonNegatif(t)) e.bentuk(`${field}.toleransi`, "Toleransi harus angka ≥ 0.");
+      if (!t || !isNonNegatif(t)) e.bentuk(`${field}.toleransi`, "Batas selisih harus angka 0 atau lebih.");
     }
   }
 }
@@ -434,39 +434,39 @@ function validasiKunciRumpang(e: Pengumpul, field: string, jenis: JenisRumpang, 
 export function validasiStimulus(input: unknown, mode: ModeValidasi = "ajukan"): ErrorValidasi[] {
   const e = new Pengumpul();
   if (!isObjek(input)) {
-    e.bentuk("", "Data stimulus tidak valid.");
+    e.bentuk("", "Data bacaan tidak terbaca.");
     return e.hasil(mode);
   }
   if (input.subtes_kategori !== undefined && !isSubtesSnbt(input.subtes_kategori)) {
-    e.bentuk("subtes_id", "Studio Soal Tahap 1 hanya untuk subtes SNBT.");
+    e.bentuk("subtes_id", "Studio Soal baru bisa dipakai untuk subtes SNBT.");
   }
 
   // Judul internal di-CHECK di semua status -> error bentuk.
   if (typeof input.judul_internal !== "string") {
-    e.bentuk("judul_internal", "Judul internal wajib diisi.");
+    e.bentuk("judul_internal", "Judul bacaan belum diisi.");
   } else {
     const p = panjangTrim(input.judul_internal);
     if (p < BATAS.stimulusJudulMin || panjangKarakter(input.judul_internal) > BATAS.stimulusJudulMaks) {
       e.bentuk(
         "judul_internal",
-        `Judul internal ${BATAS.stimulusJudulMin}–${BATAS.stimulusJudulMaks} karakter.`,
+        `Judul bacaan harus ${BATAS.stimulusJudulMin}–${BATAS.stimulusJudulMaks} karakter.`,
       );
     }
   }
 
   // Atribusi WAJIB untuk stimulus (K4): "Buatan sendiri" atau nama sumber.
   cekTeks(e, "sumber_rujukan", input.sumber_rujukan, {
-    label: 'Sumber rujukan ("Buatan sendiri" atau nama sumber)',
+    label: 'Sumber bacaan (tulis "Buatan sendiri" atau nama sumbernya)',
     maks: BATAS.sumberRujukanMaks,
     min: BATAS.sumberRujukanMin,
   });
 
   const konten = input.konten;
   if (!isObjek(konten)) {
-    e.bentuk("konten", "Konten stimulus tidak valid.");
+    e.bentuk("konten", "Isi bacaan tidak terbaca.");
     return e.hasil(mode);
   }
-  const blok = cekArray(e, "konten.blok", konten.blok, { label: "Blok stimulus", min: 1, maks: BATAS.stimulusBlokMaks });
+  const blok = cekArray(e, "konten.blok", konten.blok, { label: "Isi bacaan", min: 1, maks: BATAS.stimulusBlokMaks });
   blok?.forEach((item, i) => validasiBlok(e, `konten.blok.${i}`, item));
   return e.hasil(mode);
 }
@@ -481,7 +481,7 @@ function validasiBlok(e: Pengumpul, field: string, blok: unknown) {
     return;
   }
   if (blok.jenis === "gambar") {
-    e.bentuk(`${field}.jenis`, "Gambar stimulus belum didukung (menyusul).");
+    e.bentuk(`${field}.jenis`, "Gambar di bacaan belum bisa dipakai.");
     return;
   }
   if (blok.jenis !== "tabel") {
@@ -536,7 +536,7 @@ export interface PaketInput {
 export function validasiPaket(input: PaketInput): ErrorValidasi[] {
   const e = new Pengumpul();
   if (input.subtes_kategori !== undefined && !isSubtesSnbt(input.subtes_kategori)) {
-    e.bentuk("subtes_id", "Studio Soal Tahap 1 hanya untuk subtes SNBT.");
+    e.bentuk("subtes_id", "Studio Soal baru bisa dipakai untuk subtes SNBT.");
   }
   if (typeof input.judul !== "string") {
     e.bentuk("judul", "Judul paket wajib diisi.");

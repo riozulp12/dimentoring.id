@@ -5,12 +5,12 @@ import type { BlokStimulus } from "@/lib/shared/studio-soal/tipe";
 
 /** Pratinjau stimulus (bacaan + tabel) seperti yang akan dilihat siswa. */
 export default function StimulusPratinjau({ blok }: { blok: BlokStimulus[] }) {
-  if (blok.length === 0) return <p className="text-sm italic text-[#AFAFAF]">Stimulus masih kosong.</p>;
+  if (blok.length === 0) return <p className="text-sm italic text-subtle">Bacaan masih kosong.</p>;
   return (
     <div className="flex flex-col gap-4 text-sm text-black sm:text-base">
       {blok.map((b, i) =>
         b.jenis === "teks" ? (
-          <TeksKaya key={i} teks={b.teks} kosong="(blok teks kosong)" />
+          <TeksKaya key={i} teks={b.teks} kosong="(bagian teks masih kosong)" />
         ) : (
           <figure key={i} className="flex min-w-0 flex-col gap-2">
             {b.judul ? (
@@ -18,12 +18,12 @@ export default function StimulusPratinjau({ blok }: { blok: BlokStimulus[] }) {
                 <TeksKaya teks={b.judul} />
               </figcaption>
             ) : null}
-            <div className="max-w-full overflow-x-auto rounded-[12px] border border-[#E3E3E3]">
+            <div className="max-w-full overflow-x-auto rounded-[12px] border border-line">
               <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-[#F6F6F6]">
+                <thead className="bg-surface-muted">
                   <tr>
                     {b.kepala.map((k, j) => (
-                      <th key={j} scope="col" className="border-b border-[#E3E3E3] px-3 py-2 align-top font-medium">
+                      <th key={j} scope="col" className="border-b border-line px-3 py-2 align-top font-medium">
                         <TeksKaya teks={k} />
                       </th>
                     ))}
@@ -31,7 +31,7 @@ export default function StimulusPratinjau({ blok }: { blok: BlokStimulus[] }) {
                 </thead>
                 <tbody>
                   {b.baris.map((row, r) => (
-                    <tr key={r} className="border-b border-[#F1F1F1] last:border-b-0">
+                    <tr key={r} className="border-b border-chip last:border-b-0">
                       {row.map((sel, j) => (
                         <td key={j} className="px-3 py-2 align-top">
                           <TeksKaya teks={sel} />

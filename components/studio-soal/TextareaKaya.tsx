@@ -22,7 +22,7 @@ export function PesanError({ pesan }: { pesan?: string[] }) {
   return (
     <ul className="flex flex-col gap-0.5">
       {pesan.map((p, i) => (
-        <li key={i} className="text-xs text-[#E70A0A] sm:text-sm">
+        <li key={i} className="text-xs text-danger sm:text-sm">
           {p}
         </li>
       ))}
@@ -84,10 +84,10 @@ export default function TextareaKaya({
       <div className="flex flex-wrap items-end justify-between gap-2">
         <label htmlFor={id} className="text-sm font-medium text-black">
           {label}
-          {wajib ? <span className="text-[#E70A0A]"> *</span> : null}
+          {wajib ? <span className="text-danger"> *</span> : null}
         </label>
         {maks ? (
-          <span className={["text-xs", panjang > maks ? "text-[#E70A0A]" : "text-[#AFAFAF]"].join(" ")}>
+          <span className={["text-xs", panjang > maks ? "text-danger" : "text-subtle"].join(" ")}>
             {panjang.toLocaleString("id-ID")}/{maks.toLocaleString("id-ID")}
           </span>
         ) : null}
@@ -101,7 +101,7 @@ export default function TextareaKaya({
                   type="button"
                   title={f.judul}
                   onClick={() => bungkus(f.buka, f.tutup)}
-                  className="rounded-[8px] border border-[#CAC9C9] bg-white px-2.5 py-1 text-xs font-medium text-black hover:border-[#081EEA]"
+                  className="rounded-[8px] border border-line-strong bg-white px-2.5 py-1 text-xs font-medium text-black hover:border-primary"
                 >
                   {f.label}
                 </button>
@@ -119,11 +119,11 @@ export default function TextareaKaya({
         aria-invalid={adaError}
         onChange={(e) => onChange(e.target.value)}
         className={[
-          "w-full resize-y rounded-[12px] border bg-white px-3 py-2 text-sm text-black outline-none transition-colors focus:border-black disabled:bg-[#F6F6F6] disabled:text-[#7E7C7C] sm:text-base",
-          adaError ? "border-[#E70A0A]" : "border-[#AFAFAF]",
+          "w-full resize-y rounded-[12px] border bg-white px-3 py-2 text-sm text-black outline-none transition-colors focus:border-black disabled:bg-surface-muted disabled:text-muted sm:text-base",
+          adaError ? "border-danger" : "border-subtle",
         ].join(" ")}
       />
-      {petunjuk ? <div className="text-xs text-[#7E7C7C]">{petunjuk}</div> : null}
+      {petunjuk ? <div className="text-xs text-muted">{petunjuk}</div> : null}
       <PesanError pesan={error} />
     </div>
   );
@@ -143,17 +143,17 @@ const CONTOH: [string, string][] = [
 /** Contekan singkat cara menulis rumus & format. */
 export function ContekanRumus() {
   return (
-    <details className="rounded-[12px] border border-[#E3E3E3] bg-white px-3 py-2 text-sm">
+    <details className="rounded-[12px] border border-line bg-white px-3 py-2 text-sm">
       <summary className="cursor-pointer font-medium text-black">Cara menulis rumus & format</summary>
-      <div className="mt-2 flex flex-col gap-2 text-[#424242]">
-        <p className="text-xs text-[#7E7C7C]">
+      <div className="mt-2 flex flex-col gap-2 text-foreground">
+        <p className="text-xs text-muted">
           Rumus ditulis di antara <code>\(</code> dan <code>\)</code> (sebaris) atau <code>\[</code> dan <code>\]</code> (baris
           sendiri). Tanda <code>$</code> tidak dipakai. Baris kosong = paragraf baru. Tulis <code>\*</code> untuk bintang biasa.
         </p>
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
           {CONTOH.map(([nama, kode]) => (
-            <div key={nama} className="flex flex-col rounded-[8px] bg-[#FAFAFA] px-2 py-1.5">
-              <span className="text-xs text-[#7E7C7C]">{nama}</span>
+            <div key={nama} className="flex flex-col rounded-[8px] bg-surface px-2 py-1.5">
+              <span className="text-xs text-muted">{nama}</span>
               <code className="break-all text-xs">{kode}</code>
               <TeksKaya teks={kode} className="text-sm" />
             </div>

@@ -413,7 +413,7 @@ describe("API PATCH /api/admin/studio-soal/penugasan — aturan", () => {
   it("tugaskan: RPC dipanggil dengan adminId dari session, bukan dari body", async () => {
     const res = await patch({ mentorId: M1, subtesId: PU, aksi: "tugaskan", adminId: M2 });
     assert.equal(res.status, 200);
-    assert.deepEqual(res.json, { success: true, berubah: true, pesan: "Mentor ditugaskan.", jumlahMentorEligible: 1 });
+    assert.deepEqual(res.json, { success: true, berubah: true, pesan: "Tersimpan. Mentor ini sekarang bisa menulis dan mengecek soal di subtes ini.", jumlahMentorEligible: 1 });
     assert.equal(rpcCalls[0].p_admin_id, ADMIN);
     assert.deepEqual(db.studio_soal_penugasan_log, [{ admin_id: ADMIN, mentor_id: M1, subtes_id: PU, aksi: "tugaskan" }]);
   });
@@ -487,6 +487,24 @@ describe("data layer", () => {
     assert.deepEqual(data.penugasan, [{ mentorId: M_LAMA, subtesId: PK }]);
     // Profil mengajar TIDAK dianggap penugasan.
     assert.equal(data.penugasan.some((p) => p.mentorId === M1), false);
+  });
+
+  it("UX-1: subtes membawa kategori, mentor membawa email; semua penugasan lama tetap tampil di grup SNBT", async () => {
+    db.users = db.users.map((x) => (x.id === M1 ? { ...x, email: "satu@contoh.id" } : x));
+    await patch({ mentorId: M1, subtesId: LBI, aksi: "tugaskan" });
+    const data = await adminData.getPenugasanStudioSoalData();
+    if (data === "gagal") return assert.fail("gagal");
+    assert.ok(data.subtes.every((s) => s.kategori === "tps" || s.kategori === "literasi"));
+    assert.equal(data.mentor.find((m) => m.id === M1)?.email, "satu@contoh.id");
+    assert.equal(data.mentor.find((m) => m.id === M2)?.email, null);
+    const { subtesUntukJenis } = await import("@/lib/shared/studio-soal/jenisUjian");
+    const snbt = new Set(subtesUntukJenis("snbt", data.subtes).map((s) => s.id));
+    assert.equal(snbt.size, data.subtes.length);
+    for (const p of data.penugasan) assert.ok(snbt.has(p.subtesId), p.subtesId);
+    assert.deepEqual(
+      data.penugasan.map((p) => [p.mentorId, p.subtesId]).sort(),
+      [[M1, LBI], [M_LAMA, PK]].sort(),
+    );
   });
 
   it("Mentor tanpa penugasan → keadaan kosong (walau punya profil mengajar PU)", async () => {

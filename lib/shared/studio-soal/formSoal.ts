@@ -317,12 +317,12 @@ export interface TerjemahanRpc {
   pesan: string;
 }
 
-const NAMA: Record<ObjekStudio, string> = { soal: "Soal", stimulus: "Stimulus" };
+const NAMA: Record<ObjekStudio, string> = { soal: "Soal", stimulus: "Bacaan" };
 
 /**
  * Kode hasil fungsi studio_soal_* (db/add_studio_soal.sql,
- * db/add_studio_soal_draf.sql) -> respons API. Draf milik mentor lain
- * dijawab 404 (sama dengan tidak ada) supaya keberadaannya tidak bocor.
+ * db/add_studio_soal_draf.sql) -> HTTP + pesan untuk mentor. Pesan ditulis
+ * dalam bahasa sehari-hari: apa yang terjadi + apa yang harus dilakukan.
  */
 export function terjemahkanHasilRpc(objek: ObjekStudio, status: unknown): TerjemahanRpc {
   const n = NAMA[objek];
@@ -332,59 +332,62 @@ export function terjemahkanHasilRpc(objek: ObjekStudio, status: unknown): Terjem
     case "disimpan":
       return ok("Draf tersimpan.");
     case "diajukan":
-      return ok(objek === "stimulus" ? "Stimulus dan soalnya diajukan untuk ditinjau." : "Soal diajukan untuk ditinjau.");
+      return ok(objek === "stimulus" ? "Bacaan dan soalnya sudah dikirim untuk dicek." : "Soal sudah dikirim untuk dicek.");
     case "ditarik":
-      return ok("Pengajuan ditarik. Isinya bisa diedit lagi.");
+      return ok("Kiriman dibatalkan. Sekarang isinya bisa diubah lagi.");
     case "versi_dibuat":
-      return ok("Versi baru dibuat sebagai draf. Versi lama tetap terpakai sampai versi baru lolos tinjauan.");
+      return ok("Versi baru dibuat sebagai draf. Versi lama tetap dipakai sampai versi baru lolos dicek.");
     case "dihapus":
       return ok("Draf dihapus.");
     case "input_tidak_valid":
     case "jenis_tidak_valid":
-      return no(400, `Data ${n.toLowerCase()} tidak valid.`);
+      return no(400, `Data ${n.toLowerCase()} tidak terbaca. Muat ulang halaman lalu coba lagi.`);
     case "data_tidak_valid":
-      return no(400, `Data ${n.toLowerCase()} tidak memenuhi aturan. Periksa isian yang ditandai.`);
+      return no(400, "Ada isian yang belum sesuai aturan. Betulkan yang ditandai merah.");
     case "subtes_tidak_valid":
-      return no(400, "Studio Soal hanya untuk subtes SNBT.");
+      return no(400, "Studio Soal baru bisa dipakai untuk subtes SNBT.");
     case "tidak_eligible":
-      return no(403, "Anda tidak ditugaskan Admin ke subtes ini.");
+      return no(403, "Anda tidak ditugaskan ke subtes ini. Minta Admin menugaskan Anda dulu.");
     case "bukan_penulis":
     case "tidak_ditemukan":
-      return no(404, `${n} tidak ditemukan.`);
+      return no(404, `${n} tidak ditemukan. Mungkin sudah dihapus.`);
     case "terkunci":
-      return no(409, `${n} sudah diajukan atau terbit sehingga isinya terkunci. Tarik pengajuan atau buat versi baru untuk mengubahnya.`);
+      return no(
+        409,
+        `${n} sudah dikirim atau sudah terbit, jadi isinya dikunci. Batalkan kirim atau buat versi baru kalau mau mengubahnya.`,
+      );
     case "identitas_berubah":
-      return no(409, "Subtes, tipe, dan stimulus tidak bisa diganti setelah disimpan. Hapus draf ini lalu buat yang baru.");
+      return no(409, "Subtes, tipe soal, dan bacaan tidak bisa diganti setelah disimpan. Hapus draf ini lalu buat yang baru.");
     case "stimulus_tidak_ditemukan":
-      return no(404, "Stimulus tidak ditemukan.");
+      return no(404, "Bacaan tidak ditemukan. Mungkin sudah dihapus.");
     case "stimulus_bukan_milik":
-      return no(403, "Hanya penulis stimulus yang boleh menambah soal ke stimulus itu.");
+      return no(403, "Hanya penulis bacaan ini yang bisa menambah soal ke dalamnya.");
     case "stimulus_beda_subtes":
-      return no(400, "Stimulus berasal dari subtes lain.");
+      return no(400, "Bacaan ini milik subtes lain.");
     case "stimulus_terkunci":
-      return no(409, "Stimulus sedang ditinjau atau sudah tidak aktif, jadi belum bisa ditambah soal.");
+      return no(409, "Bacaan ini sedang dicek atau sudah tidak aktif, jadi belum bisa ditambah soal.");
     case "stimulus_penuh":
-      return no(409, "Stimulus sudah berisi 50 soal (batas maksimal).");
+      return no(409, "Bacaan ini sudah berisi 50 soal (batas maksimal).");
     case "status_tidak_valid":
-      return no(409, `Status ${n.toLowerCase()} tidak memungkinkan aksi ini. Muat ulang halaman.`);
+      return no(409, `${n} ini sudah berubah status. Muat ulang halaman.`);
     case "pernah_diajukan":
-      return no(409, `${n} ini pernah diajukan sehingga tidak bisa dihapus.`);
+      return no(409, `${n} ini sudah pernah dikirim untuk dicek, jadi tidak bisa dihapus.`);
     case "dipakai_paket":
-      return no(409, "Soal ini dipakai di paket soal sehingga tidak bisa dihapus.");
+      return no(409, "Soal ini sudah dipakai di paket soal, jadi tidak bisa dihapus.");
     case "masih_ada_soal":
-      return no(409, "Stimulus masih berisi soal. Hapus soalnya dulu.");
+      return no(409, "Bacaan ini masih dipakai soal. Hapus soal-soalnya dulu.");
     case "ajukan_lewat_stimulus":
-      return no(409, "Soal ini bagian dari stimulus yang belum terbit — ajukan bersama stimulusnya dari halaman stimulus.");
+      return no(409, "Soal ini ikut bacaannya. Kirim untuk dicek dari halaman bacaan.");
     case "tarik_lewat_stimulus":
-      return no(409, "Soal ini diajukan bersama stimulusnya — tarik dari halaman stimulus.");
+      return no(409, "Soal ini dikirim bersama bacaannya. Batalkan kirim dari halaman bacaan.");
     case "stimulus_tidak_aktif":
-      return no(409, "Stimulus soal ini sudah tidak aktif.");
+      return no(409, "Bacaan soal ini sudah tidak aktif.");
     case "kelompok_kosong":
-      return no(400, "Stimulus belum berisi soal draf untuk diajukan.");
+      return no(400, "Bacaan ini belum berisi soal draf untuk dikirim.");
     case "ada_versi_terbuka":
       return no(409, "Sudah ada versi baru yang belum terbit. Lanjutkan versi itu.");
     default:
-      return no(500, "Terjadi kesalahan. Coba lagi nanti.");
+      return no(500, "Ada gangguan. Coba lagi sebentar lagi.");
   }
 }
 

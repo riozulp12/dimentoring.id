@@ -38,7 +38,7 @@ export async function PATCH(request: NextRequest) {
   });
   if (error) {
     console.error("[admin/studio-soal/penugasan] studio_soal_atur_penugasan failed:", error);
-    return NextResponse.json({ success: false, error: "Gagal menyimpan penugasan. Coba lagi nanti." }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Penugasan belum tersimpan. Coba lagi sebentar lagi." }, { status: 500 });
   }
 
   const hasil = (data ?? {}) as { status?: unknown; jumlah_mentor_eligible?: unknown };

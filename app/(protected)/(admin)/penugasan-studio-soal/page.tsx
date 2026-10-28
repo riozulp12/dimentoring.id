@@ -21,8 +21,8 @@ export default async function PenugasanStudioSoalPage() {
       <PageTitle value="Penugasan Studio Soal" />
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-10">
         {data === "gagal" ? (
-          <div className="rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-12 text-center">
-            <p className="text-base text-[#7E7C7C]">Gagal memuat data penugasan. Coba muat ulang halaman.</p>
+          <div className="rounded-[20px] border-[0.8px] border-line bg-white px-5 py-12 text-center">
+            <p className="text-base text-muted">Data penugasan gagal dimuat. Coba muat ulang halaman.</p>
           </div>
         ) : (
           <PenugasanStudioSoalClient initialData={data} />

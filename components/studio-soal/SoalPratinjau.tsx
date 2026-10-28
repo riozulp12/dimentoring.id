@@ -79,9 +79,9 @@ export default function SoalPratinjau({
     const s = statusBagian.get(id);
     if (s === undefined) return null;
     return s ? (
-      <span className="text-xs font-medium text-[#0A7D2C]">✓ benar</span>
+      <span className="text-xs font-medium text-success">✓ benar</span>
     ) : (
-      <span className="text-xs font-medium text-[#E70A0A]">✗ salah</span>
+      <span className="text-xs font-medium text-danger">✗ salah</span>
     );
   };
 
@@ -92,7 +92,7 @@ export default function SoalPratinjau({
   return (
     <div className="flex flex-col gap-4">
       {stimulus && stimulus.length > 0 ? (
-        <div className="rounded-[16px] border border-[#E3E3E3] bg-[#FAFAFA] p-4">
+        <div className="rounded-[16px] border border-line bg-surface p-4">
           <StimulusPratinjau blok={stimulus} />
         </div>
       ) : null}
@@ -101,7 +101,7 @@ export default function SoalPratinjau({
         {soal.tipe === "isian" ? (
           <TeksKaya
             teks={soal.redaksi}
-            kosong="(redaksi soal kosong)"
+            kosong="(teks soal masih kosong)"
             rumpang={(id) =>
               jenisRumpang.has(id) ? (
                 <span className="mx-1 inline-flex items-baseline gap-1">
@@ -109,18 +109,18 @@ export default function SoalPratinjau({
                     value={isian[id] ?? ""}
                     onChange={(e) => setIsian((p) => ({ ...p, [id]: e.target.value }))}
                     inputMode={jenisRumpang.get(id) === "angka" ? "decimal" : "text"}
-                    aria-label={`Jawaban rumpang ${id}`}
-                    className="w-28 rounded-[8px] border border-[#AFAFAF] px-2 py-0.5 text-sm outline-none focus:border-[#081EEA]"
+                    aria-label={`Jawaban kotak ${id}`}
+                    className="w-28 rounded-[8px] border border-subtle px-2 py-0.5 text-sm outline-none focus:border-primary"
                   />
                   {tandaBagian(id)}
                 </span>
               ) : (
-                <span className="text-xs text-[#E70A0A]">{`{{${id}}}`} (rumpang tidak ada)</span>
+                <span className="text-xs text-danger">{`{{${id}}}`} (kotak jawaban ini tidak ada)</span>
               )
             }
           />
         ) : (
-          <TeksKaya teks={soal.redaksi} kosong="(redaksi soal kosong)" />
+          <TeksKaya teks={soal.redaksi} kosong="(teks soal masih kosong)" />
         )}
       </div>
 
@@ -138,13 +138,13 @@ export default function SoalPratinjau({
                 onClick={() => setOpsi(o.label)}
                 className={[
                   "flex items-start gap-3 rounded-[12px] border px-3 py-2 text-left text-sm transition-colors",
-                  dipilih ? "border-[#081EEA] bg-[#EEF0FE]" : "border-[#E3E3E3] bg-white hover:border-[#081EEA]",
-                  kunciIni ? "ring-2 ring-[#0A7D2C]" : "",
+                  dipilih ? "border-primary bg-primary-soft" : "border-line bg-white hover:border-primary",
+                  kunciIni ? "ring-2 ring-success" : "",
                 ].join(" ")}
               >
                 <span className="font-medium">{o.label}.</span>
                 <TeksKaya teks={o.teks} kosong="(opsi kosong)" className="flex-1" sebaris />
-                {kunciIni ? <span className="text-xs font-medium text-[#0A7D2C]">kunci</span> : null}
+                {kunciIni ? <span className="text-xs font-medium text-success">kunci</span> : null}
               </button>
             );
           })}
@@ -158,7 +158,7 @@ export default function SoalPratinjau({
             const label = daftar<string>(konten.label_kolom);
             const kunciBaris = objek(kunci.per_baris)[p.id];
             return (
-              <div key={p.id} className="flex flex-col gap-2 rounded-[12px] border border-[#E3E3E3] bg-white px-3 py-2">
+              <div key={p.id} className="flex flex-col gap-2 rounded-[12px] border border-line bg-white px-3 py-2">
                 <div className="flex items-start gap-2 text-sm">
                   <span className="font-medium">{i + 1}.</span>
                   <TeksKaya teks={p.teks} kosong="(pernyataan kosong)" className="flex-1" />
@@ -174,8 +174,8 @@ export default function SoalPratinjau({
                       onClick={() => setPerBaris((prev) => ({ ...prev, [p.id]: k }))}
                       className={[
                         "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                        perBaris[p.id] === k ? "border-[#081EEA] bg-[#081EEA] text-white" : "border-[#CAC9C9] bg-white text-black",
-                        tampilKunci && kunciBaris === k ? "ring-2 ring-[#0A7D2C] ring-offset-1" : "",
+                        perBaris[p.id] === k ? "border-primary bg-primary text-white" : "border-line-strong bg-white text-black",
+                        tampilKunci && kunciBaris === k ? "ring-2 ring-success ring-offset-1" : "",
                       ].join(" ")}
                     >
                       {label[k] || (k === 0 ? "Kolom 1" : "Kolom 2")}
@@ -189,19 +189,19 @@ export default function SoalPratinjau({
       ) : null}
 
       {soal.tipe === "isian" && rumpang.length > 0 ? (
-        <ul className="flex flex-col gap-1 text-xs text-[#7E7C7C]">
+        <ul className="flex flex-col gap-1 text-xs text-muted">
           {rumpang
             .filter((r) => r.jenis === "angka" && (isian[r.id] ?? "").trim() !== "")
             .map((r) => (
               <li key={r.id}>
-                Rumpang {r.id}: {petunjukAngka(isian[r.id] ?? "")}
+                Kotak {r.id}: {petunjukAngka(isian[r.id] ?? "")}
               </li>
             ))}
         </ul>
       ) : null}
 
-      <div className="flex flex-col gap-2 rounded-[16px] border border-dashed border-[#CAC9C9] bg-[#FAFAFA] p-3">
-        <p className="text-xs text-[#7E7C7C]">
+      <div className="flex flex-col gap-2 rounded-[16px] border border-dashed border-line-strong bg-surface p-3">
+        <p className="text-xs text-muted">
           Uji kunci jawaban: jawab sendiri seperti siswa, lalu periksa. Penilaiannya sama dengan yang dipakai untuk siswa.
         </p>
         <div className="flex flex-wrap gap-2">
@@ -215,7 +215,7 @@ export default function SoalPratinjau({
           <button
             type="button"
             onClick={ulangi}
-            className="rounded-full border border-[#CAC9C9] bg-white px-4 py-1.5 text-sm font-medium text-black"
+            className="rounded-full border border-line-strong bg-white px-4 py-1.5 text-sm font-medium text-black"
           >
             Ulangi
           </button>
@@ -223,17 +223,17 @@ export default function SoalPratinjau({
             type="button"
             aria-pressed={tampilKunci}
             onClick={() => setTampilKunci((v) => !v)}
-            className="rounded-full border border-[#CAC9C9] bg-white px-4 py-1.5 text-sm font-medium text-black"
+            className="rounded-full border border-line-strong bg-white px-4 py-1.5 text-sm font-medium text-black"
           >
             {tampilKunci ? "Sembunyikan kunci & pembahasan" : "Tampilkan kunci & pembahasan"}
           </button>
         </div>
         {hasil && !hasilBerlaku ? (
-          <p className="text-sm text-[#7E7C7C]">Soal berubah sejak diperiksa — periksa lagi.</p>
+          <p className="text-sm text-muted">Soal berubah sejak diperiksa — periksa lagi.</p>
         ) : hasilBerlaku ? (
           <p
             role="status"
-            className={["text-sm font-medium", hasilBerlaku.benar ? "text-[#0A7D2C]" : "text-[#E70A0A]"].join(" ")}
+            className={["text-sm font-medium", hasilBerlaku.benar ? "text-success" : "text-danger"].join(" ")}
           >
             {hasilBerlaku.benar
               ? "Benar — jawaban Anda cocok dengan kunci."
@@ -243,7 +243,7 @@ export default function SoalPratinjau({
       </div>
 
       {tampilKunci ? (
-        <div className="flex flex-col gap-2 rounded-[16px] border border-[#CFE9D6] bg-[#F2FAF4] p-3 text-sm">
+        <div className="flex flex-col gap-2 rounded-[16px] border border-success-line bg-success-soft p-3 text-sm">
           {soal.tipe === "pilihan_ganda" ? (
             <p>
               <span className="font-medium">Kunci:</span> {typeof kunci.opsi === "string" ? kunci.opsi : "(belum dipilih)"}

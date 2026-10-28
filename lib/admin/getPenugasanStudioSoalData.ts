@@ -16,6 +16,8 @@ import { urutkanSubtes, type PenugasanRow } from "@/lib/shared/studio-soal/penug
 export interface MentorPenugasanItem {
   id: string;
   nama: string;
+  /** Untuk pencarian Admin (UX-1). */
+  email: string | null;
   asalPtn: string | null;
   aktif: boolean;
   /** Subtes SNBT yang dicantumkan mentor di profil mengajarnya. */
@@ -23,7 +25,8 @@ export interface MentorPenugasanItem {
 }
 
 export interface PenugasanStudioSoalData {
-  subtes: { id: string; nama: string }[];
+  /** kategori dipakai untuk mengelompokkan per jenis ujian (lib/shared/studio-soal/jenisUjian.ts). */
+  subtes: { id: string; nama: string; kategori: string }[];
   mentor: MentorPenugasanItem[];
   penugasan: PenugasanRow[];
 }
@@ -36,8 +39,8 @@ function first<T>(value: Join<T>): T | null {
 
 export async function getPenugasanStudioSoalData(): Promise<PenugasanStudioSoalData | "gagal"> {
   const [subtesRes, roleRes, penugasanRes] = await Promise.all([
-    supabaseServer.from("subtes").select("id, nama").in("kategori", [...KATEGORI_SUBTES_SNBT]),
-    supabaseServer.from("user_roles").select("user_id, status, users:user_id(nama)").eq("role_type", "mentor"),
+    supabaseServer.from("subtes").select("id, nama, kategori").in("kategori", [...KATEGORI_SUBTES_SNBT]),
+    supabaseServer.from("user_roles").select("user_id, status, users:user_id(nama, email)").eq("role_type", "mentor"),
     supabaseServer.from("studio_soal_penugasan").select("mentor_id, subtes_id"),
   ]);
   if (subtesRes.error || roleRes.error || penugasanRes.error) {
@@ -45,7 +48,9 @@ export async function getPenugasanStudioSoalData(): Promise<PenugasanStudioSoalD
     return "gagal";
   }
 
-  const subtes = urutkanSubtes((subtesRes.data ?? []).map((s) => ({ id: s.id as string, nama: s.nama as string })));
+  const subtes = urutkanSubtes(
+    (subtesRes.data ?? []).map((s) => ({ id: s.id as string, nama: s.nama as string, kategori: s.kategori as string })),
+  );
   const subtesIds = new Set(subtes.map((s) => s.id));
   const penugasan: PenugasanRow[] = (penugasanRes.data ?? []).map((p) => ({
     mentorId: p.mentor_id as string,
@@ -53,7 +58,7 @@ export async function getPenugasanStudioSoalData(): Promise<PenugasanStudioSoalD
   }));
   const punyaPenugasan = new Set(penugasan.map((p) => p.mentorId));
 
-  type RoleRow = { user_id: string; status: string; users: Join<{ nama: string }> };
+  type RoleRow = { user_id: string; status: string; users: Join<{ nama: string; email?: string | null }> };
   const roles = ((roleRes.data ?? []) as unknown as RoleRow[]).filter(
     (r) => r.status === "active" || punyaPenugasan.has(r.user_id),
   );
@@ -82,6 +87,7 @@ export async function getPenugasanStudioSoalData(): Promise<PenugasanStudioSoalD
     .map((r) => ({
       id: r.user_id,
       nama: first(r.users)?.nama ?? "(tanpa nama)",
+      email: first(r.users)?.email ?? null,
       asalPtn: profil.get(r.user_id)?.asalPtn ?? null,
       aktif: r.status === "active",
       subtesProfil: profil.get(r.user_id)?.subtes ?? [],

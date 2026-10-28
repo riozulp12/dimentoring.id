@@ -465,6 +465,11 @@ function fakeRpc(name: string, p: Row) {
       if (i === -1) return hasil("tidak_ditemukan");
       if (tabel[i].penulis_id !== aktor) return hasil("bukan_penulis");
       if (tabel[i].status !== "draf") return hasil("status_tidak_valid");
+      // Sama dengan RPC asli: pernah dikirim -> tidak bisa dihapus; bacaan berisi soal -> hapus soalnya dulu.
+      if (db.soal_tinjauan_log.some((l) => l.objek_jenis === p.p_objek_jenis && l.objek_id === p.p_id && l.aksi === "ajukan")) {
+        return hasil("pernah_diajukan");
+      }
+      if (p.p_objek_jenis === "stimulus" && db.soal_bank.some((s) => s.stimulus_id === p.p_id)) return hasil("masih_ada_soal");
       tabel.splice(i, 1);
       return hasil("dihapus");
     }
@@ -579,6 +584,8 @@ const putStimulus = (id: string, body: unknown, userId: string | null = M1) =>
   stimulusRoute.PUT(req("PUT", `/api/studio-soal/stimulus/${id}`, userId, body), ctx({ id })).then(hasilnya);
 const aksiStimulus = (id: string, aksi: string, userId: string | null = M1) =>
   stimulusAksi.POST(req("POST", `/api/studio-soal/stimulus/${id}/${aksi}`, userId), ctx({ id, aksi })).then(hasilnya);
+const delStimulus = (id: string, userId: string | null = M1) =>
+  stimulusRoute.DELETE(req("DELETE", `/api/studio-soal/stimulus/${id}`, userId), ctx({ id })).then(hasilnya);
 
 describe("API studio-soal — akses", () => {
   it("tanpa login 401; siswa 403; mentor pending 403 — RPC tidak dipanggil", async () => {
@@ -729,7 +736,7 @@ describe("API studio-soal — stimulus & K7", () => {
     assert.equal((await putStimulus(ST1, stimulusLengkap())).status, 200);
     const lain = await putSoal(u(503), soalPg({ stimulus_id: ST1 }), M2);
     assert.equal(lain.status, 403);
-    assert.match(String(lain.json.error), /penulis stimulus/);
+    assert.match(String(lain.json.error), /penulis bacaan/);
     const sendiri = await putSoal(u(504), soalPg({ stimulus_id: ST1 }));
     assert.equal(sendiri.status, 200);
     assert.equal(db.soal_bank.find((s) => s.id === u(504))?.urutan_dalam_stimulus, 1);
@@ -763,6 +770,50 @@ describe("API studio-soal — stimulus & K7", () => {
     assert.notEqual(daftar, "gagal");
     if (daftar === "gagal") return;
     assert.deepEqual(daftar.map((s) => s.id), [PU]);
+  });
+
+  it("UX-1 hapus draf: bacaan yang masih dipakai 2 soal ditolak dengan jumlahnya; kosong bisa dihapus", async () => {
+    await putStimulus(ST1, stimulusLengkap());
+    await putSoal(u(504), soalPg({ stimulus_id: ST1 }));
+    await putSoal(u(505), soalPg({ stimulus_id: ST1 }));
+    const tolak = await delStimulus(ST1);
+    assert.equal(tolak.status, 409);
+    assert.equal(tolak.json.error, "Bacaan ini masih dipakai 2 soal. Hapus soal-soalnya dulu.");
+    assert.equal((await delSoal(u(504))).status, 200);
+    assert.equal((await delSoal(u(505))).status, 200);
+    const ok = await delStimulus(ST1);
+    assert.equal(ok.status, 200);
+    assert.equal(db.soal_stimulus.length, 0);
+  });
+
+  it("UX-1 hapus draf: soal yang pernah dikirim lalu dibatalkan tidak bisa dihapus (alasan jelas)", async () => {
+    await putSoal(ID1, soalPg());
+    await aksiSoal(ID1, "ajukan");
+    const sedangDicek = await delSoal(ID1);
+    assert.equal(sedangDicek.status, 409);
+    await aksiSoal(ID1, "tarik");
+    assert.equal(db.soal_bank[0].status, "draf");
+    const res = await delSoal(ID1);
+    assert.equal(res.status, 409);
+    assert.match(String(res.json.error), /sudah pernah dikirim untuk dicek/);
+    assert.equal(db.soal_bank.length, 1);
+  });
+
+  it("UX-1 data daftar: draf yang pernah dikirim ditandai, yang belum tidak", async () => {
+    await putSoal(ID1, soalPg());
+    await putSoal(u(502), soalPg());
+    await aksiSoal(ID1, "ajukan");
+    await aksiSoal(ID1, "tarik");
+    const daftarLib = await import("@/lib/mentor/getStudioSoalData");
+    const v = await daftarLib.getStudioSoalMentor(M1);
+    if (v === "gagal") return assert.fail("gagal");
+    const soal = v.ditugaskan.flatMap((k) => k.soal);
+    assert.equal(soal.find((s) => s.id === ID1)?.pernahDiajukan, true);
+    assert.equal(soal.find((s) => s.id === u(502))?.pernahDiajukan, false);
+    await putStimulus(ST1, stimulusLengkap());
+    const st = await dataLib.getStimulusMentor(M1);
+    if (st === "gagal") return assert.fail("gagal");
+    assert.equal(st[0].pernahDiajukan, false);
   });
 
   it("tidak ada tulis langsung ke tabel selama semua skenario API", async () => {
