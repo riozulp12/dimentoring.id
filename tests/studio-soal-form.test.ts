@@ -39,6 +39,7 @@ import {
 } from "@/lib/shared/studio-soal/formSoal";
 import { validasiSoal, validasiStimulus } from "@/lib/shared/studio-soal/validasi";
 import { nilaiJawaban } from "@/lib/shared/studio-soal/nilaiJawaban";
+import { alasanDariJawaban, ringkasHasilKirim, type HasilKirimSatu } from "@/lib/shared/studio-soal/kirimBanyak";
 
 const ROOT = path.resolve(__dirname, "..");
 const baca = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -477,6 +478,12 @@ function fakeRpc(name: string, p: Row) {
       const s = db.soal_bank.find((r) => r.id === p.p_soal_id);
       if (!s) return hasil("tidak_ditemukan");
       if (s.penulis_id !== aktor) return hasil("bukan_penulis");
+      // Sama dengan RPC asli: hanya draf/ditolak; soal di bacaan yang belum terbit dikirim lewat bacaannya.
+      if (s.status !== "draf" && s.status !== "ditolak") return hasil("status_tidak_valid");
+      if (s.stimulus_id) {
+        const st = db.soal_stimulus.find((r) => r.id === s.stimulus_id);
+        if (st && ["draf", "ditolak", "diajukan"].includes(st.status as string)) return hasil("ajukan_lewat_stimulus");
+      }
       s.status = "diajukan";
       db.soal_tinjauan_log.push({ objek_jenis: "soal", objek_id: s.id, aksi: "ajukan" });
       return hasil("diajukan");
@@ -728,6 +735,61 @@ describe("API studio-soal — ajukan, versi baru", () => {
     const res = await aksiSoal(ID1, "versi-baru");
     assert.equal(res.status, 200);
     assert.equal(res.json.id, u(999));
+  });
+});
+
+describe("API studio-soal — kirim banyak (UX-2, loop klien atas endpoint ajukan yang sudah ada)", () => {
+  /** Tiruan loop di StudioSoalMentor: berurutan, satu gagal tidak menghentikan yang lain. */
+  async function kirimBanyak(ids: string[], userId: string = M1) {
+    const hasil: HasilKirimSatu[] = [];
+    for (const id of ids) {
+      const r = await aksiSoal(id, "ajukan", userId);
+      hasil.push(r.status === 200 && r.json.success === true ? { id, ok: true } : { id, ok: false, alasan: alasanDariJawaban(r.json) });
+    }
+    return ringkasHasilKirim(hasil);
+  }
+  const jumlahLogAjukan = (id: string) => db.soal_tinjauan_log.filter((l) => l.objek_id === id && l.aksi === "ajukan").length;
+
+  it("beberapa draf lengkap -> semua jadi 'diajukan' (Sedang dicek)", async () => {
+    const ids = [u(701), u(702), u(703)];
+    for (const id of ids) await putSoal(id, soalPg());
+    const r = await kirimBanyak(ids);
+    assert.equal(r.judul, "3 soal terkirim.");
+    assert.ok(ids.every((id) => db.soal_bank.find((s) => s.id === id)?.status === "diajukan"));
+  });
+
+  it("campuran lengkap & belum lengkap: yang lengkap terkirim, yang belum dapat alasan biasa; ulang tidak kirim dobel", async () => {
+    await putSoal(u(711), soalPg());
+    await putSoal(u(712), soalPg({ kunci: { v: 1 } })); // jawaban benar belum dipilih
+    await putSoal(u(713), soalPg());
+    const r = await kirimBanyak([u(711), u(712), u(713)]);
+    assert.equal(r.judul, "2 soal terkirim. 1 belum terkirim:");
+    assert.deepEqual(r.gagal.map((g) => g.id), [u(712)]);
+    assert.match(r.gagal[0].alasan, /Pilih satu jawaban benar/);
+    assert.equal(db.soal_bank.find((s) => s.id === u(712))?.status, "draf");
+
+    // Dijalankan ulang (mis. tombol ditekan lagi sebelum daftar segar): server menolak yang sudah terkirim.
+    const ulang = await kirimBanyak([u(711), u(713)]);
+    assert.equal(ulang.terkirim.length, 0);
+    assert.equal(jumlahLogAjukan(u(711)), 1);
+    assert.equal(jumlahLogAjukan(u(713)), 1);
+  });
+
+  it("soal milik mentor lain ditolak server (404) dan tidak berubah — tidak hanya mengandalkan UI", async () => {
+    await putSoal(u(721), soalPg());
+    const r = await kirimBanyak([u(721)], M2);
+    assert.equal(r.terkirim.length, 0);
+    assert.match(r.gagal[0].alasan, /tidak ditemukan/);
+    assert.equal(db.soal_bank[0].status, "draf");
+    assert.equal(jumlahLogAjukan(u(721)), 0);
+  });
+
+  it("soal di bacaan yang belum terbit tidak terkirim sendiri; alasannya mengarah ke halaman bacaan", async () => {
+    await putStimulus(ST1, stimulusLengkap());
+    await putSoal(u(731), soalPg({ stimulus_id: ST1 }));
+    const r = await kirimBanyak([u(731)]);
+    assert.equal(r.terkirim.length, 0);
+    assert.match(r.gagal[0].alasan, /bacaan/);
   });
 });
 
