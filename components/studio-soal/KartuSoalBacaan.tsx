@@ -200,7 +200,8 @@ export default function KartuSoalBacaan({
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          {/* Layar besar: pratinjau soal ini tampil di kolom kanan halaman (FormStimulus). */}
+          <div className="flex flex-col gap-5">
             <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
               <IsianSoal
                 form={form}
@@ -224,8 +225,8 @@ export default function KartuSoalBacaan({
                 </section>
               ) : null}
             </div>
-            <aside className={["min-w-0", tab === "pratinjau" ? "" : "hidden lg:block"].join(" ")}>
-              <div className={`${KARTU} lg:sticky lg:top-4`}>
+            <aside className={["min-w-0 lg:hidden", tab === "pratinjau" ? "" : "hidden"].join(" ")}>
+              <div className={KARTU}>
                 <div className="flex items-baseline justify-between gap-2">
                   <h4 className="text-base font-medium text-black">Pratinjau soal {nomor}</h4>
                   <span className="text-xs text-muted">Tampilan seperti yang dilihat siswa</span>

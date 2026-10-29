@@ -36,6 +36,15 @@ export const tombolIkon = (bahaya = false) =>
     bahaya ? "text-danger hover:bg-danger-soft" : "text-black hover:bg-surface-muted",
   ].join(" ");
 
+/**
+ * Kolom pratinjau di layar besar (lg+): menempel di bawah header dashboard
+ * (--tinggi-navbar di app/globals.css) dengan jarak 1rem, tinggi maksimum
+ * menyisakan bilah aksi bawah (± 7rem), dan bisa digulir sendiri. Di HP/tablet
+ * kecil tidak menempel. Induknya grid dengan lg:items-start.
+ */
+export const KOLOM_PRATINJAU =
+  "lg:sticky lg:top-[calc(var(--tinggi-navbar)+1rem)] lg:max-h-[calc(100dvh-var(--tinggi-navbar)-9rem)] lg:overflow-y-auto lg:overscroll-contain";
+
 /** Tombol pilihan (toggle) — aktif = primary. */
 export const pilihan = (aktif: boolean, warnaAktif: "primary" | "success" = "primary", teks: "text-sm" | "text-xs" = "text-sm") =>
   [

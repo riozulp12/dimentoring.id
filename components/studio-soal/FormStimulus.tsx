@@ -8,11 +8,12 @@ import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
 import KartuSoalBacaan, { cekKartuUntukKirim, type AksiKartu, type JenisAksiKartu } from "@/components/studio-soal/KartuSoalBacaan";
 import BilahAksi, { KELAS_TOMBOL_BILAH } from "@/components/studio-soal/BilahAksi";
-import { IkonTongSampah } from "@/components/studio-soal/Ikon";
+import { IkonChevron, IkonTongSampah } from "@/components/studio-soal/Ikon";
+import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
 import PenjagaKeluar from "@/components/studio-soal/PenjagaKeluar";
 import StimulusPratinjau from "@/components/studio-soal/StimulusPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
-import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas, tombolIkon } from "@/components/studio-soal/gaya";
+import { KARTU, CHIP, KOLOM_PRATINJAU, TOMBOL_KECIL, inputKecil, pesanKelas, tombolIkon } from "@/components/studio-soal/gaya";
 import TextareaKaya, { ContekanRumus, PesanError } from "@/components/studio-soal/TextareaKaya";
 import { LABEL_STATUS, errorDi, isBolehEdit, panggilApi, petaError } from "@/components/studio-soal/klien";
 import {
@@ -149,6 +150,8 @@ export default function FormStimulus({
   const [errorServer, setErrorServer] = useState<ErrorValidasi[]>([]);
   const [tampilSemua, setTampilSemua] = useState(false);
   const [tab, setTab] = useState<"tulis" | "pratinjau">("tulis");
+  /** Kartu soal yang terakhir dibuka/difokus — pratinjaunya tampil di kolom kanan. */
+  const [idAktif, setIdAktif] = useState<string | null>(idKartuBaru ?? null);
   // Pernah diajukan di sesi ini -> tidak bisa dihapus lagi (DB juga menolak).
   const [sudahPernahDiajukan, setSudahPernahDiajukan] = useState(pernahDiajukan);
   const [kartuSoal, setKartuSoal] = useState<KartuSoal[]>(() => {
@@ -201,8 +204,11 @@ export default function FormStimulus({
   const ubahKartu = (kid: string, fn: (k: KartuSoal) => KartuSoal) => setKartuSoal((l) => l.map((k) => (k.id === kid ? fn(k) : k)));
   const setFormKartu = (kid: string) => (aksi: SetStateAction<DataFormSoal>) =>
     ubahKartu(kid, (k) => ({ ...k, form: typeof aksi === "function" ? aksi(k.form) : aksi }));
-  const tambahKartu = () =>
-    setKartuSoal((l) => [...l.map((k) => ({ ...k, terbuka: false })), kartuBaru(uuidBaru(), form.subtes_id, id)]);
+  const tambahKartu = () => {
+    const idBaru = uuidBaru();
+    setKartuSoal((l) => [...l.map((k) => ({ ...k, terbuka: false })), kartuBaru(idBaru, form.subtes_id, id)]);
+    setIdAktif(idBaru);
+  };
 
   // ---------------------------------------------------------------- aksi
   /** Simpan bacaan (bila berubah) lalu soal satu per satu. true = semua tersimpan. */
@@ -439,157 +445,198 @@ export default function FormStimulus({
   const soalAkanDikirim = kartuSoal.filter((k) => bisaDiubah(k.status) && keadaanKartu(k) !== "kosong").length;
   const adaYangBisaDisimpan = bolehEdit || soalBolehEdit;
 
+  // Pratinjau di kolom kanan (layar besar): bacaan + soal yang sedang dikerjakan.
+  const kartuAktif = kartuSoal.find((k) => k.id === idAktif && k.terbuka) ?? kartuSoal.find((k) => k.terbuka) ?? null;
+  const nomorAktif = kartuAktif ? kartuSoal.indexOf(kartuAktif) + 1 : 0;
+  const pratinjauBacaan = (
+    <>
+      <StimulusPratinjau blok={blok} />
+      {form.sumber_rujukan.trim() ? <p className="text-xs text-muted">Sumber: {form.sumber_rujukan}</p> : null}
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-4 pb-24 sm:gap-5">
       <PenjagaKeluar adaPerubahan={adaPerubahan} />
-      <div className="flex flex-col gap-2">
-        <Link href="/studio-soal" className="w-fit text-sm text-primary hover:underline">
-          ← Studio Soal
-        </Link>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-medium text-black sm:text-2xl">
-            {baru && !sudahDisimpan ? "Buat soal dengan bacaan" : "Soal dengan bacaan"}
-          </h1>
-          <span className={CHIP}>{LABEL_STATUS[status] ?? status}</span>
-          {versi > 1 ? <span className="text-xs text-muted">versi {versi}</span> : null}
-        </div>
-        <p className="text-sm text-muted">
-          Tulis bacaan atau tabelnya di atas, lalu soal-soalnya di bawah. Tekan “Simpan” untuk menyimpan bacaan dan semua soal
-          sekaligus (boleh belum lengkap). Bacaan dan soal-soalnya dikirim dan dicek bersama.
-        </p>
-      </div>
+      {/* Dua kolom di layar besar: kiri judul + bacaan + kartu soal, kanan pratinjau
+          yang menempel (mulai sejajar judul). Di HP satu kolom, pratinjau lewat tab. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
+          <div className="flex flex-col gap-2">
+            <Link href="/studio-soal" className="w-fit text-sm text-primary hover:underline">
+              ← Studio Soal
+            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-medium text-black sm:text-2xl">
+                {baru && !sudahDisimpan ? "Buat soal dengan bacaan" : "Soal dengan bacaan"}
+              </h1>
+              <span className={CHIP}>{LABEL_STATUS[status] ?? status}</span>
+              {versi > 1 ? <span className="text-xs text-muted">versi {versi}</span> : null}
+            </div>
+            <p className="text-sm text-muted">
+              Tulis bacaan atau tabelnya di atas, lalu soal-soalnya di bawah. Tekan “Simpan” untuk menyimpan bacaan dan semua soal
+              sekaligus (boleh belum lengkap). Bacaan dan soal-soalnya dikirim dan dicek bersama.
+            </p>
+          </div>
 
-      {!ditugaskan ? (
-        <Banner jenis="peringatan">
-          Anda tidak lagi ditugaskan ke subtes ini. Bacaan tetap tersimpan, tapi tidak bisa diubah atau dikirim.
-        </Banner>
-      ) : null}
-      {status === "ditolak" && alasanTolak ? (
-        <Banner jenis="peringatan">
-          <span className="font-medium">Catatan dari pengecek:</span> {alasanTolak}
-        </Banner>
-      ) : null}
-      {status === "diajukan" ? (
-        <Banner jenis="info">Bacaan dan soalnya sedang dicek, jadi isinya dikunci dulu. Tekan “Batalkan kirim” kalau mau mengubahnya.</Banner>
-      ) : null}
-      {status === "terpublikasi" ? (
-        <Banner jenis="info">
-          Bacaan sudah terbit. Anda masih bisa menambah soal baru ke dalamnya — soal baru dikirim satu per satu lewat tombol
-          “Kirim soal ini untuk dicek” di kartunya. Untuk mengubah isi bacaannya, buat versi baru.
-        </Banner>
-      ) : null}
-
-      {pesan ? (
-        <div ref={pesanRef} role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
-          <p>{pesan.teks}</p>
-          {pesan.daftar && pesan.daftar.length > 0 ? (
-            <ul className="mt-1 list-disc pl-5">
-              {pesan.daftar.map((d) => (
-                <li key={d}>{d}</li>
-              ))}
-            </ul>
+          {!ditugaskan ? (
+            <Banner jenis="peringatan">
+              Anda tidak lagi ditugaskan ke subtes ini. Bacaan tetap tersimpan, tapi tidak bisa diubah atau dikirim.
+            </Banner>
           ) : null}
-        </div>
-      ) : null}
+          {status === "ditolak" && alasanTolak ? (
+            <Banner jenis="peringatan">
+              <span className="font-medium">Catatan dari pengecek:</span> {alasanTolak}
+            </Banner>
+          ) : null}
+          {status === "diajukan" ? (
+            <Banner jenis="info">Bacaan dan soalnya sedang dicek, jadi isinya dikunci dulu. Tekan “Batalkan kirim” kalau mau mengubahnya.</Banner>
+          ) : null}
+          {status === "terpublikasi" ? (
+            <Banner jenis="info">
+              Bacaan sudah terbit. Anda masih bisa menambah soal baru ke dalamnya — soal baru dikirim satu per satu lewat tombol
+              “Kirim soal ini untuk dicek” di kartunya. Untuk mengubah isi bacaannya, buat versi baru.
+            </Banner>
+          ) : null}
 
-      {/* ---- Bacaan ---- */}
-      <div className="flex gap-2 lg:hidden" role="tablist">
-        {(["tulis", "pratinjau"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => setTab(t)}
-            className={[
-              "flex-1 rounded-full border px-4 py-2 text-sm font-medium",
-              tab === t ? "border-black bg-black text-white" : "border-line-strong bg-white text-black",
-            ].join(" ")}
-          >
-            {t === "tulis" ? "Tulis bacaan" : "Pratinjau bacaan"}
-          </button>
-        ))}
-      </div>
+          {pesan ? (
+            <div ref={pesanRef} role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
+              <p>{pesan.teks}</p>
+              {pesan.daftar && pesan.daftar.length > 0 ? (
+                <ul className="mt-1 list-disc pl-5">
+                  {pesan.daftar.map((d) => (
+                    <li key={d}>{d}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
-          <IsianStimulus
-            form={form}
-            ubah={ubah}
-            ubahBlok={ubahBlok}
-            bolehEdit={bolehEdit}
-            sudahDisimpan={sudahDisimpan}
-            subtesPilihan={subtesPilihan}
-            peta={peta}
-          />
+          {/* ---- Bacaan ---- */}
+          <div className="flex gap-2 lg:hidden" role="tablist">
+            {(["tulis", "pratinjau"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => setTab(t)}
+                className={[
+                  "flex-1 rounded-full border px-4 py-2 text-sm font-medium",
+                  tab === t ? "border-black bg-black text-white" : "border-line-strong bg-white text-black",
+                ].join(" ")}
+              >
+                {t === "tulis" ? "Tulis bacaan" : "Pratinjau bacaan"}
+              </button>
+            ))}
+          </div>
 
-          {tampilSemua && errorsAjukan.length > 0 ? (
-            <section className="flex flex-col gap-2 rounded-[20px] border border-danger-line bg-danger-soft p-4">
-              <p className="text-sm font-medium text-danger">Yang perlu dilengkapi di bacaan sebelum dikirim:</p>
-              <ul className="list-disc pl-5 text-sm text-danger">
-                {[...new Set(errorsAjukan.map((e) => e.pesan))].map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
+          <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
+            <IsianStimulus
+              form={form}
+              ubah={ubah}
+              ubahBlok={ubahBlok}
+              bolehEdit={bolehEdit}
+              sudahDisimpan={sudahDisimpan}
+              subtesPilihan={subtesPilihan}
+              peta={peta}
+            />
+
+            {tampilSemua && errorsAjukan.length > 0 ? (
+              <section className="flex flex-col gap-2 rounded-[20px] border border-danger-line bg-danger-soft p-4">
+                <p className="text-sm font-medium text-danger">Yang perlu dilengkapi di bacaan sebelum dikirim:</p>
+                <ul className="list-disc pl-5 text-sm text-danger">
+                  {[...new Set(errorsAjukan.map((e) => e.pesan))].map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </div>
+
+          {tab === "pratinjau" ? (
+            <section className={`${kartu} lg:hidden`}>
+              <h2 className="text-base font-medium text-black">Pratinjau bacaan</h2>
+              {pratinjauBacaan}
             </section>
           ) : null}
+
+          {/* ---- Soal untuk bacaan ini ---- */}
+          <section className="flex flex-col gap-3" aria-labelledby="judul-soal-bacaan">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="judul-soal-bacaan" className="text-lg font-medium text-black">
+                Soal untuk bacaan ini
+              </h2>
+              <span className="text-xs text-muted">
+                {kartuSoal.length} soal{soalTersimpan < kartuSoal.length ? ` · ${soalTersimpan} tersimpan` : ""}
+              </span>
+            </div>
+            {kartuSoal.length === 0 ? (
+              <p className="text-sm text-muted">Belum ada soal. Tambahkan minimal 1 soal sebelum dikirim.</p>
+            ) : null}
+            {kartuSoal.map((k, i) => (
+              <KartuSoalBacaan
+                key={k.id}
+                nomor={i + 1}
+                kartu={k}
+                setForm={setFormKartu(k.id)}
+                onUbah={() => ubahKartu(k.id, (x) => (x.hasil ? { ...x, hasil: null } : x))}
+                onBukaTutup={() => {
+                  if (!k.terbuka) setIdAktif(k.id);
+                  ubahKartu(k.id, (x) => ({ ...x, terbuka: !x.terbuka }));
+                }}
+                onAktif={() => setIdAktif(k.id)}
+                onBuang={k.jejakTersimpan === null ? () => setKartuSoal((l) => l.filter((x) => x.id !== k.id)) : undefined}
+                hapusDraf={
+                  k.jejakTersimpan !== null && tampilkanTombolHapus(k.status)
+                    ? {
+                        alasan: alasanTidakBisaHapus("soal", { status: k.status, pernahDiajukan: k.pernahDiajukan, ditugaskan }),
+                        onTerhapus: () => setKartuSoal((l) => l.filter((x) => x.id !== k.id)),
+                      }
+                    : undefined
+                }
+                {...aksiKartu(k)}
+                onAksi={(jenis) => aksiSoal(k.id, jenis)}
+                terkunci={sibuk !== null}
+                bolehEdit={soalBolehEdit && bisaDiubah(k.status) && sibuk === null}
+                tampilSemua={tampilSemua}
+                subtesPilihan={subtesPilihan}
+                kategori={kategori}
+                bacaanBlok={blok}
+              />
+            ))}
+            {soalBolehEdit ? (
+              <Button variant="secondary" size="sm" className="w-fit" onClick={tambahKartu} disabled={sibuk !== null}>
+                + Tambah soal
+              </Button>
+            ) : null}
+          </section>
         </div>
 
-        <aside className={["min-w-0", tab === "pratinjau" ? "" : "hidden lg:block"].join(" ")}>
-          <div className={`${kartu} lg:sticky lg:top-4`}>
-            <h2 className="text-base font-medium text-black">Pratinjau bacaan</h2>
-            <StimulusPratinjau blok={blok} />
-            {form.sumber_rujukan.trim() ? <p className="text-xs text-muted">Sumber: {form.sumber_rujukan}</p> : null}
-          </div>
+        <aside className={["hidden min-w-0 flex-col gap-4 lg:flex", KOLOM_PRATINJAU].join(" ")} aria-label="Pratinjau">
+          <details open className={`${kartu} group`}>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+              <h2 className="text-base font-medium text-black">Pratinjau bacaan</h2>
+              <IkonChevron className="size-5 shrink-0 transition-transform duration-150 group-open:rotate-180" />
+            </summary>
+            <div className="mt-4 flex flex-col gap-4">{pratinjauBacaan}</div>
+          </details>
+          {kartuAktif ? (
+            <section className={kartu} aria-label={`Pratinjau soal ${nomorAktif}`}>
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 className="text-base font-medium text-black">Pratinjau soal {nomorAktif}</h2>
+                <span className="text-xs text-muted">Tampilan seperti yang dilihat siswa</span>
+              </div>
+              {/* key: hasil "uji kunci jawaban" tidak terbawa ke soal lain. */}
+              <SoalPratinjau key={kartuAktif.id} soal={kartuAktif.form} stimulus={null} />
+            </section>
+          ) : kartuSoal.length > 0 ? (
+            <p className="rounded-[20px] border border-dashed border-line-strong px-4 py-6 text-center text-sm text-muted">
+              Buka salah satu soal untuk melihat pratinjau dan menguji kunci jawabannya di sini.
+            </p>
+          ) : null}
         </aside>
       </div>
-
-      {/* ---- Soal untuk bacaan ini ---- */}
-      <section className="flex flex-col gap-3" aria-labelledby="judul-soal-bacaan">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="judul-soal-bacaan" className="text-lg font-medium text-black">
-            Soal untuk bacaan ini
-          </h2>
-          <span className="text-xs text-muted">
-            {kartuSoal.length} soal{soalTersimpan < kartuSoal.length ? ` · ${soalTersimpan} tersimpan` : ""}
-          </span>
-        </div>
-        {kartuSoal.length === 0 ? (
-          <p className="text-sm text-muted">Belum ada soal. Tambahkan minimal 1 soal sebelum dikirim.</p>
-        ) : null}
-        {kartuSoal.map((k, i) => (
-          <KartuSoalBacaan
-            key={k.id}
-            nomor={i + 1}
-            kartu={k}
-            setForm={setFormKartu(k.id)}
-            onUbah={() => ubahKartu(k.id, (x) => (x.hasil ? { ...x, hasil: null } : x))}
-            onBukaTutup={() => ubahKartu(k.id, (x) => ({ ...x, terbuka: !x.terbuka }))}
-            onBuang={k.jejakTersimpan === null ? () => setKartuSoal((l) => l.filter((x) => x.id !== k.id)) : undefined}
-            hapusDraf={
-              k.jejakTersimpan !== null && tampilkanTombolHapus(k.status)
-                ? {
-                    alasan: alasanTidakBisaHapus("soal", { status: k.status, pernahDiajukan: k.pernahDiajukan, ditugaskan }),
-                    onTerhapus: () => setKartuSoal((l) => l.filter((x) => x.id !== k.id)),
-                  }
-                : undefined
-            }
-            {...aksiKartu(k)}
-            onAksi={(jenis) => aksiSoal(k.id, jenis)}
-            terkunci={sibuk !== null}
-            bolehEdit={soalBolehEdit && bisaDiubah(k.status) && sibuk === null}
-            tampilSemua={tampilSemua}
-            subtesPilihan={subtesPilihan}
-            kategori={kategori}
-            bacaanBlok={blok}
-          />
-        ))}
-        {soalBolehEdit ? (
-          <Button variant="secondary" size="sm" className="w-fit" onClick={tambahKartu} disabled={sibuk !== null}>
-            + Tambah soal
-          </Button>
-        ) : null}
-      </section>
 
       <BilahAksi
         keterangan={

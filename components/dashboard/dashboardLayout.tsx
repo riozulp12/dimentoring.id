@@ -65,7 +65,7 @@ function DashboardChrome({
         referralLevel={referralLevel}
       />
 
-      <main className={`min-h-screen min-w-0 pt-20 transition-[padding] duration-200 ${collapsed ? "lg:pl-20" : "lg:pl-64"}`}>
+      <main className={`min-h-screen min-w-0 pt-[var(--tinggi-navbar)] transition-[padding] duration-200 ${collapsed ? "lg:pl-20" : "lg:pl-64"}`}>
         {children}
       </main>
     </div>

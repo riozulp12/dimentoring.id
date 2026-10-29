@@ -7,6 +7,9 @@ html {
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Tinggi header dashboard (components/dashboard/header.tsx) — dipakai juga
+     untuk padding atas <main> dan jarak elemen sticky (pratinjau Studio Soal). */
+  --tinggi-navbar: 5rem;
 }
 
 @theme inline {

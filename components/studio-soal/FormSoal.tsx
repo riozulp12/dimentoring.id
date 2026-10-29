@@ -11,7 +11,7 @@ import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
 import BilahAksi, { KELAS_TOMBOL_BILAH } from "@/components/studio-soal/BilahAksi";
 import { IkonTongSampah } from "@/components/studio-soal/Ikon";
 import PenjagaKeluar from "@/components/studio-soal/PenjagaKeluar";
-import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas, pilihan, tombolIkon } from "@/components/studio-soal/gaya";
+import { KARTU, CHIP, KOLOM_PRATINJAU, TOMBOL_KECIL, inputKecil, pesanKelas, pilihan, tombolIkon } from "@/components/studio-soal/gaya";
 import TextareaKaya, { ContekanRumus, PesanError } from "@/components/studio-soal/TextareaKaya";
 import { LABEL_STATUS, errorDi, isBolehEdit, panggilApi, petaError } from "@/components/studio-soal/klien";
 import {
@@ -215,116 +215,119 @@ export default function FormSoal({
   return (
     <div className="flex flex-col gap-4 pb-24 sm:gap-5">
       <PenjagaKeluar adaPerubahan={adaPerubahan} />
-      <div className="flex flex-col gap-2">
-        <Link href={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"} className="w-fit text-sm text-primary hover:underline">
-          ← {stimulus ? `Bacaan: ${stimulus.judul || "tanpa judul"}` : "Studio Soal"}
-        </Link>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-medium text-black sm:text-2xl">{judul}</h1>
-          <span className={CHIP}>{LABEL_STATUS[status] ?? status}</span>
-          {versi > 1 ? <span className="text-xs text-muted">versi {versi}</span> : null}
-        </div>
-      </div>
+      {/* Dua kolom di layar besar: kiri judul + form, kanan pratinjau yang menempel
+          (mulai sejajar judul). Di HP satu kolom, pratinjau lewat tab. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
+          <div className="flex flex-col gap-2">
+            <Link href={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"} className="w-fit text-sm text-primary hover:underline">
+              ← {stimulus ? `Bacaan: ${stimulus.judul || "tanpa judul"}` : "Studio Soal"}
+            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-medium text-black sm:text-2xl">{judul}</h1>
+              <span className={CHIP}>{LABEL_STATUS[status] ?? status}</span>
+              {versi > 1 ? <span className="text-xs text-muted">versi {versi}</span> : null}
+            </div>
+          </div>
 
-      {!ditugaskan ? (
-        <Banner jenis="peringatan">
-          Anda tidak lagi ditugaskan ke subtes ini. Soal tetap tersimpan, tapi tidak bisa diubah atau dikirim sampai Admin
-          menugaskan Anda lagi.
-        </Banner>
-      ) : null}
-      {status === "ditolak" && alasanTolak ? (
-        <Banner jenis="peringatan">
-          <span className="font-medium">Catatan dari pengecek:</span> {alasanTolak}
-          <br />
-          Perbaiki soalnya, lalu kirim lagi.
-        </Banner>
-      ) : null}
-      {status === "diajukan" ? (
-        <Banner jenis="info">
-          Soal sedang dicek mentor lain, jadi isinya dikunci dulu.{" "}
-          {stimulus && stimulus.status === "diajukan"
-            ? "Soal ini dikirim bersama bacaannya — batalkan kirim dari halaman bacaan kalau mau mengubahnya."
-            : "Tekan “Batalkan kirim” kalau mau mengubahnya."}
-        </Banner>
-      ) : null}
-      {status === "terpublikasi" ? (
-        <Banner jenis="info">
-          Soal sudah terbit, jadi isinya dikunci. Untuk mengubah, buat versi baru — versi ini tetap dipakai sampai versi baru lolos
-          dicek.
-        </Banner>
-      ) : null}
-      {status === "digantikan" || status === "diarsipkan" ? (
-        <Banner jenis="info">Soal ini {LABEL_STATUS[status]?.toLowerCase()} dan hanya bisa dilihat.</Banner>
-      ) : null}
-
-      {pesan ? (
-        <div ref={pesanRef} role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
-          {pesan.teks}
-          {pesan.daftar && pesan.daftar.length > 0 ? (
-            <ul className="mt-1 list-disc pl-5">
-              {pesan.daftar.map((d) => (
-                <li key={d}>{d}</li>
-              ))}
-            </ul>
+          {!ditugaskan ? (
+            <Banner jenis="peringatan">
+              Anda tidak lagi ditugaskan ke subtes ini. Soal tetap tersimpan, tapi tidak bisa diubah atau dikirim sampai Admin
+              menugaskan Anda lagi.
+            </Banner>
           ) : null}
-          {pesan.tautan ? (
-            <>
-              {" "}
-              <Link href={pesan.tautan} className="font-medium underline">
-                Buka versi itu
-              </Link>
-            </>
+          {status === "ditolak" && alasanTolak ? (
+            <Banner jenis="peringatan">
+              <span className="font-medium">Catatan dari pengecek:</span> {alasanTolak}
+              <br />
+              Perbaiki soalnya, lalu kirim lagi.
+            </Banner>
           ) : null}
-        </div>
-      ) : null}
-
-      {/* Tab untuk layar kecil; di layar lebar form & pratinjau berdampingan. */}
-      <div className="flex gap-2 lg:hidden" role="tablist">
-        {(["tulis", "pratinjau"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => setTab(t)}
-            className={[
-              "flex-1 rounded-full border px-4 py-2 text-sm font-medium",
-              tab === t ? "border-black bg-black text-white" : "border-line-strong bg-white text-black",
-            ].join(" ")}
-          >
-            {t === "tulis" ? "Tulis" : "Pratinjau & uji kunci"}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
-          <IsianSoal
-            form={form}
-            setForm={setForm}
-            onUbah={() => setErrorServer([])}
-            bolehEdit={bolehEdit}
-            sudahDisimpan={sudahDisimpan}
-            subtesTerkunci={sudahDisimpan || stimulus !== null}
-            subtesPilihan={subtesPilihan}
-            peta={peta}
-          />
-
-          {tampilSemua && errorsAjukan.length > 0 ? (
-            <section className="flex flex-col gap-2 rounded-[20px] border border-danger-line bg-danger-soft p-4">
-              <p className="text-sm font-medium text-danger">Yang perlu dilengkapi sebelum dikirim:</p>
-              <ul className="list-disc pl-5 text-sm text-danger">
-                {[...new Set(errorsAjukan.map((e) => e.pesan))].map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
-            </section>
+          {status === "diajukan" ? (
+            <Banner jenis="info">
+              Soal sedang dicek mentor lain, jadi isinya dikunci dulu.{" "}
+              {stimulus && stimulus.status === "diajukan"
+                ? "Soal ini dikirim bersama bacaannya — batalkan kirim dari halaman bacaan kalau mau mengubahnya."
+                : "Tekan “Batalkan kirim” kalau mau mengubahnya."}
+            </Banner>
+          ) : null}
+          {status === "terpublikasi" ? (
+            <Banner jenis="info">
+              Soal sudah terbit, jadi isinya dikunci. Untuk mengubah, buat versi baru — versi ini tetap dipakai sampai versi baru lolos
+              dicek.
+            </Banner>
+          ) : null}
+          {status === "digantikan" || status === "diarsipkan" ? (
+            <Banner jenis="info">Soal ini {LABEL_STATUS[status]?.toLowerCase()} dan hanya bisa dilihat.</Banner>
           ) : null}
 
+          {pesan ? (
+            <div ref={pesanRef} role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
+              {pesan.teks}
+              {pesan.daftar && pesan.daftar.length > 0 ? (
+                <ul className="mt-1 list-disc pl-5">
+                  {pesan.daftar.map((d) => (
+                    <li key={d}>{d}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {pesan.tautan ? (
+                <>
+                  {" "}
+                  <Link href={pesan.tautan} className="font-medium underline">
+                    Buka versi itu
+                  </Link>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Tab untuk layar kecil; di layar lebar form & pratinjau berdampingan. */}
+          <div className="flex gap-2 lg:hidden" role="tablist">
+            {(["tulis", "pratinjau"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => setTab(t)}
+                className={[
+                  "flex-1 rounded-full border px-4 py-2 text-sm font-medium",
+                  tab === t ? "border-black bg-black text-white" : "border-line-strong bg-white text-black",
+                ].join(" ")}
+              >
+                {t === "tulis" ? "Tulis" : "Pratinjau & uji kunci"}
+              </button>
+            ))}
+          </div>
+
+          <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
+            <IsianSoal
+              form={form}
+              setForm={setForm}
+              onUbah={() => setErrorServer([])}
+              bolehEdit={bolehEdit}
+              sudahDisimpan={sudahDisimpan}
+              subtesTerkunci={sudahDisimpan || stimulus !== null}
+              subtesPilihan={subtesPilihan}
+              peta={peta}
+            />
+
+            {tampilSemua && errorsAjukan.length > 0 ? (
+              <section className="flex flex-col gap-2 rounded-[20px] border border-danger-line bg-danger-soft p-4">
+                <p className="text-sm font-medium text-danger">Yang perlu dilengkapi sebelum dikirim:</p>
+                <ul className="list-disc pl-5 text-sm text-danger">
+                  {[...new Set(errorsAjukan.map((e) => e.pesan))].map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </div>
         </div>
 
-        <aside className={["min-w-0", tab === "pratinjau" ? "" : "hidden lg:block"].join(" ")}>
-          <div className={`${kartu} lg:sticky lg:top-4`}>
+        <aside className={["min-w-0", KOLOM_PRATINJAU, tab === "pratinjau" ? "" : "hidden lg:block"].join(" ")}>
+          <div className={kartu}>
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-base font-medium text-black">Pratinjau</h2>
               <span className="text-xs text-muted">Tampilan seperti yang dilihat siswa</span>

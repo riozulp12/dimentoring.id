@@ -370,3 +370,42 @@ describe("K4 — peringatan perubahan belum tersimpan", () => {
     assert.match(st, /kartuSoal\.some\(\(k\) => keadaanKartu\(k\) === "belum"\)/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Kelompok 5 — pratinjau menempel (butir 6)
+// ---------------------------------------------------------------------------
+
+describe("K5 — pratinjau menempel di kolom kanan layar besar", () => {
+  const gaya = baca("components/studio-soal/gaya.ts");
+  const css = baca("app/globals.css");
+  const stimulus = baca("components/studio-soal/FormStimulus.tsx");
+  const soal = baca("components/studio-soal/FormSoal.tsx");
+  const kartu = baca("components/studio-soal/KartuSoalBacaan.tsx");
+
+  it("tinggi navbar satu sumber (--tinggi-navbar), dipakai header, <main>, dan jarak sticky", () => {
+    assert.match(css, /--tinggi-navbar: 5rem;/);
+    assert.match(baca("components/dashboard/header.tsx"), /h-\[var\(--tinggi-navbar\)\]/);
+    assert.match(baca("components/dashboard/dashboardLayout.tsx"), /pt-\[var\(--tinggi-navbar\)\]/);
+    assert.match(gaya, /lg:sticky lg:top-\[calc\(var\(--tinggi-navbar\)\+1rem\)\]/);
+    assert.match(gaya, /lg:max-h-\[calc\(100dvh-var\(--tinggi-navbar\)-9rem\)\] lg:overflow-y-auto/);
+    assert.doesNotMatch(stimulus + soal + kartu, /lg:top-4/, "tidak ada lagi sticky yang tertutup header");
+  });
+
+  it("dua kolom mulai dari judul: grid lg:items-start membungkus judul + form, aside memakai KOLOM_PRATINJAU", () => {
+    for (const isi of [stimulus, soal]) {
+      const iGrid = isi.indexOf('lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">');
+      const iJudul = isi.indexOf("<h1");
+      const iAside = isi.indexOf("KOLOM_PRATINJAU", isi.indexOf("return ("));
+      assert.ok(iGrid > 0 && iGrid < iJudul && iJudul < iAside, "judul di dalam kolom kiri grid");
+    }
+  });
+
+  it("halaman bacaan: kolom kanan berisi pratinjau bacaan + soal yang dibuka (uji kunci), HP tidak menempel", () => {
+    assert.match(stimulus, /\["hidden min-w-0 flex-col gap-4 lg:flex", KOLOM_PRATINJAU\]/);
+    assert.match(stimulus, /<SoalPratinjau key=\{kartuAktif\.id\} soal=\{kartuAktif\.form\}/);
+    assert.match(stimulus, /onAktif=\{\(\) => setIdAktif\(k\.id\)\}/);
+    // Di HP pratinjau soal tetap di dalam kartu (tab), pratinjau bacaan lewat tab.
+    assert.match(kartu, /\["min-w-0 lg:hidden", tab === "pratinjau" \? "" : "hidden"\]/);
+    assert.match(stimulus, /className=\{`\$\{kartu\} lg:hidden`\}/);
+  });
+});
