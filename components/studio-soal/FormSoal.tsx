@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
@@ -10,6 +10,7 @@ import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
 import BilahAksi, { KELAS_TOMBOL_BILAH } from "@/components/studio-soal/BilahAksi";
 import { IkonTongSampah } from "@/components/studio-soal/Ikon";
+import PenjagaKeluar from "@/components/studio-soal/PenjagaKeluar";
 import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas, pilihan, tombolIkon } from "@/components/studio-soal/gaya";
 import TextareaKaya, { ContekanRumus, PesanError } from "@/components/studio-soal/TextareaKaya";
 import { LABEL_STATUS, errorDi, isBolehEdit, panggilApi, petaError } from "@/components/studio-soal/klien";
@@ -30,6 +31,7 @@ import {
 import { parseAngka } from "@/lib/shared/studio-soal/angka";
 import { alasanTidakBisaHapus, tampilkanTombolHapus } from "@/lib/shared/studio-soal/hapusDraf";
 import { cekSoalLengkap, pesanUnik } from "@/lib/shared/studio-soal/kelengkapan";
+import { formBerubah } from "@/lib/shared/studio-soal/peringatanKeluar";
 import { LABEL_OPSI, TIPE_SOAL, type BlokStimulus, type TipeSoal } from "@/lib/shared/studio-soal/tipe";
 import type { ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
 
@@ -116,19 +118,16 @@ export default function FormSoal({
 
   const bolehEdit = isBolehEdit(status) && ditugaskan;
   const kategori = subtesPilihan.find((s) => s.id === form.subtes_id)?.kategori;
-  const kotor = jejakTersimpan !== JSON.stringify(form);
+  const jejakForm = JSON.stringify(form);
+  const jejakAwal = useMemo(() => JSON.stringify(awal), [awal]);
+  const kotor = jejakTersimpan !== jejakForm;
+  // Peringatan keluar: soal baru yang belum disentuh tidak dihitung berubah.
+  const adaPerubahan = bolehEdit && formBerubah({ jejakTersimpan, jejakAwal, jejakSekarang: jejakForm });
 
   const errorsAjukan = useMemo(() => cekSoalLengkap(form, kategori), [form, kategori]);
   const errorsBentuk = errorsAjukan.filter((e) => e.jenis === "bentuk");
   const peta = petaError([...(tampilSemua ? errorsAjukan : errorsBentuk), ...errorServer]);
   const jumlahBelumLengkap = errorsAjukan.length;
-
-  useEffect(() => {
-    if (!kotor || !bolehEdit) return;
-    const cegah = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", cegah);
-    return () => window.removeEventListener("beforeunload", cegah);
-  }, [kotor, bolehEdit]);
 
   // ---------------------------------------------------------------- aksi
   async function simpan(): Promise<boolean> {
@@ -215,6 +214,7 @@ export default function FormSoal({
 
   return (
     <div className="flex flex-col gap-4 pb-24 sm:gap-5">
+      <PenjagaKeluar adaPerubahan={adaPerubahan} />
       <div className="flex flex-col gap-2">
         <Link href={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"} className="w-fit text-sm text-primary hover:underline">
           ← {stimulus ? `Bacaan: ${stimulus.judul || "tanpa judul"}` : "Studio Soal"}

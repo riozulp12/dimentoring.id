@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode, type SetStateAction } from "react";
+import { useMemo, useRef, useState, type ReactNode, type SetStateAction } from "react";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
 import KartuSoalBacaan, { cekKartuUntukKirim, type AksiKartu, type JenisAksiKartu } from "@/components/studio-soal/KartuSoalBacaan";
 import BilahAksi, { KELAS_TOMBOL_BILAH } from "@/components/studio-soal/BilahAksi";
 import { IkonTongSampah } from "@/components/studio-soal/Ikon";
+import PenjagaKeluar from "@/components/studio-soal/PenjagaKeluar";
 import StimulusPratinjau from "@/components/studio-soal/StimulusPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
 import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas, tombolIkon } from "@/components/studio-soal/gaya";
@@ -34,6 +35,7 @@ import {
 } from "@/lib/shared/studio-soal/formSoal";
 import { alasanTidakBisaHapus, tampilkanTombolHapus } from "@/lib/shared/studio-soal/hapusDraf";
 import { cekBacaanLengkap, daftarBelumLengkap, type SoalKurang } from "@/lib/shared/studio-soal/kelengkapan";
+import { formBerubah } from "@/lib/shared/studio-soal/peringatanKeluar";
 import type { BlokStimulus, BlokTabel } from "@/lib/shared/studio-soal/tipe";
 import type { ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
 import type { SubtesPilihan } from "@/components/studio-soal/FormSoal";
@@ -167,21 +169,19 @@ export default function FormStimulus({
   const bolehEdit = isBolehEdit(status) && ditugaskan;
   const soalBolehEdit = ditugaskan && bacaanBolehTambahSoal(status);
   const kategori = subtesPilihan.find((s) => s.id === form.subtes_id)?.kategori;
-  const kotor = jejakTersimpan !== JSON.stringify(form);
+  const jejakForm = JSON.stringify(form);
+  const jejakAwal = useMemo(() => JSON.stringify(awal), [awal]);
+  /** Bacaan belum sama dengan yang tersimpan di server (bacaan baru: selalu perlu disimpan). */
+  const kotor = jejakTersimpan !== jejakForm;
+  // Kartu soal: setiap kartu yang sudah diisi tapi belum tersimpan (isi soal, tabel, rumus — semua lewat form kartu).
   const kartuKotor = soalBolehEdit && kartuSoal.some((k) => keadaanKartu(k) === "belum");
-  const adaPerubahan = (kotor && bolehEdit) || kartuKotor;
+  // Untuk peringatan & status: bacaan baru yang belum disentuh tidak dihitung berubah.
+  const adaPerubahan = (bolehEdit && formBerubah({ jejakTersimpan, jejakAwal, jejakSekarang: jejakForm })) || kartuKotor;
   const blok = form.konten.blok;
 
   const errorsAjukan = useMemo(() => cekBacaanLengkap(form, kategori), [form, kategori]);
   const errorsBentuk = errorsAjukan.filter((e) => e.jenis === "bentuk");
   const peta = petaError([...(tampilSemua ? errorsAjukan : errorsBentuk), ...errorServer]);
-
-  useEffect(() => {
-    if (!((kotor && bolehEdit) || kartuKotor)) return;
-    const cegah = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", cegah);
-    return () => window.removeEventListener("beforeunload", cegah);
-  }, [kotor, bolehEdit, kartuKotor]);
 
   function ubah(patch: Partial<DataFormStimulus>) {
     setForm((f) => ({ ...f, ...patch }));
@@ -441,6 +441,7 @@ export default function FormStimulus({
 
   return (
     <div className="flex flex-col gap-4 pb-24 sm:gap-5">
+      <PenjagaKeluar adaPerubahan={adaPerubahan} />
       <div className="flex flex-col gap-2">
         <Link href="/studio-soal" className="w-fit text-sm text-primary hover:underline">
           ← Studio Soal
@@ -601,7 +602,7 @@ export default function FormStimulus({
               {bolehEdit ? <span>Bacaan + {soalAkanDikirim} soal · </span> : null}
               {adaYangBisaDisimpan ? (
                 <span className={adaPerubahan ? "text-amber-700" : undefined}>
-                  {adaPerubahan ? "Ada perubahan belum disimpan" : "Semua perubahan tersimpan"}
+                  {adaPerubahan ? "Ada perubahan belum disimpan" : sudahDisimpan ? "Semua perubahan tersimpan" : "Belum disimpan"}
                 </span>
               ) : null}
             </>

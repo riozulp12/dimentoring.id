@@ -20,6 +20,7 @@ import {
   daftarBelumLengkap,
   susunKelengkapan,
 } from "@/lib/shared/studio-soal/kelengkapan";
+import { formBerubah, tujuanTautanDalam, type KlikTautan } from "@/lib/shared/studio-soal/peringatanKeluar";
 import { kelayakanDenganKelengkapan, kelayakanKirim, ubahPilihan } from "@/lib/shared/studio-soal/kirimBanyak";
 import { validasiRumusSoal } from "@/lib/shared/studio-soal/rumus";
 import { validasiSoal } from "@/lib/shared/studio-soal/validasi";
@@ -291,5 +292,81 @@ describe("K3 — daftar mentor: yang belum lengkap tidak bisa dicentang", () => 
     assert.match(ui, /kelayakanDenganKelengkapan\(/);
     assert.match(ui, /ringkasan\.gagal\.map/);
     assert.match(ui, /alasanDariJawabanBacaan\(r\.json\)/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Kelompok 4 — peringatan saat menutup tab / keluar (butir 5)
+// ---------------------------------------------------------------------------
+
+describe("K4 — peringatan perubahan belum tersimpan", () => {
+  const SINI = "https://dimentoring.id/studio-soal/stimulus/abc";
+  const tautan = (href: string, attr: Record<string, string> = {}) => {
+    const a = {
+      href: new URL(href, SINI).href,
+      getAttribute: (n: string) => attr[n] ?? null,
+      hasAttribute: (n: string) => n in attr,
+    };
+    return { closest: (sel: string) => (sel === "a[href]" ? a : null) };
+  };
+  const klik = (target: unknown, ubah: Partial<KlikTautan> = {}): KlikTautan => ({
+    defaultPrevented: false,
+    button: 0,
+    metaKey: false,
+    ctrlKey: false,
+    shiftKey: false,
+    altKey: false,
+    target: target as EventTarget,
+    ...ubah,
+  });
+
+  it("tautan internal ke halaman lain dicegat (path + query + hash)", () => {
+    assert.equal(tujuanTautanDalam(klik(tautan("/studio-soal")), SINI), "/studio-soal");
+    assert.equal(tujuanTautanDalam(klik(tautan("/dashboard/mentor?x=1#a")), SINI), "/dashboard/mentor?x=1#a");
+  });
+
+  it("tidak dicegat: tab baru, klik tengah, situs lain, unduhan, target lain, #bagian di halaman ini, bukan tautan", () => {
+    assert.equal(tujuanTautanDalam(klik(tautan("/studio-soal"), { ctrlKey: true }), SINI), null);
+    assert.equal(tujuanTautanDalam(klik(tautan("/studio-soal"), { metaKey: true }), SINI), null);
+    assert.equal(tujuanTautanDalam(klik(tautan("/studio-soal"), { button: 1 }), SINI), null);
+    assert.equal(tujuanTautanDalam(klik(tautan("/studio-soal"), { defaultPrevented: true }), SINI), null);
+    assert.equal(tujuanTautanDalam(klik(tautan("https://contoh.com/")), SINI), null);
+    assert.equal(tujuanTautanDalam(klik(tautan("/berkas.pdf", { download: "" })), SINI), null);
+    assert.equal(tujuanTautanDalam(klik(tautan("/studio-soal", { target: "_blank" })), SINI), null);
+    assert.equal(tujuanTautanDalam(klik(tautan("#judul-soal-bacaan")), SINI), null);
+    assert.equal(tujuanTautanDalam(klik({ closest: () => null }), SINI), null);
+    assert.equal(tujuanTautanDalam(klik(null), SINI), null);
+  });
+
+  it("form baru yang belum disentuh tidak dianggap berubah; sesudah simpan peringatan hilang", () => {
+    const awal = JSON.stringify({ a: "" });
+    const isi = JSON.stringify({ a: "x" });
+    assert.equal(formBerubah({ jejakTersimpan: null, jejakAwal: awal, jejakSekarang: awal }), false);
+    assert.equal(formBerubah({ jejakTersimpan: null, jejakAwal: awal, jejakSekarang: isi }), true);
+    assert.equal(formBerubah({ jejakTersimpan: isi, jejakAwal: awal, jejakSekarang: isi }), false);
+    assert.equal(formBerubah({ jejakTersimpan: isi, jejakAwal: awal, jejakSekarang: awal }), true);
+  });
+
+  it("listener beforeunload: preventDefault + returnValue, dipasang sekali, dibersihkan; tautan dicegat di fase capture", () => {
+    const p = baca("components/studio-soal/PenjagaKeluar.tsx");
+    assert.match(p, /e\.preventDefault\(\);\s*\/\/[^\n]*\n\s*e\.returnValue = "";/);
+    assert.match(p, /window\.addEventListener\("beforeunload", sebelumTutup\)/);
+    assert.match(p, /window\.removeEventListener\("beforeunload", sebelumTutup\)/);
+    assert.match(p, /document\.addEventListener\("click", klik, true\)/);
+    assert.match(p, /document\.removeEventListener\("click", klik, true\)/);
+    assert.match(p, /\}, \[\]\);/, "dipasang sekali, keadaan dibaca lewat ref");
+    assert.match(p, /Keluar tanpa menyimpan\?/);
+  });
+
+  it("halaman bacaan + soal dan halaman soal memakai penjaga; perubahan di semua bagian dihitung", () => {
+    const st = baca("components/studio-soal/FormStimulus.tsx");
+    const so = baca("components/studio-soal/FormSoal.tsx");
+    for (const isi of [st, so]) {
+      assert.match(isi, /<PenjagaKeluar adaPerubahan=\{adaPerubahan\} \/>/);
+      assert.doesNotMatch(isi, /addEventListener\("beforeunload"/, "tidak ada listener lama");
+    }
+    // Bacaan (judul, sumber, blok teks & tabel = satu objek form) + setiap kartu soal.
+    assert.match(st, /const adaPerubahan = \(bolehEdit && formBerubah\([^)]*\)\) \|\| kartuKotor;/);
+    assert.match(st, /kartuSoal\.some\(\(k\) => keadaanKartu\(k\) === "belum"\)/);
   });
 });
