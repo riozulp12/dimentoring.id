@@ -22,7 +22,9 @@ import {
 } from "@/lib/shared/studio-soal/kelengkapan";
 import { formBerubah, tujuanTautanDalam, type KlikTautan } from "@/lib/shared/studio-soal/peringatanKeluar";
 import { kelayakanDenganKelengkapan, kelayakanKirim, ubahPilihan } from "@/lib/shared/studio-soal/kirimBanyak";
-import { validasiRumusSoal } from "@/lib/shared/studio-soal/rumus";
+import { KEYBOARD_HURUF, TOMBOL_BENTUK, TOMBOL_SIMBOL, contohIsi, layoutKeyboard } from "@/lib/shared/studio-soal/keyboardRumus";
+import { cekRumus, validasiRumusSoal } from "@/lib/shared/studio-soal/rumus";
+import { cekRumusEditor } from "@/lib/shared/studio-soal/sisipRumus";
 import { validasiSoal } from "@/lib/shared/studio-soal/validasi";
 
 const ROOT = path.resolve(__dirname, "..");
@@ -446,5 +448,63 @@ describe("K6 — tombol design system di HP, keterangan sejajar", () => {
 
   it("keterangan simpan di bilah aksi berada di kotak ber-padding", () => {
     assert.match(baca("components/studio-soal/BilahAksi.tsx"), /rounded-\[12px\] bg-surface-muted px-3 py-1\.5 text-xs/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Kelompok 7 — keyboard editor rumus (butir 11)
+// ---------------------------------------------------------------------------
+
+describe("K7 — keyboard rumus: QWERTY bawaan, × = \\times, ÷ = \\div", () => {
+  type Kc = string | { latex?: string; label?: string };
+  const semua = ("rows" in KEYBOARD_HURUF ? KEYBOARD_HURUF.rows : []).flat() as Kc[];
+  const latexDari = (k: Kc) => (typeof k === "string" ? k : k.latex);
+
+  it("tombol × menghasilkan \\times dan ÷ menghasilkan \\div; / dan pecahan terpisah", () => {
+    const kali = semua.find((k) => typeof k !== "string" && k.label === "×");
+    const bagi = semua.find((k) => typeof k !== "string" && k.label === "÷");
+    assert.equal(kali && latexDari(kali), String.raw`\times`);
+    assert.equal(bagi && latexDari(bagi), String.raw`\div`);
+    const garis = semua.filter((k) => latexDari(k) === "/");
+    assert.equal(garis.length, 1, "satu tombol garis miring biasa");
+    assert.ok(semua.some((k) => latexDari(k) === String.raw`\frac{#@}{#?}`), "tombol pecahan tersendiri");
+  });
+
+  it("QWERTY lengkap: semua huruf a–z, angka 0–9, shift & hapus", () => {
+    const isi = new Set(semua.map(latexDari));
+    for (const c of "abcdefghijklmnopqrstuvwxyz0123456789") assert.ok(isi.has(c), c);
+    assert.ok(isi.has("[shift]") && isi.has("[backspace]"));
+    const baris = "rows" in KEYBOARD_HURUF ? KEYBOARD_HURUF.rows : [];
+    assert.deepEqual(baris[1].map(latexDari).join(""), "qwertyuiop");
+  });
+
+  it("setiap simbol & bentuk yang ditambahkan LOLOS cekRumus dan validasi Ajukan (tanpa mengubah rumus.ts)", () => {
+    for (const t of [...TOMBOL_SIMBOL, ...TOMBOL_BENTUK]) {
+      const tex = t.latex.includes("#") ? contohIsi(t.latex) : `2${t.latex}3`;
+      assert.equal(cekRumus(tex), null, tex);
+      assert.equal(cekRumusEditor(tex), null, tex);
+      assert.deepEqual(validasiRumusSoal({ redaksi: String.raw`Hitung \(` + tex + String.raw`\).` }), [], tex);
+    }
+    // Contoh nyata dari keyboard: 12 × 3 ÷ 4.
+    assert.equal(cekRumusEditor(String.raw`12\times3\div4`), null);
+    // Pemeriksaan keamanan tetap: perintah berbahaya masih ditolak.
+    assert.notEqual(cekRumus(String.raw`\href{https://x.y}{a}`), null);
+  });
+
+  it("pilihan keyboard: Huruf & angka (bawaan), Rumus (numerik MathLive), Simbol (simbol + Yunani)", () => {
+    assert.deepEqual(layoutKeyboard("huruf"), [KEYBOARD_HURUF]);
+    assert.deepEqual(layoutKeyboard("rumus"), ["numeric"]);
+    assert.deepEqual(layoutKeyboard("simbol"), ["symbols", "greek"]);
+  });
+
+  it("editor: keyboard huruf disetel saat dibuka, tab jenis keyboard, kebijakan auto, tanpa focus trap, format simpan sama", () => {
+    const e = baca("components/studio-soal/EditorRumus.tsx");
+    assert.match(e, /window\.mathVirtualKeyboard\.layouts = layoutKeyboard\("huruf"\)/);
+    assert.match(e, /useState<JenisKeyboard>\("huruf"\)/);
+    assert.match(e, /JENIS_KEYBOARD\.map/);
+    assert.match(e, /onPointerDown=\{\(e\) => e\.preventDefault\(\)\}/);
+    assert.match(e, /mf\.mathVirtualKeyboardPolicy = "auto"/);
+    assert.match(e, /onSisip\(tex\.trim\(\), blok\)/);
+    assert.doesNotMatch(baca("components/ui/Modal.tsx"), /focus-trap|inert/);
   });
 });
