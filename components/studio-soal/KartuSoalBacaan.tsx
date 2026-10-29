@@ -10,11 +10,10 @@ import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
 import { CHIP, KARTU, tombolIkon } from "@/components/studio-soal/gaya";
 import { LABEL_STATUS, petaError } from "@/components/studio-soal/klien";
 import { LABEL_KEADAAN, keadaanKartu, type KartuSoal } from "@/lib/shared/studio-soal/bacaanSoal";
-import { LABEL_TIPE, inputValidasiSoal, type FormSoal as DataFormSoal } from "@/lib/shared/studio-soal/formSoal";
-import { validasiRumusSoal } from "@/lib/shared/studio-soal/rumus";
+import { LABEL_TIPE, type FormSoal as DataFormSoal } from "@/lib/shared/studio-soal/formSoal";
+import { cekSoalLengkap } from "@/lib/shared/studio-soal/kelengkapan";
 import { cuplikRedaksi } from "@/lib/shared/studio-soal/studioMentor";
 import type { BlokStimulus } from "@/lib/shared/studio-soal/tipe";
-import { validasiSoal } from "@/lib/shared/studio-soal/validasi";
 
 /**
  * Satu kartu soal di halaman "Soal dengan bacaan" (Studio Soal UX-3). Isian
@@ -30,7 +29,7 @@ import { validasiSoal } from "@/lib/shared/studio-soal/validasi";
 
 /** Validasi lengkap (sama dengan API Ajukan) untuk satu soal. */
 export function cekKartuUntukKirim(form: DataFormSoal, kategori: string | undefined) {
-  return [...validasiSoal(inputValidasiSoal(form, kategori), "ajukan"), ...validasiRumusSoal(form)];
+  return cekSoalLengkap(form, kategori);
 }
 
 const WARNA_KEADAAN = {

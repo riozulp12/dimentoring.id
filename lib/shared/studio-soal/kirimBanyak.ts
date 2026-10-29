@@ -302,3 +302,17 @@ export function susunDaftar<S extends { status: string; stimulusId?: string | nu
   const mandiri = soal.filter((s) => !(s.stimulusId && idBacaan.has(s.stimulusId)) && cocok(s.status));
   return { grup, mandiri };
 }
+
+// ---------------------------------------------------------------------------
+// Revisi UX-3 butir 4: yang belum lengkap tidak bisa dicentang
+// ---------------------------------------------------------------------------
+
+/**
+ * Kelayakan kirim + kelengkapan isi (dihitung server saat memuat daftar,
+ * lib/shared/studio-soal/kelengkapan.ts). Yang belum lengkap tidak boleh
+ * dicentang; alasannya ditampilkan. Server tetap pemutus akhir saat kirim.
+ */
+export function kelayakanDenganKelengkapan(k: KelayakanKirim, alasanBelumLengkap: string | undefined): KelayakanKirim {
+  if (!k.boleh || !alasanBelumLengkap) return k;
+  return { boleh: false, alasan: `Belum lengkap: ${alasanBelumLengkap}` };
+}

@@ -22,7 +22,6 @@ import {
   PRESET_LABEL_KOLOM,
   hapusRumpang,
   idBagianBaru,
-  inputValidasiSoal,
   kontenAwal,
   penandaDiRedaksi,
   sisipRumpang,
@@ -30,9 +29,9 @@ import {
 } from "@/lib/shared/studio-soal/formSoal";
 import { parseAngka } from "@/lib/shared/studio-soal/angka";
 import { alasanTidakBisaHapus, tampilkanTombolHapus } from "@/lib/shared/studio-soal/hapusDraf";
-import { validasiRumusSoal } from "@/lib/shared/studio-soal/rumus";
+import { cekSoalLengkap, pesanUnik } from "@/lib/shared/studio-soal/kelengkapan";
 import { LABEL_OPSI, TIPE_SOAL, type BlokStimulus, type TipeSoal } from "@/lib/shared/studio-soal/tipe";
-import { validasiSoal, type ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
+import type { ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
 
 /**
  * Builder soal Studio Soal (Mentor) — PR 3b. Satu komponen untuk soal baru &
@@ -101,7 +100,14 @@ export default function FormSoal({
   const [jejakTersimpan, setJejakTersimpan] = useState<string | null>(baru ? null : JSON.stringify(awal));
   const [sibuk, setSibuk] = useState<Sibuk>(null);
   const sibukRef = useRef(false);
-  const [pesan, setPesan] = useState<{ jenis: "ok" | "gagal"; teks: string; tautan?: string } | null>(null);
+  type Pesan = { jenis: "ok" | "gagal"; teks: string; tautan?: string; daftar?: string[] };
+  const [pesan, setPesanState] = useState<Pesan | null>(null);
+  const pesanRef = useRef<HTMLDivElement | null>(null);
+  /** Tampilkan pesan dan gulir ke sana (tombol ada di bilah bawah, pesannya di atas). */
+  const setPesan = (p: Pesan | null) => {
+    setPesanState(p);
+    if (p) requestAnimationFrame(() => pesanRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  };
   const [errorServer, setErrorServer] = useState<ErrorValidasi[]>([]);
   const [tampilSemua, setTampilSemua] = useState(false);
   const [tab, setTab] = useState<"tulis" | "pratinjau">("tulis");
@@ -112,10 +118,7 @@ export default function FormSoal({
   const kategori = subtesPilihan.find((s) => s.id === form.subtes_id)?.kategori;
   const kotor = jejakTersimpan !== JSON.stringify(form);
 
-  const errorsAjukan = useMemo(
-    () => [...validasiSoal(inputValidasiSoal(form, kategori), "ajukan"), ...validasiRumusSoal(form)],
-    [form, kategori],
-  );
+  const errorsAjukan = useMemo(() => cekSoalLengkap(form, kategori), [form, kategori]);
   const errorsBentuk = errorsAjukan.filter((e) => e.jenis === "bentuk");
   const peta = petaError([...(tampilSemua ? errorsAjukan : errorsBentuk), ...errorServer]);
   const jumlahBelumLengkap = errorsAjukan.length;
@@ -171,7 +174,7 @@ export default function FormSoal({
     if (sibukRef.current) return;
     setTampilSemua(true);
     if (errorsAjukan.length > 0) {
-      setPesan({ jenis: "gagal", teks: `Masih ada ${errorsAjukan.length} hal yang perlu dilengkapi sebelum dikirim (ditandai merah).` });
+      setPesan({ jenis: "gagal", teks: "Belum bisa dikirim. Lengkapi dulu yang ditandai merah:", daftar: pesanUnik(errorsAjukan) });
       return;
     }
     if (kotor || !sudahDisimpan) {
@@ -179,8 +182,9 @@ export default function FormSoal({
     }
     const r = await jalankan("ajukan", `/api/studio-soal/soal/${id}/ajukan`, "POST");
     if (!r.ok) {
-      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Soal belum terkirim. Coba lagi.") });
-      setErrorServer(Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : []);
+      const errors = Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : [];
+      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Soal belum terkirim. Coba lagi."), daftar: pesanUnik(errors) });
+      setErrorServer(errors);
       return;
     }
     setStatus("diajukan");
@@ -254,8 +258,15 @@ export default function FormSoal({
       ) : null}
 
       {pesan ? (
-        <div role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
+        <div ref={pesanRef} role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
           {pesan.teks}
+          {pesan.daftar && pesan.daftar.length > 0 ? (
+            <ul className="mt-1 list-disc pl-5">
+              {pesan.daftar.map((d) => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          ) : null}
           {pesan.tautan ? (
             <>
               {" "}

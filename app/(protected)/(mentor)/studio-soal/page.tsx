@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
 import { getStudioSoalMentor } from "@/lib/mentor/getStudioSoalData";
-import { getStimulusMentor } from "@/lib/mentor/studioSoal";
+import { getKelengkapanDraf, getStimulusMentor } from "@/lib/mentor/studioSoal";
 import PageTitle from "@/components/dashboard/PageTitle";
 import StudioSoalMentor from "@/components/mentor/StudioSoalMentor";
 
@@ -21,7 +21,11 @@ export default async function StudioSoalPage() {
     redirect("/dashboard/mentor");
   }
 
-  const [data, stimulus] = await Promise.all([getStudioSoalMentor(session.userId), getStimulusMentor(session.userId)]);
+  const [data, stimulus, belumLengkap] = await Promise.all([
+    getStudioSoalMentor(session.userId),
+    getStimulusMentor(session.userId),
+    getKelengkapanDraf(session.userId),
+  ]);
 
   return (
     <>
@@ -32,7 +36,7 @@ export default async function StudioSoalPage() {
             <p className="text-base text-muted">Gagal memuat Studio Soal. Coba muat ulang halaman.</p>
           </div>
         ) : (
-          <StudioSoalMentor data={data} stimulus={stimulus} />
+          <StudioSoalMentor data={data} stimulus={stimulus} belumLengkap={belumLengkap} />
         )}
       </div>
     </>

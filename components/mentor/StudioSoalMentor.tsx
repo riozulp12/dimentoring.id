@@ -22,6 +22,7 @@ import {
   kelayakanKirim,
   kelayakanKirimBacaan,
   keadaanPilihSemua,
+  kelayakanDenganKelengkapan,
   kunciItem,
   petaStatusBacaan,
   pilihSemua,
@@ -86,7 +87,25 @@ function KotakPilihSemua({ keadaan, onChange, label }: { keadaan: "semua" | "seb
 }
 
 /** Checkbox kirim banyak untuk satu baris; tanpa checkbox = ruang kosong supaya teks tetap lurus. */
-type Pilih = { boleh: boolean; dipilih: boolean; onToggle: () => void; catatan?: string };
+type Pilih = {
+  boleh: boolean;
+  dipilih: boolean;
+  onToggle: () => void;
+  catatan?: string;
+  /** Alasan pertama isi belum lengkap (dihitung server saat memuat daftar). */
+  belumLengkap?: string;
+};
+
+/** Penanda "Belum lengkap" + alasan singkat pertama. */
+function PenandaBelumLengkap({ alasan }: { alasan?: string }) {
+  if (!alasan) return null;
+  return (
+    <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
+      <span className="rounded-full bg-danger-soft px-2 py-0.5 font-medium text-danger">Belum lengkap</span>
+      <span className="text-muted">{alasan}</span>
+    </p>
+  );
+}
 
 function KotakBaris({ pilih, label }: { pilih?: Pilih; label: string }) {
   if (!pilih) return null;
@@ -121,6 +140,7 @@ function BarisSoal({
             {s.stimulusId && !diDalamBacaan ? " · bagian dari bacaan" : ""}
             {s.versi > 1 ? ` · versi ${s.versi}` : ""} · diubah {formatTanggal(s.updatedAt)}
           </p>
+          <PenandaBelumLengkap alasan={pilih?.belumLengkap} />
           {pilih?.catatan ? <p className="text-xs text-muted">{pilih.catatan}</p> : null}
         </Link>
       </div>
@@ -166,6 +186,7 @@ function GrupBacaanBaris({
             <p className="text-xs text-muted sm:text-sm">
               Dipakai {st.jumlahSoal} soal{st.versi > 1 ? ` · versi ${st.versi}` : ""} · diubah {formatTanggal(st.updatedAt)}
             </p>
+            <PenandaBelumLengkap alasan={pilih?.belumLengkap} />
             {pilih?.catatan ? <p className="text-xs text-muted">{pilih.catatan}</p> : null}
           </Link>
         </div>
@@ -198,6 +219,8 @@ function GrupBacaanBaris({
   );
 }
 
+const TANPA_PENANDA: Record<string, string> = {};
+
 function denganStatus<T extends { id: string; status: string }>(x: T, statusLokal: ReadonlyMap<string, string>): T {
   const st = statusLokal.get(x.id);
   return st ? { ...x, status: st } : x;
@@ -206,9 +229,12 @@ function denganStatus<T extends { id: string; status: string }>(x: T, statusLoka
 export default function StudioSoalMentor({
   data,
   stimulus = [],
+  belumLengkap = TANPA_PENANDA,
 }: {
   data: StudioSoalMentorView;
   stimulus?: StimulusRingkas[];
+  /** "soal:<id>" / "bacaan:<id>" -> alasan pertama isi belum lengkap (server, lib/mentor/studioSoal.ts). */
+  belumLengkap?: Record<string, string>;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterStatus>("semua");
@@ -237,23 +263,32 @@ export default function StudioSoalMentor({
   const bacaanDitugaskan = useMemo(() => bacaanSemua.filter((b) => idDitugaskan.has(b.subtesId)), [bacaanSemua, idDitugaskan]);
   const jumlah = useMemo(() => hitungPerStatus([...semuaSoal, ...bacaanDitugaskan]), [semuaSoal, bacaanDitugaskan]);
 
-  /** Per kunci: boleh dicentang + catatan bila tidak. */
+  /** Per kunci: boleh dicentang + catatan bila tidak + alasan belum lengkap. */
   const kelayakan = useMemo(() => {
-    const peta = new Map<string, { boleh: boolean; catatan?: string }>();
+    const peta = new Map<string, { boleh: boolean; catatan?: string; belumLengkap?: string }>();
+    // Hanya draf/ditolak yang dinilai; status yang berubah di halaman ini (baru terkirim) tidak lagi.
+    const alasanLengkap = (kunci: string, id: string, status: string) =>
+      (status === "draf" || status === "ditolak") && !statusLokal.has(id) ? belumLengkap[kunci] : undefined;
     for (const s of semuaSoal) {
-      const k = kelayakanKirim(s, statusBacaan);
-      // Catatan hanya untuk soal yang ikut bacaannya (bukan "Sudah dikirim." dsb.).
-      const catatan = !k.boleh && s.stimulusId && (s.status === "draf" || s.status === "ditolak") ? k.alasan : undefined;
-      peta.set(kunciItem("soal", s.id), { boleh: k.boleh, catatan });
+      const kunci = kunciItem("soal", s.id);
+      const kurang = alasanLengkap(kunci, s.id, s.status);
+      const dasar = kelayakanKirim(s, statusBacaan);
+      const k = kelayakanDenganKelengkapan(dasar, kurang);
+      // Catatan hanya untuk soal yang ikut bacaannya (bukan "Sudah dikirim." dsb.); belum lengkap tampil sendiri.
+      const catatan = !dasar.boleh && s.stimulusId && (s.status === "draf" || s.status === "ditolak") ? dasar.alasan : undefined;
+      peta.set(kunci, { boleh: k.boleh, catatan, belumLengkap: kurang });
     }
     for (const b of bacaanDitugaskan) {
+      const kunci = kunciItem("bacaan", b.id);
+      const kurang = alasanLengkap(kunci, b.id, b.status);
       const soalDi = semuaSoal.filter((s) => s.stimulusId === b.id);
-      const k = kelayakanKirimBacaan(b, soalDi);
-      const catatan = !k.boleh && (b.status === "draf" || b.status === "ditolak") ? k.alasan : undefined;
-      peta.set(kunciItem("bacaan", b.id), { boleh: k.boleh, catatan });
+      const dasar = kelayakanKirimBacaan(b, soalDi);
+      const k = kelayakanDenganKelengkapan(dasar, kurang);
+      const catatan = !dasar.boleh && (b.status === "draf" || b.status === "ditolak") ? dasar.alasan : undefined;
+      peta.set(kunci, { boleh: k.boleh, catatan, belumLengkap: kurang });
     }
     return peta;
-  }, [semuaSoal, bacaanDitugaskan, statusBacaan]);
+  }, [semuaSoal, bacaanDitugaskan, statusBacaan, belumLengkap, statusLokal]);
   const boleh = (kunci: string) => kelayakan.get(kunci)?.boleh === true;
 
   const namaItem = useMemo(() => {
@@ -312,6 +347,7 @@ export default function StudioSoalMentor({
   const pilihUntuk = (kunci: string): Pilih => ({
     boleh: boleh(kunci),
     catatan: kelayakan.get(kunci)?.catatan,
+    belumLengkap: kelayakan.get(kunci)?.belumLengkap,
     dipilih: pilihanSah.has(kunci),
     onToggle: () => setTerpilih((prev) => ubahPilihan(prev, kunci, boleh(kunci))),
   });
@@ -336,7 +372,7 @@ export default function StudioSoalMentor({
           {ringkasan ? (
             <div
               ref={ringkasanRef}
-              role="status"
+              role={ringkasan.gagal.length > 0 ? "alert" : "status"}
               className={[
                 "flex flex-col gap-2 rounded-[16px] border px-4 py-3 text-sm",
                 ringkasan.gagal.length > 0 ? "border-danger-line bg-danger-soft" : "border-success-line bg-success-soft",

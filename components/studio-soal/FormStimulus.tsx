@@ -29,14 +29,13 @@ import {
   SUMBER_BUATAN_SENDIRI,
   blokTabelBaru,
   formAwal,
-  inputValidasiStimulus,
   type FormSoal as DataFormSoal,
   type FormStimulus as DataFormStimulus,
 } from "@/lib/shared/studio-soal/formSoal";
 import { alasanTidakBisaHapus, tampilkanTombolHapus } from "@/lib/shared/studio-soal/hapusDraf";
-import { validasiRumusStimulus } from "@/lib/shared/studio-soal/rumus";
+import { cekBacaanLengkap, daftarBelumLengkap, type SoalKurang } from "@/lib/shared/studio-soal/kelengkapan";
 import type { BlokStimulus, BlokTabel } from "@/lib/shared/studio-soal/tipe";
-import { validasiStimulus, type ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
+import type { ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
 import type { SubtesPilihan } from "@/components/studio-soal/FormSoal";
 
 /**
@@ -137,7 +136,14 @@ export default function FormStimulus({
   const [sibuk, setSibuk] = useState<Sibuk>(null);
   const sibukRef = useRef(false);
   const [proses, setProses] = useState<{ ke: number; dari: number } | null>(null);
-  const [pesan, setPesan] = useState<{ jenis: "ok" | "gagal"; teks: string } | null>(null);
+  /** Pesan hasil aksi; `daftar` = rincian (mis. per soal yang belum lengkap). */
+  const [pesan, setPesanState] = useState<{ jenis: "ok" | "gagal"; teks: string; daftar?: string[] } | null>(null);
+  const pesanRef = useRef<HTMLDivElement | null>(null);
+  /** Tampilkan pesan dan gulir ke sana (tombol ada di bilah bawah, pesannya di atas). */
+  const setPesan = (p: { jenis: "ok" | "gagal"; teks: string; daftar?: string[] } | null) => {
+    setPesanState(p);
+    if (p) requestAnimationFrame(() => pesanRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  };
   const [errorServer, setErrorServer] = useState<ErrorValidasi[]>([]);
   const [tampilSemua, setTampilSemua] = useState(false);
   const [tab, setTab] = useState<"tulis" | "pratinjau">("tulis");
@@ -166,10 +172,7 @@ export default function FormStimulus({
   const adaPerubahan = (kotor && bolehEdit) || kartuKotor;
   const blok = form.konten.blok;
 
-  const errorsAjukan = useMemo(
-    () => [...validasiStimulus(inputValidasiStimulus(form, kategori), "ajukan"), ...validasiRumusStimulus(form)],
-    [form, kategori],
-  );
+  const errorsAjukan = useMemo(() => cekBacaanLengkap(form, kategori), [form, kategori]);
   const errorsBentuk = errorsAjukan.filter((e) => e.jenis === "bentuk");
   const peta = petaError([...(tampilSemua ? errorsAjukan : errorsBentuk), ...errorServer]);
 
@@ -259,30 +262,39 @@ export default function FormStimulus({
       setPesan({ jenis: "gagal", teks: "Belum ada soal untuk dikirim. Tambahkan minimal 1 soal dulu." });
       return;
     }
-    if (errorsAjukan.length > 0) {
-      setPesan({ jenis: "gagal", teks: `Masih ada ${errorsAjukan.length} hal di bacaan yang perlu dilengkapi (ditandai merah).` });
-      return;
-    }
-    const belumLengkap = kartuSoal
+    // Validasi lengkap di browser lebih dulu (aturan sama dengan API Ajukan):
+    // bacaan + SEMUA kartu soal yang ikut terkirim. Kartu kosong juga dihitung
+    // supaya tidak ada kartu yang diam-diam tertinggal.
+    const kurangSoal: (SoalKurang & { id: string })[] = kartuSoal
       .map((k, i) => ({ k, nomor: i + 1 }))
-      .filter(({ k }) => bisaDiubah(k.status) && keadaanKartu(k) !== "kosong" && cekKartuUntukKirim(k.form, kategori).length > 0);
-    if (belumLengkap.length > 0) {
-      const ids = new Set(belumLengkap.map((x) => x.k.id));
+      .filter(({ k }) => bisaDiubah(k.status))
+      .map(({ k, nomor }) =>
+        keadaanKartu(k) === "kosong"
+          ? { id: k.id, nomor, errors: [], kosong: true }
+          : { id: k.id, nomor, errors: cekKartuUntukKirim(k.form, kategori) },
+      )
+      .filter((x) => x.kosong || x.errors.length > 0);
+    const daftar = daftarBelumLengkap({ bacaan: errorsAjukan, soal: kurangSoal });
+    if (daftar.length > 0) {
+      const ids = new Set(kurangSoal.map((x) => x.id));
       setKartuSoal((l) => l.map((k) => (ids.has(k.id) ? { ...k, terbuka: true } : k)));
-      setPesan({
-        jenis: "gagal",
-        teks: `Soal ${belumLengkap.map((x) => x.nomor).join(", ")} belum lengkap. Lengkapi yang ditandai merah, lalu kirim lagi.`,
-      });
+      setPesan({ jenis: "gagal", teks: "Belum bisa dikirim. Lengkapi dulu yang ditandai merah:", daftar });
       return;
     }
     if (!(await simpan())) return;
     const r = await jalankan("ajukan", `/api/studio-soal/stimulus/${id}/ajukan`, "POST");
     if (!r.ok) {
-      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Bacaan belum terkirim. Coba lagi.") });
-      setErrorServer(Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : []);
+      const errorsBacaan = Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : [];
+      setErrorServer(errorsBacaan);
       const perSoal = new Map(
         (Array.isArray(r.json.errorsSoal) ? (r.json.errorsSoal as ErrorSoalKelompok[]) : []).map((e) => [e.soalId, e.errors]),
       );
+      // Server tetap pemutus akhir (mis. isi berubah di tab lain): sebut soal & masalahnya.
+      const daftarServer = daftarBelumLengkap({
+        bacaan: errorsBacaan,
+        soal: kartuSoal.flatMap((k, i) => (perSoal.has(k.id) ? [{ nomor: i + 1, errors: perSoal.get(k.id) ?? [] }] : [])),
+      });
+      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Bacaan belum terkirim. Coba lagi."), daftar: daftarServer });
       setKartuSoal((l) =>
         l.map((k) => {
           const errors = perSoal.get(k.id);
@@ -327,10 +339,10 @@ export default function FormStimulus({
     const k = kartuSoal[nomor - 1];
     if (!k) return;
     setTampilSemua(true);
-    const errors = cekKartuUntukKirim(k.form, kategori);
-    if (errors.length > 0) {
+    const daftar = daftarBelumLengkap({ soal: [{ nomor, errors: cekKartuUntukKirim(k.form, kategori) }] });
+    if (daftar.length > 0) {
       ubahKartu(kid, (x) => ({ ...x, terbuka: true }));
-      setPesan({ jenis: "gagal", teks: `Soal ${nomor}: ${[...new Set(errors.map((e) => e.pesan))].slice(0, 2).join(" ")}` });
+      setPesan({ jenis: "gagal", teks: "Belum bisa dikirim. Lengkapi dulu yang ditandai merah:", daftar });
       return;
     }
     if (keadaanKartu(k) === "belum" && !(await simpan())) return;
@@ -467,8 +479,15 @@ export default function FormStimulus({
       ) : null}
 
       {pesan ? (
-        <div role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
-          {pesan.teks}
+        <div ref={pesanRef} role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
+          <p>{pesan.teks}</p>
+          {pesan.daftar && pesan.daftar.length > 0 ? (
+            <ul className="mt-1 list-disc pl-5">
+              {pesan.daftar.map((d) => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
