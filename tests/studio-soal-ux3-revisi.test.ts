@@ -89,3 +89,35 @@ describe("K1 — ikon hapus & panah buka/tutup", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Kelompok 2 — bilah aksi ringkas (butir 8, 10)
+// ---------------------------------------------------------------------------
+
+describe("K2 — bilah aksi ringkas", () => {
+  const bilah = baca("components/studio-soal/BilahAksi.tsx");
+  const stimulus = baca("components/studio-soal/FormStimulus.tsx");
+  const soal = baca("components/studio-soal/FormSoal.tsx");
+
+  it("HP: tombol satu baris sama lebar; layar lebar: rata kanan selebar isi", () => {
+    assert.match(bilah, /grid auto-cols-fr grid-flow-col gap-2 sm:flex sm:justify-end/);
+    assert.match(bilah, /KELAS_TOMBOL_BILAH = "w-full min-w-0 px-3 sm:w-auto sm:px-5"/);
+  });
+
+  it("ikon hapus di baris atas, kanan; keterangan di kiri", () => {
+    const iKet = bilah.indexOf("{keterangan}");
+    const iHapus = bilah.indexOf("{hapus}");
+    const iTombol = bilah.indexOf("{children}");
+    assert.ok(iKet > 0 && iKet < iHapus && iHapus < iTombol);
+  });
+
+  it("label ringkas: Simpan & Kirim untuk dicek; jumlah soal di keterangan, bukan di label", () => {
+    for (const isi of [stimulus, soal]) {
+      assert.match(isi, /<BilahAksi/);
+      assert.match(isi, /"Menyimpan…" : "Simpan"\}/);
+      assert.match(isi, /"Mengirim…" : "Kirim untuk dicek"\}/);
+    }
+    assert.doesNotMatch(stimulus, /Kirim bacaan \+ \$\{soalAkanDikirim\} soal untuk dicek/);
+    assert.match(stimulus, /Bacaan \+ \{soalAkanDikirim\} soal/);
+  });
+});

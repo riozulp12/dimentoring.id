@@ -8,6 +8,7 @@ import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
 import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
+import BilahAksi, { KELAS_TOMBOL_BILAH } from "@/components/studio-soal/BilahAksi";
 import { IkonTongSampah } from "@/components/studio-soal/Ikon";
 import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas, pilihan, tombolIkon } from "@/components/studio-soal/gaya";
 import TextareaKaya, { ContekanRumus, PesanError } from "@/components/studio-soal/TextareaKaya";
@@ -218,11 +219,6 @@ export default function FormSoal({
           <h1 className="text-xl font-medium text-black sm:text-2xl">{judul}</h1>
           <span className={CHIP}>{LABEL_STATUS[status] ?? status}</span>
           {versi > 1 ? <span className="text-xs text-muted">versi {versi}</span> : null}
-          {sudahDisimpan && bolehEdit ? (
-            <span className={["text-xs", kotor ? "text-amber-700" : "text-muted"].join(" ")}>
-              {kotor ? "Ada perubahan belum disimpan" : "Semua perubahan tersimpan"}
-            </span>
-          ) : null}
         </div>
       </div>
 
@@ -328,48 +324,63 @@ export default function FormSoal({
       </div>
 
       {/* ---- Bilah aksi (menempel di bawah, nyaman di HP) ---- */}
-      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-t border-line bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:mx-0 lg:rounded-[16px] lg:border">
+      <BilahAksi
+        keterangan={
+          bolehEdit ? (
+            <>
+              {sudahDisimpan ? (
+                <span className={kotor ? "text-amber-700" : undefined}>
+                  {kotor ? "Ada perubahan belum disimpan" : "Semua perubahan tersimpan"}
+                </span>
+              ) : (
+                <span>Belum disimpan</span>
+              )}
+              <span>
+                {" · "}
+                {bisaAjukanSendiri
+                  ? jumlahBelumLengkap === 0
+                    ? "Siap dikirim"
+                    : `${jumlahBelumLengkap} hal belum lengkap`
+                  : "Dikirim bersama bacaannya dari halaman bacaan"}
+              </span>
+            </>
+          ) : status !== "diajukan" && status !== "terpublikasi" ? (
+            "Soal ini hanya bisa dilihat."
+          ) : null
+        }
+        hapus={
+          sudahDisimpan && tampilkanTombolHapus(status) ? (
+            <TombolHapusDraf
+              objek="soal"
+              id={id}
+              versi={versi}
+              sesudahHapus={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"}
+              alasan={alasanTidakBisaHapus("soal", { status, pernahDiajukan: sudahPernahDiajukan, ditugaskan })}
+            />
+          ) : null
+        }
+      >
         {bolehEdit ? (
-          <>
-            <Button variant="secondary" size="sm" onClick={simpan} disabled={sibuk !== null}>
-              {sibuk === "simpan" ? "Menyimpan…" : "Simpan draf"}
-            </Button>
-            {bisaAjukanSendiri ? (
-              <Button size="sm" onClick={ajukan} disabled={sibuk !== null}>
-                {sibuk === "ajukan" ? "Mengirim…" : "Kirim untuk dicek"}
-              </Button>
-            ) : (
-              <span className="text-xs text-muted">Soal ini dikirim bersama bacaannya dari halaman bacaan.</span>
-            )}
-            <span className="text-xs text-muted">
-              {jumlahBelumLengkap === 0 ? "Siap dikirim" : `${jumlahBelumLengkap} hal belum lengkap`}
-            </span>
-          </>
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={simpan} disabled={sibuk !== null}>
+            {sibuk === "simpan" ? "Menyimpan…" : "Simpan"}
+          </Button>
+        ) : null}
+        {bolehEdit && bisaAjukanSendiri ? (
+          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={ajukan} disabled={sibuk !== null}>
+            {sibuk === "ajukan" ? "Mengirim…" : "Kirim untuk dicek"}
+          </Button>
         ) : null}
         {status === "diajukan" && ditugaskan && !(stimulus && stimulus.status === "diajukan") ? (
-          <Button variant="secondary" size="sm" onClick={tarik} disabled={sibuk !== null}>
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={tarik} disabled={sibuk !== null}>
             {sibuk === "tarik" ? "Membatalkan…" : "Batalkan kirim"}
           </Button>
         ) : null}
         {status === "terpublikasi" && ditugaskan ? (
-          <Button size="sm" onClick={versiBaru} disabled={sibuk !== null}>
+          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={versiBaru} disabled={sibuk !== null}>
             {sibuk === "versi" ? "Membuat…" : "Buat versi baru"}
           </Button>
         ) : null}
-        {!bolehEdit && status !== "diajukan" && status !== "terpublikasi" ? (
-          <span className="text-xs text-muted">Soal ini hanya bisa dilihat.</span>
-        ) : null}
-        {sudahDisimpan && tampilkanTombolHapus(status) ? (
-          <TombolHapusDraf
-            objek="soal"
-            id={id}
-            versi={versi}
-            className="ml-auto"
-            sesudahHapus={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"}
-            alasan={alasanTidakBisaHapus("soal", { status, pernahDiajukan: sudahPernahDiajukan, ditugaskan })}
-          />
-        ) : null}
-      </div>
+      </BilahAksi>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
 import KartuSoalBacaan, { cekKartuUntukKirim, type AksiKartu, type JenisAksiKartu } from "@/components/studio-soal/KartuSoalBacaan";
+import BilahAksi, { KELAS_TOMBOL_BILAH } from "@/components/studio-soal/BilahAksi";
 import { IkonTongSampah } from "@/components/studio-soal/Ikon";
 import StimulusPratinjau from "@/components/studio-soal/StimulusPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
@@ -162,6 +163,7 @@ export default function FormStimulus({
   const kategori = subtesPilihan.find((s) => s.id === form.subtes_id)?.kategori;
   const kotor = jejakTersimpan !== JSON.stringify(form);
   const kartuKotor = soalBolehEdit && kartuSoal.some((k) => keadaanKartu(k) === "belum");
+  const adaPerubahan = (kotor && bolehEdit) || kartuKotor;
   const blok = form.konten.blok;
 
   const errorsAjukan = useMemo(
@@ -253,6 +255,10 @@ export default function FormStimulus({
   async function ajukan() {
     if (sibukRef.current) return;
     setTampilSemua(true);
+    if (soalAkanDikirim === 0) {
+      setPesan({ jenis: "gagal", teks: "Belum ada soal untuk dikirim. Tambahkan minimal 1 soal dulu." });
+      return;
+    }
     if (errorsAjukan.length > 0) {
       setPesan({ jenis: "gagal", teks: `Masih ada ${errorsAjukan.length} hal di bacaan yang perlu dilengkapi (ditandai merah).` });
       return;
@@ -435,8 +441,8 @@ export default function FormStimulus({
           {versi > 1 ? <span className="text-xs text-muted">versi {versi}</span> : null}
         </div>
         <p className="text-sm text-muted">
-          Tulis bacaan atau tabelnya di atas, lalu soal-soalnya di bawah. Tekan “Simpan semua” untuk menyimpan bacaan dan semua
-          soal sekaligus. Bacaan dan soal-soalnya dikirim dan dicek bersama.
+          Tulis bacaan atau tabelnya di atas, lalu soal-soalnya di bawah. Tekan “Simpan” untuk menyimpan bacaan dan semua soal
+          sekaligus (boleh belum lengkap). Bacaan dan soal-soalnya dikirim dan dicek bersama.
         </p>
       </div>
 
@@ -565,53 +571,67 @@ export default function FormStimulus({
         ) : null}
       </section>
 
-      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-t border-line bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:mx-0 lg:rounded-[16px] lg:border">
+      <BilahAksi
+        keterangan={
+          sibuk === "simpan" && proses ? (
+            <span className="text-black">
+              Menyimpan {proses.ke} dari {proses.dari}…
+            </span>
+          ) : adaYangBisaDisimpan || bolehEdit ? (
+            <>
+              {bolehEdit ? <span>Bacaan + {soalAkanDikirim} soal · </span> : null}
+              {adaYangBisaDisimpan ? (
+                <span className={adaPerubahan ? "text-amber-700" : undefined}>
+                  {adaPerubahan ? "Ada perubahan belum disimpan" : "Semua perubahan tersimpan"}
+                </span>
+              ) : null}
+            </>
+          ) : null
+        }
+        hapus={
+          sudahDisimpan && tampilkanTombolHapus(status) ? (
+            <TombolHapusDraf
+              objek="stimulus"
+              id={id}
+              versi={versi}
+              sesudahHapus="/studio-soal"
+              alasan={alasanTidakBisaHapus("stimulus", {
+                status,
+                pernahDiajukan: sudahPernahDiajukan,
+                ditugaskan,
+                jumlahSoal: soalTersimpan,
+              })}
+            />
+          ) : null
+        }
+      >
         {adaYangBisaDisimpan ? (
-          <Button variant="secondary" size="sm" onClick={simpan} disabled={sibuk !== null}>
-            {sibuk === "simpan" ? (proses ? `Menyimpan ${proses.ke} dari ${proses.dari}…` : "Menyimpan…") : "Simpan semua"}
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={simpan} disabled={sibuk !== null}>
+            {sibuk === "simpan" ? "Menyimpan…" : "Simpan"}
           </Button>
         ) : null}
         {bolehEdit ? (
           <Button
             size="sm"
+            className={KELAS_TOMBOL_BILAH}
             onClick={ajukan}
-            disabled={sibuk !== null || soalAkanDikirim === 0}
-            title={soalAkanDikirim === 0 ? "Tambahkan minimal 1 soal dulu" : undefined}
+            disabled={sibuk !== null}
+            title={`Kirim bacaan dan ${soalAkanDikirim} soalnya untuk dicek`}
           >
-            {sibuk === "ajukan" ? "Mengirim…" : `Kirim bacaan + ${soalAkanDikirim} soal untuk dicek`}
+            {sibuk === "ajukan" ? "Mengirim…" : "Kirim untuk dicek"}
           </Button>
         ) : null}
-        {adaYangBisaDisimpan ? (
-          <span className={["text-xs", (kotor && bolehEdit) || kartuKotor ? "text-amber-700" : "text-muted"].join(" ")}>
-            {(kotor && bolehEdit) || kartuKotor ? "Ada perubahan belum disimpan" : "Semua perubahan tersimpan"}
-          </span>
-        ) : null}
         {status === "diajukan" && ditugaskan ? (
-          <Button variant="secondary" size="sm" onClick={tarik} disabled={sibuk !== null}>
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={tarik} disabled={sibuk !== null}>
             {sibuk === "tarik" ? "Membatalkan…" : "Batalkan kirim"}
           </Button>
         ) : null}
         {status === "terpublikasi" && ditugaskan ? (
-          <Button size="sm" onClick={versiBaru} disabled={sibuk !== null}>
-            {sibuk === "versi" ? "Membuat…" : "Buat versi baru bacaan"}
+          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={versiBaru} disabled={sibuk !== null}>
+            {sibuk === "versi" ? "Membuat…" : "Versi baru bacaan"}
           </Button>
         ) : null}
-        {sudahDisimpan && tampilkanTombolHapus(status) ? (
-          <TombolHapusDraf
-            objek="stimulus"
-            id={id}
-            versi={versi}
-            className="ml-auto"
-            sesudahHapus="/studio-soal"
-            alasan={alasanTidakBisaHapus("stimulus", {
-              status,
-              pernahDiajukan: sudahPernahDiajukan,
-              ditugaskan,
-              jumlahSoal: soalTersimpan,
-            })}
-          />
-        ) : null}
-      </div>
+      </BilahAksi>
     </div>
   );
 }
