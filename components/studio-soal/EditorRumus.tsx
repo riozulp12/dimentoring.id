@@ -28,6 +28,10 @@ function muat(): Promise<ModulMathlive> {
   muatMathlive ??= import("mathlive").then((m) => {
     m.MathfieldElement.fontsDirectory = null;
     m.MathfieldElement.soundsDirectory = null;
+    // Keyboard rumus MathLive ikut mode gelap HP (prefers-color-scheme) dan
+    // jadi hitam. Situs ini selalu terang: [theme="light"] di <body> adalah
+    // pengalih resmi MathLive untuk memaksa tema terang.
+    document.body.setAttribute("theme", "light");
     return m;
   });
   return muatMathlive;

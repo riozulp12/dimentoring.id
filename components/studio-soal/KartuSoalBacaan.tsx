@@ -6,6 +6,7 @@ import Modal from "@/components/ui/Modal";
 import { IsianSoal, type SubtesPilihan } from "@/components/studio-soal/FormSoal";
 import { IkonChevron, IkonTongSampah } from "@/components/studio-soal/Ikon";
 import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
+import TabTulisPratinjau, { type TabForm } from "@/components/studio-soal/TabTulisPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
 import { CHIP, KARTU, tombolIkon } from "@/components/studio-soal/gaya";
 import { LABEL_STATUS, petaError } from "@/components/studio-soal/klien";
@@ -92,7 +93,7 @@ export default function KartuSoalBacaan({
   /** Kartu ini sedang dikerjakan (fokus/dibuka) -> pratinjau di kolom kanan. */
   onAktif?: () => void;
 }) {
-  const [tab, setTab] = useState<"tulis" | "pratinjau">("tulis");
+  const [tab, setTab] = useState<TabForm>("tulis");
   const [yakinBuang, setYakinBuang] = useState(false);
   const idJudulBuang = useId();
   const { form, hasil } = kartu;
@@ -183,23 +184,7 @@ export default function KartuSoalBacaan({
 
       {kartu.terbuka ? (
         <div id={idIsi} className="flex flex-col gap-4">
-          <div className="flex gap-2 lg:hidden" role="tablist">
-            {(["tulis", "pratinjau"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                role="tab"
-                aria-selected={tab === t}
-                onClick={() => setTab(t)}
-                className={[
-                  "flex-1 rounded-full border px-4 py-2 text-sm font-medium",
-                  tab === t ? "border-black bg-black text-white" : "border-line-strong bg-white text-black",
-                ].join(" ")}
-              >
-                {t === "tulis" ? "Tulis" : "Pratinjau & uji kunci"}
-              </button>
-            ))}
-          </div>
+          <TabTulisPratinjau tab={tab} setTab={setTab} label={{ tulis: "Tulis", pratinjau: "Pratinjau & uji kunci" }} />
           {/* Layar besar: pratinjau soal ini tampil di kolom kanan halaman (FormStimulus). */}
           <div className="flex flex-col gap-5">
             <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>

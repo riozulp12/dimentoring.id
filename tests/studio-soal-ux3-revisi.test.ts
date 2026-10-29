@@ -115,7 +115,7 @@ describe("K2 — bilah aksi ringkas", () => {
 
   it("HP: tombol satu baris sama lebar; layar lebar: rata kanan selebar isi", () => {
     assert.match(bilah, /grid auto-cols-fr grid-flow-col gap-2 sm:flex sm:justify-end/);
-    assert.match(bilah, /KELAS_TOMBOL_BILAH = "w-full min-w-0 px-3 sm:w-auto sm:px-5"/);
+    assert.match(bilah, /KELAS_TOMBOL_BILAH = "w-full min-w-0 max-sm:px-3 sm:w-auto"/);
   });
 
   it("ikon hapus di baris atas, kanan; keterangan di kiri", () => {
@@ -407,5 +407,44 @@ describe("K5 — pratinjau menempel di kolom kanan layar besar", () => {
     // Di HP pratinjau soal tetap di dalam kartu (tab), pratinjau bacaan lewat tab.
     assert.match(kartu, /\["min-w-0 lg:hidden", tab === "pratinjau" \? "" : "hidden"\]/);
     assert.match(stimulus, /className=\{`\$\{kartu\} lg:hidden`\}/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Kelompok 6 — tampilan HP (butir 7, 9)
+// ---------------------------------------------------------------------------
+
+describe("K6 — tombol design system di HP, keterangan sejajar", () => {
+  const files = [
+    "components/studio-soal/FormSoal.tsx",
+    "components/studio-soal/FormStimulus.tsx",
+    "components/studio-soal/KartuSoalBacaan.tsx",
+    "components/studio-soal/SoalPratinjau.tsx",
+    "components/studio-soal/EditorRumus.tsx",
+    "components/studio-soal/TabTulisPratinjau.tsx",
+    "components/mentor/StudioSoalMentor.tsx",
+  ];
+
+  it("tidak ada lagi tombol hitam (bg-black) di Studio Soal", () => {
+    for (const f of files) assert.doesNotMatch(baca(f), /bg-black/, f);
+  });
+
+  it("tab Tulis/Pratinjau (hanya tampil di HP) memakai gaya tombol primary/secondary", () => {
+    assert.match(baca("components/studio-soal/TabTulisPratinjau.tsx"), /buttonClassName\(\{ variant: tab === t \? "primary" : "secondary"/);
+    for (const f of files.slice(0, 3)) assert.match(baca(f), /<TabTulisPratinjau /, f);
+  });
+
+  it("tombol uji kunci jawaban memakai Button", () => {
+    const p = baca("components/studio-soal/SoalPratinjau.tsx");
+    assert.match(p, /<Button size="sm" onClick=\{periksa\}>/);
+    assert.match(p, /<Button size="sm" variant="secondary" onClick=\{ulangi\}>/);
+  });
+
+  it("keyboard rumus MathLive dipaksa tema terang (tidak hitam di mode gelap HP)", () => {
+    assert.match(baca("components/studio-soal/EditorRumus.tsx"), /document\.body\.setAttribute\("theme", "light"\)/);
+  });
+
+  it("keterangan simpan di bilah aksi berada di kotak ber-padding", () => {
+    assert.match(baca("components/studio-soal/BilahAksi.tsx"), /rounded-\[12px\] bg-surface-muted px-3 py-1\.5 text-xs/);
   });
 });

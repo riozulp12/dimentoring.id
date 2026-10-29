@@ -10,6 +10,7 @@ import KartuSoalBacaan, { cekKartuUntukKirim, type AksiKartu, type JenisAksiKart
 import BilahAksi, { KELAS_TOMBOL_BILAH } from "@/components/studio-soal/BilahAksi";
 import { IkonChevron, IkonTongSampah } from "@/components/studio-soal/Ikon";
 import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
+import TabTulisPratinjau, { type TabForm } from "@/components/studio-soal/TabTulisPratinjau";
 import PenjagaKeluar from "@/components/studio-soal/PenjagaKeluar";
 import StimulusPratinjau from "@/components/studio-soal/StimulusPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
@@ -149,7 +150,7 @@ export default function FormStimulus({
   };
   const [errorServer, setErrorServer] = useState<ErrorValidasi[]>([]);
   const [tampilSemua, setTampilSemua] = useState(false);
-  const [tab, setTab] = useState<"tulis" | "pratinjau">("tulis");
+  const [tab, setTab] = useState<TabForm>("tulis");
   /** Kartu soal yang terakhir dibuka/difokus — pratinjaunya tampil di kolom kanan. */
   const [idAktif, setIdAktif] = useState<string | null>(idKartuBaru ?? null);
   // Pernah diajukan di sesi ini -> tidak bisa dihapus lagi (DB juga menolak).
@@ -513,23 +514,7 @@ export default function FormStimulus({
           ) : null}
 
           {/* ---- Bacaan ---- */}
-          <div className="flex gap-2 lg:hidden" role="tablist">
-            {(["tulis", "pratinjau"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                role="tab"
-                aria-selected={tab === t}
-                onClick={() => setTab(t)}
-                className={[
-                  "flex-1 rounded-full border px-4 py-2 text-sm font-medium",
-                  tab === t ? "border-black bg-black text-white" : "border-line-strong bg-white text-black",
-                ].join(" ")}
-              >
-                {t === "tulis" ? "Tulis bacaan" : "Pratinjau bacaan"}
-              </button>
-            ))}
-          </div>
+          <TabTulisPratinjau tab={tab} setTab={setTab} label={{ tulis: "Tulis bacaan", pratinjau: "Pratinjau bacaan" }} />
 
           <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
             <IsianStimulus

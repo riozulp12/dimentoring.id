@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
 import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
+import TabTulisPratinjau, { type TabForm } from "@/components/studio-soal/TabTulisPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
 import BilahAksi, { KELAS_TOMBOL_BILAH } from "@/components/studio-soal/BilahAksi";
 import { IkonTongSampah } from "@/components/studio-soal/Ikon";
@@ -112,7 +113,7 @@ export default function FormSoal({
   };
   const [errorServer, setErrorServer] = useState<ErrorValidasi[]>([]);
   const [tampilSemua, setTampilSemua] = useState(false);
-  const [tab, setTab] = useState<"tulis" | "pratinjau">("tulis");
+  const [tab, setTab] = useState<TabForm>("tulis");
   // Pernah diajukan di sesi ini -> tidak bisa dihapus lagi (DB juga menolak).
   const [sudahPernahDiajukan, setSudahPernahDiajukan] = useState(pernahDiajukan);
 
@@ -283,23 +284,7 @@ export default function FormSoal({
           ) : null}
 
           {/* Tab untuk layar kecil; di layar lebar form & pratinjau berdampingan. */}
-          <div className="flex gap-2 lg:hidden" role="tablist">
-            {(["tulis", "pratinjau"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                role="tab"
-                aria-selected={tab === t}
-                onClick={() => setTab(t)}
-                className={[
-                  "flex-1 rounded-full border px-4 py-2 text-sm font-medium",
-                  tab === t ? "border-black bg-black text-white" : "border-line-strong bg-white text-black",
-                ].join(" ")}
-              >
-                {t === "tulis" ? "Tulis" : "Pratinjau & uji kunci"}
-              </button>
-            ))}
-          </div>
+          <TabTulisPratinjau tab={tab} setTab={setTab} label={{ tulis: "Tulis", pratinjau: "Pratinjau & uji kunci" }} />
 
           <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
             <IsianSoal
