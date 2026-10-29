@@ -131,6 +131,7 @@ function BarisSoal({
             objek="soal"
             id={s.id}
             versi={s.versi}
+            label="Hapus draf soal"
             alasan={alasanTidakBisaHapus("soal", { status: s.status, pernahDiajukan: s.pernahDiajukan ?? false, ditugaskan })}
           />
         ) : null}
@@ -175,6 +176,7 @@ function GrupBacaanBaris({
               objek="stimulus"
               id={st.id}
               versi={st.versi}
+              label="Hapus draf bacaan"
               alasan={alasanTidakBisaHapus("stimulus", {
                 status: st.status,
                 pernahDiajukan: st.pernahDiajukan ?? false,

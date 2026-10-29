@@ -25,6 +25,17 @@ export const inputKecil = (error?: string[]) =>
 export const TOMBOL_KECIL =
   "rounded-[8px] border border-line-strong bg-white px-2.5 py-1 text-xs font-medium text-black hover:border-primary disabled:cursor-not-allowed disabled:opacity-50";
 
+/**
+ * Tombol yang hanya berisi ikon (hapus, buka/tutup). Area ketuk 40×40 px.
+ * WAJIB diberi aria-label + title. `bahaya` = merah (hapus).
+ */
+export const tombolIkon = (bahaya = false) =>
+  [
+    "inline-flex size-10 shrink-0 items-center justify-center rounded-[12px] transition-colors",
+    "focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50",
+    bahaya ? "text-danger hover:bg-danger-soft" : "text-black hover:bg-surface-muted",
+  ].join(" ");
+
 /** Tombol pilihan (toggle) — aktif = primary. */
 export const pilihan = (aktif: boolean, warnaAktif: "primary" | "success" = "primary", teks: "text-sm" | "text-xs" = "text-sm") =>
   [

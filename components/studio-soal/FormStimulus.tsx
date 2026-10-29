@@ -6,10 +6,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type SetStateActi
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
-import KartuSoalBacaan, { cekKartuUntukKirim } from "@/components/studio-soal/KartuSoalBacaan";
+import KartuSoalBacaan, { cekKartuUntukKirim, type AksiKartu, type JenisAksiKartu } from "@/components/studio-soal/KartuSoalBacaan";
+import { IkonTongSampah } from "@/components/studio-soal/Ikon";
 import StimulusPratinjau from "@/components/studio-soal/StimulusPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
-import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas } from "@/components/studio-soal/gaya";
+import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas, tombolIkon } from "@/components/studio-soal/gaya";
 import TextareaKaya, { ContekanRumus, PesanError } from "@/components/studio-soal/TextareaKaya";
 import { LABEL_STATUS, errorDi, isBolehEdit, panggilApi, petaError } from "@/components/studio-soal/klien";
 import {
@@ -59,6 +60,8 @@ export interface SoalAwalBacaan {
   status: string;
   versi: number;
   alasanTolak: string | null;
+  /** Pernah dikirim untuk dicek -> draf tidak bisa dihapus. */
+  pernahDiajukan?: boolean;
 }
 
 interface ErrorSoalKelompok {
@@ -71,7 +74,8 @@ const kartu = KARTU;
 const inputKelas = inputKecil;
 const tombolKecil = TOMBOL_KECIL;
 
-type Sibuk = null | "simpan" | "ajukan" | "tarik" | "versi" | "hapus";
+/** Aksi halaman, atau aksi satu kartu soal ("soal-kirim:<id>", dst.). */
+type Sibuk = null | "simpan" | "ajukan" | "tarik" | "versi" | "hapus" | `soal-${"kirim" | "tarik" | "versi"}:${string}`;
 
 /** UUID v4 di browser (id soal baru dibuat di browser, seperti id bacaan). */
 function uuidBaru(): string {
@@ -145,7 +149,7 @@ export default function FormStimulus({
       status: s.status,
       versi: s.versi,
       alasanTolak: s.alasanTolak,
-      pernahDiajukan: false,
+      pernahDiajukan: s.pernahDiajukan ?? false,
       jejakTersimpan: jejak(s.form),
       terbuka: false,
       hasil: null,
@@ -307,6 +311,112 @@ export default function FormStimulus({
     router.push(`/studio-soal/stimulus/${String(r.json.id)}`);
   }
 
+  // ---------------------------------------------------------------- aksi per soal
+  // Dulu hanya ada di halaman soal; sekarang langsung di kartu (revisi UX-3).
+
+  /** Kirim satu soal sendiri — hanya untuk soal di bacaan yang sudah terbit. */
+  async function kirimSoal(kid: string) {
+    if (sibukRef.current) return;
+    const nomor = kartuSoal.findIndex((k) => k.id === kid) + 1;
+    const k = kartuSoal[nomor - 1];
+    if (!k) return;
+    setTampilSemua(true);
+    const errors = cekKartuUntukKirim(k.form, kategori);
+    if (errors.length > 0) {
+      ubahKartu(kid, (x) => ({ ...x, terbuka: true }));
+      setPesan({ jenis: "gagal", teks: `Soal ${nomor}: ${[...new Set(errors.map((e) => e.pesan))].slice(0, 2).join(" ")}` });
+      return;
+    }
+    if (keadaanKartu(k) === "belum" && !(await simpan())) return;
+    const r = await jalankan(`soal-kirim:${kid}`, `/api/studio-soal/soal/${kid}/ajukan`, "POST");
+    if (!r.ok) {
+      const errorsServer = Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : [];
+      const alasan = String(r.json.error ?? "Soal belum terkirim. Coba lagi.");
+      ubahKartu(kid, (x) => ({ ...x, terbuka: true, hasil: { ok: false, alasan, errors: errorsServer } }));
+      setPesan({ jenis: "gagal", teks: `Soal ${nomor}: ${alasan}` });
+      return;
+    }
+    ubahKartu(kid, (x) => ({ ...x, status: "diajukan", pernahDiajukan: true, hasil: null }));
+    setPesan({ jenis: "ok", teks: `Soal ${nomor} sudah dikirim untuk dicek.` });
+  }
+
+  /** Batalkan kirim satu soal (yang dikirim sendiri, bukan bersama bacaannya). */
+  async function tarikSoal(kid: string) {
+    if (sibukRef.current) return;
+    const nomor = kartuSoal.findIndex((k) => k.id === kid) + 1;
+    const r = await jalankan(`soal-tarik:${kid}`, `/api/studio-soal/soal/${kid}/tarik`, "POST");
+    if (!r.ok) {
+      setPesan({ jenis: "gagal", teks: `Soal ${nomor}: ${String(r.json.error ?? "Kiriman belum dibatalkan. Coba lagi.")}` });
+      return;
+    }
+    ubahKartu(kid, (x) => ({ ...x, status: "draf" }));
+    setPesan({ jenis: "ok", teks: `Kiriman soal ${nomor} dibatalkan. Soalnya bisa diubah lagi.` });
+  }
+
+  /** Versi baru dari soal yang sudah terbit: salinan draf muncul sebagai kartu baru tepat di bawahnya. */
+  async function versiBaruSoal(kid: string) {
+    if (sibukRef.current) return;
+    const nomor = kartuSoal.findIndex((k) => k.id === kid) + 1;
+    const r = await jalankan(`soal-versi:${kid}`, `/api/studio-soal/soal/${kid}/versi-baru`, "POST");
+    if (!r.ok || typeof r.json.id !== "string") {
+      setPesan({ jenis: "gagal", teks: `Soal ${nomor}: ${String(r.json.error ?? "Versi baru belum dibuat. Coba lagi.")}` });
+      return;
+    }
+    const idBaru = r.json.id;
+    setKartuSoal((l) =>
+      l.flatMap((k) =>
+        k.id !== kid
+          ? [k]
+          : [
+              { ...k, terbuka: false },
+              {
+                id: idBaru,
+                form: k.form,
+                status: "draf",
+                versi: k.versi + 1,
+                alasanTolak: null,
+                pernahDiajukan: false,
+                jejakTersimpan: jejak(k.form),
+                terbuka: true,
+                hasil: null,
+              },
+            ],
+      ),
+    );
+    setPesan({
+      jenis: "ok",
+      teks: `Versi baru soal ${nomor} dibuat sebagai draf tepat di bawahnya. Versi yang terbit tetap dipakai sampai versi baru lolos dicek.`,
+    });
+  }
+
+  /** Tombol aksi & keterangan untuk satu kartu yang sudah tersimpan. */
+  function aksiKartu(k: KartuSoal): { aksi: AksiKartu[]; catatan?: string } {
+    if (k.jejakTersimpan === null || !ditugaskan) return { aksi: [] };
+    const aksi: AksiKartu[] = [];
+    if (status === "terpublikasi" && bisaDiubah(k.status)) {
+      aksi.push({ jenis: "kirim", label: "Kirim soal ini untuk dicek", labelSibuk: "Mengirim…", sibuk: sibuk === `soal-kirim:${k.id}`, utama: true });
+    }
+    if (k.status === "diajukan" && status !== "diajukan") {
+      aksi.push({ jenis: "tarik", label: "Batalkan kirim", labelSibuk: "Membatalkan…", sibuk: sibuk === `soal-tarik:${k.id}` });
+    }
+    if (k.status === "terpublikasi" && status === "terpublikasi") {
+      aksi.push({ jenis: "versi", label: "Buat versi baru", labelSibuk: "Membuat…", sibuk: sibuk === `soal-versi:${k.id}` });
+    }
+    let catatan: string | undefined;
+    if (k.status === "diajukan") {
+      catatan = status === "diajukan" ? "Sedang dicek bersama bacaannya, jadi hanya bisa dilihat." : "Sedang dicek, jadi hanya bisa dilihat.";
+    } else if (k.status === "terpublikasi") {
+      catatan = status === "terpublikasi" ? "Sudah terbit, jadi hanya bisa dilihat. Buat versi baru untuk mengubahnya." : "Sudah terbit, jadi hanya bisa dilihat.";
+    }
+    return { aksi, catatan };
+  }
+
+  function aksiSoal(kid: string, jenis: JenisAksiKartu) {
+    if (jenis === "kirim") return kirimSoal(kid);
+    if (jenis === "tarik") return tarikSoal(kid);
+    return versiBaruSoal(kid);
+  }
+
   const soalTersimpan = kartuSoal.filter((k) => k.jejakTersimpan !== null).length;
   const soalAkanDikirim = kartuSoal.filter((k) => bisaDiubah(k.status) && keadaanKartu(k) !== "kosong").length;
   const adaYangBisaDisimpan = bolehEdit || soalBolehEdit;
@@ -345,8 +455,8 @@ export default function FormStimulus({
       ) : null}
       {status === "terpublikasi" ? (
         <Banner jenis="info">
-          Bacaan sudah terbit. Anda masih bisa menambah soal baru ke dalamnya — soal baru dikirim satu per satu dari halaman
-          soalnya. Untuk mengubah isi bacaannya, buat versi baru.
+          Bacaan sudah terbit. Anda masih bisa menambah soal baru ke dalamnya — soal baru dikirim satu per satu lewat tombol
+          “Kirim soal ini untuk dicek” di kartunya. Untuk mengubah isi bacaannya, buat versi baru.
         </Banner>
       ) : null}
 
@@ -429,7 +539,18 @@ export default function FormStimulus({
             setForm={setFormKartu(k.id)}
             onUbah={() => ubahKartu(k.id, (x) => (x.hasil ? { ...x, hasil: null } : x))}
             onBukaTutup={() => ubahKartu(k.id, (x) => ({ ...x, terbuka: !x.terbuka }))}
-            onHapus={k.jejakTersimpan === null ? () => setKartuSoal((l) => l.filter((x) => x.id !== k.id)) : undefined}
+            onBuang={k.jejakTersimpan === null ? () => setKartuSoal((l) => l.filter((x) => x.id !== k.id)) : undefined}
+            hapusDraf={
+              k.jejakTersimpan !== null && tampilkanTombolHapus(k.status)
+                ? {
+                    alasan: alasanTidakBisaHapus("soal", { status: k.status, pernahDiajukan: k.pernahDiajukan, ditugaskan }),
+                    onTerhapus: () => setKartuSoal((l) => l.filter((x) => x.id !== k.id)),
+                  }
+                : undefined
+            }
+            {...aksiKartu(k)}
+            onAksi={(jenis) => aksiSoal(k.id, jenis)}
+            terkunci={sibuk !== null}
             bolehEdit={soalBolehEdit && bisaDiubah(k.status) && sibuk === null}
             tampilSemua={tampilSemua}
             subtesPilihan={subtesPilihan}
@@ -608,15 +729,35 @@ export function IsianStimulus({
                 {i + 1}. {b.jenis === "teks" ? "Teks" : "Tabel"}
               </span>
               {bolehEdit ? (
-                <div className="ml-auto flex gap-1.5">
-                  <button type="button" aria-label="Geser ke atas" disabled={i === 0} onClick={() => geser(i, -1)} className={tombolKecil}>
+                <div className="ml-auto flex gap-0.5">
+                  <button
+                    type="button"
+                    aria-label={`Geser bagian ${i + 1} ke atas`}
+                    title="Geser ke atas"
+                    disabled={i === 0}
+                    onClick={() => geser(i, -1)}
+                    className={tombolIkon()}
+                  >
                     ↑
                   </button>
-                  <button type="button" aria-label="Geser ke bawah" disabled={i === blok.length - 1} onClick={() => geser(i, 1)} className={tombolKecil}>
+                  <button
+                    type="button"
+                    aria-label={`Geser bagian ${i + 1} ke bawah`}
+                    title="Geser ke bawah"
+                    disabled={i === blok.length - 1}
+                    onClick={() => geser(i, 1)}
+                    className={tombolIkon()}
+                  >
                     ↓
                   </button>
-                  <button type="button" onClick={() => ubahBlok((l) => l.filter((_, j) => j !== i))} className={`${tombolKecil} text-danger`}>
-                    Hapus
+                  <button
+                    type="button"
+                    aria-label={`Hapus bagian ${i + 1} (${b.jenis === "teks" ? "teks" : "tabel"})`}
+                    title="Hapus bagian ini"
+                    onClick={() => ubahBlok((l) => l.filter((_, j) => j !== i))}
+                    className={tombolIkon(true)}
+                  >
+                    <IkonTongSampah />
                   </button>
                 </div>
               ) : null}

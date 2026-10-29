@@ -8,7 +8,8 @@ import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
 import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
-import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas, pilihan } from "@/components/studio-soal/gaya";
+import { IkonTongSampah } from "@/components/studio-soal/Ikon";
+import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas, pilihan, tombolIkon } from "@/components/studio-soal/gaya";
 import TextareaKaya, { ContekanRumus, PesanError } from "@/components/studio-soal/TextareaKaya";
 import { LABEL_STATUS, errorDi, isBolehEdit, panggilApi, petaError } from "@/components/studio-soal/klien";
 import {
@@ -685,9 +686,11 @@ export function IsianSoal({
                         kunci: { ...f.kunci, per_baris: kunciBaru },
                       }));
                     }}
-                    className="ml-auto text-xs text-danger hover:underline"
+                    aria-label={`Hapus pernyataan ${i + 1}`}
+                    title="Hapus pernyataan ini"
+                    className={`ml-auto ${tombolIkon(true)}`}
                   >
-                    Hapus pernyataan
+                    <IkonTongSampah />
                   </button>
                 ) : null}
               </div>
@@ -753,8 +756,14 @@ export function IsianSoal({
                     <option value="angka">Angka</option>
                   </select>
                   {bolehEdit ? (
-                    <button type="button" onClick={() => setForm((f) => hapusRumpang(f, r.id))} className="ml-auto text-xs text-danger hover:underline">
-                      Hapus kotak ini
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => hapusRumpang(f, r.id))}
+                      aria-label={`Hapus kotak jawaban ${r.id}`}
+                      title="Hapus kotak jawaban ini"
+                      className={`ml-auto ${tombolIkon(true)}`}
+                    >
+                      <IkonTongSampah />
                     </button>
                   ) : null}
                 </div>
@@ -780,11 +789,12 @@ export function IsianSoal({
                         {diterima.length > 1 && bolehEdit ? (
                           <button
                             type="button"
-                            aria-label="Hapus jawaban ini"
+                            aria-label={`Hapus jawaban ${j + 1} untuk ${r.id}`}
+                            title="Hapus jawaban ini"
                             onClick={() => ubahKunciRumpang(r.id, { diterima: diterima.filter((_, n) => n !== j) })}
-                            className="shrink-0 text-xs text-danger hover:underline"
+                            className={tombolIkon(true)}
                           >
-                            Hapus
+                            <IkonTongSampah />
                           </button>
                         ) : null}
                       </div>

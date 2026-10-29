@@ -4,12 +4,16 @@ import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
+import { IkonTongSampah } from "@/components/studio-soal/Ikon";
+import { tombolIkon } from "@/components/studio-soal/gaya";
 import { panggilApi } from "@/components/studio-soal/klien";
 import type { ObjekStudio } from "@/lib/shared/studio-soal/formSoal";
 
 /**
  * Tombol "Hapus draf" + jendela konfirmasi (Studio Soal UX-1). Dipakai di
- * halaman daftar dan halaman edit, untuk soal maupun bacaan.
+ * halaman daftar, halaman soal, halaman bacaan, dan kartu soal di halaman
+ * bacaan. Pemicunya ikon tong sampah (UX-3 revisi), nama tombol lewat
+ * aria-label + title.
  *
  * Bila `alasan` terisi (tidak bisa dihapus), klik tombol membuka jendela yang
  * menjelaskan alasannya — tombol tidak disembunyikan supaya mentor tahu
@@ -23,6 +27,8 @@ export default function TombolHapusDraf({
   sesudahHapus,
   versi = 1,
   className,
+  label = "Hapus draf",
+  onTerhapus,
 }: {
   objek: ObjekStudio;
   id: string;
@@ -33,6 +39,10 @@ export default function TombolHapusDraf({
   /** Versi > 1 = draf versi baru dari yang sudah terbit. */
   versi?: number;
   className?: string;
+  /** Nama tombol untuk pembaca layar & tooltip. */
+  label?: string;
+  /** Bila ada: dipanggil sesudah terhapus, menggantikan pindah halaman (mis. kartu soal dibuang dari daftar). */
+  onTerhapus?: () => void;
 }) {
   const router = useRouter();
   const [buka, setBuka] = useState(false);
@@ -58,7 +68,8 @@ export default function TombolHapusDraf({
       return;
     }
     setBuka(false);
-    if (sesudahHapus) router.push(sesudahHapus);
+    if (onTerhapus) onTerhapus();
+    else if (sesudahHapus) router.push(sesudahHapus);
     router.refresh();
   }
 
@@ -67,9 +78,11 @@ export default function TombolHapusDraf({
       <button
         type="button"
         onClick={() => setBuka(true)}
-        className={["text-sm font-medium text-danger hover:underline", className].filter(Boolean).join(" ")}
+        aria-label={label}
+        title={label}
+        className={[tombolIkon(true), className].filter(Boolean).join(" ")}
       >
-        Hapus draf
+        <IkonTongSampah />
       </button>
       <Modal open={buka} onClose={tutup} labelledBy={idJudul}>
         <div className="flex flex-col gap-4">

@@ -6,6 +6,7 @@ import FormStimulus from "@/components/studio-soal/FormStimulus";
 import KartuPesan from "@/components/studio-soal/KartuPesan";
 import { mentorHalamanStudio } from "@/lib/mentor/studioSoalHalaman";
 import {
+  getIdPernahDiajukan,
   getSoalDiStimulus,
   getStimulusMilik,
   getSubtesById,
@@ -44,8 +45,15 @@ export default async function EditStimulusPage({
     notFound();
   } else {
     const ditugaskan = subtes.some((s) => s.id === stimulus.subtes_id);
-    const subtesStimulus = ditugaskan ? null : await getSubtesById(stimulus.subtes_id);
-    if (subtesStimulus === "gagal") {
+    // Soal draf yang pernah dikirim tidak bisa dihapus (tombol hapus di kartu menjelaskan alasannya).
+    const [subtesStimulus, soalPernahDiajukan] = await Promise.all([
+      ditugaskan ? null : getSubtesById(stimulus.subtes_id),
+      getIdPernahDiajukan(
+        "soal",
+        soal.filter((s) => s.status === "draf").map((s) => s.id),
+      ),
+    ]);
+    if (subtesStimulus === "gagal" || soalPernahDiajukan === "gagal") {
       isi = <KartuPesan judul="Bacaan gagal dimuat" isi="Coba muat ulang halaman." />;
     } else {
       isi = (
@@ -69,6 +77,7 @@ export default async function EditStimulusPage({
             status: s.status,
             versi: s.versi,
             alasanTolak: s.alasan_tolak,
+            pernahDiajukan: soalPernahDiajukan.has(s.id),
             form: {
               subtes_id: s.subtes_id,
               tipe: s.tipe,
