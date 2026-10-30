@@ -3,6 +3,7 @@
 import { useId, useMemo, useState, type SetStateAction } from "react";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
+import TeksSibuk from "@/components/ui/TeksSibuk";
 import { IsianSoal, type SubtesPilihan } from "@/components/studio-soal/FormSoal";
 import { IkonChevron, IkonTongSampah } from "@/components/studio-soal/Ikon";
 import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
@@ -233,8 +234,11 @@ export default function KartuSoalBacaan({
                       variant={a.utama ? "primary" : "secondary"}
                       onClick={() => onAksi?.(a.jenis)}
                       disabled={terkunci}
+                      aria-busy={a.sibuk}
                     >
-                      {a.sibuk ? a.labelSibuk : a.label}
+                      <TeksSibuk sibuk={a.sibuk} teks={a.labelSibuk}>
+                        {a.label}
+                      </TeksSibuk>
                     </Button>
                   ))}
                 </div>

@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Button from "@/components/ui/Button";
+import MaskotLoading from "@/components/ui/MaskotLoading";
 import Modal from "@/components/ui/Modal";
+import TeksSibuk from "@/components/ui/TeksSibuk";
 import { buttonClassName } from "@/components/ui/buttonClassName";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
 import { CHIP, pilihan } from "@/components/studio-soal/gaya";
 import { panggilApi } from "@/components/studio-soal/klien";
+import { useNavigasiSibuk } from "@/components/studio-soal/useNavigasiSibuk";
 import { alasanTidakBisaHapus, tampilkanTombolHapus } from "@/lib/shared/studio-soal/hapusDraf";
 import {
   BATAS_KIRIM,
@@ -236,7 +238,7 @@ export default function StudioSoalMentor({
   /** "soal:<id>" / "bacaan:<id>" -> alasan pertama isi belum lengkap (server, lib/mentor/studioSoal.ts). */
   belumLengkap?: Record<string, string>;
 }) {
-  const router = useRouter();
+  const { jenisPindah, pindah } = useNavigasiSibuk<"kirim">();
   const [filter, setFilter] = useState<FilterStatus>("semua");
   /** Kunci "soal:<id>" / "bacaan:<id>". */
   const [terpilih, setTerpilih] = useState<Set<string>>(new Set());
@@ -244,6 +246,8 @@ export default function StudioSoalMentor({
   const [statusLokal, setStatusLokal] = useState<Map<string, string>>(new Map());
   const [konfirmasi, setKonfirmasi] = useState(false);
   const [proses, setProses] = useState<{ ke: number; dari: number } | null>(null);
+  // Sibuk mengirim, atau daftar masih dimuat ulang sesudahnya (UX-4).
+  const sedangKirim = proses !== null || jenisPindah !== null;
   const [ringkasan, setRingkasan] = useState<RingkasanKirim | null>(null);
   const sibukRef = useRef(false);
   const ringkasanRef = useRef<HTMLDivElement | null>(null);
@@ -337,12 +341,20 @@ export default function StudioSoalMentor({
     }
     sibukRef.current = false;
     setProses(null);
-    setKonfirmasi(false);
-    setTerpilih(new Set());
-    setRingkasan(ringkasHasilKirim(hasil));
-    router.refresh();
-    requestAnimationFrame(() => ringkasanRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+    // Jendela tetap terbuka ("Mengirim…") sampai daftar terbaru selesai dimuat;
+    // state di dalam transition diterapkan bersama data baru.
+    pindah("kirim", (r) => {
+      setKonfirmasi(false);
+      setTerpilih(new Set());
+      setRingkasan(ringkasHasilKirim(hasil));
+      r.refresh();
+    });
   }
+
+  // Gulir ke ringkasan hasil begitu tampil (sesudah daftar terbaru dimuat).
+  useEffect(() => {
+    if (ringkasan) ringkasanRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [ringkasan]);
 
   const pilihUntuk = (kunci: string): Pilih => ({
     boleh: boleh(kunci),
@@ -489,7 +501,7 @@ export default function StudioSoalMentor({
         </div>
       ) : null}
 
-      <Modal open={konfirmasi} onClose={() => (proses ? undefined : setKonfirmasi(false))} labelledBy={idJudulKirim}>
+      <Modal open={konfirmasi} onClose={() => (sedangKirim ? undefined : setKonfirmasi(false))} labelledBy={idJudulKirim}>
         <div className="flex flex-col gap-4">
           <h2 id={idJudulKirim} className="pr-8 text-lg font-medium text-black">Kirim {teksPilihan} untuk dicek?</h2>
           <p className="text-sm text-black">
@@ -502,17 +514,27 @@ export default function StudioSoalMentor({
               soalnya tidak terkirim.
             </p>
           ) : null}
-          {proses ? (
-            <p className="text-sm text-muted" aria-live="polite">
-              Mengirim {proses.ke} dari {proses.dari}…
-            </p>
-          ) : null}
+          <p className="text-sm text-muted" aria-live="polite">
+            {proses ? (
+              <span className="inline-flex items-center gap-1.5">
+                <MaskotLoading size="xs" />
+                Mengirim {proses.ke} dari {proses.dari}…
+              </span>
+            ) : jenisPindah ? (
+              <span className="inline-flex items-center gap-1.5">
+                <MaskotLoading size="xs" />
+                Memperbarui daftar…
+              </span>
+            ) : null}
+          </p>
           <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setKonfirmasi(false)} disabled={proses !== null}>
+            <Button variant="secondary" size="sm" onClick={() => setKonfirmasi(false)} disabled={sedangKirim}>
               Batal
             </Button>
-            <Button size="sm" onClick={kirimSemua} disabled={proses !== null}>
-              {proses ? "Mengirim…" : "Ya, kirim"}
+            <Button size="sm" onClick={kirimSemua} disabled={sedangKirim} aria-busy={sedangKirim}>
+              <TeksSibuk sibuk={sedangKirim} teks="Mengirim…">
+                Ya, kirim
+              </TeksSibuk>
             </Button>
           </div>
         </div>

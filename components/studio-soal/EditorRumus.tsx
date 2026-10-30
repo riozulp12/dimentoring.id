@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { MathfieldElement } from "mathlive";
 import Button from "@/components/ui/Button";
+import MaskotLoading from "@/components/ui/MaskotLoading";
 import Modal from "@/components/ui/Modal";
 import Toggle from "@/components/ui/Toggle";
 import TeksKaya from "@/components/studio-soal/TeksKaya";
@@ -128,7 +129,12 @@ export default function EditorRumus({
             Tulis rumusnya
           </label>
           <div ref={wadahRef} />
-          {status === "memuat" ? <p className="text-sm text-muted">Menyiapkan editor rumus…</p> : null}
+          {status === "memuat" ? (
+            <p role="status" className="inline-flex items-center gap-1.5 text-sm text-muted">
+              <MaskotLoading size="xs" />
+              Menyiapkan editor rumus…
+            </p>
+          ) : null}
           {status === "gagal" ? (
             <p role="alert" className="text-sm text-danger">
               Editor rumus gagal dimuat. Cek koneksi lalu coba lagi, atau tulis kode rumus langsung di kotak teks.
@@ -195,7 +201,7 @@ export default function EditorRumus({
           <Button variant="secondary" size="sm" onClick={onBatal}>
             Batal
           </Button>
-          <Button size="sm" disabled={!bolehSisip} onClick={() => onSisip(tex.trim(), blok)}>
+          <Button size="sm" disabled={!bolehSisip} aria-busy={status === "memuat"} onClick={() => onSisip(tex.trim(), blok)}>
             Sisipkan
           </Button>
         </div>
