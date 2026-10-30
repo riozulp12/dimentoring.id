@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { ringkasStatus } from "../lib/shared/studio-soal/kirimBanyak";
 
 const ROOT = path.resolve(__dirname, "..");
 const baca = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -87,5 +88,45 @@ describe("UX-4 — tanda loading", () => {
     assert.match(daftar, /Memperbarui daftar…/);
     assert.match(baca("components/admin/PenugasanStudioSoalClient.tsx"), /<MaskotLoading size="xs" \/>\s*Menyimpan…/);
     assert.match(baca("components/studio-soal/EditorRumus.tsx"), /<MaskotLoading size="xs" \/>\s*Menyiapkan editor rumus…/);
+  });
+});
+
+describe("UX-4 — kartu subtes bisa dilipat", () => {
+  const daftar = baca("components/mentor/StudioSoalMentor.tsx");
+
+  it("ringkasan status kecil: hanya status yang ada, urutan filter", () => {
+    assert.equal(ringkasStatus([]), "");
+    assert.equal(
+      ringkasStatus([{ status: "draf" }, { status: "diajukan" }, { status: "draf" }, { status: "draf" }, { status: "digantikan" }]),
+      "3 draf · 1 sedang dicek",
+    );
+    assert.equal(ringkasStatus([{ status: "terpublikasi" }, { status: "ditolak" }]), "1 perlu diperbaiki · 1 terbit");
+  });
+
+  it("chevron: aria-expanded + aria-controls, area ketuk 44px, berputar, Ikon bersama", () => {
+    assert.match(daftar, /import \{ IkonChevron \} from "@\/components\/studio-soal\/Ikon";/);
+    assert.match(daftar, /aria-expanded=\{terbuka\}\s*aria-controls=\{idIsi\}/);
+    assert.match(daftar, /size-11/);
+    assert.match(daftar, /terbuka \? "rotate-180" : ""/);
+    assert.match(daftar, /<div id=\{idIsi\} hidden=\{!terbuka\}/);
+  });
+
+  it("seluruh kepala kartu bisa diketuk kecuali tautan/tombol", () => {
+    assert.match(daftar, /if \(!\(e\.target as HTMLElement\)\.closest\("a, button"\)\) onBukaTutup\(\);/);
+  });
+
+  it("awal terbuka; Tutup semua / Buka semua; pilihan tetap di induk", () => {
+    assert.match(daftar, /const \[tertutup, setTertutup\] = useState<Set<string>>\(new Set\(\)\);/);
+    assert.match(daftar, /Tutup semua/);
+    assert.match(daftar, /Buka semua/);
+    assert.match(daftar, /terbuka=\{!tertutup\.has\(k\.subtesId\)\}/);
+    // Isi tertutup memakai hidden (tetap terpasang), pilihan dihitung di kepala kartu.
+    assert.match(daftar, /\{nDipilih\} dipilih/);
+  });
+
+  it("+ Buat soal: HP baris sendiri selebar kartu; sm ke atas di kepala kartu sebelum chevron", () => {
+    assert.match(daftar, /col-span-2 row-start-2 w-full sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:w-auto/);
+    assert.match(daftar, /col-start-2 row-start-1 size-11 sm:col-start-3/);
+    assert.match(daftar, /sm:grid-cols-\[minmax\(0,1fr\)_auto_auto\]/);
   });
 });
