@@ -128,7 +128,7 @@ export function terapkanHasilSimpan<K extends KartuSoal>(kartu: K[], h: HasilSim
     if (!r) return k;
     return r.ok
       ? { ...k, form: formSoalUntukBacaan(k.form, bacaan), jejakTersimpan: r.jejak, hasil: { ok: true } }
-      : { ...k, terbuka: true, hasil: { ok: false, alasan: r.alasan, errors: r.errors } };
+      : { ...k, terbuka: true, hasil: { ok: false, alasan: `Belum tersimpan: ${r.alasan}`, errors: r.errors } };
   });
 }
 

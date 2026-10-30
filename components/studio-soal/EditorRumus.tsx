@@ -6,6 +6,8 @@ import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import Toggle from "@/components/ui/Toggle";
 import TeksKaya from "@/components/studio-soal/TeksKaya";
+import { pilihan } from "@/components/studio-soal/gaya";
+import { JENIS_KEYBOARD, layoutKeyboard, type JenisKeyboard } from "@/lib/shared/studio-soal/keyboardRumus";
 import { bungkusRumus, cekRumusEditor } from "@/lib/shared/studio-soal/sisipRumus";
 
 /**
@@ -19,6 +21,15 @@ import { bungkusRumus, cekRumusEditor } from "@/lib/shared/studio-soal/sisipRumu
  * dimuat MathLive (fontsDirectory = null): MathLive memakai keluarga font
  * KaTeX yang sudah dilayani dari situs sendiri lewat katex.min.css (TeksKaya),
  * jadi tidak ada CDN. Suara keyboard dimatikan (soundsDirectory = null).
+ *
+ * Keyboard layar (revisi UX-3 butir 11): bawaannya "Huruf & angka" (QWERTY
+ * + × ÷ dst., lib/shared/studio-soal/keyboardRumus.ts); mentor bisa pindah
+ * ke "Rumus" (numerik bawaan MathLive) atau "Simbol". Kebijakan
+ * mathVirtualKeyboardPolicy = "auto": di perangkat sentuh keyboard layar
+ * muncul saat kolom rumus difokus; di komputer tidak muncul sendiri sehingga
+ * keyboard fisik langsung dipakai (tombol "Tampilkan keyboard rumus" tetap
+ * ada). Tanpa focus trap (lihat Modal): keyboard MathLive ada di
+ * document.body, di luar jendela, dan tetap bisa diketuk.
  */
 
 type ModulMathlive = typeof import("mathlive");
@@ -28,6 +39,10 @@ function muat(): Promise<ModulMathlive> {
   muatMathlive ??= import("mathlive").then((m) => {
     m.MathfieldElement.fontsDirectory = null;
     m.MathfieldElement.soundsDirectory = null;
+    // Keyboard rumus MathLive ikut mode gelap HP (prefers-color-scheme) dan
+    // jadi hitam. Situs ini selalu terang: [theme="light"] di <body> adalah
+    // pengalih resmi MathLive untuk memaksa tema terang.
+    document.body.setAttribute("theme", "light");
     return m;
   });
   return muatMathlive;
@@ -54,6 +69,7 @@ export default function EditorRumus({
   const [tex, setTex] = useState(awal);
   const [blok, setBlok] = useState(blokAwal);
   const [status, setStatus] = useState<"memuat" | "siap" | "gagal">("memuat");
+  const [jenisKeyboard, setJenisKeyboard] = useState<JenisKeyboard>("huruf");
   const idJudul = useId();
 
   useEffect(() => {
@@ -70,6 +86,8 @@ export default function EditorRumus({
         mf.className = "block w-full rounded-[12px] border border-subtle bg-white px-3 py-2 text-lg";
         mf.value = awal;
         mf.addEventListener("input", () => setTex(mf?.getValue("latex-expanded") ?? ""));
+        // Keyboard layar bersifat global di MathLive: setel ulang tiap editor dibuka.
+        if (window.mathVirtualKeyboard) window.mathVirtualKeyboard.layouts = layoutKeyboard("huruf");
         wadahRef.current.appendChild(mf);
         mfRef.current = mf;
         setStatus("siap");
@@ -85,6 +103,18 @@ export default function EditorRumus({
       mfRef.current = null;
     };
   }, [awal]);
+
+  // Jenis keyboard layar yang dipilih mentor (keyboard MathLive bersifat global).
+  useEffect(() => {
+    if (status !== "siap" || !window.mathVirtualKeyboard) return;
+    window.mathVirtualKeyboard.layouts = layoutKeyboard(jenisKeyboard);
+  }, [status, jenisKeyboard]);
+
+  function gantiKeyboard(jenis: JenisKeyboard) {
+    setJenisKeyboard(jenis);
+    mfRef.current?.focus();
+    window.mathVirtualKeyboard?.show();
+  }
 
   const galat = status === "siap" ? cekRumusEditor(tex, blok) : null;
   const bolehSisip = status === "siap" && galat === null;
@@ -105,20 +135,43 @@ export default function EditorRumus({
             </p>
           ) : null}
           <p id="petunjuk-rumus" className="text-xs text-muted">
-            Ketik <code>/</code> untuk pecahan, <code>^</code> untuk pangkat, <code>_</code> untuk indeks bawah,{" "}
-            <code>sqrt</code> untuk akar. Di HP, keyboard rumus muncul otomatis.
+            Di keyboard layar: × untuk kali, ÷ untuk bagi, a⁄b untuk pecahan. Mengetik dengan keyboard komputer: <code>/</code>{" "}
+            jadi pecahan, <code>^</code> pangkat, <code>_</code> indeks bawah, <code>sqrt</code> akar. Di HP keyboard layar muncul
+            otomatis.
           </p>
           {status === "siap" ? (
-            <button
-              type="button"
-              onClick={() => {
-                mfRef.current?.focus();
-                window.mathVirtualKeyboard?.show();
-              }}
-              className="w-fit text-xs font-medium text-primary hover:underline"
-            >
-              Tampilkan keyboard rumus
-            </button>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-black" id="label-jenis-keyboard">
+                Jenis keyboard layar
+              </span>
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="label-jenis-keyboard">
+                {JENIS_KEYBOARD.map((j) => (
+                  <button
+                    key={j.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={jenisKeyboard === j.id}
+                    title={j.keterangan}
+                    // Jangan ambil fokus dari kolom rumus, supaya keyboard layar tidak tertutup.
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() => gantiKeyboard(j.id)}
+                    className={`min-h-10 rounded-full px-3.5 py-1.5 ${pilihan(jenisKeyboard === j.id)}`}
+                  >
+                    {j.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  mfRef.current?.focus();
+                  window.mathVirtualKeyboard?.show();
+                }}
+                className="w-fit text-xs font-medium text-primary hover:underline"
+              >
+                Tampilkan keyboard rumus
+              </button>
+            </div>
           ) : null}
         </div>
 

@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode, type SetStateAction } from "react";
+import { useMemo, useRef, useState, type ReactNode, type SetStateAction } from "react";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
-import KartuSoalBacaan, { cekKartuUntukKirim } from "@/components/studio-soal/KartuSoalBacaan";
+import KartuSoalBacaan, { cekKartuUntukKirim, type AksiKartu, type JenisAksiKartu } from "@/components/studio-soal/KartuSoalBacaan";
+import BilahAksi, { KELAS_TOMBOL_BILAH } from "@/components/studio-soal/BilahAksi";
+import { IkonChevron, IkonTongSampah } from "@/components/studio-soal/Ikon";
+import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
+import TabTulisPratinjau, { type TabForm } from "@/components/studio-soal/TabTulisPratinjau";
+import PenjagaKeluar from "@/components/studio-soal/PenjagaKeluar";
 import StimulusPratinjau from "@/components/studio-soal/StimulusPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
-import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas } from "@/components/studio-soal/gaya";
+import { KARTU, CHIP, KOLOM_PRATINJAU, TOMBOL_KECIL, inputKecil, pesanKelas, tombolIkon } from "@/components/studio-soal/gaya";
 import TextareaKaya, { ContekanRumus, PesanError } from "@/components/studio-soal/TextareaKaya";
 import { LABEL_STATUS, errorDi, isBolehEdit, panggilApi, petaError } from "@/components/studio-soal/klien";
 import {
@@ -27,14 +32,14 @@ import {
   SUMBER_BUATAN_SENDIRI,
   blokTabelBaru,
   formAwal,
-  inputValidasiStimulus,
   type FormSoal as DataFormSoal,
   type FormStimulus as DataFormStimulus,
 } from "@/lib/shared/studio-soal/formSoal";
 import { alasanTidakBisaHapus, tampilkanTombolHapus } from "@/lib/shared/studio-soal/hapusDraf";
-import { validasiRumusStimulus } from "@/lib/shared/studio-soal/rumus";
+import { cekBacaanLengkap, daftarBelumLengkap, type SoalKurang } from "@/lib/shared/studio-soal/kelengkapan";
+import { formBerubah } from "@/lib/shared/studio-soal/peringatanKeluar";
 import type { BlokStimulus, BlokTabel } from "@/lib/shared/studio-soal/tipe";
-import { validasiStimulus, type ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
+import type { ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
 import type { SubtesPilihan } from "@/components/studio-soal/FormSoal";
 
 /**
@@ -59,6 +64,8 @@ export interface SoalAwalBacaan {
   status: string;
   versi: number;
   alasanTolak: string | null;
+  /** Pernah dikirim untuk dicek -> draf tidak bisa dihapus. */
+  pernahDiajukan?: boolean;
 }
 
 interface ErrorSoalKelompok {
@@ -71,7 +78,8 @@ const kartu = KARTU;
 const inputKelas = inputKecil;
 const tombolKecil = TOMBOL_KECIL;
 
-type Sibuk = null | "simpan" | "ajukan" | "tarik" | "versi" | "hapus";
+/** Aksi halaman, atau aksi satu kartu soal ("soal-kirim:<id>", dst.). */
+type Sibuk = null | "simpan" | "ajukan" | "tarik" | "versi" | "hapus" | `soal-${"kirim" | "tarik" | "versi"}:${string}`;
 
 /** UUID v4 di browser (id soal baru dibuat di browser, seperti id bacaan). */
 function uuidBaru(): string {
@@ -132,10 +140,19 @@ export default function FormStimulus({
   const [sibuk, setSibuk] = useState<Sibuk>(null);
   const sibukRef = useRef(false);
   const [proses, setProses] = useState<{ ke: number; dari: number } | null>(null);
-  const [pesan, setPesan] = useState<{ jenis: "ok" | "gagal"; teks: string } | null>(null);
+  /** Pesan hasil aksi; `daftar` = rincian (mis. per soal yang belum lengkap). */
+  const [pesan, setPesanState] = useState<{ jenis: "ok" | "gagal"; teks: string; daftar?: string[] } | null>(null);
+  const pesanRef = useRef<HTMLDivElement | null>(null);
+  /** Tampilkan pesan dan gulir ke sana (tombol ada di bilah bawah, pesannya di atas). */
+  const setPesan = (p: { jenis: "ok" | "gagal"; teks: string; daftar?: string[] } | null) => {
+    setPesanState(p);
+    if (p) requestAnimationFrame(() => pesanRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  };
   const [errorServer, setErrorServer] = useState<ErrorValidasi[]>([]);
   const [tampilSemua, setTampilSemua] = useState(false);
-  const [tab, setTab] = useState<"tulis" | "pratinjau">("tulis");
+  const [tab, setTab] = useState<TabForm>("tulis");
+  /** Kartu soal yang terakhir dibuka/difokus — pratinjaunya tampil di kolom kanan. */
+  const [idAktif, setIdAktif] = useState<string | null>(idKartuBaru ?? null);
   // Pernah diajukan di sesi ini -> tidak bisa dihapus lagi (DB juga menolak).
   const [sudahPernahDiajukan, setSudahPernahDiajukan] = useState(pernahDiajukan);
   const [kartuSoal, setKartuSoal] = useState<KartuSoal[]>(() => {
@@ -145,7 +162,7 @@ export default function FormStimulus({
       status: s.status,
       versi: s.versi,
       alasanTolak: s.alasanTolak,
-      pernahDiajukan: false,
+      pernahDiajukan: s.pernahDiajukan ?? false,
       jejakTersimpan: jejak(s.form),
       terbuka: false,
       hasil: null,
@@ -156,23 +173,19 @@ export default function FormStimulus({
   const bolehEdit = isBolehEdit(status) && ditugaskan;
   const soalBolehEdit = ditugaskan && bacaanBolehTambahSoal(status);
   const kategori = subtesPilihan.find((s) => s.id === form.subtes_id)?.kategori;
-  const kotor = jejakTersimpan !== JSON.stringify(form);
+  const jejakForm = JSON.stringify(form);
+  const jejakAwal = useMemo(() => JSON.stringify(awal), [awal]);
+  /** Bacaan belum sama dengan yang tersimpan di server (bacaan baru: selalu perlu disimpan). */
+  const kotor = jejakTersimpan !== jejakForm;
+  // Kartu soal: setiap kartu yang sudah diisi tapi belum tersimpan (isi soal, tabel, rumus — semua lewat form kartu).
   const kartuKotor = soalBolehEdit && kartuSoal.some((k) => keadaanKartu(k) === "belum");
+  // Untuk peringatan & status: bacaan baru yang belum disentuh tidak dihitung berubah.
+  const adaPerubahan = (bolehEdit && formBerubah({ jejakTersimpan, jejakAwal, jejakSekarang: jejakForm })) || kartuKotor;
   const blok = form.konten.blok;
 
-  const errorsAjukan = useMemo(
-    () => [...validasiStimulus(inputValidasiStimulus(form, kategori), "ajukan"), ...validasiRumusStimulus(form)],
-    [form, kategori],
-  );
+  const errorsAjukan = useMemo(() => cekBacaanLengkap(form, kategori), [form, kategori]);
   const errorsBentuk = errorsAjukan.filter((e) => e.jenis === "bentuk");
   const peta = petaError([...(tampilSemua ? errorsAjukan : errorsBentuk), ...errorServer]);
-
-  useEffect(() => {
-    if (!((kotor && bolehEdit) || kartuKotor)) return;
-    const cegah = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", cegah);
-    return () => window.removeEventListener("beforeunload", cegah);
-  }, [kotor, bolehEdit, kartuKotor]);
 
   function ubah(patch: Partial<DataFormStimulus>) {
     setForm((f) => ({ ...f, ...patch }));
@@ -192,8 +205,11 @@ export default function FormStimulus({
   const ubahKartu = (kid: string, fn: (k: KartuSoal) => KartuSoal) => setKartuSoal((l) => l.map((k) => (k.id === kid ? fn(k) : k)));
   const setFormKartu = (kid: string) => (aksi: SetStateAction<DataFormSoal>) =>
     ubahKartu(kid, (k) => ({ ...k, form: typeof aksi === "function" ? aksi(k.form) : aksi }));
-  const tambahKartu = () =>
-    setKartuSoal((l) => [...l.map((k) => ({ ...k, terbuka: false })), kartuBaru(uuidBaru(), form.subtes_id, id)]);
+  const tambahKartu = () => {
+    const idBaru = uuidBaru();
+    setKartuSoal((l) => [...l.map((k) => ({ ...k, terbuka: false })), kartuBaru(idBaru, form.subtes_id, id)]);
+    setIdAktif(idBaru);
+  };
 
   // ---------------------------------------------------------------- aksi
   /** Simpan bacaan (bila berubah) lalu soal satu per satu. true = semua tersimpan. */
@@ -249,30 +265,43 @@ export default function FormStimulus({
   async function ajukan() {
     if (sibukRef.current) return;
     setTampilSemua(true);
-    if (errorsAjukan.length > 0) {
-      setPesan({ jenis: "gagal", teks: `Masih ada ${errorsAjukan.length} hal di bacaan yang perlu dilengkapi (ditandai merah).` });
+    if (soalAkanDikirim === 0) {
+      setPesan({ jenis: "gagal", teks: "Belum ada soal untuk dikirim. Tambahkan minimal 1 soal dulu." });
       return;
     }
-    const belumLengkap = kartuSoal
+    // Validasi lengkap di browser lebih dulu (aturan sama dengan API Ajukan):
+    // bacaan + SEMUA kartu soal yang ikut terkirim. Kartu kosong juga dihitung
+    // supaya tidak ada kartu yang diam-diam tertinggal.
+    const kurangSoal: (SoalKurang & { id: string })[] = kartuSoal
       .map((k, i) => ({ k, nomor: i + 1 }))
-      .filter(({ k }) => bisaDiubah(k.status) && keadaanKartu(k) !== "kosong" && cekKartuUntukKirim(k.form, kategori).length > 0);
-    if (belumLengkap.length > 0) {
-      const ids = new Set(belumLengkap.map((x) => x.k.id));
+      .filter(({ k }) => bisaDiubah(k.status))
+      .map(({ k, nomor }) =>
+        keadaanKartu(k) === "kosong"
+          ? { id: k.id, nomor, errors: [], kosong: true }
+          : { id: k.id, nomor, errors: cekKartuUntukKirim(k.form, kategori) },
+      )
+      .filter((x) => x.kosong || x.errors.length > 0);
+    const daftar = daftarBelumLengkap({ bacaan: errorsAjukan, soal: kurangSoal });
+    if (daftar.length > 0) {
+      const ids = new Set(kurangSoal.map((x) => x.id));
       setKartuSoal((l) => l.map((k) => (ids.has(k.id) ? { ...k, terbuka: true } : k)));
-      setPesan({
-        jenis: "gagal",
-        teks: `Soal ${belumLengkap.map((x) => x.nomor).join(", ")} belum lengkap. Lengkapi yang ditandai merah, lalu kirim lagi.`,
-      });
+      setPesan({ jenis: "gagal", teks: "Belum bisa dikirim. Lengkapi dulu yang ditandai merah:", daftar });
       return;
     }
     if (!(await simpan())) return;
     const r = await jalankan("ajukan", `/api/studio-soal/stimulus/${id}/ajukan`, "POST");
     if (!r.ok) {
-      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Bacaan belum terkirim. Coba lagi.") });
-      setErrorServer(Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : []);
+      const errorsBacaan = Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : [];
+      setErrorServer(errorsBacaan);
       const perSoal = new Map(
         (Array.isArray(r.json.errorsSoal) ? (r.json.errorsSoal as ErrorSoalKelompok[]) : []).map((e) => [e.soalId, e.errors]),
       );
+      // Server tetap pemutus akhir (mis. isi berubah di tab lain): sebut soal & masalahnya.
+      const daftarServer = daftarBelumLengkap({
+        bacaan: errorsBacaan,
+        soal: kartuSoal.flatMap((k, i) => (perSoal.has(k.id) ? [{ nomor: i + 1, errors: perSoal.get(k.id) ?? [] }] : [])),
+      });
+      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Bacaan belum terkirim. Coba lagi."), daftar: daftarServer });
       setKartuSoal((l) =>
         l.map((k) => {
           const errors = perSoal.get(k.id);
@@ -307,190 +336,354 @@ export default function FormStimulus({
     router.push(`/studio-soal/stimulus/${String(r.json.id)}`);
   }
 
+  // ---------------------------------------------------------------- aksi per soal
+  // Dulu hanya ada di halaman soal; sekarang langsung di kartu (revisi UX-3).
+
+  /** Kirim satu soal sendiri — hanya untuk soal di bacaan yang sudah terbit. */
+  async function kirimSoal(kid: string) {
+    if (sibukRef.current) return;
+    const nomor = kartuSoal.findIndex((k) => k.id === kid) + 1;
+    const k = kartuSoal[nomor - 1];
+    if (!k) return;
+    setTampilSemua(true);
+    const daftar = daftarBelumLengkap({ soal: [{ nomor, errors: cekKartuUntukKirim(k.form, kategori) }] });
+    if (daftar.length > 0) {
+      ubahKartu(kid, (x) => ({ ...x, terbuka: true }));
+      setPesan({ jenis: "gagal", teks: "Belum bisa dikirim. Lengkapi dulu yang ditandai merah:", daftar });
+      return;
+    }
+    if (keadaanKartu(k) === "belum" && !(await simpan())) return;
+    const r = await jalankan(`soal-kirim:${kid}`, `/api/studio-soal/soal/${kid}/ajukan`, "POST");
+    if (!r.ok) {
+      const errorsServer = Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : [];
+      const alasan = String(r.json.error ?? "Soal belum terkirim. Coba lagi.");
+      ubahKartu(kid, (x) => ({ ...x, terbuka: true, hasil: { ok: false, alasan, errors: errorsServer } }));
+      setPesan({ jenis: "gagal", teks: `Soal ${nomor}: ${alasan}` });
+      return;
+    }
+    ubahKartu(kid, (x) => ({ ...x, status: "diajukan", pernahDiajukan: true, hasil: null }));
+    setPesan({ jenis: "ok", teks: `Soal ${nomor} sudah dikirim untuk dicek.` });
+  }
+
+  /** Batalkan kirim satu soal (yang dikirim sendiri, bukan bersama bacaannya). */
+  async function tarikSoal(kid: string) {
+    if (sibukRef.current) return;
+    const nomor = kartuSoal.findIndex((k) => k.id === kid) + 1;
+    const r = await jalankan(`soal-tarik:${kid}`, `/api/studio-soal/soal/${kid}/tarik`, "POST");
+    if (!r.ok) {
+      setPesan({ jenis: "gagal", teks: `Soal ${nomor}: ${String(r.json.error ?? "Kiriman belum dibatalkan. Coba lagi.")}` });
+      return;
+    }
+    ubahKartu(kid, (x) => ({ ...x, status: "draf" }));
+    setPesan({ jenis: "ok", teks: `Kiriman soal ${nomor} dibatalkan. Soalnya bisa diubah lagi.` });
+  }
+
+  /** Versi baru dari soal yang sudah terbit: salinan draf muncul sebagai kartu baru tepat di bawahnya. */
+  async function versiBaruSoal(kid: string) {
+    if (sibukRef.current) return;
+    const nomor = kartuSoal.findIndex((k) => k.id === kid) + 1;
+    const r = await jalankan(`soal-versi:${kid}`, `/api/studio-soal/soal/${kid}/versi-baru`, "POST");
+    if (!r.ok || typeof r.json.id !== "string") {
+      setPesan({ jenis: "gagal", teks: `Soal ${nomor}: ${String(r.json.error ?? "Versi baru belum dibuat. Coba lagi.")}` });
+      return;
+    }
+    const idBaru = r.json.id;
+    setKartuSoal((l) =>
+      l.flatMap((k) =>
+        k.id !== kid
+          ? [k]
+          : [
+              { ...k, terbuka: false },
+              {
+                id: idBaru,
+                form: k.form,
+                status: "draf",
+                versi: k.versi + 1,
+                alasanTolak: null,
+                pernahDiajukan: false,
+                jejakTersimpan: jejak(k.form),
+                terbuka: true,
+                hasil: null,
+              },
+            ],
+      ),
+    );
+    setPesan({
+      jenis: "ok",
+      teks: `Versi baru soal ${nomor} dibuat sebagai draf tepat di bawahnya. Versi yang terbit tetap dipakai sampai versi baru lolos dicek.`,
+    });
+  }
+
+  /** Tombol aksi & keterangan untuk satu kartu yang sudah tersimpan. */
+  function aksiKartu(k: KartuSoal): { aksi: AksiKartu[]; catatan?: string } {
+    if (k.jejakTersimpan === null || !ditugaskan) return { aksi: [] };
+    const aksi: AksiKartu[] = [];
+    if (status === "terpublikasi" && bisaDiubah(k.status)) {
+      aksi.push({ jenis: "kirim", label: "Kirim soal ini untuk dicek", labelSibuk: "Mengirim…", sibuk: sibuk === `soal-kirim:${k.id}`, utama: true });
+    }
+    if (k.status === "diajukan" && status !== "diajukan") {
+      aksi.push({ jenis: "tarik", label: "Batalkan kirim", labelSibuk: "Membatalkan…", sibuk: sibuk === `soal-tarik:${k.id}` });
+    }
+    if (k.status === "terpublikasi" && status === "terpublikasi") {
+      aksi.push({ jenis: "versi", label: "Buat versi baru", labelSibuk: "Membuat…", sibuk: sibuk === `soal-versi:${k.id}` });
+    }
+    let catatan: string | undefined;
+    if (k.status === "diajukan") {
+      catatan = status === "diajukan" ? "Sedang dicek bersama bacaannya, jadi hanya bisa dilihat." : "Sedang dicek, jadi hanya bisa dilihat.";
+    } else if (k.status === "terpublikasi") {
+      catatan = status === "terpublikasi" ? "Sudah terbit, jadi hanya bisa dilihat. Buat versi baru untuk mengubahnya." : "Sudah terbit, jadi hanya bisa dilihat.";
+    }
+    return { aksi, catatan };
+  }
+
+  function aksiSoal(kid: string, jenis: JenisAksiKartu) {
+    if (jenis === "kirim") return kirimSoal(kid);
+    if (jenis === "tarik") return tarikSoal(kid);
+    return versiBaruSoal(kid);
+  }
+
   const soalTersimpan = kartuSoal.filter((k) => k.jejakTersimpan !== null).length;
   const soalAkanDikirim = kartuSoal.filter((k) => bisaDiubah(k.status) && keadaanKartu(k) !== "kosong").length;
   const adaYangBisaDisimpan = bolehEdit || soalBolehEdit;
 
+  // Pratinjau di kolom kanan (layar besar): bacaan + soal yang sedang dikerjakan.
+  const kartuAktif = kartuSoal.find((k) => k.id === idAktif && k.terbuka) ?? kartuSoal.find((k) => k.terbuka) ?? null;
+  const nomorAktif = kartuAktif ? kartuSoal.indexOf(kartuAktif) + 1 : 0;
+  const pratinjauBacaan = (
+    <>
+      <StimulusPratinjau blok={blok} />
+      {form.sumber_rujukan.trim() ? <p className="text-xs text-muted">Sumber: {form.sumber_rujukan}</p> : null}
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-4 pb-24 sm:gap-5">
-      <div className="flex flex-col gap-2">
-        <Link href="/studio-soal" className="w-fit text-sm text-primary hover:underline">
-          ← Studio Soal
-        </Link>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-medium text-black sm:text-2xl">
-            {baru && !sudahDisimpan ? "Buat soal dengan bacaan" : "Soal dengan bacaan"}
-          </h1>
-          <span className={CHIP}>{LABEL_STATUS[status] ?? status}</span>
-          {versi > 1 ? <span className="text-xs text-muted">versi {versi}</span> : null}
-        </div>
-        <p className="text-sm text-muted">
-          Tulis bacaan atau tabelnya di atas, lalu soal-soalnya di bawah. Tekan “Simpan semua” untuk menyimpan bacaan dan semua
-          soal sekaligus. Bacaan dan soal-soalnya dikirim dan dicek bersama.
-        </p>
-      </div>
+      <PenjagaKeluar adaPerubahan={adaPerubahan} />
+      {/* Dua kolom di layar besar: kiri judul + bacaan + kartu soal, kanan pratinjau
+          yang menempel (mulai sejajar judul). Di HP satu kolom, pratinjau lewat tab. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
+          <div className="flex flex-col gap-2">
+            <Link href="/studio-soal" className="w-fit text-sm text-primary hover:underline">
+              ← Studio Soal
+            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-medium text-black sm:text-2xl">
+                {baru && !sudahDisimpan ? "Buat soal dengan bacaan" : "Soal dengan bacaan"}
+              </h1>
+              <span className={CHIP}>{LABEL_STATUS[status] ?? status}</span>
+              {versi > 1 ? <span className="text-xs text-muted">versi {versi}</span> : null}
+            </div>
+            <p className="text-sm text-muted">
+              Tulis bacaan atau tabelnya di atas, lalu soal-soalnya di bawah. Tekan “Simpan” untuk menyimpan bacaan dan semua soal
+              sekaligus (boleh belum lengkap). Bacaan dan soal-soalnya dikirim dan dicek bersama.
+            </p>
+          </div>
 
-      {!ditugaskan ? (
-        <Banner jenis="peringatan">
-          Anda tidak lagi ditugaskan ke subtes ini. Bacaan tetap tersimpan, tapi tidak bisa diubah atau dikirim.
-        </Banner>
-      ) : null}
-      {status === "ditolak" && alasanTolak ? (
-        <Banner jenis="peringatan">
-          <span className="font-medium">Catatan dari pengecek:</span> {alasanTolak}
-        </Banner>
-      ) : null}
-      {status === "diajukan" ? (
-        <Banner jenis="info">Bacaan dan soalnya sedang dicek, jadi isinya dikunci dulu. Tekan “Batalkan kirim” kalau mau mengubahnya.</Banner>
-      ) : null}
-      {status === "terpublikasi" ? (
-        <Banner jenis="info">
-          Bacaan sudah terbit. Anda masih bisa menambah soal baru ke dalamnya — soal baru dikirim satu per satu dari halaman
-          soalnya. Untuk mengubah isi bacaannya, buat versi baru.
-        </Banner>
-      ) : null}
+          {!ditugaskan ? (
+            <Banner jenis="peringatan">
+              Anda tidak lagi ditugaskan ke subtes ini. Bacaan tetap tersimpan, tapi tidak bisa diubah atau dikirim.
+            </Banner>
+          ) : null}
+          {status === "ditolak" && alasanTolak ? (
+            <Banner jenis="peringatan">
+              <span className="font-medium">Catatan dari pengecek:</span> {alasanTolak}
+            </Banner>
+          ) : null}
+          {status === "diajukan" ? (
+            <Banner jenis="info">Bacaan dan soalnya sedang dicek, jadi isinya dikunci dulu. Tekan “Batalkan kirim” kalau mau mengubahnya.</Banner>
+          ) : null}
+          {status === "terpublikasi" ? (
+            <Banner jenis="info">
+              Bacaan sudah terbit. Anda masih bisa menambah soal baru ke dalamnya — soal baru dikirim satu per satu lewat tombol
+              “Kirim soal ini untuk dicek” di kartunya. Untuk mengubah isi bacaannya, buat versi baru.
+            </Banner>
+          ) : null}
 
-      {pesan ? (
-        <div role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
-          {pesan.teks}
-        </div>
-      ) : null}
+          {pesan ? (
+            <div ref={pesanRef} role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
+              <p>{pesan.teks}</p>
+              {pesan.daftar && pesan.daftar.length > 0 ? (
+                <ul className="mt-1 list-disc pl-5">
+                  {pesan.daftar.map((d) => (
+                    <li key={d}>{d}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
 
-      {/* ---- Bacaan ---- */}
-      <div className="flex gap-2 lg:hidden" role="tablist">
-        {(["tulis", "pratinjau"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => setTab(t)}
-            className={[
-              "flex-1 rounded-full border px-4 py-2 text-sm font-medium",
-              tab === t ? "border-black bg-black text-white" : "border-line-strong bg-white text-black",
-            ].join(" ")}
-          >
-            {t === "tulis" ? "Tulis bacaan" : "Pratinjau bacaan"}
-          </button>
-        ))}
-      </div>
+          {/* ---- Bacaan ---- */}
+          <TabTulisPratinjau tab={tab} setTab={setTab} label={{ tulis: "Tulis bacaan", pratinjau: "Pratinjau bacaan" }} />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
-          <IsianStimulus
-            form={form}
-            ubah={ubah}
-            ubahBlok={ubahBlok}
-            bolehEdit={bolehEdit}
-            sudahDisimpan={sudahDisimpan}
-            subtesPilihan={subtesPilihan}
-            peta={peta}
-          />
+          <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
+            <IsianStimulus
+              form={form}
+              ubah={ubah}
+              ubahBlok={ubahBlok}
+              bolehEdit={bolehEdit}
+              sudahDisimpan={sudahDisimpan}
+              subtesPilihan={subtesPilihan}
+              peta={peta}
+            />
 
-          {tampilSemua && errorsAjukan.length > 0 ? (
-            <section className="flex flex-col gap-2 rounded-[20px] border border-danger-line bg-danger-soft p-4">
-              <p className="text-sm font-medium text-danger">Yang perlu dilengkapi di bacaan sebelum dikirim:</p>
-              <ul className="list-disc pl-5 text-sm text-danger">
-                {[...new Set(errorsAjukan.map((e) => e.pesan))].map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
+            {tampilSemua && errorsAjukan.length > 0 ? (
+              <section className="flex flex-col gap-2 rounded-[20px] border border-danger-line bg-danger-soft p-4">
+                <p className="text-sm font-medium text-danger">Yang perlu dilengkapi di bacaan sebelum dikirim:</p>
+                <ul className="list-disc pl-5 text-sm text-danger">
+                  {[...new Set(errorsAjukan.map((e) => e.pesan))].map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </div>
+
+          {tab === "pratinjau" ? (
+            <section className={`${kartu} lg:hidden`}>
+              <h2 className="text-base font-medium text-black">Pratinjau bacaan</h2>
+              {pratinjauBacaan}
             </section>
           ) : null}
+
+          {/* ---- Soal untuk bacaan ini ---- */}
+          <section className="flex flex-col gap-3" aria-labelledby="judul-soal-bacaan">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="judul-soal-bacaan" className="text-lg font-medium text-black">
+                Soal untuk bacaan ini
+              </h2>
+              <span className="text-xs text-muted">
+                {kartuSoal.length} soal{soalTersimpan < kartuSoal.length ? ` · ${soalTersimpan} tersimpan` : ""}
+              </span>
+            </div>
+            {kartuSoal.length === 0 ? (
+              <p className="text-sm text-muted">Belum ada soal. Tambahkan minimal 1 soal sebelum dikirim.</p>
+            ) : null}
+            {kartuSoal.map((k, i) => (
+              <KartuSoalBacaan
+                key={k.id}
+                nomor={i + 1}
+                kartu={k}
+                setForm={setFormKartu(k.id)}
+                onUbah={() => ubahKartu(k.id, (x) => (x.hasil ? { ...x, hasil: null } : x))}
+                onBukaTutup={() => {
+                  if (!k.terbuka) setIdAktif(k.id);
+                  ubahKartu(k.id, (x) => ({ ...x, terbuka: !x.terbuka }));
+                }}
+                onAktif={() => setIdAktif(k.id)}
+                onBuang={k.jejakTersimpan === null ? () => setKartuSoal((l) => l.filter((x) => x.id !== k.id)) : undefined}
+                hapusDraf={
+                  k.jejakTersimpan !== null && tampilkanTombolHapus(k.status)
+                    ? {
+                        alasan: alasanTidakBisaHapus("soal", { status: k.status, pernahDiajukan: k.pernahDiajukan, ditugaskan }),
+                        onTerhapus: () => setKartuSoal((l) => l.filter((x) => x.id !== k.id)),
+                      }
+                    : undefined
+                }
+                {...aksiKartu(k)}
+                onAksi={(jenis) => aksiSoal(k.id, jenis)}
+                terkunci={sibuk !== null}
+                bolehEdit={soalBolehEdit && bisaDiubah(k.status) && sibuk === null}
+                tampilSemua={tampilSemua}
+                subtesPilihan={subtesPilihan}
+                kategori={kategori}
+                bacaanBlok={blok}
+              />
+            ))}
+            {soalBolehEdit ? (
+              <Button variant="secondary" size="sm" className="w-fit" onClick={tambahKartu} disabled={sibuk !== null}>
+                + Tambah soal
+              </Button>
+            ) : null}
+          </section>
         </div>
 
-        <aside className={["min-w-0", tab === "pratinjau" ? "" : "hidden lg:block"].join(" ")}>
-          <div className={`${kartu} lg:sticky lg:top-4`}>
-            <h2 className="text-base font-medium text-black">Pratinjau bacaan</h2>
-            <StimulusPratinjau blok={blok} />
-            {form.sumber_rujukan.trim() ? <p className="text-xs text-muted">Sumber: {form.sumber_rujukan}</p> : null}
-          </div>
+        <aside className={["hidden min-w-0 flex-col gap-4 lg:flex", KOLOM_PRATINJAU].join(" ")} aria-label="Pratinjau">
+          <details open className={`${kartu} group`}>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+              <h2 className="text-base font-medium text-black">Pratinjau bacaan</h2>
+              <IkonChevron className="size-5 shrink-0 transition-transform duration-150 group-open:rotate-180" />
+            </summary>
+            <div className="mt-4 flex flex-col gap-4">{pratinjauBacaan}</div>
+          </details>
+          {kartuAktif ? (
+            <section className={kartu} aria-label={`Pratinjau soal ${nomorAktif}`}>
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 className="text-base font-medium text-black">Pratinjau soal {nomorAktif}</h2>
+                <span className="text-xs text-muted">Tampilan seperti yang dilihat siswa</span>
+              </div>
+              {/* key: hasil "uji kunci jawaban" tidak terbawa ke soal lain. */}
+              <SoalPratinjau key={kartuAktif.id} soal={kartuAktif.form} stimulus={null} />
+            </section>
+          ) : kartuSoal.length > 0 ? (
+            <p className="rounded-[20px] border border-dashed border-line-strong px-4 py-6 text-center text-sm text-muted">
+              Buka salah satu soal untuk melihat pratinjau dan menguji kunci jawabannya di sini.
+            </p>
+          ) : null}
         </aside>
       </div>
 
-      {/* ---- Soal untuk bacaan ini ---- */}
-      <section className="flex flex-col gap-3" aria-labelledby="judul-soal-bacaan">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="judul-soal-bacaan" className="text-lg font-medium text-black">
-            Soal untuk bacaan ini
-          </h2>
-          <span className="text-xs text-muted">
-            {kartuSoal.length} soal{soalTersimpan < kartuSoal.length ? ` · ${soalTersimpan} tersimpan` : ""}
-          </span>
-        </div>
-        {kartuSoal.length === 0 ? (
-          <p className="text-sm text-muted">Belum ada soal. Tambahkan minimal 1 soal sebelum dikirim.</p>
-        ) : null}
-        {kartuSoal.map((k, i) => (
-          <KartuSoalBacaan
-            key={k.id}
-            nomor={i + 1}
-            kartu={k}
-            setForm={setFormKartu(k.id)}
-            onUbah={() => ubahKartu(k.id, (x) => (x.hasil ? { ...x, hasil: null } : x))}
-            onBukaTutup={() => ubahKartu(k.id, (x) => ({ ...x, terbuka: !x.terbuka }))}
-            onHapus={k.jejakTersimpan === null ? () => setKartuSoal((l) => l.filter((x) => x.id !== k.id)) : undefined}
-            bolehEdit={soalBolehEdit && bisaDiubah(k.status) && sibuk === null}
-            tampilSemua={tampilSemua}
-            subtesPilihan={subtesPilihan}
-            kategori={kategori}
-            bacaanBlok={blok}
-          />
-        ))}
-        {soalBolehEdit ? (
-          <Button variant="secondary" size="sm" className="w-fit" onClick={tambahKartu} disabled={sibuk !== null}>
-            + Tambah soal
-          </Button>
-        ) : null}
-      </section>
-
-      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-t border-line bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:mx-0 lg:rounded-[16px] lg:border">
+      <BilahAksi
+        keterangan={
+          sibuk === "simpan" && proses ? (
+            <span className="text-black">
+              Menyimpan {proses.ke} dari {proses.dari}…
+            </span>
+          ) : adaYangBisaDisimpan || bolehEdit ? (
+            <>
+              {bolehEdit ? <span>Bacaan + {soalAkanDikirim} soal · </span> : null}
+              {adaYangBisaDisimpan ? (
+                <span className={adaPerubahan ? "text-amber-700" : undefined}>
+                  {adaPerubahan ? "Ada perubahan belum disimpan" : sudahDisimpan ? "Semua perubahan tersimpan" : "Belum disimpan"}
+                </span>
+              ) : null}
+            </>
+          ) : null
+        }
+        hapus={
+          sudahDisimpan && tampilkanTombolHapus(status) ? (
+            <TombolHapusDraf
+              objek="stimulus"
+              id={id}
+              versi={versi}
+              sesudahHapus="/studio-soal"
+              alasan={alasanTidakBisaHapus("stimulus", {
+                status,
+                pernahDiajukan: sudahPernahDiajukan,
+                ditugaskan,
+                jumlahSoal: soalTersimpan,
+              })}
+            />
+          ) : null
+        }
+      >
         {adaYangBisaDisimpan ? (
-          <Button variant="secondary" size="sm" onClick={simpan} disabled={sibuk !== null}>
-            {sibuk === "simpan" ? (proses ? `Menyimpan ${proses.ke} dari ${proses.dari}…` : "Menyimpan…") : "Simpan semua"}
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={simpan} disabled={sibuk !== null}>
+            {sibuk === "simpan" ? "Menyimpan…" : "Simpan"}
           </Button>
         ) : null}
         {bolehEdit ? (
           <Button
             size="sm"
+            className={KELAS_TOMBOL_BILAH}
             onClick={ajukan}
-            disabled={sibuk !== null || soalAkanDikirim === 0}
-            title={soalAkanDikirim === 0 ? "Tambahkan minimal 1 soal dulu" : undefined}
+            disabled={sibuk !== null}
+            title={`Kirim bacaan dan ${soalAkanDikirim} soalnya untuk dicek`}
           >
-            {sibuk === "ajukan" ? "Mengirim…" : `Kirim bacaan + ${soalAkanDikirim} soal untuk dicek`}
+            {sibuk === "ajukan" ? "Mengirim…" : "Kirim untuk dicek"}
           </Button>
         ) : null}
-        {adaYangBisaDisimpan ? (
-          <span className={["text-xs", (kotor && bolehEdit) || kartuKotor ? "text-amber-700" : "text-muted"].join(" ")}>
-            {(kotor && bolehEdit) || kartuKotor ? "Ada perubahan belum disimpan" : "Semua perubahan tersimpan"}
-          </span>
-        ) : null}
         {status === "diajukan" && ditugaskan ? (
-          <Button variant="secondary" size="sm" onClick={tarik} disabled={sibuk !== null}>
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={tarik} disabled={sibuk !== null}>
             {sibuk === "tarik" ? "Membatalkan…" : "Batalkan kirim"}
           </Button>
         ) : null}
         {status === "terpublikasi" && ditugaskan ? (
-          <Button size="sm" onClick={versiBaru} disabled={sibuk !== null}>
-            {sibuk === "versi" ? "Membuat…" : "Buat versi baru bacaan"}
+          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={versiBaru} disabled={sibuk !== null}>
+            {sibuk === "versi" ? "Membuat…" : "Versi baru bacaan"}
           </Button>
         ) : null}
-        {sudahDisimpan && tampilkanTombolHapus(status) ? (
-          <TombolHapusDraf
-            objek="stimulus"
-            id={id}
-            versi={versi}
-            className="ml-auto"
-            sesudahHapus="/studio-soal"
-            alasan={alasanTidakBisaHapus("stimulus", {
-              status,
-              pernahDiajukan: sudahPernahDiajukan,
-              ditugaskan,
-              jumlahSoal: soalTersimpan,
-            })}
-          />
-        ) : null}
-      </div>
+      </BilahAksi>
     </div>
   );
 }
@@ -608,15 +801,35 @@ export function IsianStimulus({
                 {i + 1}. {b.jenis === "teks" ? "Teks" : "Tabel"}
               </span>
               {bolehEdit ? (
-                <div className="ml-auto flex gap-1.5">
-                  <button type="button" aria-label="Geser ke atas" disabled={i === 0} onClick={() => geser(i, -1)} className={tombolKecil}>
+                <div className="ml-auto flex gap-0.5">
+                  <button
+                    type="button"
+                    aria-label={`Geser bagian ${i + 1} ke atas`}
+                    title="Geser ke atas"
+                    disabled={i === 0}
+                    onClick={() => geser(i, -1)}
+                    className={tombolIkon()}
+                  >
                     ↑
                   </button>
-                  <button type="button" aria-label="Geser ke bawah" disabled={i === blok.length - 1} onClick={() => geser(i, 1)} className={tombolKecil}>
+                  <button
+                    type="button"
+                    aria-label={`Geser bagian ${i + 1} ke bawah`}
+                    title="Geser ke bawah"
+                    disabled={i === blok.length - 1}
+                    onClick={() => geser(i, 1)}
+                    className={tombolIkon()}
+                  >
                     ↓
                   </button>
-                  <button type="button" onClick={() => ubahBlok((l) => l.filter((_, j) => j !== i))} className={`${tombolKecil} text-danger`}>
-                    Hapus
+                  <button
+                    type="button"
+                    aria-label={`Hapus bagian ${i + 1} (${b.jenis === "teks" ? "teks" : "tabel"})`}
+                    title="Hapus bagian ini"
+                    onClick={() => ubahBlok((l) => l.filter((_, j) => j !== i))}
+                    className={tombolIkon(true)}
+                  >
+                    <IkonTongSampah />
                   </button>
                 </div>
               ) : null}

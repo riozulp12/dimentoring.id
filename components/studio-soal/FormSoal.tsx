@@ -2,13 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
 import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
+import TabTulisPratinjau, { type TabForm } from "@/components/studio-soal/TabTulisPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
-import { KARTU, CHIP, TOMBOL_KECIL, inputKecil, pesanKelas, pilihan } from "@/components/studio-soal/gaya";
+import BilahAksi, { KELAS_TOMBOL_BILAH } from "@/components/studio-soal/BilahAksi";
+import { IkonTongSampah } from "@/components/studio-soal/Ikon";
+import PenjagaKeluar from "@/components/studio-soal/PenjagaKeluar";
+import { KARTU, CHIP, KOLOM_PRATINJAU, TOMBOL_KECIL, inputKecil, pesanKelas, pilihan, tombolIkon } from "@/components/studio-soal/gaya";
 import TextareaKaya, { ContekanRumus, PesanError } from "@/components/studio-soal/TextareaKaya";
 import { LABEL_STATUS, errorDi, isBolehEdit, panggilApi, petaError } from "@/components/studio-soal/klien";
 import {
@@ -20,7 +24,6 @@ import {
   PRESET_LABEL_KOLOM,
   hapusRumpang,
   idBagianBaru,
-  inputValidasiSoal,
   kontenAwal,
   penandaDiRedaksi,
   sisipRumpang,
@@ -28,9 +31,10 @@ import {
 } from "@/lib/shared/studio-soal/formSoal";
 import { parseAngka } from "@/lib/shared/studio-soal/angka";
 import { alasanTidakBisaHapus, tampilkanTombolHapus } from "@/lib/shared/studio-soal/hapusDraf";
-import { validasiRumusSoal } from "@/lib/shared/studio-soal/rumus";
+import { cekSoalLengkap, pesanUnik } from "@/lib/shared/studio-soal/kelengkapan";
+import { formBerubah } from "@/lib/shared/studio-soal/peringatanKeluar";
 import { LABEL_OPSI, TIPE_SOAL, type BlokStimulus, type TipeSoal } from "@/lib/shared/studio-soal/tipe";
-import { validasiSoal, type ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
+import type { ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
 
 /**
  * Builder soal Studio Soal (Mentor) — PR 3b. Satu komponen untuk soal baru &
@@ -99,31 +103,32 @@ export default function FormSoal({
   const [jejakTersimpan, setJejakTersimpan] = useState<string | null>(baru ? null : JSON.stringify(awal));
   const [sibuk, setSibuk] = useState<Sibuk>(null);
   const sibukRef = useRef(false);
-  const [pesan, setPesan] = useState<{ jenis: "ok" | "gagal"; teks: string; tautan?: string } | null>(null);
+  type Pesan = { jenis: "ok" | "gagal"; teks: string; tautan?: string; daftar?: string[] };
+  const [pesan, setPesanState] = useState<Pesan | null>(null);
+  const pesanRef = useRef<HTMLDivElement | null>(null);
+  /** Tampilkan pesan dan gulir ke sana (tombol ada di bilah bawah, pesannya di atas). */
+  const setPesan = (p: Pesan | null) => {
+    setPesanState(p);
+    if (p) requestAnimationFrame(() => pesanRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  };
   const [errorServer, setErrorServer] = useState<ErrorValidasi[]>([]);
   const [tampilSemua, setTampilSemua] = useState(false);
-  const [tab, setTab] = useState<"tulis" | "pratinjau">("tulis");
+  const [tab, setTab] = useState<TabForm>("tulis");
   // Pernah diajukan di sesi ini -> tidak bisa dihapus lagi (DB juga menolak).
   const [sudahPernahDiajukan, setSudahPernahDiajukan] = useState(pernahDiajukan);
 
   const bolehEdit = isBolehEdit(status) && ditugaskan;
   const kategori = subtesPilihan.find((s) => s.id === form.subtes_id)?.kategori;
-  const kotor = jejakTersimpan !== JSON.stringify(form);
+  const jejakForm = JSON.stringify(form);
+  const jejakAwal = useMemo(() => JSON.stringify(awal), [awal]);
+  const kotor = jejakTersimpan !== jejakForm;
+  // Peringatan keluar: soal baru yang belum disentuh tidak dihitung berubah.
+  const adaPerubahan = bolehEdit && formBerubah({ jejakTersimpan, jejakAwal, jejakSekarang: jejakForm });
 
-  const errorsAjukan = useMemo(
-    () => [...validasiSoal(inputValidasiSoal(form, kategori), "ajukan"), ...validasiRumusSoal(form)],
-    [form, kategori],
-  );
+  const errorsAjukan = useMemo(() => cekSoalLengkap(form, kategori), [form, kategori]);
   const errorsBentuk = errorsAjukan.filter((e) => e.jenis === "bentuk");
   const peta = petaError([...(tampilSemua ? errorsAjukan : errorsBentuk), ...errorServer]);
   const jumlahBelumLengkap = errorsAjukan.length;
-
-  useEffect(() => {
-    if (!kotor || !bolehEdit) return;
-    const cegah = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", cegah);
-    return () => window.removeEventListener("beforeunload", cegah);
-  }, [kotor, bolehEdit]);
 
   // ---------------------------------------------------------------- aksi
   async function simpan(): Promise<boolean> {
@@ -169,7 +174,7 @@ export default function FormSoal({
     if (sibukRef.current) return;
     setTampilSemua(true);
     if (errorsAjukan.length > 0) {
-      setPesan({ jenis: "gagal", teks: `Masih ada ${errorsAjukan.length} hal yang perlu dilengkapi sebelum dikirim (ditandai merah).` });
+      setPesan({ jenis: "gagal", teks: "Belum bisa dikirim. Lengkapi dulu yang ditandai merah:", daftar: pesanUnik(errorsAjukan) });
       return;
     }
     if (kotor || !sudahDisimpan) {
@@ -177,8 +182,9 @@ export default function FormSoal({
     }
     const r = await jalankan("ajukan", `/api/studio-soal/soal/${id}/ajukan`, "POST");
     if (!r.ok) {
-      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Soal belum terkirim. Coba lagi.") });
-      setErrorServer(Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : []);
+      const errors = Array.isArray(r.json.errors) ? (r.json.errors as ErrorValidasi[]) : [];
+      setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Soal belum terkirim. Coba lagi."), daftar: pesanUnik(errors) });
+      setErrorServer(errors);
       return;
     }
     setStatus("diajukan");
@@ -209,114 +215,104 @@ export default function FormSoal({
 
   return (
     <div className="flex flex-col gap-4 pb-24 sm:gap-5">
-      <div className="flex flex-col gap-2">
-        <Link href={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"} className="w-fit text-sm text-primary hover:underline">
-          ← {stimulus ? `Bacaan: ${stimulus.judul || "tanpa judul"}` : "Studio Soal"}
-        </Link>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-medium text-black sm:text-2xl">{judul}</h1>
-          <span className={CHIP}>{LABEL_STATUS[status] ?? status}</span>
-          {versi > 1 ? <span className="text-xs text-muted">versi {versi}</span> : null}
-          {sudahDisimpan && bolehEdit ? (
-            <span className={["text-xs", kotor ? "text-amber-700" : "text-muted"].join(" ")}>
-              {kotor ? "Ada perubahan belum disimpan" : "Semua perubahan tersimpan"}
-            </span>
+      <PenjagaKeluar adaPerubahan={adaPerubahan} />
+      {/* Dua kolom di layar besar: kiri judul + form, kanan pratinjau yang menempel
+          (mulai sejajar judul). Di HP satu kolom, pratinjau lewat tab. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
+          <div className="flex flex-col gap-2">
+            <Link href={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"} className="w-fit text-sm text-primary hover:underline">
+              ← {stimulus ? `Bacaan: ${stimulus.judul || "tanpa judul"}` : "Studio Soal"}
+            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-medium text-black sm:text-2xl">{judul}</h1>
+              <span className={CHIP}>{LABEL_STATUS[status] ?? status}</span>
+              {versi > 1 ? <span className="text-xs text-muted">versi {versi}</span> : null}
+            </div>
+          </div>
+
+          {!ditugaskan ? (
+            <Banner jenis="peringatan">
+              Anda tidak lagi ditugaskan ke subtes ini. Soal tetap tersimpan, tapi tidak bisa diubah atau dikirim sampai Admin
+              menugaskan Anda lagi.
+            </Banner>
           ) : null}
-        </div>
-      </div>
-
-      {!ditugaskan ? (
-        <Banner jenis="peringatan">
-          Anda tidak lagi ditugaskan ke subtes ini. Soal tetap tersimpan, tapi tidak bisa diubah atau dikirim sampai Admin
-          menugaskan Anda lagi.
-        </Banner>
-      ) : null}
-      {status === "ditolak" && alasanTolak ? (
-        <Banner jenis="peringatan">
-          <span className="font-medium">Catatan dari pengecek:</span> {alasanTolak}
-          <br />
-          Perbaiki soalnya, lalu kirim lagi.
-        </Banner>
-      ) : null}
-      {status === "diajukan" ? (
-        <Banner jenis="info">
-          Soal sedang dicek mentor lain, jadi isinya dikunci dulu.{" "}
-          {stimulus && stimulus.status === "diajukan"
-            ? "Soal ini dikirim bersama bacaannya — batalkan kirim dari halaman bacaan kalau mau mengubahnya."
-            : "Tekan “Batalkan kirim” kalau mau mengubahnya."}
-        </Banner>
-      ) : null}
-      {status === "terpublikasi" ? (
-        <Banner jenis="info">
-          Soal sudah terbit, jadi isinya dikunci. Untuk mengubah, buat versi baru — versi ini tetap dipakai sampai versi baru lolos
-          dicek.
-        </Banner>
-      ) : null}
-      {status === "digantikan" || status === "diarsipkan" ? (
-        <Banner jenis="info">Soal ini {LABEL_STATUS[status]?.toLowerCase()} dan hanya bisa dilihat.</Banner>
-      ) : null}
-
-      {pesan ? (
-        <div role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
-          {pesan.teks}
-          {pesan.tautan ? (
-            <>
-              {" "}
-              <Link href={pesan.tautan} className="font-medium underline">
-                Buka versi itu
-              </Link>
-            </>
+          {status === "ditolak" && alasanTolak ? (
+            <Banner jenis="peringatan">
+              <span className="font-medium">Catatan dari pengecek:</span> {alasanTolak}
+              <br />
+              Perbaiki soalnya, lalu kirim lagi.
+            </Banner>
           ) : null}
-        </div>
-      ) : null}
-
-      {/* Tab untuk layar kecil; di layar lebar form & pratinjau berdampingan. */}
-      <div className="flex gap-2 lg:hidden" role="tablist">
-        {(["tulis", "pratinjau"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => setTab(t)}
-            className={[
-              "flex-1 rounded-full border px-4 py-2 text-sm font-medium",
-              tab === t ? "border-black bg-black text-white" : "border-line-strong bg-white text-black",
-            ].join(" ")}
-          >
-            {t === "tulis" ? "Tulis" : "Pratinjau & uji kunci"}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
-          <IsianSoal
-            form={form}
-            setForm={setForm}
-            onUbah={() => setErrorServer([])}
-            bolehEdit={bolehEdit}
-            sudahDisimpan={sudahDisimpan}
-            subtesTerkunci={sudahDisimpan || stimulus !== null}
-            subtesPilihan={subtesPilihan}
-            peta={peta}
-          />
-
-          {tampilSemua && errorsAjukan.length > 0 ? (
-            <section className="flex flex-col gap-2 rounded-[20px] border border-danger-line bg-danger-soft p-4">
-              <p className="text-sm font-medium text-danger">Yang perlu dilengkapi sebelum dikirim:</p>
-              <ul className="list-disc pl-5 text-sm text-danger">
-                {[...new Set(errorsAjukan.map((e) => e.pesan))].map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
-            </section>
+          {status === "diajukan" ? (
+            <Banner jenis="info">
+              Soal sedang dicek mentor lain, jadi isinya dikunci dulu.{" "}
+              {stimulus && stimulus.status === "diajukan"
+                ? "Soal ini dikirim bersama bacaannya — batalkan kirim dari halaman bacaan kalau mau mengubahnya."
+                : "Tekan “Batalkan kirim” kalau mau mengubahnya."}
+            </Banner>
+          ) : null}
+          {status === "terpublikasi" ? (
+            <Banner jenis="info">
+              Soal sudah terbit, jadi isinya dikunci. Untuk mengubah, buat versi baru — versi ini tetap dipakai sampai versi baru lolos
+              dicek.
+            </Banner>
+          ) : null}
+          {status === "digantikan" || status === "diarsipkan" ? (
+            <Banner jenis="info">Soal ini {LABEL_STATUS[status]?.toLowerCase()} dan hanya bisa dilihat.</Banner>
           ) : null}
 
+          {pesan ? (
+            <div ref={pesanRef} role={pesan.jenis === "gagal" ? "alert" : "status"} className={pesanKelas(pesan.jenis)}>
+              {pesan.teks}
+              {pesan.daftar && pesan.daftar.length > 0 ? (
+                <ul className="mt-1 list-disc pl-5">
+                  {pesan.daftar.map((d) => (
+                    <li key={d}>{d}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {pesan.tautan ? (
+                <>
+                  {" "}
+                  <Link href={pesan.tautan} className="font-medium underline">
+                    Buka versi itu
+                  </Link>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Tab untuk layar kecil; di layar lebar form & pratinjau berdampingan. */}
+          <TabTulisPratinjau tab={tab} setTab={setTab} label={{ tulis: "Tulis", pratinjau: "Pratinjau & uji kunci" }} />
+
+          <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
+            <IsianSoal
+              form={form}
+              setForm={setForm}
+              onUbah={() => setErrorServer([])}
+              bolehEdit={bolehEdit}
+              sudahDisimpan={sudahDisimpan}
+              subtesTerkunci={sudahDisimpan || stimulus !== null}
+              subtesPilihan={subtesPilihan}
+              peta={peta}
+            />
+
+            {tampilSemua && errorsAjukan.length > 0 ? (
+              <section className="flex flex-col gap-2 rounded-[20px] border border-danger-line bg-danger-soft p-4">
+                <p className="text-sm font-medium text-danger">Yang perlu dilengkapi sebelum dikirim:</p>
+                <ul className="list-disc pl-5 text-sm text-danger">
+                  {[...new Set(errorsAjukan.map((e) => e.pesan))].map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </div>
         </div>
 
-        <aside className={["min-w-0", tab === "pratinjau" ? "" : "hidden lg:block"].join(" ")}>
-          <div className={`${kartu} lg:sticky lg:top-4`}>
+        <aside className={["min-w-0", KOLOM_PRATINJAU, tab === "pratinjau" ? "" : "hidden lg:block"].join(" ")}>
+          <div className={kartu}>
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-base font-medium text-black">Pratinjau</h2>
               <span className="text-xs text-muted">Tampilan seperti yang dilihat siswa</span>
@@ -327,48 +323,63 @@ export default function FormSoal({
       </div>
 
       {/* ---- Bilah aksi (menempel di bawah, nyaman di HP) ---- */}
-      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-2 border-t border-line bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:mx-0 lg:rounded-[16px] lg:border">
+      <BilahAksi
+        keterangan={
+          bolehEdit ? (
+            <>
+              {sudahDisimpan ? (
+                <span className={kotor ? "text-amber-700" : undefined}>
+                  {kotor ? "Ada perubahan belum disimpan" : "Semua perubahan tersimpan"}
+                </span>
+              ) : (
+                <span>Belum disimpan</span>
+              )}
+              <span>
+                {" · "}
+                {bisaAjukanSendiri
+                  ? jumlahBelumLengkap === 0
+                    ? "Siap dikirim"
+                    : `${jumlahBelumLengkap} hal belum lengkap`
+                  : "Dikirim bersama bacaannya dari halaman bacaan"}
+              </span>
+            </>
+          ) : status !== "diajukan" && status !== "terpublikasi" ? (
+            "Soal ini hanya bisa dilihat."
+          ) : null
+        }
+        hapus={
+          sudahDisimpan && tampilkanTombolHapus(status) ? (
+            <TombolHapusDraf
+              objek="soal"
+              id={id}
+              versi={versi}
+              sesudahHapus={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"}
+              alasan={alasanTidakBisaHapus("soal", { status, pernahDiajukan: sudahPernahDiajukan, ditugaskan })}
+            />
+          ) : null
+        }
+      >
         {bolehEdit ? (
-          <>
-            <Button variant="secondary" size="sm" onClick={simpan} disabled={sibuk !== null}>
-              {sibuk === "simpan" ? "Menyimpan…" : "Simpan draf"}
-            </Button>
-            {bisaAjukanSendiri ? (
-              <Button size="sm" onClick={ajukan} disabled={sibuk !== null}>
-                {sibuk === "ajukan" ? "Mengirim…" : "Kirim untuk dicek"}
-              </Button>
-            ) : (
-              <span className="text-xs text-muted">Soal ini dikirim bersama bacaannya dari halaman bacaan.</span>
-            )}
-            <span className="text-xs text-muted">
-              {jumlahBelumLengkap === 0 ? "Siap dikirim" : `${jumlahBelumLengkap} hal belum lengkap`}
-            </span>
-          </>
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={simpan} disabled={sibuk !== null}>
+            {sibuk === "simpan" ? "Menyimpan…" : "Simpan"}
+          </Button>
+        ) : null}
+        {bolehEdit && bisaAjukanSendiri ? (
+          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={ajukan} disabled={sibuk !== null}>
+            {sibuk === "ajukan" ? "Mengirim…" : "Kirim untuk dicek"}
+          </Button>
         ) : null}
         {status === "diajukan" && ditugaskan && !(stimulus && stimulus.status === "diajukan") ? (
-          <Button variant="secondary" size="sm" onClick={tarik} disabled={sibuk !== null}>
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={tarik} disabled={sibuk !== null}>
             {sibuk === "tarik" ? "Membatalkan…" : "Batalkan kirim"}
           </Button>
         ) : null}
         {status === "terpublikasi" && ditugaskan ? (
-          <Button size="sm" onClick={versiBaru} disabled={sibuk !== null}>
+          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={versiBaru} disabled={sibuk !== null}>
             {sibuk === "versi" ? "Membuat…" : "Buat versi baru"}
           </Button>
         ) : null}
-        {!bolehEdit && status !== "diajukan" && status !== "terpublikasi" ? (
-          <span className="text-xs text-muted">Soal ini hanya bisa dilihat.</span>
-        ) : null}
-        {sudahDisimpan && tampilkanTombolHapus(status) ? (
-          <TombolHapusDraf
-            objek="soal"
-            id={id}
-            versi={versi}
-            className="ml-auto"
-            sesudahHapus={stimulus ? `/studio-soal/stimulus/${stimulus.id}` : "/studio-soal"}
-            alasan={alasanTidakBisaHapus("soal", { status, pernahDiajukan: sudahPernahDiajukan, ditugaskan })}
-          />
-        ) : null}
-      </div>
+      </BilahAksi>
     </div>
   );
 }
@@ -685,9 +696,11 @@ export function IsianSoal({
                         kunci: { ...f.kunci, per_baris: kunciBaru },
                       }));
                     }}
-                    className="ml-auto text-xs text-danger hover:underline"
+                    aria-label={`Hapus pernyataan ${i + 1}`}
+                    title="Hapus pernyataan ini"
+                    className={`ml-auto ${tombolIkon(true)}`}
                   >
-                    Hapus pernyataan
+                    <IkonTongSampah />
                   </button>
                 ) : null}
               </div>
@@ -753,8 +766,14 @@ export function IsianSoal({
                     <option value="angka">Angka</option>
                   </select>
                   {bolehEdit ? (
-                    <button type="button" onClick={() => setForm((f) => hapusRumpang(f, r.id))} className="ml-auto text-xs text-danger hover:underline">
-                      Hapus kotak ini
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => hapusRumpang(f, r.id))}
+                      aria-label={`Hapus kotak jawaban ${r.id}`}
+                      title="Hapus kotak jawaban ini"
+                      className={`ml-auto ${tombolIkon(true)}`}
+                    >
+                      <IkonTongSampah />
                     </button>
                   ) : null}
                 </div>
@@ -780,11 +799,12 @@ export function IsianSoal({
                         {diterima.length > 1 && bolehEdit ? (
                           <button
                             type="button"
-                            aria-label="Hapus jawaban ini"
+                            aria-label={`Hapus jawaban ${j + 1} untuk ${r.id}`}
+                            title="Hapus jawaban ini"
                             onClick={() => ubahKunciRumpang(r.id, { diterima: diterima.filter((_, n) => n !== j) })}
-                            className="shrink-0 text-xs text-danger hover:underline"
+                            className={tombolIkon(true)}
                           >
-                            Hapus
+                            <IkonTongSampah />
                           </button>
                         ) : null}
                       </div>

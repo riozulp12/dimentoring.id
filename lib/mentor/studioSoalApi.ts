@@ -22,7 +22,7 @@ import {
   type ObjekStudio,
 } from "@/lib/shared/studio-soal/formSoal";
 import { pesanBacaanMasihDipakai } from "@/lib/shared/studio-soal/hapusDraf";
-import { validasiRumusSoal, validasiRumusStimulus } from "@/lib/shared/studio-soal/rumus";
+import { cekBacaanLengkap, cekSoalLengkap } from "@/lib/shared/studio-soal/kelengkapan";
 import { validasiSoal, validasiStimulus, type ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
 
 /**
@@ -210,7 +210,7 @@ export async function aksi(request: NextRequest, objek: ObjekStudio, id: string,
     const soal = await getSoalMilik(mentorId, id);
     if (soal === "gagal") return gagal(500, GAGAL_SERVER);
     if (!soal) return gagal(404, "Soal tidak ditemukan.");
-    const errors = [...validasiSoal(inputValidasiSoal(soal, subtesKategori), "ajukan"), ...validasiRumusSoal(soal)];
+    const errors = cekSoalLengkap(soal, subtesKategori);
     if (errors.length > 0) return gagal(400, "Soal belum lengkap. Lengkapi yang ditandai merah, lalu kirim lagi.", { errors });
     const hasil = await panggilRpc("studio_soal_ajukan_soal", { p_soal_id: id, p_aktor_id: mentorId });
     if (hasil === "gagal") return gagal(500, GAGAL_SERVER);
@@ -220,17 +220,14 @@ export async function aksi(request: NextRequest, objek: ObjekStudio, id: string,
   const [stimulus, daftarSoal] = await Promise.all([getStimulusMilik(mentorId, id), getSoalDiStimulus(mentorId, id)]);
   if (stimulus === "gagal" || daftarSoal === "gagal") return gagal(500, GAGAL_SERVER);
   if (!stimulus) return gagal(404, "Bacaan tidak ditemukan.");
-  const errors = [
-    ...validasiStimulus(inputValidasiStimulus(stimulus, subtesKategori), "ajukan"),
-    ...validasiRumusStimulus(stimulus),
-  ];
+  const errors = cekBacaanLengkap(stimulus, subtesKategori);
   // Soal yang ikut diajukan = draf/ditolak di stimulus ini (sama dengan RPC).
   const errorsSoal: ErrorSoalKelompok[] = daftarSoal
     .filter((s) => s.status === "draf" || s.status === "ditolak")
     .map((s) => ({
       soalId: s.id,
       urutan: s.urutan_dalam_stimulus,
-      errors: [...validasiSoal(inputValidasiSoal(s, subtesKategori), "ajukan"), ...validasiRumusSoal(s)],
+      errors: cekSoalLengkap(s, subtesKategori),
     }))
     .filter((s) => s.errors.length > 0);
   if (errors.length > 0 || errorsSoal.length > 0) {

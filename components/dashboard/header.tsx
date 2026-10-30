@@ -33,7 +33,7 @@ export default function Header({
 }: HeaderProps) {
   return (
     <header
-      className={`${inter.className} fixed inset-x-0 top-0 z-30 flex h-20 items-center justify-between bg-white px-4 shadow-[1px_2px_4px_rgba(0,0,0,0.1)] transition-[left] duration-200 sm:px-5 ${collapsed ? "lg:left-20" : "lg:left-64"}`}
+      className={`${inter.className} fixed inset-x-0 top-0 z-30 flex h-[var(--tinggi-navbar)] items-center justify-between bg-white px-4 shadow-[1px_2px_4px_rgba(0,0,0,0.1)] transition-[left] duration-200 sm:px-5 ${collapsed ? "lg:left-20" : "lg:left-64"}`}
     >
       <div className="flex items-center gap-3">
         <button

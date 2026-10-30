@@ -89,10 +89,11 @@ describe("C — statis", () => {
     assert.doesNotMatch(formStimulus + kartuSoal, /Sisipkan kotak jawaban|Tambah pernyataan/);
   });
 
-  it("satu tombol Simpan semua, kartu baru, buang kartu, peringatan menutup halaman", () => {
-    assert.match(formStimulus, /Simpan semua/);
+  it("satu tombol Simpan (menyimpan semua), kartu baru, buang kartu, peringatan menutup halaman", () => {
+    assert.match(formStimulus, /"Menyimpan…" : "Simpan"\}/);
     assert.match(formStimulus, /\+ Tambah soal/);
-    assert.match(formStimulus, /beforeunload/);
+    assert.match(formStimulus, /<PenjagaKeluar adaPerubahan=/);
+    assert.match(baca("components/studio-soal/PenjagaKeluar.tsx"), /beforeunload/);
     assert.match(kartuSoal, /Buang kartu/);
   });
 

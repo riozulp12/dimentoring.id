@@ -6,6 +6,7 @@ import { urutkanSubtes } from "@/lib/shared/studio-soal/penugasan";
 import type { StimulusRingkas } from "@/lib/shared/studio-soal/studioMentor";
 import type { FormSoal, FormStimulus } from "@/lib/shared/studio-soal/formSoal";
 import type { TipeSoal } from "@/lib/shared/studio-soal/tipe";
+import { susunKelengkapan } from "@/lib/shared/studio-soal/kelengkapan";
 
 /**
  * Data layer form Studio Soal (PR 3b) — HANYA BACA. Semua perubahan lewat
@@ -245,4 +246,53 @@ export async function getStimulusMentor(mentorId: string): Promise<StimulusRingk
       updatedAt: s.updated_at as string,
       pernahDiajukan: pernah.has(s.id as string),
     }));
+}
+
+/** Batas baca untuk penanda "Belum lengkap" di halaman daftar (draf/ditolak terbaru). */
+export const BATAS_CEK_KELENGKAPAN = { soal: 300, bacaan: 100 } as const;
+
+/**
+ * Penanda "Belum lengkap" untuk halaman daftar mentor (revisi UX-3 butir 4):
+ * peta "soal:<id>" / "bacaan:<id>" -> alasan pertama. Dihitung dengan fungsi
+ * validasi yang SAMA dengan API Ajukan (lib/shared/studio-soal/kelengkapan).
+ * Hanya draf/ditolak terbaru sampai BATAS_CEK_KELENGKAPAN; sisanya tanpa
+ * penanda (server tetap memeriksa saat dikirim). Gagal baca = tanpa penanda,
+ * halaman daftar tetap tampil.
+ */
+export async function getKelengkapanDraf(mentorId: string): Promise<Record<string, string>> {
+  const subtes = await getSubtesDitugaskan(mentorId);
+  if (subtes === "gagal" || subtes.length === 0) return {};
+  const [soalRes, stRes] = await Promise.all([
+    supabaseServer
+      .from("soal_bank")
+      .select(KOLOM_SOAL)
+      .eq("penulis_id", mentorId)
+      .in("status", ["draf", "ditolak"])
+      .order("updated_at", { ascending: false })
+      .limit(BATAS_CEK_KELENGKAPAN.soal),
+    supabaseServer
+      .from("soal_stimulus")
+      .select("id, subtes_id, judul_internal, konten, sumber_rujukan, status")
+      .eq("penulis_id", mentorId)
+      .in("status", ["draf", "ditolak"])
+      .order("updated_at", { ascending: false })
+      .limit(BATAS_CEK_KELENGKAPAN.bacaan),
+  ]);
+  if (soalRes.error || stRes.error) {
+    console.error("[studioSoal] query kelengkapan failed:", soalRes.error ?? stRes.error);
+    return {};
+  }
+  const soal = (soalRes.data ?? []).map((r) => keSoalDetail(r as Row));
+  const bacaan = (stRes.data ?? []).map((r) => {
+    const konten = r.konten as FormStimulus["konten"] | null;
+    return {
+      id: r.id as string,
+      subtes_id: r.subtes_id as string,
+      judul_internal: (r.judul_internal as string) ?? "",
+      sumber_rujukan: (r.sumber_rujukan as string) ?? "",
+      konten: konten && Array.isArray(konten.blok) ? { v: 1 as const, blok: konten.blok } : { v: 1 as const, blok: [] },
+      status: r.status as string,
+    };
+  });
+  return susunKelengkapan(soal, bacaan, new Map(subtes.map((s) => [s.id, s.kategori])));
 }

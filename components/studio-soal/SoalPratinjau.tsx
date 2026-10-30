@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Button from "@/components/ui/Button";
 import TeksKaya from "@/components/studio-soal/TeksKaya";
 import StimulusPratinjau from "@/components/studio-soal/StimulusPratinjau";
 import { nilaiJawaban, type HasilNilai } from "@/lib/shared/studio-soal/nilaiJawaban";
@@ -205,28 +206,15 @@ export default function SoalPratinjau({
           Uji kunci jawaban: jawab sendiri seperti siswa, lalu periksa. Penilaiannya sama dengan yang dipakai untuk siswa.
         </p>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={periksa}
-            className="rounded-full bg-black px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-80"
-          >
+          <Button size="sm" onClick={periksa}>
             Periksa jawaban
-          </button>
-          <button
-            type="button"
-            onClick={ulangi}
-            className="rounded-full border border-line-strong bg-white px-4 py-1.5 text-sm font-medium text-black"
-          >
+          </Button>
+          <Button size="sm" variant="secondary" onClick={ulangi}>
             Ulangi
-          </button>
-          <button
-            type="button"
-            aria-pressed={tampilKunci}
-            onClick={() => setTampilKunci((v) => !v)}
-            className="rounded-full border border-line-strong bg-white px-4 py-1.5 text-sm font-medium text-black"
-          >
+          </Button>
+          <Button size="sm" variant="secondary" aria-pressed={tampilKunci} onClick={() => setTampilKunci((v) => !v)}>
             {tampilKunci ? "Sembunyikan kunci & pembahasan" : "Tampilkan kunci & pembahasan"}
-          </button>
+          </Button>
         </div>
         {hasil && !hasilBerlaku ? (
           <p className="text-sm text-muted">Soal berubah sejak diperiksa — periksa lagi.</p>
