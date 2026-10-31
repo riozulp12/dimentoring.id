@@ -9,10 +9,12 @@ import { CATATAN_CADANGAN, rapikanCatatan } from "@/lib/shared/catatanAssessment
 import {
   aksiKartuKelas,
   aksiTryout,
+  HREF_TRYOUT,
   pilihKelasUmum,
   type StatusKelasPengguna,
 } from "@/lib/shared/saranProdukAssessment";
 import { hitungHargaSetelahDiskon, normalizeDiskonPersen } from "@/lib/shared/kelasDiskon";
+import { fiturTerbuka } from "@/lib/shared/fiturSegera";
 import { getNavbarProps, type NavbarSessionProps } from "@/lib/dashboard/getNavbarProps";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
@@ -316,7 +318,12 @@ export default async function AssessmentHasilPage({ params }: PageProps) {
   // /tryout. Tamu diarahkan ke login lalu kembali ke /tryout. Dimentoring
   // belum menyimpan data kepemilikan paket tryout, jadi status beli tidak
   // bisa ditampilkan di sini. ----
-  const tryoutAksi = aksiTryout(Boolean(session));
+  // Soft launch: selama Try Out belum dibuka (lib/shared/fiturSegera.ts) tamu
+  // tidak perlu login dulu hanya untuk melihat alert "Segera hadir".
+  const tryoutSegera = !fiturTerbuka("tryout");
+  const tryoutAksi = tryoutSegera
+    ? { href: HREF_TRYOUT, label: "Lihat Try Out", segera: true }
+    : aksiTryout(Boolean(session));
 
   // ---- Lead Capture (PRD 7.4.6, BR-38): hanya kalau bendera
   // NEXT_PUBLIC_LEAD_CAPTURE_ENABLED aktif; tamu, atau user login yang belum

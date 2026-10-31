@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --conditions=react-server --test tests/kelas-saya.test.ts tests/payment-mayar.test.ts tests/presensi.test.ts tests/presensi-mentor.test.ts tests/enrollment-manual.test.ts tests/leads.test.ts tests/studio-soal-validasi.test.ts tests/studio-soal-nilai.test.ts tests/laporan-honor-v2.test.ts tests/studio-soal-penugasan.test.ts tests/studio-soal-form.test.ts tests/studio-soal-ux1.test.ts tests/studio-soal-ux2.test.ts tests/studio-soal-ux3.test.ts tests/studio-soal-ux3-bacaan.test.ts tests/studio-soal-ux3-rumus.test.ts tests/studio-soal-ux3-revisi.test.ts tests/studio-soal-ux4.test.ts tests/ui-modal.test.ts tests/assessment-saran.test.ts tests/assessment-tamu.test.ts",
+    "test": "tsx --conditions=react-server --test tests/kelas-saya.test.ts tests/payment-mayar.test.ts tests/presensi.test.ts tests/presensi-mentor.test.ts tests/enrollment-manual.test.ts tests/leads.test.ts tests/studio-soal-validasi.test.ts tests/studio-soal-nilai.test.ts tests/laporan-honor-v2.test.ts tests/studio-soal-penugasan.test.ts tests/studio-soal-form.test.ts tests/studio-soal-ux1.test.ts tests/studio-soal-ux2.test.ts tests/studio-soal-ux3.test.ts tests/studio-soal-ux3-bacaan.test.ts tests/studio-soal-ux3-rumus.test.ts tests/studio-soal-ux3-revisi.test.ts tests/studio-soal-ux4.test.ts tests/ui-modal.test.ts tests/assessment-saran.test.ts tests/assessment-tamu.test.ts tests/fitur-segera.test.ts",
     "tarik-ptn": "tsx scripts/tarik-data-ptn.ts jawa",
     "tarik-ptn:luar-jawa": "tsx scripts/tarik-data-ptn.ts luar-jawa",
     "tarik-ptn:vokasi-ptkin": "tsx scripts/tarik-data-ptn.ts vokasi-ptkin"

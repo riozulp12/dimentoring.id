@@ -1,5 +1,7 @@
 import Link from "next/link";
 import Button from "@/components/ui/Button";
+import LencanaSegera from "@/components/ui/LencanaSegera";
+import { fiturTerbuka } from "@/lib/shared/fiturSegera";
 
 /**
  * Section ajakan Try Out — PRD Bagian 4.3. CTA mengarah ke /tryout (route
@@ -20,11 +22,14 @@ export default function TryoutCTA() {
         </p>
       </div>
 
-      <Link href="/tryout">
-        <Button variant="primary" size="lg">
-          Mulai Try Out
-        </Button>
-      </Link>
+      <div className="flex flex-col items-center gap-3">
+        {fiturTerbuka("tryout") ? null : <LencanaSegera />}
+        <Link href="/tryout">
+          <Button variant="primary" size="lg">
+            Mulai Try Out
+          </Button>
+        </Link>
+      </div>
     </section>
   );
 }

@@ -4,7 +4,9 @@
  * perlu menyentuh logic komponen, cukup edit data di sini.
  */
 
-export type SidebarRole = "siswa" | "mentor" | "admin";
+import type { FiturSegeraId } from "@/lib/shared/fiturSegera";
+
+export type SidebarRole ="siswa" | "mentor" | "admin";
 
 export type SidebarIconKey =
   | "dashboard"
@@ -25,6 +27,8 @@ export interface SidebarMenuItem {
   href: string;
   /** BR-27: item ini dikunci (disabled + tooltip) selama UserRole Mentor berstatus 'pending'. */
   lockedForPendingMentor?: boolean;
+  /** Menu ini menuju fitur yang bisa digembok (lib/shared/fiturSegera.ts): kalau belum dibuka, tampil lencana "Segera hadir". Tetap bisa diklik. */
+  fiturId?: FiturSegeraId;
 }
 
 export interface SidebarMenuGroup {
@@ -40,7 +44,7 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
         { icon: "dashboard", label: "Dashboard", href: "/dashboard/siswa" },
         { icon: "assessment", label: "Assessment Prediksi PTN", href: "/assessment" },
         { icon: "kelas", label: "Kelas Saya", href: "/kelas" },
-        { icon: "tryout", label: "Try Out", href: "/tryout" },
+        { icon: "tryout", label: "Try Out", href: "/tryout", fiturId: "tryout" },
       ],
     },
     {
