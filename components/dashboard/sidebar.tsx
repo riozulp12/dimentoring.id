@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { Inter } from "next/font/google";
 import Logo from "@/components/ui/Logo";
 import LogoutConfirmModal from "@/components/shared/LogoutConfirmModal";
+import LencanaSegera from "@/components/ui/LencanaSegera";
+import { fiturTerbuka } from "@/lib/shared/fiturSegera";
 import {
   DashboardIcon,
   AssessmentIcon,
@@ -52,6 +54,7 @@ function NavRow({
   href,
   active,
   locked,
+  segera,
   collapsed,
   onNavigate,
   onClick,
@@ -61,6 +64,8 @@ function NavRow({
   href: string;
   active: boolean;
   locked?: boolean;
+  /** Menuju fitur yang belum dibuka: tampil lencana "Segera hadir", tetap bisa diklik. */
+  segera?: boolean;
   collapsed?: boolean;
   onNavigate?: () => void;
   /** Cuma dipakai untuk item "Keluar" — buka modal konfirmasi, bukan navigasi langsung. */
@@ -118,6 +123,7 @@ function NavRow({
       >
         {label}
       </span>
+      {segera ? <LencanaSegera className={`ml-auto ${labelClass}`} /> : null}
     </Link>
   );
 }
@@ -199,6 +205,7 @@ export default function Sidebar({
                       href={item.href}
                       active={isActive(pathname, item.href)}
                       locked={mentorPending && item.lockedForPendingMentor}
+                      segera={item.fiturId ? !fiturTerbuka(item.fiturId) : false}
                       collapsed={collapsed}
                       onNavigate={onClose}
                     />

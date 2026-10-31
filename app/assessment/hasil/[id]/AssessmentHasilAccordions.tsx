@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import Button from "@/components/ui/Button";
 import Mascot from "@/components/ui/Mascot";
+import LencanaSegera from "@/components/ui/LencanaSegera";
 import LeadCaptureCard from "./LeadCaptureCard";
 
 export interface PilihanCardData {
@@ -54,7 +55,7 @@ export interface AssessmentHasilData {
   kelasRekomendasi: KelasRekomendasiData[];
   /** true = dipilih dari mapel tersulit; false = kelas umum persiapan PTN. */
   kelasPersonal: boolean;
-  tryoutAksi: { href: string; label: string };
+  tryoutAksi: { href: string; label: string; segera?: boolean };
   /** Pengunjung halaman belum login. */
   isGuest: boolean;
   showDaftarCta: boolean;
@@ -386,8 +387,9 @@ export default function AssessmentHasilAccordions({ data }: { data: AssessmentHa
           <p className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Try Out SNBT dan TKA</p>
           <p className="text-sm text-[#7E7C7C] sm:text-base">
             Simulasi ujian biar kamu tahu posisimu sekarang dan bagian mana yang perlu dikejar.
-            {data.isGuest ? " Masuk dulu, nanti kamu langsung diarahkan ke halaman Try Out." : ""}
+            {data.isGuest && !data.tryoutAksi.segera ? " Masuk dulu, nanti kamu langsung diarahkan ke halaman Try Out." : ""}
           </p>
+          {data.tryoutAksi.segera ? <LencanaSegera /> : null}
           <Link href={data.tryoutAksi.href} className="self-start">
             <Button size="sm">{data.tryoutAksi.label}</Button>
           </Link>
