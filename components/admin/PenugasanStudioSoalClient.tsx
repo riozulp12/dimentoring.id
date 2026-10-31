@@ -3,6 +3,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
+import MaskotLoading from "@/components/ui/MaskotLoading";
 import Toggle from "@/components/ui/Toggle";
 import { KARTU, pesanKelas, pilihan } from "@/components/studio-soal/gaya";
 import type { MentorPenugasanItem, PenugasanStudioSoalData } from "@/lib/admin/getPenugasanStudioSoalData";
@@ -267,10 +268,13 @@ export default function PenugasanStudioSoalClient({ initialData }: { initialData
                         <li key={s.id} className="flex items-center justify-between gap-3 py-3">
                           <div className="flex min-w-0 flex-col gap-0.5">
                             <span className="text-sm font-medium text-black">{s.nama}</span>
-                            <span className="text-xs text-muted">
-                              {sibuk.has(kunci)
-                                ? "Menyimpan…"
-                                : aktif
+                            <span className="text-xs text-muted" aria-live="polite">
+                              {sibuk.has(kunci) ? (
+                                <span className="inline-flex items-center gap-1.5 align-middle">
+                                  <MaskotLoading size="xs" />
+                                  Menyimpan…
+                                </span>
+                              ) : aktif
                                   ? "Menulis & mengecek soal"
                                   : "Belum ditugaskan"}
                               {mengajar ? " · di profilnya: mengajar subtes ini" : ""}

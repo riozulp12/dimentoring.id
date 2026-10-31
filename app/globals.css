@@ -129,6 +129,13 @@ body {
   animation: mascot-bounce 900ms ease-in-out infinite;
 }
 
+/* Hormati pengaturan "kurangi gerakan": maskot diam, tetap terlihat. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-mascot-bounce {
+    animation: none;
+  }
+}
+
 /* Sembunyikan scrollbar visual di container scrollable dalam popup/modal
    (components/ui/Modal.tsx & konten scrollable lain di dalamnya) — scroll
    TETAP jalan normal lewat mouse/trackpad/keyboard, cuma garis scrollbar-nya

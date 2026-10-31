@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import Button from "@/components/ui/Button";
+import TeksSibuk from "@/components/ui/TeksSibuk";
 import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
 import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
@@ -12,6 +12,7 @@ import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
 import BilahAksi, { KELAS_TOMBOL_BILAH } from "@/components/studio-soal/BilahAksi";
 import { IkonTongSampah } from "@/components/studio-soal/Ikon";
 import PenjagaKeluar from "@/components/studio-soal/PenjagaKeluar";
+import { useNavigasiSibuk } from "@/components/studio-soal/useNavigasiSibuk";
 import { KARTU, CHIP, KOLOM_PRATINJAU, TOMBOL_KECIL, inputKecil, pesanKelas, pilihan, tombolIkon } from "@/components/studio-soal/gaya";
 import TextareaKaya, { ContekanRumus, PesanError } from "@/components/studio-soal/TextareaKaya";
 import { LABEL_STATUS, errorDi, isBolehEdit, panggilApi, petaError } from "@/components/studio-soal/klien";
@@ -96,12 +97,14 @@ export default function FormSoal({
   stimulus: StimulusKonteks | null;
   ditugaskan: boolean;
 }) {
-  const router = useRouter();
+  const { jenisPindah, pindah } = useNavigasiSibuk<Exclude<Sibuk, null>>();
   const [form, setForm] = useState<DataFormSoal>(awal);
   const [status, setStatus] = useState(statusAwal);
   const [sudahDisimpan, setSudahDisimpan] = useState(!baru);
   const [jejakTersimpan, setJejakTersimpan] = useState<string | null>(baru ? null : JSON.stringify(awal));
-  const [sibuk, setSibuk] = useState<Sibuk>(null);
+  const [sibukAksi, setSibuk] = useState<Sibuk>(null);
+  // Sibuk = aksi sedang berjalan ATAU halaman berikutnya masih dimuat (UX-4).
+  const sibuk: Sibuk = jenisPindah ?? sibukAksi;
   const sibukRef = useRef(false);
   type Pesan = { jenis: "ok" | "gagal"; teks: string; tautan?: string; daftar?: string[] };
   const [pesan, setPesanState] = useState<Pesan | null>(null);
@@ -207,7 +210,7 @@ export default function FormSoal({
       const terbuka = typeof r.json.idTerbuka === "string" ? `/studio-soal/soal/${r.json.idTerbuka}` : undefined;
       return setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Versi baru belum dibuat. Coba lagi."), tautan: terbuka });
     }
-    router.push(`/studio-soal/soal/${String(r.json.id)}`);
+    pindah("versi", (rt) => rt.push(`/studio-soal/soal/${String(r.json.id)}`));
   }
 
   const judul = baru && !sudahDisimpan ? "Tulis soal baru" : "Soal";
@@ -360,23 +363,35 @@ export default function FormSoal({
         }
       >
         {bolehEdit ? (
-          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={simpan} disabled={sibuk !== null}>
-            {sibuk === "simpan" ? "Menyimpan…" : "Simpan"}
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={simpan} disabled={sibuk !== null}
+            aria-busy={sibuk === "simpan"}>
+            <TeksSibuk sibuk={sibuk === "simpan"} teks="Menyimpan…">
+              Simpan
+            </TeksSibuk>
           </Button>
         ) : null}
         {bolehEdit && bisaAjukanSendiri ? (
-          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={ajukan} disabled={sibuk !== null}>
-            {sibuk === "ajukan" ? "Mengirim…" : "Kirim untuk dicek"}
+          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={ajukan} disabled={sibuk !== null}
+            aria-busy={sibuk === "ajukan"}>
+            <TeksSibuk sibuk={sibuk === "ajukan"} teks="Mengirim…">
+              Kirim untuk dicek
+            </TeksSibuk>
           </Button>
         ) : null}
         {status === "diajukan" && ditugaskan && !(stimulus && stimulus.status === "diajukan") ? (
-          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={tarik} disabled={sibuk !== null}>
-            {sibuk === "tarik" ? "Membatalkan…" : "Batalkan kirim"}
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={tarik} disabled={sibuk !== null}
+            aria-busy={sibuk === "tarik"}>
+            <TeksSibuk sibuk={sibuk === "tarik"} teks="Membatalkan…">
+              Batalkan kirim
+            </TeksSibuk>
           </Button>
         ) : null}
         {status === "terpublikasi" && ditugaskan ? (
-          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={versiBaru} disabled={sibuk !== null}>
-            {sibuk === "versi" ? "Membuat…" : "Buat versi baru"}
+          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={versiBaru} disabled={sibuk !== null}
+            aria-busy={sibuk === "versi"}>
+            <TeksSibuk sibuk={sibuk === "versi"} teks="Membuat…">
+              Buat versi baru
+            </TeksSibuk>
           </Button>
         ) : null}
       </BilahAksi>

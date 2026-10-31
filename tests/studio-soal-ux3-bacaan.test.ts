@@ -90,7 +90,7 @@ describe("C — statis", () => {
   });
 
   it("satu tombol Simpan (menyimpan semua), kartu baru, buang kartu, peringatan menutup halaman", () => {
-    assert.match(formStimulus, /"Menyimpan…" : "Simpan"\}/);
+    assert.match(formStimulus, /teks="Menyimpan…">\s*Simpan\s*</);
     assert.match(formStimulus, /\+ Tambah soal/);
     assert.match(formStimulus, /<PenjagaKeluar adaPerubahan=/);
     assert.match(baca("components/studio-soal/PenjagaKeluar.tsx"), /beforeunload/);

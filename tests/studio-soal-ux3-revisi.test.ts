@@ -130,8 +130,8 @@ describe("K2 — bilah aksi ringkas", () => {
   it("label ringkas: Simpan & Kirim untuk dicek; jumlah soal di keterangan, bukan di label", () => {
     for (const isi of [stimulus, soal]) {
       assert.match(isi, /<BilahAksi/);
-      assert.match(isi, /"Menyimpan…" : "Simpan"\}/);
-      assert.match(isi, /"Mengirim…" : "Kirim untuk dicek"\}/);
+      assert.match(isi, /teks="Menyimpan…">\s*Simpan\s*</);
+      assert.match(isi, /teks="Mengirim…">\s*Kirim untuk dicek\s*</);
     }
     assert.doesNotMatch(stimulus, /Kirim bacaan \+ \$\{soalAkanDikirim\} soal untuk dicek/);
     assert.match(stimulus, /Bacaan \+ \{soalAkanDikirim\} soal/);

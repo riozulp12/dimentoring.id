@@ -1,14 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Button from "@/components/ui/Button";
+import MaskotLoading from "@/components/ui/MaskotLoading";
 import Modal from "@/components/ui/Modal";
+import TeksSibuk from "@/components/ui/TeksSibuk";
 import { buttonClassName } from "@/components/ui/buttonClassName";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
-import { CHIP, pilihan } from "@/components/studio-soal/gaya";
+import { CHIP, pilihan, tombolIkon } from "@/components/studio-soal/gaya";
+import { IkonChevron } from "@/components/studio-soal/Ikon";
 import { panggilApi } from "@/components/studio-soal/klien";
+import { useNavigasiSibuk } from "@/components/studio-soal/useNavigasiSibuk";
 import { alasanTidakBisaHapus, tampilkanTombolHapus } from "@/lib/shared/studio-soal/hapusDraf";
 import {
   BATAS_KIRIM,
@@ -27,6 +30,7 @@ import {
   petaStatusBacaan,
   pilihSemua,
   ringkasHasilKirim,
+  ringkasStatus,
   susunDaftar,
   teksJumlah,
   uraiKunci,
@@ -236,14 +240,18 @@ export default function StudioSoalMentor({
   /** "soal:<id>" / "bacaan:<id>" -> alasan pertama isi belum lengkap (server, lib/mentor/studioSoal.ts). */
   belumLengkap?: Record<string, string>;
 }) {
-  const router = useRouter();
+  const { jenisPindah, pindah } = useNavigasiSibuk<"kirim">();
   const [filter, setFilter] = useState<FilterStatus>("semua");
+  /** Subtes yang kartunya dilipat (UX-4). Awalnya semua terbuka. */
+  const [tertutup, setTertutup] = useState<Set<string>>(new Set());
   /** Kunci "soal:<id>" / "bacaan:<id>". */
   const [terpilih, setTerpilih] = useState<Set<string>>(new Set());
   // Status setelah dikirim di halaman ini (sebelum daftar selesai disegarkan). Id soal & bacaan sama-sama UUID.
   const [statusLokal, setStatusLokal] = useState<Map<string, string>>(new Map());
   const [konfirmasi, setKonfirmasi] = useState(false);
   const [proses, setProses] = useState<{ ke: number; dari: number } | null>(null);
+  // Sibuk mengirim, atau daftar masih dimuat ulang sesudahnya (UX-4).
+  const sedangKirim = proses !== null || jenisPindah !== null;
   const [ringkasan, setRingkasan] = useState<RingkasanKirim | null>(null);
   const sibukRef = useRef(false);
   const ringkasanRef = useRef<HTMLDivElement | null>(null);
@@ -337,12 +345,20 @@ export default function StudioSoalMentor({
     }
     sibukRef.current = false;
     setProses(null);
-    setKonfirmasi(false);
-    setTerpilih(new Set());
-    setRingkasan(ringkasHasilKirim(hasil));
-    router.refresh();
-    requestAnimationFrame(() => ringkasanRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+    // Jendela tetap terbuka ("Mengirim…") sampai daftar terbaru selesai dimuat;
+    // state di dalam transition diterapkan bersama data baru.
+    pindah("kirim", (r) => {
+      setKonfirmasi(false);
+      setTerpilih(new Set());
+      setRingkasan(ringkasHasilKirim(hasil));
+      r.refresh();
+    });
   }
+
+  // Gulir ke ringkasan hasil begitu tampil (sesudah daftar terbaru dimuat).
+  useEffect(() => {
+    if (ringkasan) ringkasanRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [ringkasan]);
 
   const pilihUntuk = (kunci: string): Pilih => ({
     boleh: boleh(kunci),
@@ -423,17 +439,44 @@ export default function StudioSoalMentor({
             </div>
           </div>
 
-          {kelompok.map((k) => (
-            <BagianSubtes
-              key={k.subtesId}
-              k={k}
-              filter={filter}
-              bacaan={bacaanDi(k.subtesId)}
-              terpilih={pilihanSah}
-              setTerpilih={setTerpilih}
-              pilihUntuk={pilihUntuk}
-            />
-          ))}
+          <div className="flex flex-col gap-3">
+            {kelompok.length > 1 ? (
+              <div className="flex justify-end gap-3 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setTertutup(new Set(kelompok.map((k) => k.subtesId)))}
+                  disabled={tertutup.size === kelompok.length}
+                  className={TAUTAN_KECIL}
+                >
+                  Tutup semua
+                </button>
+                <span className="text-subtle" aria-hidden="true">
+                  ·
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTertutup(new Set())}
+                  disabled={tertutup.size === 0}
+                  className={TAUTAN_KECIL}
+                >
+                  Buka semua
+                </button>
+              </div>
+            ) : null}
+            {kelompok.map((k) => (
+              <BagianSubtes
+                key={k.subtesId}
+                k={k}
+                filter={filter}
+                bacaan={bacaanDi(k.subtesId)}
+                terpilih={pilihanSah}
+                setTerpilih={setTerpilih}
+                pilihUntuk={pilihUntuk}
+                terbuka={!tertutup.has(k.subtesId)}
+                onBukaTutup={() => setTertutup((prev) => bukaTutup(prev, k.subtesId))}
+              />
+            ))}
+          </div>
         </>
       )}
 
@@ -489,7 +532,7 @@ export default function StudioSoalMentor({
         </div>
       ) : null}
 
-      <Modal open={konfirmasi} onClose={() => (proses ? undefined : setKonfirmasi(false))} labelledBy={idJudulKirim}>
+      <Modal open={konfirmasi} onClose={() => (sedangKirim ? undefined : setKonfirmasi(false))} labelledBy={idJudulKirim}>
         <div className="flex flex-col gap-4">
           <h2 id={idJudulKirim} className="pr-8 text-lg font-medium text-black">Kirim {teksPilihan} untuk dicek?</h2>
           <p className="text-sm text-black">
@@ -502,23 +545,43 @@ export default function StudioSoalMentor({
               soalnya tidak terkirim.
             </p>
           ) : null}
-          {proses ? (
-            <p className="text-sm text-muted" aria-live="polite">
-              Mengirim {proses.ke} dari {proses.dari}…
-            </p>
-          ) : null}
+          <p className="text-sm text-muted" aria-live="polite">
+            {proses ? (
+              <span className="inline-flex items-center gap-1.5">
+                <MaskotLoading size="xs" />
+                Mengirim {proses.ke} dari {proses.dari}…
+              </span>
+            ) : jenisPindah ? (
+              <span className="inline-flex items-center gap-1.5">
+                <MaskotLoading size="xs" />
+                Memperbarui daftar…
+              </span>
+            ) : null}
+          </p>
           <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setKonfirmasi(false)} disabled={proses !== null}>
+            <Button variant="secondary" size="sm" onClick={() => setKonfirmasi(false)} disabled={sedangKirim}>
               Batal
             </Button>
-            <Button size="sm" onClick={kirimSemua} disabled={proses !== null}>
-              {proses ? "Mengirim…" : "Ya, kirim"}
+            <Button size="sm" onClick={kirimSemua} disabled={sedangKirim} aria-busy={sedangKirim}>
+              <TeksSibuk sibuk={sedangKirim} teks="Mengirim…">
+                Ya, kirim
+              </TeksSibuk>
             </Button>
           </div>
         </div>
       </Modal>
     </div>
   );
+}
+
+const TAUTAN_KECIL =
+  "font-medium text-primary hover:underline disabled:cursor-default disabled:text-muted disabled:no-underline";
+
+/** Balik keadaan lipat satu subtes (ada di set = tertutup). */
+function bukaTutup(prev: ReadonlySet<string>, subtesId: string): Set<string> {
+  const baru = new Set(prev);
+  if (!baru.delete(subtesId)) baru.add(subtesId);
+  return baru;
 }
 
 function BagianSubtes({
@@ -528,6 +591,8 @@ function BagianSubtes({
   terpilih,
   setTerpilih,
   pilihUntuk,
+  terbuka,
+  onBukaTutup,
 }: {
   k: KelompokSubtes;
   filter: FilterStatus;
@@ -535,7 +600,11 @@ function BagianSubtes({
   terpilih: ReadonlySet<string>;
   setTerpilih: (fn: (prev: Set<string>) => Set<string>) => void;
   pilihUntuk: (kunci: string) => Pilih;
+  /** Isi kartu terlihat (UX-4: kartu bisa dilipat). */
+  terbuka: boolean;
+  onBukaTutup: () => void;
 }) {
+  const idIsi = useId();
   const { grup, mandiri } = susunDaftar(k.soal, bacaan, filter);
   // Urutan yang terlihat: bacaan, soal di dalamnya, lalu soal biasa — untuk "Pilih semua".
   const ringkasTerlihat = [
@@ -544,50 +613,85 @@ function BagianSubtes({
   ].map((id) => ({ id, boleh: pilihUntuk(id).boleh }));
   const adaBoleh = ringkasTerlihat.some((t) => t.boleh);
   const kosong = k.soal.length === 0 && bacaan.length === 0;
+  const ringkas = ringkasStatus(k.soal);
+  // Pilihan tetap tersimpan saat kartu dilipat; jumlahnya terlihat di kepala kartu.
+  const nDipilih = [...k.soal.map((s) => kunciItem("soal", s.id)), ...bacaan.map((b) => kunciItem("bacaan", b.id))].filter(
+    (x) => terpilih.has(x),
+  ).length;
 
   return (
     <section className="flex flex-col gap-3 rounded-[20px] border-[0.8px] border-line bg-white px-5 py-4 sm:px-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-baseline gap-3">
+      {/* Kepala kartu: seluruh area bisa diketuk untuk buka/tutup, kecuali tautan/tombol di dalamnya.
+          HP: [judul | chevron], lalu "+ Buat soal" selebar kartu. sm ke atas: [judul | + Buat soal | chevron]. */}
+      <div
+        className="grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
+        onClick={(e) => {
+          if (!(e.target as HTMLElement).closest("a, button")) onBukaTutup();
+        }}
+      >
+        <div className="col-start-1 row-start-1 flex min-w-0 flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-3">
           <h2 className="text-base font-medium text-black sm:text-lg">{k.nama}</h2>
-          <p className="shrink-0 text-sm text-muted">
+          <p className="text-sm text-muted">
             {k.soal.length} soal{bacaan.length > 0 ? ` · ${bacaan.length} bacaan` : ""}
+            {ringkas ? <span className="text-xs"> ({ringkas})</span> : null}
+            {nDipilih > 0 ? <span className="text-xs font-medium text-primary"> · {nDipilih} dipilih</span> : null}
           </p>
         </div>
-        <Link href={`/studio-soal/buat?subtes=${k.subtesId}`} className={buttonClassName({ size: "sm" })}>
+        <Link
+          href={`/studio-soal/buat?subtes=${k.subtesId}`}
+          className={buttonClassName({
+            size: "sm",
+            className: "col-span-2 row-start-2 w-full sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:w-auto",
+          })}
+        >
           + Buat soal
         </Link>
+        <button
+          type="button"
+          onClick={onBukaTutup}
+          aria-expanded={terbuka}
+          aria-controls={idIsi}
+          aria-label={`${terbuka ? "Tutup" : "Buka"} ${k.nama}`}
+          title={terbuka ? "Tutup" : "Buka"}
+          className={`${tombolIkon()} col-start-2 row-start-1 size-11 sm:col-start-3`}
+        >
+          <IkonChevron
+            className={["size-5 transition-transform duration-150 motion-reduce:transition-none", terbuka ? "rotate-180" : ""].join(" ")}
+          />
+        </button>
       </div>
-      {kosong ? (
-        <p className="text-sm text-muted">Belum ada soal di subtes ini.</p>
-      ) : ringkasTerlihat.length === 0 ? (
-        <p className="text-sm text-muted">Tidak ada soal atau bacaan dengan status “{LABEL_FILTER[filter]}” di subtes ini.</p>
-      ) : (
-        <div className="flex flex-col gap-1">
-          {adaBoleh ? (
-            <KotakPilihSemua
-              keadaan={keadaanPilihSemua(terpilih, ringkasTerlihat)}
-              onChange={() => setTerpilih((prev) => pilihSemua(prev, ringkasTerlihat))}
-              label="Pilih semua yang bisa dikirim"
-            />
-          ) : null}
-          <ul className="flex flex-col divide-y divide-line">
-            {grup.map((g) => (
-              <GrupBacaanBaris
-                key={g.bacaan.id}
-                st={g.bacaan}
-                soal={g.soal}
-                ditugaskan
-                pilih={pilihUntuk(kunciItem("bacaan", g.bacaan.id))}
-                pilihSoal={(s) => pilihUntuk(kunciItem("soal", s.id))}
+      <div id={idIsi} hidden={!terbuka} className="flex flex-col gap-3">
+        {kosong ? (
+          <p className="text-sm text-muted">Belum ada soal di subtes ini.</p>
+        ) : ringkasTerlihat.length === 0 ? (
+          <p className="text-sm text-muted">Tidak ada soal atau bacaan dengan status “{LABEL_FILTER[filter]}” di subtes ini.</p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {adaBoleh ? (
+              <KotakPilihSemua
+                keadaan={keadaanPilihSemua(terpilih, ringkasTerlihat)}
+                onChange={() => setTerpilih((prev) => pilihSemua(prev, ringkasTerlihat))}
+                label="Pilih semua yang bisa dikirim"
               />
-            ))}
-            {mandiri.map((s) => (
-              <BarisSoal key={s.id} s={s} ditugaskan pilih={pilihUntuk(kunciItem("soal", s.id))} />
-            ))}
-          </ul>
-        </div>
-      )}
+            ) : null}
+            <ul className="flex flex-col divide-y divide-line">
+              {grup.map((g) => (
+                <GrupBacaanBaris
+                  key={g.bacaan.id}
+                  st={g.bacaan}
+                  soal={g.soal}
+                  ditugaskan
+                  pilih={pilihUntuk(kunciItem("bacaan", g.bacaan.id))}
+                  pilihSoal={(s) => pilihUntuk(kunciItem("soal", s.id))}
+                />
+              ))}
+              {mandiri.map((s) => (
+                <BarisSoal key={s.id} s={s} ditugaskan pilih={pilihUntuk(kunciItem("soal", s.id))} />
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

@@ -53,6 +53,17 @@ export function hitungPerStatus(soal: { status: string }[]): Record<FilterStatus
   return hasil;
 }
 
+/**
+ * Ringkasan status kecil di kepala kartu subtes (UX-4), mis. "3 draf · 1 sedang
+ * dicek". Hanya status yang ada isinya, urutan sama dengan filter. "" bila kosong.
+ */
+export function ringkasStatus(soal: { status: string }[]): string {
+  const n = hitungPerStatus(soal);
+  return FILTER_STATUS.filter((f) => f !== "semua" && n[f] > 0)
+    .map((f) => `${n[f]} ${LABEL_FILTER[f].toLowerCase()}`)
+    .join(" · ");
+}
+
 // ---------------------------------------------------------------------------
 // Boleh dikirim sendiri?
 // ---------------------------------------------------------------------------

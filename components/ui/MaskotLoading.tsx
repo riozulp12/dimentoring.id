@@ -8,9 +8,11 @@ import Mascot, { type MascotVariant } from "./Mascot";
  * (Assessment submit, Payment checkout, dst) — lihat pemakaian di sana.
  */
 
-export type MaskotLoadingSize = "sm" | "md" | "lg";
+/** xs = di dalam tombol kecil (size="sm"), tinggi tombol tidak berubah. */
+export type MaskotLoadingSize = "xs" | "sm" | "md" | "lg";
 
 const SIZE_CLASS: Record<MaskotLoadingSize, string> = {
+  xs: "h-5 w-auto",
   sm: "h-6 w-auto",
   md: "h-16 w-auto",
   lg: "h-32 w-auto",

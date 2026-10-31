@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type ReactNode, type SetStateAction } from "react";
 import Button from "@/components/ui/Button";
+import MaskotLoading from "@/components/ui/MaskotLoading";
+import TeksSibuk from "@/components/ui/TeksSibuk";
 import InputField from "@/components/ui/InputField";
 import SelectField from "@/components/ui/SelectField";
 import KartuSoalBacaan, { cekKartuUntukKirim, type AksiKartu, type JenisAksiKartu } from "@/components/studio-soal/KartuSoalBacaan";
@@ -12,6 +13,7 @@ import { IkonChevron, IkonTongSampah } from "@/components/studio-soal/Ikon";
 import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
 import TabTulisPratinjau, { type TabForm } from "@/components/studio-soal/TabTulisPratinjau";
 import PenjagaKeluar from "@/components/studio-soal/PenjagaKeluar";
+import { useNavigasiSibuk } from "@/components/studio-soal/useNavigasiSibuk";
 import StimulusPratinjau from "@/components/studio-soal/StimulusPratinjau";
 import TombolHapusDraf from "@/components/studio-soal/TombolHapusDraf";
 import { KARTU, CHIP, KOLOM_PRATINJAU, TOMBOL_KECIL, inputKecil, pesanKelas, tombolIkon } from "@/components/studio-soal/gaya";
@@ -132,12 +134,14 @@ export default function FormStimulus({
   /** Bila diisi: buka satu kartu soal baru dengan id ini (bacaan baru, atau ?tambah=1). */
   idKartuBaru?: string | null;
 }) {
-  const router = useRouter();
+  const { jenisPindah, pindah } = useNavigasiSibuk<Exclude<Sibuk, null>>();
   const [form, setForm] = useState<DataFormStimulus>(awal);
   const [status, setStatus] = useState(statusAwal);
   const [sudahDisimpan, setSudahDisimpan] = useState(!baru);
   const [jejakTersimpan, setJejakTersimpan] = useState<string | null>(baru ? null : JSON.stringify(awal));
-  const [sibuk, setSibuk] = useState<Sibuk>(null);
+  const [sibukAksi, setSibuk] = useState<Sibuk>(null);
+  // Sibuk = aksi sedang berjalan ATAU halaman berikutnya masih dimuat (UX-4).
+  const sibuk: Sibuk = jenisPindah ?? sibukAksi;
   const sibukRef = useRef(false);
   const [proses, setProses] = useState<{ ke: number; dari: number } | null>(null);
   /** Pesan hasil aksi; `daftar` = rincian (mis. per soal yang belum lengkap). */
@@ -316,7 +320,7 @@ export default function FormStimulus({
     setSudahPernahDiajukan(true);
     setKartuSoal((l) => l.map((k) => (k.jejakTersimpan !== null && bisaDiubah(k.status) ? { ...k, status: "diajukan" } : k)));
     setPesan({ jenis: "ok", teks: String(r.json.pesan ?? "Bacaan dan soalnya sudah dikirim untuk dicek.") });
-    router.refresh();
+    pindah("ajukan", (rt) => rt.refresh());
   }
 
   async function tarik() {
@@ -326,14 +330,14 @@ export default function FormStimulus({
     setStatus("draf");
     setKartuSoal((l) => l.map((k) => (k.status === "diajukan" ? { ...k, status: "draf" } : k)));
     setPesan({ jenis: "ok", teks: String(r.json.pesan ?? "Kiriman dibatalkan.") });
-    router.refresh();
+    pindah("tarik", (rt) => rt.refresh());
   }
 
   async function versiBaru() {
     if (sibukRef.current) return;
     const r = await jalankan("versi", `/api/studio-soal/stimulus/${id}/versi-baru`, "POST");
     if (!r.ok) return setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Versi baru belum dibuat. Coba lagi.") });
-    router.push(`/studio-soal/stimulus/${String(r.json.id)}`);
+    pindah("versi", (rt) => rt.push(`/studio-soal/stimulus/${String(r.json.id)}`));
   }
 
   // ---------------------------------------------------------------- aksi per soal
@@ -626,7 +630,8 @@ export default function FormStimulus({
       <BilahAksi
         keterangan={
           sibuk === "simpan" && proses ? (
-            <span className="text-black">
+            <span className="inline-flex items-center gap-1.5 text-black">
+              <MaskotLoading size="xs" />
               Menyimpan {proses.ke} dari {proses.dari}…
             </span>
           ) : adaYangBisaDisimpan || bolehEdit ? (
@@ -658,8 +663,11 @@ export default function FormStimulus({
         }
       >
         {adaYangBisaDisimpan ? (
-          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={simpan} disabled={sibuk !== null}>
-            {sibuk === "simpan" ? "Menyimpan…" : "Simpan"}
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={simpan} disabled={sibuk !== null}
+            aria-busy={sibuk === "simpan"}>
+            <TeksSibuk sibuk={sibuk === "simpan"} teks="Menyimpan…">
+              Simpan
+            </TeksSibuk>
           </Button>
         ) : null}
         {bolehEdit ? (
@@ -668,19 +676,28 @@ export default function FormStimulus({
             className={KELAS_TOMBOL_BILAH}
             onClick={ajukan}
             disabled={sibuk !== null}
+            aria-busy={sibuk === "ajukan"}
             title={`Kirim bacaan dan ${soalAkanDikirim} soalnya untuk dicek`}
           >
-            {sibuk === "ajukan" ? "Mengirim…" : "Kirim untuk dicek"}
+            <TeksSibuk sibuk={sibuk === "ajukan"} teks="Mengirim…">
+              Kirim untuk dicek
+            </TeksSibuk>
           </Button>
         ) : null}
         {status === "diajukan" && ditugaskan ? (
-          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={tarik} disabled={sibuk !== null}>
-            {sibuk === "tarik" ? "Membatalkan…" : "Batalkan kirim"}
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={tarik} disabled={sibuk !== null}
+            aria-busy={sibuk === "tarik"}>
+            <TeksSibuk sibuk={sibuk === "tarik"} teks="Membatalkan…">
+              Batalkan kirim
+            </TeksSibuk>
           </Button>
         ) : null}
         {status === "terpublikasi" && ditugaskan ? (
-          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={versiBaru} disabled={sibuk !== null}>
-            {sibuk === "versi" ? "Membuat…" : "Versi baru bacaan"}
+          <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={versiBaru} disabled={sibuk !== null}
+            aria-busy={sibuk === "versi"}>
+            <TeksSibuk sibuk={sibuk === "versi"} teks="Membuat…">
+              Versi baru bacaan
+            </TeksSibuk>
           </Button>
         ) : null}
       </BilahAksi>

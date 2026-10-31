@@ -1,12 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
+import TeksSibuk from "@/components/ui/TeksSibuk";
 import { IkonTongSampah } from "@/components/studio-soal/Ikon";
 import { tombolIkon } from "@/components/studio-soal/gaya";
 import { panggilApi } from "@/components/studio-soal/klien";
+import { useNavigasiSibuk } from "@/components/studio-soal/useNavigasiSibuk";
 import type { ObjekStudio } from "@/lib/shared/studio-soal/formSoal";
 
 /**
@@ -44,10 +45,12 @@ export default function TombolHapusDraf({
   /** Bila ada: dipanggil sesudah terhapus, menggantikan pindah halaman (mis. kartu soal dibuang dari daftar). */
   onTerhapus?: () => void;
 }) {
-  const router = useRouter();
+  const { jenisPindah, pindah } = useNavigasiSibuk<"hapus">();
   const [buka, setBuka] = useState(false);
   const idJudul = useId();
-  const [sibuk, setSibuk] = useState(false);
+  const [menghapus, setSibuk] = useState(false);
+  // Tetap sibuk sampai halaman tujuan / data baru selesai dimuat (UX-4).
+  const sibuk = menghapus || jenisPindah !== null;
   const [gagal, setGagal] = useState<string | null>(null);
   const nama = objek === "soal" ? "soal" : "bacaan";
 
@@ -67,10 +70,19 @@ export default function TombolHapusDraf({
       setGagal(String(r.json.error ?? "Draf belum terhapus. Coba lagi."));
       return;
     }
-    setBuka(false);
-    if (onTerhapus) onTerhapus();
-    else if (sesudahHapus) router.push(sesudahHapus);
-    router.refresh();
+    if (onTerhapus) {
+      setBuka(false);
+      onTerhapus();
+      pindah("hapus", (r) => r.refresh());
+      return;
+    }
+    // Modal tetap terbuka dengan "Menghapus…" sampai halaman berikutnya muncul;
+    // setBuka di dalam transition ikut diterapkan bersama halaman baru.
+    pindah("hapus", (r) => {
+      setBuka(false);
+      if (sesudahHapus) r.push(sesudahHapus);
+      r.refresh();
+    });
   }
 
   return (
@@ -112,8 +124,10 @@ export default function TombolHapusDraf({
                 <Button variant="secondary" size="sm" onClick={tutup} disabled={sibuk}>
                   Batal
                 </Button>
-                <Button size="sm" onClick={hapus} disabled={sibuk}>
-                  {sibuk ? "Menghapus…" : "Ya, hapus"}
+                <Button size="sm" onClick={hapus} disabled={sibuk} aria-busy={sibuk}>
+                  <TeksSibuk sibuk={sibuk} teks="Menghapus…">
+                    Ya, hapus
+                  </TeksSibuk>
                 </Button>
               </div>
             </>

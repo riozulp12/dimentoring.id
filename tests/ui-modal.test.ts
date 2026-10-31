@@ -46,8 +46,21 @@ describe("Modal — aksesibilitas", () => {
     assert.match(dialog, /aria-labelledby=\{labelledBy\}/);
     assert.match(dialog, /aria-label=\{labelledBy \? undefined : label\}/);
     assert.doesNotMatch(dialog, /aria-hidden/);
-    // Tampilan jendela tidak berubah.
-    assert.match(dialog, /relative max-h-\[85vh\] w-full max-w-md overflow-y-auto rounded-\[24px\] bg-white p-6/);
+    // Tampilan jendela sama; tinggi maksimum mengikuti layar yang terlihat (HP landscape).
+    assert.match(dialog, /relative max-h-\[calc\(100dvh-2rem\)\] w-full max-w-md overflow-y-auto rounded-\[24px\] bg-white p-6/);
+  });
+
+  it("dirender lewat portal ke document.body, hanya di browser (UX-4)", () => {
+    assert.match(modal, /import \{ createPortal \} from "react-dom";/);
+    assert.match(modal, /return createPortal\(/);
+    assert.match(modal, /document\.body,\s*\);/);
+    assert.match(modal, /useSyncExternalStore\(/);
+    assert.match(modal, /if \(!open \|\| !diBrowser\) return null;/);
+  });
+
+  it("lapisan modal di atas navbar/sidebar (z-50), di bawah keyboard MathLive (105)", () => {
+    const lapisan = tagDengan(modal, "fixed inset-0");
+    assert.match(lapisan, /z-\[60\]/);
   });
 
   it("Esc tetap menutup; tidak ada focus trap ketat", () => {

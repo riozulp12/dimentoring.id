@@ -1,6 +1,17 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+
+const tanpaLangganan = () => () => {};
+/** true hanya di browser (sesudah hidrasi); false saat render server. */
+function useDiBrowser(): boolean {
+  return useSyncExternalStore(
+    tanpaLangganan,
+    () => true,
+    () => false,
+  );
+}
 
 /**
  * Jendela modal bersama.
@@ -15,6 +26,18 @@ import { useEffect, useRef, type ReactNode } from "react";
  * tadi aktif (tombol pemicu) bila masih ada. Sengaja TANPA focus trap ketat —
  * elemen di luar jendela (mis. keyboard rumus MathLive di document.body)
  * harus tetap bisa diketuk.
+ *
+ * Portal (UX-4): isi modal dirender ke document.body lewat createPortal.
+ * Elemen position:fixed di dalam leluhur ber-backdrop-filter/transform/filter
+ * menempel ke leluhur itu, bukan ke layar — dulu modal hapus di BilahAksi
+ * (sticky + backdrop-blur) hanya menutupi bilah aksi. Dengan portal, modal
+ * selalu menutupi seluruh layar. Event React tetap merambat lewat pohon
+ * komponen seperti biasa. Saat render server / sebelum hidrasi tidak ada apa
+ * pun yang dirender (modal selalu dibuka oleh aksi pengguna).
+ *
+ * Lapisan: z-[60] — di atas navbar/sidebar (z-50) dan bilah aksi (z-10),
+ * di bawah keyboard layar MathLive (z-index bawaan 105) supaya keyboard rumus
+ * tetap bisa diketuk saat editor rumus terbuka.
  */
 export default function Modal({
   open,
@@ -32,6 +55,7 @@ export default function Modal({
   label?: string;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const diBrowser = useDiBrowser();
 
   useEffect(() => {
     if (!open) return;
@@ -43,19 +67,19 @@ export default function Modal({
   }, [open, onClose]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !diBrowser) return;
     const sebelumnya = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = dialogRef.current;
     if (dialog && !dialog.contains(document.activeElement)) dialog.focus({ preventScroll: true });
     return () => {
       if (sebelumnya?.isConnected) sebelumnya.focus({ preventScroll: true });
     };
-  }, [open]);
+  }, [open, diBrowser]);
 
-  if (!open) return null;
+  if (!open || !diBrowser) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
       <div
         ref={dialogRef}
@@ -65,7 +89,7 @@ export default function Modal({
         aria-label={labelledBy ? undefined : label}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
-        className="modal-content-scrollable relative max-h-[85vh] w-full max-w-md overflow-y-auto rounded-[24px] bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.2)] outline-none sm:p-8"
+        className="modal-content-scrollable relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-[24px] bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.2)] outline-none sm:p-8"
       >
         <button
           type="button"
@@ -79,6 +103,7 @@ export default function Modal({
         </button>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
