@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { getPendaftaranKeluar, getProgresSesiPerPendaftaran } from "@/lib/shared/progresSesiData";
 
 /**
  * Data layer "Siswa Saya" (Mentor) — PRD Bagian 7.5 & Bagian 13 (enrollments,
@@ -53,7 +54,7 @@ function firstOrNull<T>(value: T | T[] | null): T | null {
 export async function getSiswaBinaanGrouped(mentorId: string): Promise<SiswaBinaanGroup[]> {
   const { data: kelasList, error: kelasError } = await supabaseServer
     .from("kelas")
-    .select("id, nama")
+    .select("id, nama, jumlah_sesi")
     .eq("mentor_id", mentorId)
     .order("nama", { ascending: true });
 
@@ -66,7 +67,7 @@ export async function getSiswaBinaanGrouped(mentorId: string): Promise<SiswaBina
   const kelasIds = kelasList.map((k) => k.id as string);
   const { data: enrollmentRows, error: enrollmentError } = await supabaseServer
     .from("enrollments")
-    .select("kelas_id, progres_persen, users:user_id(id, nama, avatar_url)")
+    .select("id, kelas_id, users:user_id(id, nama, avatar_url)")
     .in("kelas_id", kelasIds)
     .eq("status_pembayaran", "lunas");
 
@@ -76,14 +77,29 @@ export async function getSiswaBinaanGrouped(mentorId: string): Promise<SiswaBina
     return kelasList.map((k) => ({ kelasId: k.id as string, kelasNama: k.nama as string, siswa: [] }));
   }
 
-  type Row = { kelas_id: string; progres_persen: number; users: UserJoin | UserJoin[] | null };
+  type Row = { id: string; kelas_id: string; users: UserJoin | UserJoin[] | null };
+
+  // Progress = Progress Kehadiran (lib/shared/progresSesi.ts), sama dengan
+  // dashboard & halaman kelas. Siswa yang sudah resmi keluar tidak ditampilkan.
+  const rows = (enrollmentRows ?? []) as unknown as Row[];
+  const jumlahSesiByKelas = new Map(kelasList.map((k) => [k.id as string, (k.jumlah_sesi as number | null) ?? 0]));
+  const keluar = await getPendaftaranKeluar(rows.map((row) => row.id));
+  const aktif = rows.filter((row) => !keluar.has(row.id));
+  const progresByEnrollment = await getProgresSesiPerPendaftaran(
+    aktif.map((row) => ({ id: row.id, jumlahSesi: jumlahSesiByKelas.get(row.kelas_id) ?? 0 })),
+  );
 
   const byKelas = new Map<string, SiswaBinaanItem[]>();
-  for (const row of (enrollmentRows ?? []) as unknown as Row[]) {
+  for (const row of aktif) {
     const user = firstOrNull(row.users);
     if (!user) continue;
     const list = byKelas.get(row.kelas_id) ?? [];
-    list.push({ userId: user.id, nama: user.nama, avatarUrl: user.avatar_url, progresPersen: row.progres_persen });
+    list.push({
+      userId: user.id,
+      nama: user.nama,
+      avatarUrl: user.avatar_url,
+      progresPersen: progresByEnrollment.get(row.id)?.persen ?? 0,
+    });
     byKelas.set(row.kelas_id, list);
   }
 
@@ -108,7 +124,7 @@ export async function getSiswaBinaanDetail(
 ): Promise<SiswaBinaanDetail | null> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("progres_persen, kelas:kelas_id(id, nama, mentor_id), users:user_id(id, nama, avatar_url)")
+    .select("id, kelas:kelas_id(id, nama, mentor_id, jumlah_sesi), users:user_id(id, nama, avatar_url)")
     .eq("user_id", siswaUserId)
     .eq("kelas_id", kelasId)
     .eq("status_pembayaran", "lunas")
@@ -120,11 +136,15 @@ export async function getSiswaBinaanDetail(
   }
   if (!data) return null;
 
-  type KelasJoin = { id: string; nama: string; mentor_id: string | null };
+  type KelasJoin = { id: string; nama: string; mentor_id: string | null; jumlah_sesi: number | null };
   const kelas = firstOrNull(data.kelas as KelasJoin | KelasJoin[] | null);
   const user = firstOrNull(data.users as UserJoin | UserJoin[] | null);
   if (!kelas || !user) return null;
   if (kelas.mentor_id !== mentorId) return null;
+
+  const progres = (await getProgresSesiPerPendaftaran([{ id: data.id as string, jumlahSesi: kelas.jumlah_sesi }])).get(
+    data.id as string,
+  );
 
   return {
     userId: user.id,
@@ -132,7 +152,7 @@ export async function getSiswaBinaanDetail(
     avatarUrl: user.avatar_url,
     kelasId: kelas.id,
     kelasNama: kelas.nama,
-    progresPersen: data.progres_persen as number,
+    progresPersen: progres?.persen ?? 0,
   };
 }
 

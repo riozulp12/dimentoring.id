@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { getProgresSesiPerPendaftaran } from "@/lib/shared/progresSesiData";
 
 /**
  * Data layer "Manajemen Siswa" (Admin) — PRD Bagian 5 (User Roles) & Bagian
@@ -93,9 +94,11 @@ export interface SiswaKelasItem {
 interface SiswaKelasRow {
   id: string;
   status_pembayaran: SiswaKelasItem["statusPembayaran"];
-  progres_persen: number;
   sumber: string | null;
-  kelas: { id: string; nama: string } | { id: string; nama: string }[] | null;
+  kelas:
+    | { id: string; nama: string; jumlah_sesi: number | null }
+    | { id: string; nama: string; jumlah_sesi: number | null }[]
+    | null;
 }
 
 function firstOrNull<T>(value: T | T[] | null): T | null {
@@ -107,7 +110,7 @@ function firstOrNull<T>(value: T | T[] | null): T | null {
 export async function getSiswaKelasDiikuti(userId: string): Promise<SiswaKelasItem[]> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, status_pembayaran, progres_persen, sumber, kelas:kelas_id(id, nama)")
+    .select("id, status_pembayaran, sumber, kelas:kelas_id(id, nama, jumlah_sesi)")
     .eq("user_id", userId)
     .order("tanggal_daftar", { ascending: false });
 
@@ -116,7 +119,13 @@ export async function getSiswaKelasDiikuti(userId: string): Promise<SiswaKelasIt
     return [];
   }
 
-  return ((data ?? []) as unknown as SiswaKelasRow[])
+  // Progress = Progress Kehadiran (lib/shared/progresSesi.ts), bukan progres materi.
+  const rows = (data ?? []) as unknown as SiswaKelasRow[];
+  const progresByEnrollment = await getProgresSesiPerPendaftaran(
+    rows.map((row) => ({ id: row.id, jumlahSesi: firstOrNull(row.kelas)?.jumlah_sesi ?? 0 })),
+  );
+
+  return rows
     .map((row) => {
       const kelas = firstOrNull(row.kelas);
       if (!kelas) return null;
@@ -125,7 +134,7 @@ export async function getSiswaKelasDiikuti(userId: string): Promise<SiswaKelasIt
         kelasId: kelas.id,
         nama: kelas.nama,
         statusPembayaran: row.status_pembayaran,
-        progresPersen: row.progres_persen,
+        progresPersen: progresByEnrollment.get(row.id)?.persen ?? 0,
         sumber: row.sumber === "manual" ? ("manual" as const) : ("checkout" as const),
       };
     })

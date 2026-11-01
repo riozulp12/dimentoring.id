@@ -4,6 +4,7 @@ import { useState } from "react";
 import Button from "@/components/ui/Button";
 import type { SesiRiwayat } from "@/lib/siswa/getKelasDetail";
 import type { StatusSesiEfektif } from "@/lib/shared/statusSesi";
+import { hitungProgresSesi } from "@/lib/shared/progresSesi";
 
 /**
  * Progress Kehadiran + prompt konfirmasi balik Siswa + riwayat sesi (PRD
@@ -105,7 +106,7 @@ export default function SesiKehadiranSection({
       <div className="h-2 w-full overflow-hidden rounded-full bg-[#F0F0F0]">
         <div
           className="h-full rounded-full bg-[#081EEA]"
-          style={{ width: `${jumlahSesi > 0 ? Math.min(100, (validCount / jumlahSesi) * 100) : 0}%` }}
+          style={{ width: `${hitungProgresSesi(validCount, jumlahSesi).persen}%` }}
         />
       </div>
 

@@ -2,7 +2,7 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
 import { formatJadwalSiswaTerdaftar } from "@/lib/shared/jadwalPilihan";
-import { hitungProgresSesi, hitungSesiTerkonfirmasi, type SesiStatusRow } from "@/lib/shared/progresSesi";
+import { getProgresSesiPerPendaftaran } from "@/lib/shared/progresSesiData";
 import {
   queryKelasKatalog,
   toCardPreviewList,
@@ -89,33 +89,18 @@ export async function getKelasSaya(userId: string): Promise<KelasSayaItem[]> {
   const rows = (data ?? []) as unknown as Row[];
   if (rows.length === 0) return [];
 
-  const { data: sesiData, error: sesiError } = await supabaseServer
-    .from("sesi_kelas")
-    .select("enrollment_id, dikonfirmasi_mentor, status_siswa")
-    .in(
-      "enrollment_id",
-      rows.map((row) => row.id),
-    );
-
-  if (sesiError) {
-    console.error("[getKelasSaya] query sesi_kelas failed:", sesiError);
-  }
-
-  const sesiByEnrollment = new Map<string, SesiStatusRow[]>();
-  for (const sesi of (sesiData ?? []) as unknown as (SesiStatusRow & { enrollment_id: string })[]) {
-    const list = sesiByEnrollment.get(sesi.enrollment_id) ?? [];
-    list.push(sesi);
-    sesiByEnrollment.set(sesi.enrollment_id, list);
-  }
+  const progresByEnrollment = await getProgresSesiPerPendaftaran(
+    rows.map((row) => {
+      const kelas = Array.isArray(row.kelas) ? row.kelas[0] : row.kelas;
+      return { id: row.id, jumlahSesi: kelas?.jumlah_sesi ?? 0 };
+    }),
+  );
 
   return rows
     .map((row) => {
       const kelas = Array.isArray(row.kelas) ? row.kelas[0] : row.kelas;
       if (!kelas) return null;
-      const progres = hitungProgresSesi(
-        hitungSesiTerkonfirmasi(sesiByEnrollment.get(row.id) ?? []),
-        kelas.jumlah_sesi ?? 0,
-      );
+      const progres = progresByEnrollment.get(row.id) ?? { persen: 0, selesai: false };
       return {
         id: kelas.id,
         nama: kelas.nama,

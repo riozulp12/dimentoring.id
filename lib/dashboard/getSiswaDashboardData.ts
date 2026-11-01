@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { getInfoBeasiswaEvent } from "@/lib/dashboard/getInfoBeasiswaEvent";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
 import { formatDeadline } from "@/lib/shared/formatDeadline";
+import { getProgresSesiPerPendaftaran } from "@/lib/shared/progresSesiData";
 import type {
   InfoBeasiswaItem,
   KelasTerdaftarItem,
@@ -165,7 +166,7 @@ async function getEnrollmentsWithKelas(userId: string): Promise<{
 }> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("progres_persen, kelas:kelas_id(nama, jadwal)")
+    .select("id, status_pembayaran, kelas:kelas_id(nama, jadwal, jumlah_sesi)")
     .eq("user_id", userId);
 
   if (error) {
@@ -174,13 +175,23 @@ async function getEnrollmentsWithKelas(userId: string): Promise<{
   }
 
   const rows = (data ?? []) as unknown as {
-    progres_persen: number;
-    kelas: { nama: string; jadwal: unknown } | null;
+    id: string;
+    status_pembayaran: string;
+    kelas: { nama: string; jadwal: unknown; jumlah_sesi: number | null } | null;
   }[];
 
-  const progressBelajar: ProgressBelajarItem[] = rows
-    .filter((r) => r.kelas)
-    .map((r) => ({ subtes: r.kelas!.nama, persen: r.progres_persen }));
+  // Progress = Progress Kehadiran (sesi terhitung / jumlah_sesi) — angka yang
+  // sama dengan halaman Kelas Saya & detail kelas (lib/shared/progresSesi.ts),
+  // BUKAN enrollments.progres_persen (progres materi). Hanya kelas yang sudah
+  // lunas (sama dengan Kelas Saya).
+  const kelasLunas = rows.filter((r) => r.kelas && r.status_pembayaran === "lunas");
+  const progresByEnrollment = await getProgresSesiPerPendaftaran(
+    kelasLunas.map((r) => ({ id: r.id, jumlahSesi: r.kelas!.jumlah_sesi })),
+  );
+  const progressBelajar: ProgressBelajarItem[] = kelasLunas.map((r) => ({
+    subtes: r.kelas!.nama,
+    persen: progresByEnrollment.get(r.id)?.persen ?? 0,
+  }));
 
   const kelasTerdaftar: KelasTerdaftarItem[] = rows
     .filter((r) => r.kelas)
