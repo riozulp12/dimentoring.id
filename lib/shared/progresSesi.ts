@@ -2,29 +2,42 @@
  * Progress Kehadiran (PRD 7.5.5 FR-A4, BR-34) — SATU definisi "sesi
  * terkonfirmasi" + rumus persentasenya. Dipakai di SEMUA tempat yang
  * menampilkan progress: Dashboard Siswa & Mentor, Kelas Saya Siswa, Detail
- * Kelas Siswa, Siswa Binaan Mentor, dan Manajemen Siswa Admin — supaya
- * angkanya selalu identik (mis. 2 dari 10 sesi = 20% di mana pun).
+ * Kelas Siswa, Kelas Saya Mentor ("Sesi X dari Y"), Siswa Binaan Mentor, dan
+ * Manajemen Siswa Admin — supaya angkanya selalu identik.
  * Tanpa "server-only" supaya aman diimport dari Server maupun Client Component.
  *
+ * ATURAN (keputusan produk): sesi HANYA terhitung kalau status efektifnya
+ * (hitungStatusSesi, lib/shared/statusSesi.ts) "terkonfirmasi_siswa" atau
+ * "terkonfirmasi_otomatis" (24 jam). Sesi yang masih "menunggu_siswa",
+ * "disangkal_menunggu_review", atau "belum_terjadi" (termasuk yang dibatalkan
+ * Admin) TIDAK terhitung. Sesi disangkal yang disetujui Admin berubah jadi
+ * status_siswa='dikonfirmasi' → ikut terhitung. Selaras dengan honor.
+ *
+ * TERPISAH dari "sesi sudah ditandai mentor" (kolom dikonfirmasi_mentor) —
+ * itu dasar NOMOR SESI BERIKUTNYA dan batas SATU PENANDAAN PER HARI, dihitung
+ * langsung dari dikonfirmasi_mentor / dikonfirmasi_mentor_pada di
+ * lib/mentor/getKelasSayaData.ts dan app/api/mentor/sesi, TIDAK lewat fungsi
+ * di file ini, dan tidak berubah.
+ *
  * BUKAN progres materi (enrollments.progres_persen / materi_progress) — itu
- * metrik terpisah yang cuma tampil di daftar materi detail kelas. Keputusan
- * produk: progress di dashboard = presensi saja.
+ * metrik terpisah yang cuma tampil di daftar materi detail kelas.
  *
  * Pengambilan data per pendaftaran ada di lib/shared/progresSesiData.ts.
  */
 
-export interface SesiStatusRow {
-  dikonfirmasi_mentor: boolean;
-  status_siswa: string;
+import { hitungStatusSesi, type SesiWaktuRow } from "@/lib/shared/statusSesi";
+
+/** Kolom sesi_kelas yang dibutuhkan hitungStatusSesi. */
+export type SesiStatusRow = SesiWaktuRow;
+
+/** Sesi terhitung untuk progress = terkonfirmasi siswa atau otomatis (24 jam). */
+export function isSesiTerkonfirmasi(row: SesiStatusRow, now: Date = new Date()): boolean {
+  const { status } = hitungStatusSesi(row, now);
+  return status === "terkonfirmasi_siswa" || status === "terkonfirmasi_otomatis";
 }
 
-/** Sesi dihitung kalau sudah ditandai mentor DAN tidak disangkal siswa. */
-export function isSesiTerkonfirmasi(row: SesiStatusRow): boolean {
-  return row.dikonfirmasi_mentor && row.status_siswa !== "disangkal";
-}
-
-export function hitungSesiTerkonfirmasi(rows: SesiStatusRow[]): number {
-  return rows.filter(isSesiTerkonfirmasi).length;
+export function hitungSesiTerkonfirmasi(rows: SesiStatusRow[], now: Date = new Date()): number {
+  return rows.filter((row) => isSesiTerkonfirmasi(row, now)).length;
 }
 
 export interface ProgresSesi {

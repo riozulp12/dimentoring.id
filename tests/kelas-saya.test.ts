@@ -205,7 +205,7 @@ beforeEach(() => {
       { id: "e-HL", user_id: SISWA, kelas_id: "HL", status_pembayaran: "lunas", progres_persen: 0, jadwal_ditetapkan: null },
     ],
     sesi_kelas: [
-      // A: 4 terhitung (3 dikonfirmasi siswa + 1 masih menunggu respons siswa) + 1 disangkal.
+      // A: 3 terhitung (dikonfirmasi siswa) + 1 masih menunggu respons siswa (belum terhitung) + 1 disangkal.
       ...sesi("e-A", ["dikonfirmasi", "dikonfirmasi", "dikonfirmasi", "disangkal", "belum"]),
       // B: 10 dari 10.
       ...sesi("e-B", Array<string>(10).fill("dikonfirmasi")),
@@ -250,23 +250,27 @@ describe("hitungProgresSesi (helper bersama)", () => {
     assert.equal(hitungProgresSesi(12, 10).persen, 100);
   });
 
-  it("sesi disangkal & sesi yang belum ditandai mentor tidak dihitung", () => {
+  it("hanya sesi terkonfirmasi (siswa/otomatis) yang dihitung; menunggu, disangkal, belum ditandai tidak", () => {
+    const sekarang = new Date("2026-10-17T12:00:00.000Z");
+    const ditandai = "2026-10-17T10:00:00.000Z"; // 2 jam lalu → masih menunggu
     const rows = [
-      { dikonfirmasi_mentor: true, status_siswa: "dikonfirmasi" },
-      { dikonfirmasi_mentor: true, status_siswa: "belum" },
-      { dikonfirmasi_mentor: true, status_siswa: "disangkal" },
-      { dikonfirmasi_mentor: false, status_siswa: "belum" },
+      { dikonfirmasi_mentor: true, dikonfirmasi_mentor_pada: ditandai, status_siswa: "dikonfirmasi", dikonfirmasi_siswa_pada: ditandai },
+      { dikonfirmasi_mentor: true, dikonfirmasi_mentor_pada: ditandai, status_siswa: "belum", dikonfirmasi_siswa_pada: null },
+      { dikonfirmasi_mentor: true, dikonfirmasi_mentor_pada: "2026-10-10T10:00:00.000Z", status_siswa: "belum", dikonfirmasi_siswa_pada: null },
+      { dikonfirmasi_mentor: true, dikonfirmasi_mentor_pada: ditandai, status_siswa: "disangkal", dikonfirmasi_siswa_pada: ditandai },
+      { dikonfirmasi_mentor: false, dikonfirmasi_mentor_pada: null, status_siswa: "belum", dikonfirmasi_siswa_pada: null },
     ];
-    assert.equal(hitungSesiTerkonfirmasi(rows), 2);
+    // dikonfirmasi + otomatis (lewat 24 jam) = 2; menunggu, disangkal, belum ditandai tidak.
+    assert.equal(hitungSesiTerkonfirmasi(rows, sekarang), 2);
   });
 });
 
 describe("getKelasSaya", () => {
-  it("4/10 → 40% (Sedang Berjalan), 10/10 → 100% (Selesai)", async () => {
+  it("3/10 → 30% (Sedang Berjalan; 1 sesi masih menunggu tidak dihitung), 10/10 → 100% (Selesai)", async () => {
     const items = await kelasSayaData.getKelasSaya(SISWA);
     const a = items.find((k) => k.id === "A");
     const b = items.find((k) => k.id === "B");
-    assert.deepEqual([a?.progresPersen, a?.selesai], [40, false]);
+    assert.deepEqual([a?.progresPersen, a?.selesai], [30, false]);
     assert.deepEqual([b?.progresPersen, b?.selesai], [100, true]);
   });
 

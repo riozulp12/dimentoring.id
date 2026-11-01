@@ -29,7 +29,7 @@ export async function getProgresSesiPerPendaftaran(
 
   const { data, error } = await supabaseServer
     .from("sesi_kelas")
-    .select("enrollment_id, dikonfirmasi_mentor, status_siswa")
+    .select("enrollment_id, dikonfirmasi_mentor, dikonfirmasi_mentor_pada, status_siswa, dikonfirmasi_siswa_pada")
     .in(
       "enrollment_id",
       pendaftaran.map((p) => p.id),
@@ -39,6 +39,7 @@ export async function getProgresSesiPerPendaftaran(
     console.error("[getProgresSesiPerPendaftaran] query sesi_kelas failed:", error);
   }
 
+  const now = new Date();
   const sesiPerPendaftaran = new Map<string, SesiStatusRow[]>();
   for (const sesi of (data ?? []) as unknown as (SesiStatusRow & { enrollment_id: string })[]) {
     const daftar = sesiPerPendaftaran.get(sesi.enrollment_id) ?? [];
@@ -49,7 +50,7 @@ export async function getProgresSesiPerPendaftaran(
   for (const p of pendaftaran) {
     hasil.set(
       p.id,
-      hitungProgresSesi(hitungSesiTerkonfirmasi(sesiPerPendaftaran.get(p.id) ?? []), p.jumlahSesi ?? 0),
+      hitungProgresSesi(hitungSesiTerkonfirmasi(sesiPerPendaftaran.get(p.id) ?? [], now), p.jumlahSesi ?? 0),
     );
   }
   return hasil;
