@@ -73,8 +73,8 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
                 ...r,
                 busy: false,
                 info: `Sesi ke-${nomorDitandai} ditandai. Terkonfirmasi otomatis dalam 24 jam kalau siswa tidak merespons.`,
-                // Sesi yang baru ditandai langsung ikut terhitung (progresSesi.ts).
-                sesiValidCount: r.sesiValidCount + 1,
+                // sesiValidCount TIDAK berubah: sesi baru ditandai masih
+                // menunggu konfirmasi siswa, baru terhitung setelah "Ya"/24 jam.
                 sesiMenungguSiswa: r.sesiMenungguSiswa + 1,
                 ditandaiHariIni: true,
                 sesiDitandaiSaya: r.sesiDitandaiSaya + 1,

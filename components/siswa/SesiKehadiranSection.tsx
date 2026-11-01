@@ -83,9 +83,9 @@ export default function SesiKehadiranSection({
         setBusy(false);
         return;
       }
-      // Sesi yang menunggu jawaban SUDAH ikut terhitung (progresSesi.ts) —
-      // "Ya" tidak mengubah angka, "Tidak" mengeluarkannya dari hitungan.
-      if (!konfirmasi) setValidCount((prev) => Math.max(0, prev - 1));
+      // Sesi menunggu belum terhitung (progresSesi.ts): "Ya" menambah satu,
+      // "Tidak" tidak mengubah angka (masuk antrian Admin).
+      if (konfirmasi) setValidCount((prev) => prev + 1);
       const statusBaru: StatusSesiEfektif = konfirmasi ? "terkonfirmasi_siswa" : "disangkal_menunggu_review";
       setRiwayat((prev) => prev.map((r) => (r.id === pending.id ? { ...r, status: statusBaru, batasRespons: null } : r)));
       setBusy(false);

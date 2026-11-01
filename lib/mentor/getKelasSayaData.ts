@@ -149,6 +149,7 @@ export interface SesiSiswaItem {
   userId: string;
   nama: string;
   avatarUrl: string | null;
+  /** Sesi TERKONFIRMASI (siswa/otomatis) — dasar "Sesi X dari Y"; bukan jumlah yang ditandai. */
   sesiValidCount: number;
   /** Ditandai mentor, belum dijawab siswa, 24 jam belum lewat. */
   sesiMenungguSiswa: number;
@@ -186,8 +187,9 @@ function firstUser(value: UserJoin): { id: string; nama: string; avatar_url: str
  * Progress sesi (Absensi, PRD 7.5.5) per siswa lunas di kelas ini — dasar
  * tombol "Tandai Sesi Hari Ini Selesai" & progress "Sesi X dari Y" di halaman
  * Kelas Saya (Mentor). `sesiValidCount` pakai definisi bersama
- * lib/shared/progresSesi.ts (BR-34/FR-A4) — sesi yang masih disangkal &
- * menunggu review Admin TIDAK dihitung progress. Rincian status per sesi
+ * lib/shared/progresSesi.ts (BR-34/FR-A4) — hanya sesi terkonfirmasi siswa /
+ * otomatis; sesi menunggu konfirmasi, disangkal, dan dibatalkan TIDAK dihitung.
+ * `sesiBerikutnya` & `ditandaiHariIni` tetap berdasar sesi yang SUDAH DITANDAI. Rincian status per sesi
  * dari lib/shared/statusSesi.ts.
  */
 export async function getSesiSiswaByKelasId(
@@ -266,7 +268,7 @@ export async function getSesiSiswaByKelasId(
         userId: user.id,
         nama: user.nama,
         avatarUrl: user.avatar_url,
-        sesiValidCount: hitungSesiTerkonfirmasi(sesiList),
+        sesiValidCount: hitungSesiTerkonfirmasi(sesiList, now),
         sesiMenungguSiswa: statusList.filter((st) => st === "menunggu_siswa").length,
         sesiDisangkal: statusList.filter((st) => st === "disangkal_menunggu_review").length,
         ditandaiHariIni,

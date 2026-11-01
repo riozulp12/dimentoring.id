@@ -194,8 +194,10 @@ export async function getSesiKehadiran(enrollmentId: string): Promise<SesiKehadi
     nama_mapel?: string | null;
     mentor?: MentorJoin;
   }[];
-  const validCount = hitungSesiTerkonfirmasi(rows);
   const now = new Date();
+  // Hanya sesi terkonfirmasi siswa / otomatis (lib/shared/progresSesi.ts);
+  // `riwayat` di bawah tetap memuat SEMUA sesi yang sudah ditandai.
+  const validCount = hitungSesiTerkonfirmasi(rows, now);
 
   let pending: SesiPending | null = null;
   const riwayat: SesiRiwayat[] = [];
