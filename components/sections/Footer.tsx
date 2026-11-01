@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import Logo from "../ui/Logo";
+import { HREF_KEBIJAKAN } from "@/lib/shared/kebijakan";
 import { PROGRAM_KATEGORI_LABEL, PROGRAM_KATEGORI_ORDER, PROGRAM_KATEGORI_SLUG } from "@/lib/shared/kelasLabels";
 
 interface SocialLink {
@@ -185,10 +186,10 @@ export default function Footer() {
           Copyright @2026 dimentoring.id
         </p>
         <Link
-          href="/kebijakan-privasi"
+          href={HREF_KEBIJAKAN}
           className="text-sm leading-[1.5] tracking-[-0.36px] text-[#979696] underline underline-offset-2 hover:text-black"
         >
-          Kebijakan Privasi
+          Kebijakan Privasi &amp; Refund
         </Link>
       </div>
     </footer>
