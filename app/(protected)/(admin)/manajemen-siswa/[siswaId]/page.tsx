@@ -194,7 +194,7 @@ export default async function ManajemenSiswaDetailPage({
                         <span className="rounded-full bg-[#EEF0FF] px-2 py-0.5 text-xs font-medium text-[#081EEA]">Manual</span>
                       ) : null}
                     </p>
-                    <p className="text-sm text-[#7E7C7C]">Progress {kelas.progresPersen}%</p>
+                    <p className="text-sm text-[#7E7C7C]">Progress kehadiran {kelas.progresPersen}%</p>
                   </div>
                   <span
                     className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${

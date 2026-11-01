@@ -67,7 +67,7 @@ export default async function SiswaBinaanDetailPage({
           </div>
           <div className="flex flex-col items-center gap-1 pt-2">
             <p className="text-4xl font-semibold tracking-[-0.02em] text-[#081EEA]">{detail.progresPersen}%</p>
-            <p className="text-sm text-[#7E7C7C]">Progress Kelas</p>
+            <p className="text-sm text-[#7E7C7C]">Progress Kehadiran</p>
           </div>
         </div>
 
