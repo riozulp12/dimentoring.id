@@ -5,6 +5,8 @@ import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
 import MaskotLoading from "@/components/ui/MaskotLoading";
 import { MAX_JADWAL_PILIHAN, formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
+import Link from "next/link";
+import { HREF_KEBIJAKAN_PRIVASI, HREF_KEBIJAKAN_REFUND, RINGKASAN_REFUND_CHECKOUT } from "@/lib/shared/kebijakan";
 
 /**
  * Form Checkout — PRD Bagian 7.5/Bagian 13 (payments, kode_promo). Validasi
@@ -150,6 +152,10 @@ export default function CheckoutForm({
 
   const [payError, setPayError] = useState<string | null>(null);
   const [isPaying, setIsPaying] = useState(false);
+  // Persetujuan Kebijakan Refund & Privasi — wajib dicentang sebelum bayar.
+  // Cuma pengaman tampilan (belum dicatat di server).
+  const [setujuKebijakan, setSetujuKebijakan] = useState(false);
+  const [kebijakanError, setKebijakanError] = useState<string | null>(null);
 
   const total = appliedPromo ? appliedPromo.total : harga;
 
@@ -212,6 +218,12 @@ export default function CheckoutForm({
     setPayError(null);
     setSubtesError(null);
     setJadwalError(null);
+
+    if (!setujuKebijakan) {
+      setKebijakanError("Centang persetujuan Kebijakan Refund dan Kebijakan Privasi dulu ya.");
+      return;
+    }
+    setKebijakanError(null);
 
     const jadwalPilihan = jadwalPilihanKeys
       .filter(Boolean)
@@ -493,13 +505,81 @@ export default function CheckoutForm({
           </div>
         </div>
 
+        <div className="flex flex-col gap-1 rounded-[16px] bg-[#F5F6FF] px-4 py-3 text-sm leading-[1.6] text-black">
+          <p className="font-semibold">Kebijakan Refund singkat</p>
+          <ul className="flex list-disc flex-col gap-0.5 pl-5">
+            {RINGKASAN_REFUND_CHECKOUT.map((baris) => (
+              <li key={baris}>{baris}</li>
+            ))}
+            <li>
+              Selengkapnya di{" "}
+              <Link
+                href={HREF_KEBIJAKAN_REFUND}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-[#081EEA] underline underline-offset-2"
+              >
+                Kebijakan Refund
+              </Link>
+              .
+            </li>
+          </ul>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="flex items-start gap-3 text-sm leading-[1.6] text-black">
+            <input
+              type="checkbox"
+              checked={setujuKebijakan}
+              onChange={(event) => {
+                setSetujuKebijakan(event.target.checked);
+                if (event.target.checked) setKebijakanError(null);
+              }}
+              className="mt-1 h-4 w-4 shrink-0 accent-[#081EEA]"
+            />
+            <span>
+              Saya sudah membaca dan setuju dengan{" "}
+              <Link
+                href={HREF_KEBIJAKAN_REFUND}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-[#081EEA] underline underline-offset-2"
+              >
+                Kebijakan Refund
+              </Link>{" "}
+              dan{" "}
+              <Link
+                href={HREF_KEBIJAKAN_PRIVASI}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-[#081EEA] underline underline-offset-2"
+              >
+                Kebijakan Privasi
+              </Link>{" "}
+              dimentoring.id.
+            </span>
+          </label>
+          {!setujuKebijakan && !kebijakanError ? (
+            <p className="text-xs text-[#7E7C7C]">Centang kotak di atas dulu supaya tombol bayar aktif.</p>
+          ) : null}
+          {kebijakanError ? (
+            <p role="alert" className="text-sm text-[#E70A0A]">
+              {kebijakanError}
+            </p>
+          ) : null}
+        </div>
+
         {payError ? <p className="text-sm text-[#E70A0A]">{payError}</p> : null}
 
         <Button
           variant="primary"
           size="xl"
           onClick={handleBayar}
-          disabled={isPaying || (isOffline && (!offlineMentors || offlineMentors.length === 0 || !selectedMentorId))}
+          disabled={
+            isPaying ||
+            !setujuKebijakan ||
+            (isOffline && (!offlineMentors || offlineMentors.length === 0 || !selectedMentorId))
+          }
           className="w-full"
         >
           {isPaying ? (
