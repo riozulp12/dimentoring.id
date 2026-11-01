@@ -90,8 +90,8 @@
 - [ ] Akun tanpa kelas: teks "Kamu belum ikut kelas apa pun nih…" + daftar kelas katalog; klik kartu → detail jualan (bukan halaman materi)
 - [ ] Detail kelas: link Meet, list Materi (cuma `published`), tandai selesai → progress bar update
 - [ ] Presensi: setelah mentor menandai sesi, notifikasi bell menyebut "akan terkonfirmasi otomatis dalam 24 jam jika tidak ada respons"; di detail kelas muncul prompt Ya/Tidak + batas jawab (jam WIB)
-- [ ] Presensi: jawab "Ya" → angka Progress Kehadiran TIDAK bertambah (sesi menunggu sudah terhitung); jawab "Tidak" → angka berkurang satu dan sesi masuk antrian Admin
-- [ ] Presensi: sesi yang lewat 24 jam tanpa jawaban → prompt hilang, tetap terhitung di progress; memaksa PATCH `/api/siswa/sesi` untuk sesi itu → 409 "Batas 24 jam untuk menjawab sudah lewat…"
+- [ ] Presensi: sesi yang baru ditandai mentor ("Menunggu konfirmasimu") BELUM menambah angka Progress Kehadiran; jawab "Ya" → angka bertambah satu; jawab "Tidak" → angka tidak berubah dan sesi masuk antrian Admin (disetujui Admin → angka bertambah)
+- [ ] Presensi: sesi yang lewat 24 jam tanpa jawaban → prompt hilang, "Terkonfirmasi otomatis" dan BARU terhitung di progress; memaksa PATCH `/api/siswa/sesi` untuk sesi itu → 409 "Batas 24 jam untuk menjawab sudah lewat…"
 - [ ] Presensi multi-mentor: riwayat sesi di detail kelas menampilkan "Nama Mentor — Mapel" per sesi (sesi lama tanpa mentor: tanpa label); notifikasi & prompt menyebut mentor + mapel; dua sesi menunggu (beda mentor) → prompt kedua muncul setelah yang pertama dijawab
 - [ ] Presensi multi-mentor: total sesi tetap `jumlah_sesi` kelas (mis. 10) walau ditandai bergantian oleh beberapa mentor — bukan 10 per mentor
 - [ ] Coba akses kelas yang BUKAN diikuti lewat ganti URL → ditolak
