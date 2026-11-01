@@ -1,11 +1,15 @@
 /**
- * Test Progress Kehadiran di Dashboard (Siswa & Mentor), Siswa Binaan, dan
- * Manajemen Siswa. Keputusan produk: progress = presensi saja (sesi terhitung /
- * jumlah_sesi paket), bukan progres materi (enrollments.progres_persen).
+ * Test Progress Kehadiran di Dashboard (Siswa & Mentor), Siswa Binaan, Kelas
+ * Saya Mentor, dan Manajemen Siswa. Keputusan produk: progress = presensi saja,
+ * dan HANYA sesi yang terkonfirmasi (dikonfirmasi siswa atau otomatis 24 jam)
+ * yang terhitung — sesi menunggu konfirmasi, disangkal, dan dibatalkan tidak.
+ * Bukan progres materi (enrollments.progres_persen).
  *
- * - Unit: lib/shared/progresSesi.ts (hitungProgresSesi, hitungRataRataProgres).
+ * - Unit: lib/shared/progresSesi.ts (hitungSesiTerkonfirmasi, hitungProgresSesi,
+ *   hitungRataRataProgres).
  * - Data layer: dijalankan terhadap Supabase TIRUAN di memori (tidak pernah
  *   menyentuh database asli).
+ * - Regresi: nomor sesi berikutnya & batas penandaan harian mentor tidak berubah.
  * - Statis: rumus progress hanya ada di SATU fungsi bersama.
  *
  * Jalankan: npm test
@@ -19,50 +23,123 @@ import {
   hitungRataRataProgres,
   hitungSesiTerkonfirmasi,
 } from "@/lib/shared/progresSesi";
+import { hitungStatusSesi, type SesiWaktuRow } from "@/lib/shared/statusSesi";
 
 // ---------------------------------------------------------------------------
 // Unit — fungsi bersama
 // ---------------------------------------------------------------------------
 
-/** n sesi dengan status siswa tertentu (sudah ditandai mentor), sisanya belum ditandai. */
-function sesiRows(statusSiswa: string[], total = 10) {
-  return Array.from({ length: total }, (_, i) => ({
-    dikonfirmasi_mentor: i < statusSiswa.length,
-    status_siswa: statusSiswa[i] ?? "belum",
-  }));
+const JAM = 60 * 60 * 1000;
+const NOW = new Date("2026-10-17T12:00:00.000Z");
+const iso = (ms: number) => new Date(ms).toISOString();
+
+/** Jenis sesi → baris sesi_kelas relatif terhadap `sekarang`. */
+type Jenis = "dikonfirmasi" | "menunggu" | "otomatis" | "disangkal" | "disetujui" | "dibatalkan";
+function baris(jenis: Jenis, sekarang: Date = NOW): SesiWaktuRow {
+  const t = sekarang.getTime();
+  switch (jenis) {
+    case "dikonfirmasi": // siswa menjawab "Ya"
+    case "disetujui": // disangkal lalu Admin "Setujui sebagai Valid" → status_siswa = dikonfirmasi
+      return {
+        dikonfirmasi_mentor: true,
+        dikonfirmasi_mentor_pada: iso(t - 3 * JAM),
+        status_siswa: "dikonfirmasi",
+        dikonfirmasi_siswa_pada: iso(t - 2 * JAM),
+      };
+    case "menunggu": // ditandai 1 jam lalu, belum dijawab
+      return { dikonfirmasi_mentor: true, dikonfirmasi_mentor_pada: iso(t - JAM), status_siswa: "belum", dikonfirmasi_siswa_pada: null };
+    case "otomatis": // ditandai 25 jam lalu, tidak dijawab
+      return { dikonfirmasi_mentor: true, dikonfirmasi_mentor_pada: iso(t - 25 * JAM), status_siswa: "belum", dikonfirmasi_siswa_pada: null };
+    case "disangkal":
+      return {
+        dikonfirmasi_mentor: true,
+        dikonfirmasi_mentor_pada: iso(t - 3 * JAM),
+        status_siswa: "disangkal",
+        dikonfirmasi_siswa_pada: iso(t - 2 * JAM),
+      };
+    case "dibatalkan": // Admin "Batalkan Sesi Ini" → reset ke belum terjadi
+      return { dikonfirmasi_mentor: false, dikonfirmasi_mentor_pada: null, status_siswa: "belum", dikonfirmasi_siswa_pada: null };
+  }
 }
 
-describe("hitungProgresSesi", () => {
+/** Jenis-jenis sesi pertama, sisanya belum ditandai (kosong), total `total` baris. */
+function sesiRows(jenis: Jenis[], total = 10, sekarang: Date = NOW): SesiWaktuRow[] {
+  return Array.from({ length: total }, (_, i) => baris(jenis[i] ?? "dibatalkan", sekarang));
+}
+
+describe("hitungProgresSesi / hitungSesiTerkonfirmasi — hanya sesi terkonfirmasi", () => {
   it("0 sesi terhitung dari 10 → 0%", () => {
-    assert.deepEqual(hitungProgresSesi(hitungSesiTerkonfirmasi(sesiRows([])), 10), { persen: 0, selesai: false });
-  });
-
-  it("2 dari 10 → 20% (bukan 0%)", () => {
-    const terhitung = hitungSesiTerkonfirmasi(sesiRows(["dikonfirmasi", "belum"]));
-    assert.equal(terhitung, 2);
-    assert.deepEqual(hitungProgresSesi(terhitung, 10), { persen: 20, selesai: false });
-  });
-
-  it("semua sesi disangkal → 0%", () => {
-    const terhitung = hitungSesiTerkonfirmasi(sesiRows(["disangkal", "disangkal", "disangkal"]));
-    assert.equal(terhitung, 0);
+    const terhitung = hitungSesiTerkonfirmasi(sesiRows([]), NOW);
     assert.deepEqual(hitungProgresSesi(terhitung, 10), { persen: 0, selesai: false });
   });
 
-  it("sesi disangkal lalu disetujui Admin (jadi dikonfirmasi) → ikut terhitung", () => {
-    assert.equal(hitungSesiTerkonfirmasi(sesiRows(["disangkal"])), 0);
-    // Admin "Setujui sebagai Valid" → status_siswa = 'dikonfirmasi'.
-    const terhitung = hitungSesiTerkonfirmasi(sesiRows(["dikonfirmasi"]));
-    assert.equal(terhitung, 1);
-    assert.deepEqual(hitungProgresSesi(terhitung, 10), { persen: 10, selesai: false });
+  it("3 dikonfirmasi + 1 menunggu = 3 dari 10 (30%), bukan 4", () => {
+    const rows = sesiRows(["dikonfirmasi", "dikonfirmasi", "dikonfirmasi", "menunggu"]);
+    const terhitung = hitungSesiTerkonfirmasi(rows, NOW);
+    assert.equal(terhitung, 3);
+    assert.deepEqual(hitungProgresSesi(terhitung, 10), { persen: 30, selesai: false });
   });
 
-  it("10 dari 10 → 100% dan selesai", () => {
-    const terhitung = hitungSesiTerkonfirmasi(sesiRows(Array<string>(10).fill("dikonfirmasi")));
+  it("kasus screenshot: sesi 1 otomatis, 2 & 3 terkonfirmasi, 4 menunggu → 3 dari 10 (30%)", () => {
+    const rows = sesiRows(["otomatis", "dikonfirmasi", "dikonfirmasi", "menunggu"]);
+    assert.equal(hitungSesiTerkonfirmasi(rows, NOW), 3);
+    assert.equal(hitungProgresSesi(3, 10).persen, 30);
+  });
+
+  it("menunggu lalu dikonfirmasi siswa → angka naik jadi 4", () => {
+    const rows = sesiRows(["dikonfirmasi", "dikonfirmasi", "dikonfirmasi", "menunggu"]);
+    assert.equal(hitungSesiTerkonfirmasi(rows, NOW), 3);
+    rows[3] = baris("dikonfirmasi"); // siswa menekan "Ya"
+    assert.equal(hitungSesiTerkonfirmasi(rows, NOW), 4);
+  });
+
+  it("menunggu lalu lewat 24 jam → otomatis, ikut terhitung (tepat 24:00 sudah terhitung)", () => {
+    const ditandai = Date.parse("2026-10-17T03:00:00.000Z");
+    const row: SesiWaktuRow = {
+      dikonfirmasi_mentor: true,
+      dikonfirmasi_mentor_pada: iso(ditandai),
+      status_siswa: "belum",
+      dikonfirmasi_siswa_pada: null,
+    };
+    assert.equal(hitungSesiTerkonfirmasi([row], new Date(ditandai + 24 * JAM - 1)), 0);
+    assert.equal(hitungSesiTerkonfirmasi([row], new Date(ditandai + 24 * JAM)), 1);
+    assert.equal(hitungStatusSesi(row, new Date(ditandai + 24 * JAM)).status, "terkonfirmasi_otomatis");
+  });
+
+  it("disangkal tidak terhitung, dan tidak pernah jadi otomatis walau lewat 24 jam", () => {
+    const rows = sesiRows(["disangkal", "disangkal", "disangkal"]);
+    assert.equal(hitungSesiTerkonfirmasi(rows, NOW), 0);
+    assert.equal(hitungSesiTerkonfirmasi(rows, new Date(NOW.getTime() + 30 * 24 * JAM)), 0);
+    assert.deepEqual(hitungProgresSesi(0, 10), { persen: 0, selesai: false });
+  });
+
+  it("disangkal lalu disetujui Admin (jadi status_siswa = dikonfirmasi) → terhitung", () => {
+    assert.equal(hitungSesiTerkonfirmasi([baris("disangkal")], NOW), 0);
+    assert.equal(hitungStatusSesi(baris("disetujui"), NOW).status, "terkonfirmasi_siswa");
+    assert.equal(hitungSesiTerkonfirmasi([baris("disetujui")], NOW), 1);
+    assert.deepEqual(hitungProgresSesi(1, 10), { persen: 10, selesai: false });
+  });
+
+  it("dibatalkan (kembali belum terjadi) tidak terhitung", () => {
+    assert.equal(hitungSesiTerkonfirmasi([baris("dibatalkan")], NOW), 0);
+  });
+
+  it("10 dari 10 terkonfirmasi → 100% dan selesai", () => {
+    const terhitung = hitungSesiTerkonfirmasi(sesiRows(Array<Jenis>(10).fill("dikonfirmasi")), NOW);
     assert.deepEqual(hitungProgresSesi(terhitung, 10), { persen: 100, selesai: true });
   });
 
-  it("tidak pernah 0% kalau ada sesi terhitung, dan tidak 100% kalau belum semua", () => {
+  it("semua 10 sesi sudah ditandai tapi 1 masih menunggu → 90%, belum selesai (sampai terkonfirmasi/otomatis)", () => {
+    const rows = sesiRows([...Array<Jenis>(9).fill("dikonfirmasi"), "menunggu"]);
+    const terhitung = hitungSesiTerkonfirmasi(rows, NOW);
+    assert.equal(terhitung, 9);
+    assert.deepEqual(hitungProgresSesi(terhitung, 10), { persen: 90, selesai: false });
+    // Lewat 24 jam → otomatis → 100%.
+    const nanti = new Date(NOW.getTime() + 24 * JAM);
+    assert.deepEqual(hitungProgresSesi(hitungSesiTerkonfirmasi(rows, nanti), 10), { persen: 100, selesai: true });
+  });
+
+  it("aturan tepi lama tetap: tidak 0% bila ada yang terhitung, tidak 100% bila belum semua", () => {
     assert.equal(hitungProgresSesi(1, 300).persen, 1); // 0,33% dibulatkan ke 0 → ditahan di 1
     assert.deepEqual(hitungProgresSesi(199, 200), { persen: 99, selesai: false }); // 99,5% → bukan 100
     assert.deepEqual(hitungProgresSesi(200, 200), { persen: 100, selesai: true });
@@ -79,6 +156,11 @@ describe("hitungProgresSesi", () => {
   it("pembulatan konsisten (1/3 → 33, 2/3 → 67)", () => {
     assert.equal(hitungProgresSesi(1, 3).persen, 33);
     assert.equal(hitungProgresSesi(2, 3).persen, 67);
+  });
+
+  it("data tidak lengkap (ditandai tanpa waktu penandaan) fail-closed: tidak terhitung", () => {
+    const row: SesiWaktuRow = { dikonfirmasi_mentor: true, dikonfirmasi_mentor_pada: null, status_siswa: "belum", dikonfirmasi_siswa_pada: null };
+    assert.equal(hitungSesiTerkonfirmasi([row], new Date("2030-01-01T00:00:00.000Z")), 0);
   });
 });
 
@@ -197,8 +279,16 @@ function enrollment(id: string, userId: string, extra: Row = {}): Row {
   };
 }
 
-function sesiDb(enrollmentId: string, statusSiswa: string[], total = 10): Row[] {
-  return sesiRows(statusSiswa, total).map((s, i) => ({ enrollment_id: enrollmentId, nomor_sesi: i + 1, ...s }));
+/** Baris sesi_kelas untuk fake DB (waktu relatif terhadap SEKARANG nyata, karena loader memakai new Date()). */
+function sesiDb(enrollmentId: string, jenis: Jenis[], total = 10, mentorId: string | null = MENTOR): Row[] {
+  return sesiRows(jenis, total, new Date()).map((s, i) => ({
+    enrollment_id: enrollmentId,
+    nomor_sesi: i + 1,
+    mentor_id: s.dikonfirmasi_mentor ? mentorId : null,
+    nama_mapel: null,
+    tanggal_dilaksanakan: null,
+    ...s,
+  }));
 }
 
 type SiswaDashboardModule = typeof import("@/lib/dashboard/getSiswaDashboardData");
@@ -207,12 +297,14 @@ type SiswaBinaanModule = typeof import("@/lib/mentor/getSiswaBinaanData");
 type ManajemenSiswaModule = typeof import("@/lib/admin/getManajemenSiswaData");
 type KelasSayaModule = typeof import("@/lib/siswa/getKelasSayaData");
 type KelasDetailModule = typeof import("@/lib/siswa/getKelasDetail");
+type KelasSayaMentorModule = typeof import("@/lib/mentor/getKelasSayaData");
 let siswaDashboard: SiswaDashboardModule;
 let mentorDashboard: MentorDashboardModule;
 let siswaBinaan: SiswaBinaanModule;
 let manajemenSiswa: ManajemenSiswaModule;
 let kelasSaya: KelasSayaModule;
 let kelasDetail: KelasDetailModule;
+let kelasSayaMentor: KelasSayaMentorModule;
 
 before(async () => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost:54321";
@@ -227,6 +319,7 @@ before(async () => {
   manajemenSiswa = await import("@/lib/admin/getManajemenSiswaData");
   kelasSaya = await import("@/lib/siswa/getKelasSayaData");
   kelasDetail = await import("@/lib/siswa/getKelasDetail");
+  kelasSayaMentor = await import("@/lib/mentor/getKelasSayaData");
 });
 
 beforeEach(() => {
@@ -265,12 +358,13 @@ beforeEach(() => {
       enrollment("e7", "s7"), // belum ada baris sesi sama sekali → 0%
     ],
     sesi_kelas: [
-      ...sesiDb("e1", ["dikonfirmasi", "belum"]),
+      // e1: 1 dikonfirmasi + 1 otomatis = 2 terhitung; sesi ke-3 masih menunggu (TIDAK terhitung).
+      ...sesiDb("e1", ["dikonfirmasi", "otomatis", "menunggu"]),
       ...sesiDb("e2", ["disangkal", "disangkal", "disangkal"]),
-      ...sesiDb("e3", ["dikonfirmasi"]),
-      ...sesiDb("e4", Array<string>(10).fill("dikonfirmasi")),
-      ...sesiDb("e5", Array<string>(10).fill("dikonfirmasi")),
-      ...sesiDb("e6", ["dikonfirmasi", "dikonfirmasi", "dikonfirmasi", "dikonfirmasi", "dikonfirmasi"]),
+      ...sesiDb("e3", ["disetujui"]),
+      ...sesiDb("e4", Array<Jenis>(10).fill("dikonfirmasi")),
+      ...sesiDb("e5", Array<Jenis>(10).fill("dikonfirmasi")),
+      ...sesiDb("e6", Array<Jenis>(5).fill("dikonfirmasi")),
     ],
   };
 });
@@ -346,6 +440,123 @@ describe("Dashboard Mentor", () => {
   });
 });
 
+describe("kasus screenshot: sesi 1 otomatis, 2 & 3 terkonfirmasi, sesi 4 menunggu → 3 dari 10 (30%) di semua tempat", () => {
+  /** Ganti sesi pendaftaran e1 (siswa s1) dengan pola screenshot. Sesi 4 baru saja ditandai MENTOR. */
+  function pasangPolaScreenshot() {
+    db.sesi_kelas = db.sesi_kelas.filter((r) => r.enrollment_id !== "e1");
+    const rows = sesiDb("e1", ["otomatis", "dikonfirmasi", "dikonfirmasi", "menunggu"]);
+    rows[3].dikonfirmasi_mentor_pada = new Date().toISOString();
+    db.sesi_kelas.push(...rows);
+    return rows;
+  }
+
+  async function semuaPersenUntukS1() {
+    const detail = await kelasDetail.getSesiKehadiran("e1");
+    const sesiMentor = (await kelasSayaMentor.getSesiSiswaByKelasId(KELAS, MENTOR, "utama")).find((r) => r.enrollmentId === "e1");
+    const progresMentor = (await mentorDashboard.getMentorProgressByKelas(MENTOR))[0].siswa.find((s) => s.userId === "s1");
+    const binaan = (await siswaBinaan.getSiswaBinaanGrouped(MENTOR))[0].siswa.find((s) => s.userId === "s1");
+    return {
+      dashboardSiswa: (await siswaDashboard.getSiswaDashboardData("s1")).progressBelajar[0]?.persen,
+      kelasSaya: (await kelasSaya.getKelasSaya("s1"))[0]?.progresPersen,
+      detailKelasSiswa: hitungProgresSesi(detail.validCount, 10).persen,
+      kelasSayaMentor: hitungProgresSesi(sesiMentor?.sesiValidCount ?? -1, 10).persen,
+      dashboardMentor: progresMentor?.progresPersen,
+      siswaBinaan: binaan?.progresPersen,
+      siswaBinaanDetail: (await siswaBinaan.getSiswaBinaanDetail(MENTOR, "s1", KELAS))?.progresPersen,
+      admin: (await manajemenSiswa.getSiswaKelasDiikuti("s1"))[0]?.progresPersen,
+      teksSiswa: detail.validCount,
+      teksMentor: sesiMentor?.sesiValidCount,
+    };
+  }
+
+  it("30% dan teks '3 dari 10 sesi' di dashboard siswa/mentor, /kelas, /kelas/{id}, /kelas-saya/{id}, /siswa-binaan, admin", async () => {
+    pasangPolaScreenshot();
+    assert.deepEqual(await semuaPersenUntukS1(), {
+      dashboardSiswa: 30,
+      kelasSaya: 30,
+      detailKelasSiswa: 30,
+      kelasSayaMentor: 30,
+      dashboardMentor: 30,
+      siswaBinaan: 30,
+      siswaBinaanDetail: 30,
+      admin: 30,
+      teksSiswa: 3,
+      teksMentor: 3,
+    });
+  });
+
+  it("daftar sesi tetap menampilkan SEMUA sesi yang ditandai, termasuk 'Menunggu konfirmasimu'", async () => {
+    pasangPolaScreenshot();
+    const detail = await kelasDetail.getSesiKehadiran("e1");
+    assert.deepEqual(
+      detail.riwayat.map((r) => [r.nomorSesi, r.status]),
+      [
+        [1, "terkonfirmasi_otomatis"],
+        [2, "terkonfirmasi_siswa"],
+        [3, "terkonfirmasi_siswa"],
+        [4, "menunggu_siswa"],
+      ],
+    );
+    assert.equal(detail.pending?.nomorSesi, 4);
+    const sesiMentor = (await kelasSayaMentor.getSesiSiswaByKelasId(KELAS, MENTOR, "utama")).find((r) => r.enrollmentId === "e1");
+    assert.equal(sesiMentor?.riwayat.length, 4);
+    assert.equal(sesiMentor?.sesiMenungguSiswa, 1);
+  });
+
+  it("sesi 4 dikonfirmasi siswa ('Ya') → semua tempat naik jadi 4 dari 10 (40%)", async () => {
+    const rows = pasangPolaScreenshot();
+    Object.assign(rows[3], { status_siswa: "dikonfirmasi", dikonfirmasi_siswa_pada: new Date().toISOString() });
+    const hasil = await semuaPersenUntukS1();
+    assert.equal(hasil.teksSiswa, 4);
+    for (const [tempat, nilai] of Object.entries(hasil)) {
+      if (tempat.startsWith("teks")) continue;
+      assert.equal(nilai, 40, tempat);
+    }
+  });
+
+  it("sesi 4 disangkal → tetap 3 dari 10; disetujui Admin → 4 dari 10", async () => {
+    const rows = pasangPolaScreenshot();
+    Object.assign(rows[3], { status_siswa: "disangkal", dikonfirmasi_siswa_pada: new Date().toISOString() });
+    assert.equal((await semuaPersenUntukS1()).teksSiswa, 3);
+    rows[3].status_siswa = "dikonfirmasi"; // Admin: Setujui sebagai Valid
+    assert.equal((await semuaPersenUntukS1()).teksSiswa, 4);
+  });
+
+  it("sesi 4 dibatalkan Admin (reset ke belum terjadi) → tetap 3 dari 10", async () => {
+    const rows = pasangPolaScreenshot();
+    Object.assign(rows[3], { dikonfirmasi_mentor: false, dikonfirmasi_mentor_pada: null, mentor_id: null, status_siswa: "belum" });
+    assert.equal((await semuaPersenUntukS1()).teksSiswa, 3);
+  });
+
+  it("sesi 4 lewat 24 jam tanpa jawaban → otomatis, naik jadi 4 dari 10", async () => {
+    const rows = pasangPolaScreenshot();
+    rows[3].dikonfirmasi_mentor_pada = new Date(Date.now() - 25 * JAM).toISOString();
+    assert.equal((await semuaPersenUntukS1()).teksSiswa, 4);
+  });
+
+  it("REGRESI: nomor sesi berikutnya & batas penandaan harian mentor tetap berdasar sesi yang SUDAH DITANDAI", async () => {
+    pasangPolaScreenshot();
+    const sesiMentor = (await kelasSayaMentor.getSesiSiswaByKelasId(KELAS, MENTOR, "utama")).find((r) => r.enrollmentId === "e1");
+    // 4 sesi sudah ditandai (walau baru 3 terkonfirmasi) → berikutnya sesi ke-5, bukan ke-4.
+    assert.equal(sesiMentor?.sesiBerikutnya, 5);
+    assert.equal(sesiMentor?.sesiDitandaiSaya, 4);
+    // Sesi 4 menunggu ditandai mentor ini hari ini → tombol tandai terkunci sampai besok.
+    assert.equal(sesiMentor?.ditandaiHariIni, true);
+  });
+
+  it("REGRESI: semua sesi sudah ditandai tapi sebagian menunggu → tombol tandai hilang, progress < 100%", async () => {
+    db.sesi_kelas = db.sesi_kelas.filter((r) => r.enrollment_id !== "e1");
+    db.sesi_kelas.push(...sesiDb("e1", [...Array<Jenis>(9).fill("dikonfirmasi"), "menunggu"]));
+    const sesiMentor = (await kelasSayaMentor.getSesiSiswaByKelasId(KELAS, MENTOR, "utama")).find((r) => r.enrollmentId === "e1");
+    assert.equal(sesiMentor?.sesiBerikutnya, null);
+    assert.equal(sesiMentor?.sesiValidCount, 9);
+    assert.deepEqual(
+      [(await kelasSaya.getKelasSaya("s1"))[0]?.progresPersen, (await kelasSaya.getKelasSaya("s1"))[0]?.selesai],
+      [90, false],
+    );
+  });
+});
+
 describe("Siswa Binaan Mentor & Manajemen Siswa Admin", () => {
   it("daftar /siswa-binaan: progress presensi, tanpa siswa keluar", async () => {
     const [grup] = await siswaBinaan.getSiswaBinaanGrouped(MENTOR);
@@ -413,8 +624,24 @@ describe("rumus progress hanya ada di satu fungsi bersama", () => {
     assert.match(baca("app/api/materi/[materiId]/toggle-selesai/route.ts"), /progres_persen: progresPersen/);
   });
 
-  it("aturan lain tidak berubah: statusSesi.ts dan hariWib.ts tidak menyebut progres", () => {
+  it("definisi baru memakai hitungStatusSesi (dikonfirmasi siswa / otomatis); statusSesi.ts tidak berubah arah", () => {
     assert.ok(!baca("lib/shared/statusSesi.ts").includes("hitungProgresSesi"));
-    assert.match(baca("lib/shared/progresSesi.ts"), /return row\.dikonfirmasi_mentor && row\.status_siswa !== "disangkal";/);
+    const progres = kode("lib/shared/progresSesi.ts");
+    assert.match(progres, /hitungStatusSesi\(row, now\)/);
+    assert.match(progres, /status === "terkonfirmasi_siswa" \|\| status === "terkonfirmasi_otomatis"/);
+  });
+
+  it("nomor sesi berikutnya & batas harian TIDAK memakai definisi progress (tetap berdasar dikonfirmasi_mentor)", () => {
+    const mentorData = kode("lib/mentor/getKelasSayaData.ts");
+    assert.match(mentorData, /sesiList\.find\(\(s\) => !s\.dikonfirmasi_mentor\)\?\.nomor_sesi/);
+    assert.match(mentorData, /s\.dikonfirmasi_mentor &&\s+s\.mentor_id === mentorId/);
+    const route = kode("app/api/mentor/sesi/route.ts");
+    assert.ok(!route.includes("progresSesi"), "route penandaan mentor tidak boleh memakai definisi progress");
+    assert.match(route, /dikonfirmasi_mentor_pada/);
+  });
+
+  it("honor (scripts/laporan-honor-v2) tidak memakai fungsi progress", () => {
+    assert.ok(!baca("scripts/laporan-honor-v2/hitung.ts").includes("progresSesi"));
+    assert.ok(!baca("scripts/laporan-honor-v2.ts").includes("progresSesi"));
   });
 });

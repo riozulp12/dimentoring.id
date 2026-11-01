@@ -362,8 +362,13 @@ describe("POST /api/mentor/sesi (multi-mentor)", () => {
     );
     assert.equal(semua.filter((r) => r.mentor_id === MENTOR_UTAMA).length, 5);
     assert.equal(semua.filter((r) => r.mentor_id === MENTOR_KEDUA).length, 5);
-    const terhitung = progres.hitungSesiTerkonfirmasi(semua as unknown as { dikonfirmasi_mentor: boolean; status_siswa: string }[]);
+    type Baris = Parameters<typeof progres.hitungSesiTerkonfirmasi>[0];
+    // Semua sesi sudah ditandai DAN sudah lewat 24 jam (geserSehari) → otomatis → 100%.
+    const terhitung = progres.hitungSesiTerkonfirmasi(semua as unknown as Baris);
     assert.deepEqual(progres.hitungProgresSesi(terhitung, 10), { persen: 100, selesai: true });
+    // Belum lewat 24 jam / belum dijawab siswa: semua tertandai tapi progress belum 100%.
+    const barusan = new Date(Date.parse(String(semua[0].dikonfirmasi_mentor_pada)) - 60 * 60 * 1000);
+    assert.equal(progres.hitungSesiTerkonfirmasi(semua as unknown as Baris, barusan), 0);
   });
 
   it("sesi lama tanpa mentor_id tidak error dan tidak memblokir batas harian siapa pun", async () => {
@@ -387,7 +392,11 @@ describe("tampilan multi-mentor (Kelas Saya Mentor + notifikasi)", () => {
     await tandai(MENTOR_KEDUA, "e-on");
 
     const [utama] = await kelasSayaMentor.getSesiSiswaByKelasId("K-ON", MENTOR_UTAMA, "utama");
-    assert.equal(utama.sesiValidCount, 2, "progress total tetap gabungan semua mentor");
+    // Dua sesi ditandai tapi keduanya masih menunggu siswa → belum terhitung di progress.
+    assert.equal(utama.sesiValidCount, 0, "progress hanya menghitung sesi terkonfirmasi");
+    assert.equal(utama.sesiMenungguSiswa, 2);
+    // REGRESI: nomor sesi berikutnya & batas harian tetap berdasar sesi yang SUDAH DITANDAI.
+    assert.equal(utama.sesiBerikutnya, 3);
     assert.equal(utama.sesiDitandaiSaya, 1);
     assert.equal(utama.ditandaiHariIni, true);
     assert.deepEqual(

@@ -79,15 +79,17 @@ describe("hitungStatusSesi", () => {
     assert.deepEqual(info, { status: "menunggu_siswa", waktuTerkonfirmasi: null, batasRespons: null });
   });
 
-  it("aturan progress tidak berubah: menunggu & otomatis terhitung, disangkal & belum ditandai tidak", () => {
+  it("progress hanya menghitung dikonfirmasi & otomatis: menunggu, disangkal, belum ditandai tidak", () => {
     const rows = [
-      row(),
-      row({ dikonfirmasi_mentor_pada: "2026-10-01T00:00:00.000Z" }),
+      row(), // ditandai 10:00 WIB, "sekarang" 10:30 → masih menunggu
+      row({ dikonfirmasi_mentor_pada: "2026-10-01T00:00:00.000Z" }), // lewat 24 jam → otomatis
       row({ status_siswa: "dikonfirmasi", dikonfirmasi_siswa_pada: DITANDAI }),
       row({ status_siswa: "disangkal" }),
       row({ dikonfirmasi_mentor: false, dikonfirmasi_mentor_pada: null }),
     ];
-    assert.equal(hitungSesiTerkonfirmasi(rows), 3);
+    assert.equal(hitungSesiTerkonfirmasi(rows, at("2026-10-17T03:30:00.000Z")), 2);
+    // Sehari kemudian sesi pertama juga otomatis; yang disangkal tetap tidak.
+    assert.equal(hitungSesiTerkonfirmasi(rows, at(BATAS)), 3);
   });
 });
 
