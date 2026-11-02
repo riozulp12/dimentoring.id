@@ -1,6 +1,6 @@
 # Kebijakan Privasi dimentoring.id
 
-Berlaku sejak: 5 November 2026
+Berlaku sejak: 23 Oktober 2026
 Versi: v1
 
 Kebijakan ini menjelaskan data apa yang kami kumpulkan di dimentoring.id, untuk apa, dan hak kamu atas data itu. Kami menyusunnya mengacu pada Undang-Undang Pelindungan Data Pribadi (UU No. 27 Tahun 2022).

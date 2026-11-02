@@ -13,8 +13,11 @@ export const HREF_KEBIJAKAN = "/kebijakan";
 export const HREF_KEBIJAKAN_PRIVASI = "/kebijakan#privasi";
 export const HREF_KEBIJAKAN_REFUND = "/kebijakan#refund";
 
-export const KEBIJAKAN_TANGGAL_BERLAKU = "5 November 2026";
+// Tanggal berlaku & versi dipisah per bagian: Privasi tidak berubah isinya sejak
+// terbit (v1, 23 Oktober 2026); Refund baru berlaku 5 November 2026 (v1).
+export const KEBIJAKAN_PRIVASI_TANGGAL_BERLAKU = "23 Oktober 2026";
 export const KEBIJAKAN_PRIVASI_VERSI = "v1";
+export const KEBIJAKAN_REFUND_TANGGAL_BERLAKU = "5 November 2026";
 export const KEBIJAKAN_REFUND_VERSI = "v1";
 
 export const KEBIJAKAN_EMAIL_KONTAK = "info.dimentoring@gmail.com";

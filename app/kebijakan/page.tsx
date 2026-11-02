@@ -7,10 +7,11 @@ import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import {
   KEBIJAKAN_EMAIL_KONTAK as EMAIL_KONTAK,
+  KEBIJAKAN_PRIVASI_TANGGAL_BERLAKU,
   KEBIJAKAN_PRIVASI_VERSI,
   KEBIJAKAN_REFUND,
+  KEBIJAKAN_REFUND_TANGGAL_BERLAKU,
   KEBIJAKAN_REFUND_VERSI,
-  KEBIJAKAN_TANGGAL_BERLAKU as TANGGAL_BERLAKU,
   REFUND_PENGANTAR,
 } from "@/lib/shared/kebijakan";
 
@@ -93,7 +94,7 @@ export default async function KebijakanPage() {
                 Kebijakan Privasi dimentoring.id
               </h2>
               <p className={metaClass}>
-                Berlaku sejak: {TANGGAL_BERLAKU} · Versi: {KEBIJAKAN_PRIVASI_VERSI}
+                Berlaku sejak: {KEBIJAKAN_PRIVASI_TANGGAL_BERLAKU} · Versi: {KEBIJAKAN_PRIVASI_VERSI}
               </p>
             </div>
 
@@ -246,7 +247,7 @@ export default async function KebijakanPage() {
                 Kebijakan Refund
               </h2>
               <p className={metaClass}>
-                Berlaku sejak: {TANGGAL_BERLAKU} · Versi: {KEBIJAKAN_REFUND_VERSI}
+                Berlaku sejak: {KEBIJAKAN_REFUND_TANGGAL_BERLAKU} · Versi: {KEBIJAKAN_REFUND_VERSI}
               </p>
             </div>
 
