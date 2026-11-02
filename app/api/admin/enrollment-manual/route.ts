@@ -274,10 +274,11 @@ export async function POST(request: NextRequest) {
   const kelasNama = kelas.nama as string;
   await notifySiswaDidaftarkanAdmin(siswaId, kelasId, kelasNama);
   const jadwalDisplay = formatJadwalRingkas(kelas.jadwal);
+  const siswaBaru = { kejadianId: hasil.enrollment_id as string, siswaUserId: siswaId };
   if (mentorOfflineId) {
-    await notifyMentorOfflineSiswaBaruDaftar(mentorOfflineId, kelasId, kelasNama, jadwalDisplay);
+    await notifyMentorOfflineSiswaBaruDaftar(mentorOfflineId, kelasId, kelasNama, jadwalDisplay, siswaBaru);
   } else if (kelas.mode_pembelajaran !== "offline") {
-    await notifyMentorsSiswaBaruDaftar(kelasId, kelasNama, jadwalDisplay, subtesIds);
+    await notifyMentorsSiswaBaruDaftar(kelasId, kelasNama, jadwalDisplay, subtesIds, siswaBaru);
   }
 
   return NextResponse.json(

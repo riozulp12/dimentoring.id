@@ -91,6 +91,8 @@ export async function jalankanPascaLunas(payment: PaymentRow, opts: { pertamaKal
   if (!opts.pertamaKali && hasil.sesi !== "dibuat") return;
 
   const kelasId = payment.item_id;
+  // Kanal luar web (email/WhatsApp) memakai id payment sebagai kunci kejadian.
+  const siswa = { kejadianId: payment.id, siswaUserId: payment.user_id };
   const kelasNama = (hasil.kelas?.nama as string) ?? "kamu";
   const jadwalDisplay = formatJadwalRingkas(hasil.kelas?.jadwal);
 
@@ -100,10 +102,10 @@ export async function jalankanPascaLunas(payment: PaymentRow, opts: { pertamaKal
   // (kelas offline tidak punya kelas_subtes_mentor/kelas_mentor).
   if (hasil.kelas?.mode_pembelajaran === "offline") {
     if (payment.mentor_offline_id) {
-      await notifyMentorOfflineSiswaBaruDaftar(payment.mentor_offline_id as string, kelasId, kelasNama, jadwalDisplay);
+      await notifyMentorOfflineSiswaBaruDaftar(payment.mentor_offline_id as string, kelasId, kelasNama, jadwalDisplay, siswa);
     }
   } else {
-    await notifyMentorsSiswaBaruDaftar(kelasId, kelasNama, jadwalDisplay, hasil.subtesIds);
+    await notifyMentorsSiswaBaruDaftar(kelasId, kelasNama, jadwalDisplay, hasil.subtesIds, siswa);
   }
 }
 

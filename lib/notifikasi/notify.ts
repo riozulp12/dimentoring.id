@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
-import { kirimEmailMentorSiswaBaru } from "@/lib/email/kirimEmailMentorSiswaBaru";
+import { kabariMentorSiswaBaru, type MentorPenerima } from "@/lib/notifikasi/siswaBaru";
+import { jalankanSetelahRespons } from "@/lib/notifikasi/setelahRespons";
 
 /**
  * Helper INSERT notifikasi — dipanggil dari route yang memicu kejadian nyata
@@ -16,6 +17,41 @@ interface NotifikasiInsertRow {
   judul: string;
   pesan?: string | null;
   link_tujuan?: string | null;
+}
+
+/**
+ * Siapa siswa barunya + id kejadiannya (payments.id untuk checkout,
+ * enrollments.id untuk pendaftaran manual Admin). Dipakai kanal LUAR web
+ * (email & WhatsApp) saja; lonceng di dalam web tetap tanpa nama siswa.
+ */
+export interface SiswaBaruInfo {
+  kejadianId: string;
+  siswaUserId: string;
+}
+
+/**
+ * Email + WhatsApp untuk mentor, dijalankan SETELAH respons dikirim (webhook /
+ * pendaftaran tidak menunggu, dan tidak pernah gagal gara-gara kanal ini).
+ * Semua galat ditelan di dalam (hanya dicatat).
+ */
+async function kabariMentorLuarWeb(
+  mentors: MentorPenerima[],
+  kelasId: string,
+  kelasNama: string,
+  jadwalDisplay: string | null,
+  siswa: SiswaBaruInfo,
+) {
+  await jalankanSetelahRespons("notifikasi-siswa-baru", async () => {
+    const { data } = await supabaseServer.from("users").select("nama").eq("id", siswa.siswaUserId).maybeSingle();
+    await kabariMentorSiswaBaru({
+      kejadianId: siswa.kejadianId,
+      kelasId,
+      kelasNama,
+      jadwalDisplay,
+      siswaNama: (data?.nama as string | undefined) ?? null,
+      mentors,
+    });
+  });
 }
 
 async function insertNotifikasi(rows: NotifikasiInsertRow[]) {
@@ -100,11 +136,13 @@ export async function notifyPembayaranBerhasil(userId: string, kelasId: string, 
 }
 
 /**
- * 2f: Siswa Baru Daftar (Payment Berhasil) — notif bell + email ke mentor
- * yang RELEVAN (PRD Bagian 7.5, Bagian 13 kelas_subtes_mentor — BARU).
+ * 2f: Siswa Baru Daftar (Payment Berhasil) — notif bell + email + WhatsApp ke
+ * mentor yang RELEVAN (PRD Bagian 7.5, Bagian 13 kelas_subtes_mentor — BARU).
+ * Bell tetap TANPA nama siswa; email memuat nama siswa; WhatsApp hanya nama
+ * kelas (lib/notifikasi/siswaBaru.ts).
  * Dipanggil dari lib/payment/fulfillPayment.ts SETELAH enrollments
- * di-upsert 'lunas' & enrollment_subtes diisi. TANPA nama siswa (privasi
- * anak, PRD Bagian 8 Data & Privasi) — cukup info kelas & jadwal.
+ * di-upsert 'lunas' & enrollment_subtes diisi. Lonceng TANPA nama siswa
+ * (privasi anak, PRD Bagian 8 Data & Privasi) — cukup info kelas & jadwal.
  *
  * `subtesIds` = pilihan siswa ini (enrollment_subtes) untuk kelas paket —
  * kalau terisi, CUMA mentor yang dipasangkan ke subtes yang DIPILIH siswa
@@ -117,6 +155,7 @@ export async function notifyMentorsSiswaBaruDaftar(
   kelasNama: string,
   jadwalDisplay: string | null,
   subtesIds: string[] = [],
+  siswa: SiswaBaruInfo,
 ) {
   type MentorUserJoin = { id: string; nama: string; email: string } | { id: string; nama: string; email: string }[] | null;
 
@@ -171,27 +210,14 @@ export async function notifyMentorsSiswaBaruDaftar(
     })),
   );
 
-  await Promise.all(
-    mentors.map((mentor) =>
-      kirimEmailMentorSiswaBaru({
-        email: mentor.email,
-        namaMentor: mentor.nama,
-        kelasNama,
-        jadwalDisplay: jadwalText,
-      }).then((result) => {
-        if (!result.success) {
-          console.error("[notifikasi] kirim email siswa_baru gagal untuk", mentor.email, ":", result.error);
-        }
-      }),
-    ),
-  );
+  await kabariMentorLuarWeb(mentors, kelasId, kelasNama, jadwalDisplay, siswa);
 }
 
 /**
- * 2g: Siswa Baru Daftar Kelas OFFLINE — notif bell + email HANYA ke satu
- * mentor (mentor_offline_id) yang DIPILIH siswa saat checkout (matching
- * jarak terdekat, lihat lib/payment/getOfflineMentorOptions.ts), REUSE
- * template email yang sama dengan kelas online (kirimEmailMentorSiswaBaru).
+ * 2g: Siswa Baru Daftar Kelas OFFLINE — notif bell + email + WhatsApp HANYA ke
+ * satu mentor (mentor_offline_id) yang DIPILIH siswa saat checkout (matching
+ * jarak terdekat, lihat lib/payment/getOfflineMentorOptions.ts), lewat jalur
+ * yang sama dengan kelas online (kabariMentorSiswaBaru).
  * Dipanggil dari lib/payment/fulfillPayment.ts SETELAH enrollments
  * di-upsert 'lunas' untuk kelas mode_pembelajaran='offline'.
  */
@@ -200,6 +226,7 @@ export async function notifyMentorOfflineSiswaBaruDaftar(
   kelasId: string,
   kelasNama: string,
   jadwalDisplay: string | null,
+  siswa: SiswaBaruInfo,
 ) {
   const { data: mentor, error } = await supabaseServer
     .from("users")
@@ -226,15 +253,13 @@ export async function notifyMentorOfflineSiswaBaruDaftar(
     },
   ]);
 
-  const result = await kirimEmailMentorSiswaBaru({
-    email: mentor.email as string,
-    namaMentor: mentor.nama as string,
+  await kabariMentorLuarWeb(
+    [{ id: mentor.id as string, nama: mentor.nama as string, email: mentor.email as string }],
+    kelasId,
     kelasNama,
-    jadwalDisplay: jadwalText,
-  });
-  if (!result.success) {
-    console.error("[notifikasi] kirim email mentor_offline gagal untuk", mentor.email, ":", result.error);
-  }
+    jadwalDisplay,
+    siswa,
+  );
 }
 
 /**
