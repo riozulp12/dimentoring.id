@@ -55,10 +55,22 @@ function formatTanggalIndonesia(iso: string): string {
   return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 }
 
+/** Teks persetujuan WhatsApp "siswa baru" untuk Mentor (ditampilkan apa adanya di bawah saklar). */
+export const TEKS_SETUJU_WA_MENTOR =
+  "Saya setuju menerima pesan WhatsApp otomatis dari Dimentoring tentang siswa baru. Saya bisa mematikannya kapan saja.";
+
+/** Bentuk sama dengan NotifWaMentorData di lib/pengaturan/notifWaMentor.ts (server-only, jadi ditulis ulang di sini). */
+export interface NotifWaMentorProps {
+  tersedia: boolean;
+  setuju: boolean;
+  noWa: string | null;
+}
+
 export default function PengaturanClient({
   role,
   notifEmail: initialNotifEmail,
   notifWa: initialNotifWa,
+  notifWaMentor,
   optOutLeaderboard: initialOptOut,
   consentLeaderboardLokasi: initialConsent,
   permintaanHapusAkun: initialPermintaan,
@@ -67,6 +79,8 @@ export default function PengaturanClient({
   role: SessionRole;
   notifEmail: boolean;
   notifWa: boolean;
+  /** Hanya diisi untuk role mentor; null untuk role lain. */
+  notifWaMentor?: NotifWaMentorProps | null;
   optOutLeaderboard: boolean;
   consentLeaderboardLokasi: boolean;
   permintaanHapusAkun: boolean;
@@ -150,6 +164,39 @@ export default function PengaturanClient({
       setToggleError("Gagal terhubung ke server.");
     } finally {
       setPendingToggle(null);
+    }
+  }
+
+  // ---- Section 2b: WhatsApp "siswa baru" (khusus Mentor) ----
+  const [waMentorSetuju, setWaMentorSetuju] = useState(notifWaMentor?.setuju ?? false);
+  const [waMentorPending, setWaMentorPending] = useState(false);
+  const [waMentorError, setWaMentorError] = useState<string | null>(null);
+  const waMentorNomor = notifWaMentor?.noWa ?? null;
+  const waMentorTersedia = notifWaMentor?.tersedia ?? false;
+  // Boleh dimatikan kapan saja; menyalakan butuh nomor valid dan fitur sudah tersedia.
+  const waMentorTerkunci = waMentorPending || !waMentorTersedia || (!waMentorSetuju && !waMentorNomor);
+
+  async function handleToggleWaMentor() {
+    const next = !waMentorSetuju;
+    setWaMentorPending(true);
+    setWaMentorError(null);
+    setWaMentorSetuju(next);
+    try {
+      const response = await fetch("/api/pengaturan/notif-wa", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ setuju: next }),
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok || !json?.success) {
+        setWaMentorSetuju(!next);
+        setWaMentorError(json?.error ?? "Gagal menyimpan. Coba lagi nanti.");
+      }
+    } catch {
+      setWaMentorSetuju(!next);
+      setWaMentorError("Gagal terhubung ke server.");
+    } finally {
+      setWaMentorPending(false);
     }
   }
 
@@ -299,6 +346,40 @@ export default function PengaturanClient({
         />
         {toggleError ? <p className="text-sm text-[#E70A0A]">{toggleError}</p> : null}
       </Card>
+
+      {/* Section 2b: WhatsApp siswa baru — hanya Mentor */}
+      {role === "mentor" && notifWaMentor ? (
+        <Card>
+          <SectionTitle>WhatsApp Siswa Baru</SectionTitle>
+          <ToggleRow
+            label="Kabari saya lewat WhatsApp saat ada siswa baru"
+            description={TEKS_SETUJU_WA_MENTOR}
+            checked={waMentorSetuju}
+            disabled={waMentorTerkunci}
+            onToggle={handleToggleWaMentor}
+          />
+          {waMentorNomor ? (
+            <p className="text-sm text-black">
+              Nomor tujuan: <span className="font-medium">{waMentorNomor}</span>
+            </p>
+          ) : (
+            <p className="text-sm text-[#E70A0A]">
+              Nomor WhatsApp kamu belum terisi atau belum valid, jadi saklar ini belum bisa dinyalakan.{" "}
+              <Link href="/profil" className="font-medium text-[#081EEA] underline underline-offset-2">
+                Lengkapi di Profil
+              </Link>
+              .
+            </p>
+          )}
+          {!waMentorTersedia ? (
+            <p className="text-sm text-[#7E7C7C]">Fitur ini belum aktif. Coba lagi nanti ya.</p>
+          ) : null}
+          <p className="text-xs text-[#7E7C7C] sm:text-sm">
+            Simpan nomor Dimentoring di kontak HP-mu dan balas satu pesan supaya pesan tidak dianggap spam.
+          </p>
+          {waMentorError ? <p className="text-sm text-[#E70A0A]">{waMentorError}</p> : null}
+        </Card>
+      ) : null}
 
       {/* Section 3: Privasi — disembunyikan untuk Admin */}
       {role !== "admin" ? (
