@@ -1,5 +1,6 @@
 import "server-only";
 import { GoogleGenAI } from "@google/genai";
+import { ringkasGalatAi, ringkasResponsKosong } from "@/lib/ai/logGalatAi";
 
 /**
  * Generate deskripsi kelas — PRD Bagian 7.5.1 (pola sama dengan
@@ -47,7 +48,7 @@ function buildUserPrompt(data: GenerateKelasDeskripsiInput): string {
 export async function generateKelasDeskripsi(data: GenerateKelasDeskripsiInput): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.error("[generateKelasDeskripsi] GEMINI_API_KEY belum diset di .env.local.");
+    console.error("[generateKelasDeskripsi] GEMINI_API_KEY belum diset (env server kosong/tidak ada).");
     return null;
   }
 
@@ -63,9 +64,15 @@ export async function generateKelasDeskripsi(data: GenerateKelasDeskripsiInput):
     });
 
     const text = response.text?.trim();
-    return text || null;
+    if (!text) {
+      console.error(`[generateKelasDeskripsi] Respons AI kosong. model=${MODEL} ${ringkasResponsKosong(response)}`);
+      return null;
+    }
+    return text;
   } catch (error) {
-    console.error("[generateKelasDeskripsi] Gagal generate deskripsi AI:", error);
+    // Hanya ringkasan aman (jenis, status HTTP, kode Gemini, pesan pendek) —
+    // tanpa API key & tanpa isi prompt. Lihat di Vercel Logs.
+    console.error(`[generateKelasDeskripsi] Gagal generate deskripsi AI. model=${MODEL} ${ringkasGalatAi(error, apiKey)}`);
     return null;
   }
 }
