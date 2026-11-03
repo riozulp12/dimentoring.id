@@ -47,12 +47,16 @@ function formatJarak(km: number): string {
 export default function CheckoutForm({
   kelasId,
   harga,
+  hargaAsli,
   subtesOptions,
   modePembelajaran,
   jadwalOptions,
 }: {
   kelasId: string;
+  /** Harga yang DITAGIH (sudah setelah diskon kelas, dihitung server). */
   harga: number;
+  /** Harga asli sebelum diskon kelas — hanya untuk coretan di ringkasan. */
+  hargaAsli?: number;
   /** Pool Subtes kelas ini (kelas_subtes) — checklist cuma tampil kalau > 1
    * (kelas paket). Kalau <= 1, dikirim otomatis tanpa perlu siswa memilih. */
   subtesOptions: CheckoutSubtesOption[];
@@ -489,6 +493,12 @@ export default function CheckoutForm({
       <div className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
         <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Ringkasan Harga</h2>
         <div className="flex flex-col gap-2 text-sm sm:text-base">
+          {hargaAsli !== undefined && hargaAsli > harga ? (
+            <div className="flex items-center justify-between">
+              <span className="text-[#7E7C7C]">Harga asli</span>
+              <span className="text-[#7E7C7C] line-through decoration-[#DC2626]">{formatRupiah(hargaAsli)}</span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between">
             <span className="text-[#7E7C7C]">Subtotal</span>
             <span className="text-black">{formatRupiah(harga)}</span>

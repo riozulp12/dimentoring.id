@@ -547,6 +547,177 @@ describe("POST /api/payment/create (Mayar)", () => {
   });
 });
 
+describe("harga aktif = harga asli setelah diskon_persen kelas (tagihan sama dengan harga tampil)", () => {
+  const PROMO_10: Row = {
+    id: "promo-10",
+    kode: "HEMAT10",
+    tipe_diskon: "persen",
+    nilai_diskon: 10,
+    tanggal_mulai: null,
+    tanggal_selesai: null,
+    kuota_pemakaian: null,
+    jumlah_terpakai: 0,
+    status: "aktif",
+    berlaku_semua_kelas: true,
+  };
+
+  function aturKelas(harga: number, diskonPersen: number | undefined) {
+    const kelas = db.kelas[0];
+    kelas.harga = harga;
+    if (diskonPersen === undefined) delete kelas.diskon_persen;
+    else kelas.diskon_persen = diskonPersen;
+  }
+
+  async function sesi() {
+    const { NextRequest } = await import("next/server");
+    const token = sessionLib.createSessionToken({ userId: SISWA, role: "student" });
+    return { NextRequest, cookie: `${sessionLib.SESSION_COOKIE_NAME}=${token}` };
+  }
+
+  async function buat(body: Record<string, unknown> = {}) {
+    const { NextRequest, cookie } = await sesi();
+    const semula = process.env.NEXT_PUBLIC_CHECKOUT_INTERNAL_READY;
+    process.env.NEXT_PUBLIC_CHECKOUT_INTERNAL_READY = "true";
+    try {
+      const res = await createRoute.POST(
+        new NextRequest("http://localhost/api/payment/create", {
+          method: "POST",
+          headers: { cookie, "content-type": "application/json" },
+          body: JSON.stringify({ kelasId: KELAS, ...body }),
+        }),
+      );
+      const json = await res.json();
+      const payment = db.payments.find((p) => p.order_id === json.orderId) ?? null;
+      return { res, json, payment };
+    } finally {
+      if (semula === undefined) delete process.env.NEXT_PUBLIC_CHECKOUT_INTERNAL_READY;
+      else process.env.NEXT_PUBLIC_CHECKOUT_INTERNAL_READY = semula;
+    }
+  }
+
+  function jumlahDiMayar(payment: Row | null): number {
+    return mayarPayments[payment!.gateway_reference as string].amount;
+  }
+
+  it("50000 diskon 20% -> invoice Mayar, payments.jumlah, dan jumlah_sebelum_diskon = 40000", async () => {
+    aturKelas(50000, 20);
+    const { res, payment } = await buat();
+    assert.equal(res.status, 200);
+    assert.equal(jumlahDiMayar(payment), 40000);
+    assert.equal(payment!.jumlah, 40000);
+    assert.equal(payment!.jumlah_sebelum_diskon, 40000);
+  });
+
+  it("dengan kode promo: dihitung dari harga aktif (10% dari 40000 = 4000 -> 36000), bukan dari 50000", async () => {
+    aturKelas(50000, 20);
+    db.kode_promo = [{ ...PROMO_10 }];
+    const { res, payment } = await buat({ kodePromo: "hemat10" });
+    assert.equal(res.status, 200);
+    assert.equal(payment!.jumlah_sebelum_diskon, 40000);
+    assert.equal(payment!.jumlah, 36000);
+    assert.equal(jumlahDiMayar(payment), 36000);
+    assert.equal(payment!.kode_promo_id, "promo-10");
+  });
+
+  it("tanpa diskon (0 atau kolom kosong) -> tagihan = harga penuh 50000", async () => {
+    for (const diskon of [0, undefined]) {
+      aturKelas(50000, diskon);
+      const { res, payment } = await buat();
+      assert.equal(res.status, 200);
+      assert.equal(payment!.jumlah, 50000);
+      assert.equal(payment!.jumlah_sebelum_diskon, 50000);
+      assert.equal(jumlahDiMayar(payment), 50000);
+      db.payments = db.payments.filter((p) => p !== payment);
+    }
+  });
+
+  it("kelas gratis (harga 0) tetap jalan dan tetap 0, walau diskon terisi", async () => {
+    aturKelas(0, 50);
+    const { res, payment } = await buat();
+    assert.equal(res.status, 200);
+    assert.equal(payment!.jumlah, 0);
+    assert.equal(payment!.jumlah_sebelum_diskon, 0);
+  });
+
+  it("diskon 100% -> 0, bukan negatif; diskon kotor (>100 / negatif / bukan angka) tidak pernah melampaui harga asli", async () => {
+    const checkout = await import("@/lib/payment/getKelasForCheckout");
+    for (const [diskon, harapan] of [[100, 0], [150, 0], [-5, 50000], [Number.NaN, 50000]] as const) {
+      aturKelas(50000, diskon);
+      assert.equal((await checkout.getKelasForCheckout(KELAS))!.hargaAktif, harapan, `diskon ${diskon}`);
+    }
+  });
+
+  it("klien tidak bisa menimpa jumlah: harga/jumlah/total/hargaAktif/diskonPersen di body diabaikan", async () => {
+    aturKelas(50000, 20);
+    const { res, payment } = await buat({ harga: 1, jumlah: 1, total: 1, hargaAktif: 1, diskonPersen: 99, jumlah_sebelum_diskon: 1 });
+    assert.equal(res.status, 200);
+    assert.equal(payment!.jumlah, 40000);
+    assert.equal(payment!.jumlah_sebelum_diskon, 40000);
+    assert.equal(jumlahDiMayar(payment), 40000);
+  });
+
+  it("validate-promo: subtotal = harga aktif dan diskon dihitung darinya (checkout = yang ditagih)", async () => {
+    aturKelas(50000, 20);
+    db.kode_promo = [{ ...PROMO_10 }];
+    const { NextRequest, cookie } = await sesi();
+    const route = await import("@/app/api/payment/validate-promo/route");
+    const res = await route.POST(
+      new NextRequest("http://localhost/api/payment/validate-promo", {
+        method: "POST",
+        headers: { cookie, "content-type": "application/json" },
+        body: JSON.stringify({ kelasId: KELAS, kode: "HEMAT10", subtotal: 1 }),
+      }),
+    );
+    const json = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(json.subtotal, 40000);
+    assert.equal(json.diskon, 4000);
+    assert.equal(json.total, 36000);
+  });
+
+  it("webhook hanya membandingkan dengan payments.jumlah: nominal 40000 -> lunas; 50000 (harga asli) -> TIDAK lunas", async () => {
+    aturKelas(50000, 20);
+    const { payment: benar } = await buat();
+    const ref = benar!.gateway_reference as string;
+    mayarPayments[ref] = { status: "paid", amount: 40000, trx: { id: "trx-benar", status: "paid", amount: 40000 } };
+    assert.equal((await postWebhook({ data: { productId: ref } })).status, 200);
+    assert.equal(benar!.status, "berhasil");
+
+    // Siswa sudah lunas (create kedua akan 409) -> kosongkan, lalu ubah harga kelas:
+    // webhook tidak boleh menghitung ulang dari kelas, hanya membandingkan dengan payments.jumlah.
+    db.enrollments = [];
+    db.kelas[0].diskon_persen = 0;
+    db.kelas[0].harga = 99999;
+    const { payment: salah } = await buat();
+    const ref2 = salah!.gateway_reference as string;
+    assert.equal(salah!.jumlah, 99999);
+    mayarPayments[ref2] = { status: "paid", amount: 99999, trx: { id: "trx-salah", status: "paid", amount: 50000 } };
+    assert.equal((await postWebhook({ data: { productId: ref2 } })).status, 200);
+    assert.equal(salah!.status, "menunggu");
+  });
+
+  it("webhook tidak membaca harga kelas (tanpa kelas.harga / diskon_persen / hargaAktif)", () => {
+    for (const file of ["app/api/payment/webhook/mayar/route.ts", "lib/payment/syncPayment.ts", "lib/payment/fulfillPayment.ts"]) {
+      const isi = readFileSync(file, "utf8");
+      assert.ok(!/hargaAktif|diskon_persen|kelas\.harga|\.select\([^)]*\bharga\b/.test(isi), `${file} menghitung/membaca harga kelas`);
+    }
+  });
+
+  it("jalur payment hanya memakai hargaAktif, tidak ada kelas.harga mentah untuk menagih", () => {
+    for (const file of ["app/api/payment/create/route.ts", "app/api/payment/validate-promo/route.ts"]) {
+      const isi = readFileSync(file, "utf8");
+      assert.ok(isi.includes("hargaAktif"), `${file} tidak memakai hargaAktif`);
+      assert.ok(!/kelas\.harga\b/.test(isi), `${file} masih memakai kelas.harga`);
+    }
+  });
+
+  it('teks urgensi "Buruan daftar sebelum promo berakhir!" sudah tidak ada di kode', () => {
+    const isi = readFileSync("components/ui/KelasCardVisual.tsx", "utf8");
+    assert.ok(!/Buruan daftar/i.test(isi));
+    assert.ok(!/sebelum promo berakhir/i.test(isi));
+  });
+});
+
 describe("POST /api/admin/payment/recheck", () => {
   async function postRecheck(role: "admin" | "student", body?: unknown) {
     const { NextRequest } = await import("next/server");
