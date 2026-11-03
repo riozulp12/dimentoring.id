@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getPengaturanData } from "@/lib/pengaturan/getPengaturanData";
+import { getNotifWaMentor } from "@/lib/pengaturan/notifWaMentor";
 import PageTitle from "@/components/dashboard/PageTitle";
 import PengaturanClient from "@/components/pengaturan/PengaturanClient";
 
@@ -16,6 +17,10 @@ export default async function PengaturanPage() {
   const data = await getPengaturanData(session.userId);
   if (!data) redirect("/login");
 
+  // Saklar WhatsApp "siswa baru" hanya untuk Mentor; dibaca terpisah supaya
+  // halaman tetap jalan walau kolomnya belum ada (migrasi belum dijalankan).
+  const notifWaMentor = session.role === "mentor" ? await getNotifWaMentor(session.userId) : null;
+
   return (
     <>
       <PageTitle value="Pengaturan" />
@@ -24,6 +29,7 @@ export default async function PengaturanPage() {
           role={session.role}
           notifEmail={data.notifEmail}
           notifWa={data.notifWa}
+          notifWaMentor={notifWaMentor}
           optOutLeaderboard={data.optOutLeaderboard}
           consentLeaderboardLokasi={data.consentLeaderboardLokasi}
           permintaanHapusAkun={data.permintaanHapusAkun}
