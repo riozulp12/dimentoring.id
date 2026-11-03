@@ -8,6 +8,7 @@ import Mascot from "@/components/ui/Mascot";
 import { LEAD_CONSENT_TEXT, LEAD_NAMA_MAX } from "@/lib/shared/leadConsent";
 import { normalisasiNoWa } from "@/lib/shared/noWa";
 import { isLeadCaptureEnabled } from "@/lib/shared/leadCaptureFlag";
+import { HREF_KEBIJAKAN_PRIVASI } from "@/lib/shared/kebijakan";
 
 /**
  * Kartu Lead Capture di halaman hasil Assessment (PRD 7.4.6, BR-38).
@@ -142,7 +143,7 @@ export default function LeadCaptureCard({
             />
             <span>
               {LEAD_CONSENT_TEXT} Baca{" "}
-              <Link href="/kebijakan-privasi" target="_blank" rel="noopener noreferrer" className="font-medium text-[#081EEA]">
+              <Link href={HREF_KEBIJAKAN_PRIVASI} target="_blank" rel="noopener noreferrer" className="font-medium text-[#081EEA]">
                 Kebijakan Privasi
               </Link>
               .

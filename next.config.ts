@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Kebijakan Privasi & Refund digabung jadi satu halaman (/kebijakan).
+  // Alamat lama diarahkan PERMANEN (308) ke bagiannya masing-masing.
+  async redirects() {
+    return [
+      { source: "/kebijakan-privasi", destination: "/kebijakan#privasi", permanent: true },
+      { source: "/kebijakan-refund", destination: "/kebijakan#refund", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

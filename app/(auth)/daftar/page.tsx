@@ -10,6 +10,7 @@ import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { signInWithGoogleIdToken } from "@/lib/auth/signInWithGoogleIdToken";
 import { safeInternalPath } from "@/lib/auth/safeInternalPath";
+import { HREF_KEBIJAKAN_PRIVASI } from "@/lib/shared/kebijakan";
 
 /**
  * Register — SEKARANG cuma 1 langkah (PRD Bagian 7.0.2 DIREVISI TOTAL, Agustus
@@ -239,7 +240,7 @@ function RegisterPageInner() {
             <p className="w-full text-center text-xs leading-[1.5] tracking-[-0.24px] text-[#7E7C7C] sm:text-sm sm:tracking-[-0.28px]">
               Dengan mendaftar, kamu menyetujui{" "}
               <Link
-                href="/kebijakan-privasi"
+                href={HREF_KEBIJAKAN_PRIVASI}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-medium text-[#081EEA]"
