@@ -8,6 +8,7 @@ import Modal from "@/components/ui/Modal";
 import Toggle from "@/components/ui/Toggle";
 import LogoutConfirmModal from "@/components/shared/LogoutConfirmModal";
 import type { SessionRole } from "@/lib/auth/session";
+import { HREF_KEBIJAKAN_PRIVASI } from "@/lib/shared/kebijakan";
 
 /** Halaman Pengaturan — SATU komponen, 5 section berurutan. Section 3
  * (Privasi) disembunyikan untuk role Admin (PRD 8 BR-14/BR-25 cuma relevan
@@ -348,7 +349,7 @@ export default function PengaturanClient({
             </Button>
           </div>
           {downloadError ? <p className="text-sm text-[#E70A0A]">{downloadError}</p> : null}
-          <Link href="/kebijakan-privasi" target="_blank" rel="noopener noreferrer" className="text-sm text-[#081EEA] underline underline-offset-2">
+          <Link href={HREF_KEBIJAKAN_PRIVASI} target="_blank" rel="noopener noreferrer" className="text-sm text-[#081EEA] underline underline-offset-2">
             Baca Kebijakan Privasi lengkap
           </Link>
         </div>
