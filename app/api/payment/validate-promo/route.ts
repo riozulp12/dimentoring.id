@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     return errorResponse("Kelas tidak ditemukan.", 404);
   }
 
-  const result = await validatePromoCode(kode, kelasId, kelas.harga);
+  const result = await validatePromoCode(kode, kelasId, kelas.hargaAktif);
   if (!result.ok) {
     return errorResponse(result.error, 400);
   }
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     success: true,
     kode: result.data.kode,
-    subtotal: kelas.harga,
+    subtotal: kelas.hargaAktif,
     diskon: result.data.diskon,
     total: result.data.total,
   });

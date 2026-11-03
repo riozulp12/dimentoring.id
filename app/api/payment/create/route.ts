@@ -151,11 +151,11 @@ export async function POST(request: NextRequest) {
   }
 
   let kodePromoId: string | null = null;
-  let total = kelas.harga;
+  let total = kelas.hargaAktif;
 
   const kodePromo = body.kodePromo?.trim();
   if (kodePromo) {
-    const promoResult = await validatePromoCode(kodePromo, kelasId, kelas.harga);
+    const promoResult = await validatePromoCode(kodePromo, kelasId, kelas.hargaAktif);
     if (!promoResult.ok) {
       return errorResponse(promoResult.error, 400);
     }
@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
         user_id: session.userId,
         item_type: "kelas",
         item_id: kelasId,
-        jumlah_sebelum_diskon: kelas.harga,
+        jumlah_sebelum_diskon: kelas.hargaAktif,
         jumlah: tagihan,
         status: "menunggu",
         kode_promo_id: kodePromoId,

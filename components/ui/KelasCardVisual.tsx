@@ -62,7 +62,6 @@ function resolveCtaText(isPenuh: boolean, isMenipis: boolean, hasDiskon: boolean
   if (isPenuh) return "Kelas ini sudah penuh, cek kelas lain ya";
   if (isMenipis && hasDiskon) return "Slot terbatas + diskon spesial, jangan sampai lewat!";
   if (isMenipis) return "Gabung sekarang, jangan sampai kehabisan!!!";
-  if (hasDiskon) return "Buruan daftar sebelum promo berakhir!";
   return "Yuk mulai belajar bareng mentor terbaik!";
 }
 

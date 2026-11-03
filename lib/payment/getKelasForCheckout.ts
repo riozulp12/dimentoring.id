@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { hitungHargaSetelahDiskon, normalizeDiskonPersen } from "@/lib/shared/kelasDiskon";
 
 /**
  * Data layer halaman Checkout — PRD Bagian 13 (kelas, enrollments). Harga
@@ -10,7 +11,13 @@ import { supabaseServer } from "@/lib/supabase/server";
 export interface KelasCheckoutData {
   id: string;
   nama: string;
+  /** Harga asli kelas (kelas.harga) — HANYA untuk tampilan coretan. Jangan dipakai menagih. */
   harga: number;
+  /** kelas.diskon_persen yang sudah dinormalisasi (0-100). */
+  diskonPersen: number;
+  /** Harga yang DITAGIH: harga asli setelah diskon_persen kelas, dihitung di server
+   * lewat lib/shared/kelasDiskon.ts. Dasar kode promo & payments.jumlah_sebelum_diskon. */
+  hargaAktif: number;
   modePembelajaran: "online" | "offline";
   /** kelas.link_lynkid ("Input Link Pendaftaran") — dipakai guard checkout
    * (lib/shared/checkoutGuard.ts): kelas yang punya link ditolak checkout internal. */
@@ -28,7 +35,7 @@ export interface KelasCheckoutData {
 export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckoutData | null> {
   const { data, error } = await supabaseServer
     .from("kelas")
-    .select("id, nama, harga, mode_pembelajaran, link_lynkid, jadwal, jadwal_pilih_siswa")
+    .select("id, nama, harga, diskon_persen, mode_pembelajaran, link_lynkid, jadwal, jadwal_pilih_siswa")
     .eq("id", kelasId)
     .eq("tampil_di_katalog", true)
     .maybeSingle();
@@ -39,10 +46,15 @@ export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckou
   }
   if (!data) return null;
 
+  const harga = Number(data.harga);
+  const diskonPersen = normalizeDiskonPersen(data.diskon_persen as number | null);
+
   return {
     id: data.id as string,
     nama: data.nama as string,
-    harga: Number(data.harga),
+    harga,
+    diskonPersen,
+    hargaAktif: hitungHargaSetelahDiskon(harga, diskonPersen),
     modePembelajaran: (data.mode_pembelajaran as "online" | "offline") ?? "online",
     linkPendaftaran: (data.link_lynkid as string | null) ?? null,
     jadwalPilihSiswa: data.jadwal_pilih_siswa === true,
