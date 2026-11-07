@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Button from "./Button";
 import Dropdown from "./Dropdown";
 import Logo from "./Logo";
-import AccountMenu, { type AccountMenuItem } from "@/components/dashboard/AccountMenu";
+import AccountMenu, { OnReviewBadge, type AccountMenuItem } from "@/components/dashboard/AccountMenu";
 import { PROGRAM_KATEGORI_LABEL, PROGRAM_KATEGORI_ORDER, PROGRAM_KATEGORI_SLUG } from "@/lib/shared/kelasLabels";
 
 export type NavItemKey = "home" | "program" | "cek-peluang" | "mentor" | "testimonial" | "faq";
@@ -270,21 +270,16 @@ export default function Navbar({
       >
         <div
           ref={barRef}
-          className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-3 px-5 py-4 sm:px-8 md:px-12 lg:flex-nowrap lg:gap-4 lg:px-20 lg:py-5 min-[1440px]:gap-16 min-[1440px]:py-8"
+          className="flex w-full flex-nowrap items-center justify-between gap-x-2 gap-y-3 px-4 py-3 min-[360px]:gap-x-4 min-[360px]:px-5 min-[360px]:py-4 sm:px-8 md:px-12 lg:gap-4 lg:px-20 lg:py-5 min-[1440px]:gap-16 min-[1440px]:py-8"
         >
-          <Link href="/" aria-label="Ke landing page" className="flex items-center">
-            <Logo variant="primary" mark="full" priority className="h-8 w-auto lg:h-9 min-[1440px]:h-10" />
+          <Link href="/" aria-label="Ke landing page" className="flex shrink-0 items-center">
+            <Logo
+              variant="primary"
+              mark="full"
+              priority
+              className="h-6 w-auto min-[360px]:h-7 sm:h-8 lg:h-9 min-[1440px]:h-10"
+            />
           </Link>
-
-          <button
-            type="button"
-            onClick={() => setIsMenuOpen((prev) => !prev)}
-            aria-label={isMenuOpen ? "Tutup menu" : "Buka menu"}
-            aria-expanded={isMenuOpen}
-            className="flex items-center justify-center rounded-lg p-2 lg:hidden"
-          >
-            <MenuIcon open={isMenuOpen} />
-          </button>
 
           <div className="hidden items-center gap-4 lg:flex min-[1440px]:gap-16">
             <NavLink label={homeItem.label} href={homeItem.href} isActive={effectiveActiveItem === homeItem.key} />
@@ -304,31 +299,75 @@ export default function Navbar({
             />
           </div>
 
-          <div className="hidden lg:flex lg:items-center lg:gap-3 min-[1440px]:gap-8">
+          {/* Aksi akun: SATU kelompok di kanan bilah atas di semua breakpoint
+              (mobile: [aksi][hamburger]; desktop: hanya aksi). AccountMenu
+              dirender sekali saja (tidak ada duplikat fetch notifikasi). */}
+          <div className="flex min-w-0 items-center gap-1 sm:gap-2 lg:gap-3 min-[1440px]:gap-8">
             {isLoggedIn ? (
-              <AccountMenu
-                firstName={firstName}
-                fullName={fullName ?? firstName}
-                avatarUrl={avatarUrl}
-                menuItems={menuItems}
-                mentorStatus={mentorStatus}
-                referralLevel={referralLevel}
-              />
+              // Interaksi di lonceng/avatar menutup menu hamburger (dan sebaliknya:
+              // klik hamburger = mousedown di luar AccountMenu → Dropdown menutup panelnya).
+              <div onPointerDownCapture={() => setIsMenuOpen(false)}>
+                <AccountMenu
+                  firstName={firstName}
+                  fullName={fullName ?? firstName}
+                  avatarUrl={avatarUrl}
+                  menuItems={menuItems}
+                  mentorStatus={mentorStatus}
+                  referralLevel={referralLevel}
+                  mobileBar
+                />
+              </div>
             ) : (
               <>
-                <Button variant="primary" size="md" onClick={handleLoginClick}>
-                  Login
-                </Button>
-                <Button variant="secondary" size="md" onClick={handleRegisterClick}>
-                  Daftar
-                </Button>
+                {/* Mobile: Daftar (terisi) + Login (outline), kompak, satu baris. */}
+                <div className="flex items-center gap-2 lg:hidden">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleRegisterClick}
+                    className="!px-3 !py-2.5 !text-xs min-[360px]:!px-4"
+                  >
+                    Daftar
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleLoginClick}
+                    className="!px-3 !py-2.5 !text-xs min-[360px]:!px-4"
+                  >
+                    Login
+                  </Button>
+                </div>
+                {/* Desktop: tidak berubah (Login primary, Daftar secondary). */}
+                <div className="hidden lg:flex lg:items-center lg:gap-3 min-[1440px]:gap-8">
+                  <Button variant="primary" size="md" onClick={handleLoginClick}>
+                    Login
+                  </Button>
+                  <Button variant="secondary" size="md" onClick={handleRegisterClick}>
+                    Daftar
+                  </Button>
+                </div>
               </>
             )}
+
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen((prev) => !prev)}
+              aria-label={isMenuOpen ? "Tutup menu" : "Buka menu"}
+              aria-expanded={isMenuOpen}
+              aria-controls="navbar-mobile-menu"
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#081EEA] lg:hidden"
+            >
+              <MenuIcon open={isMenuOpen} />
+            </button>
           </div>
         </div>
 
         {isMenuOpen ? (
-          <div className="flex w-full flex-col items-center gap-6 border-t border-[#E3E3E3] px-5 pt-5 pb-5 sm:px-8 md:px-12 lg:hidden">
+          <div
+            id="navbar-mobile-menu"
+            className="flex w-full flex-col items-center gap-6 border-t border-[#E3E3E3] px-5 pt-5 pb-5 sm:px-8 md:px-12 lg:hidden"
+          >
             <div className="flex w-full flex-col items-center gap-5">
               <NavLink
                 label={homeItem.label}
@@ -364,32 +403,10 @@ export default function Navbar({
               />
             </div>
 
-            {isLoggedIn ? (
-              // justify-end (bukan justify-between — AccountMenu satu-satunya
-              // child, jadi justify-between tidak ngefek) supaya trigger notif/
-              // avatar mepet KANAN, sesuai asumsi align="right" dropdown-nya
-              // (lihat AccountMenu.tsx) — kalau mepet KIRI panelnya nyembur ke
-              // luar layar sebelah kiri di layar sempit.
-              <div className="flex w-full items-center justify-end">
-                <AccountMenu
-                  firstName={firstName}
-                  fullName={fullName ?? firstName}
-                  avatarUrl={avatarUrl}
-                  menuItems={menuItems}
-                  mentorStatus={mentorStatus}
-                  referralLevel={referralLevel}
-                />
-              </div>
-            ) : (
-              <div className="flex w-full flex-col gap-3">
-                <Button variant="primary" size="md" onClick={handleLoginClick} className="w-full">
-                  Login
-                </Button>
-                <Button variant="secondary" size="md" onClick={handleRegisterClick} className="w-full">
-                  Daftar
-                </Button>
-              </div>
-            )}
+            {/* Layar <360px: badge "On Review" tidak muat di bilah atas, tampil di sini. */}
+            {isLoggedIn && mentorStatus === "pending" ? (
+              <OnReviewBadge className="min-[360px]:hidden" />
+            ) : null}
           </div>
         ) : null}
       </nav>

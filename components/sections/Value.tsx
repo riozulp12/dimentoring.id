@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import Mascot, { type MascotVariant } from "@/components/ui/Mascot";
+import { JUMLAH_SISWA } from "@/lib/shared/jumlahSiswa";
 
 interface ValueItem {
   count: number;
@@ -8,7 +9,7 @@ interface ValueItem {
 }
 
 const VALUES: ValueItem[] = [
-  { count: 30, label: "Siswa Hebat", mascot: "Happy Graduate" },
+  { count: JUMLAH_SISWA, label: "Siswa Hebat", mascot: "Happy Graduate" },
   { count: 30, label: "Mentor Keren", mascot: "Happy" },
   { count: 5, label: "Event", mascot: "Listen" },
   { count: 7, label: "Program Akademik", mascot: "Happy1" },
