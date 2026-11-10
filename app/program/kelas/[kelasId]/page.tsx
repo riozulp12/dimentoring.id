@@ -142,7 +142,6 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
               namaKelas={kelas.nama}
               index={0}
               diskonAktif={kelas.diskonAktif}
-              kodePromo={kelas.kodePromoAktif}
               sisaSlot={kelas.sisaSlot}
               kapasitas={kelas.kapasitas}
               programKategori={kelas.programKategori}
