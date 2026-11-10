@@ -11,6 +11,13 @@ import {
 } from "@/lib/shared/kelasLabels";
 import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
 import { hitungHargaSetelahDiskon, normalizeDiskonPersen } from "@/lib/shared/kelasDiskon";
+import {
+  isKodePromoBerlaku,
+  labelKodePromo,
+  pilihKodePromoTerbaik,
+  tanggalHariIni,
+  type KodePromoKandidat,
+} from "@/lib/shared/kodePromoAktif";
 
 export const KELAS_CARD_SELECT =
   "id, nama, tipe_kelas, mode_pembelajaran, harga, diskon_persen, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, subtes:subtes_id(nama), mentor:mentor_id(nama)";
@@ -21,7 +28,15 @@ export const KELAS_CARD_SELECT =
  * khusus Admin (butuh field CRUD, bukan cuma tampilan publik).
  */
 
+/** Diskon yang MELEKAT ke kelas (`kelas.diskon_persen`) — ikut terlihat di harga
+ * kartu (harga coret) dan di checkout. Label: "Diskon X%". */
 export interface DiskonAktif {
+  label: string;
+}
+
+/** Kode promo aktif yang berlaku untuk kelas ini — BUTUH kode diketik di
+ * checkout, jadi TIDAK mengubah harga kartu. Label: "Kode PROMO 9.9: -9%". */
+export interface KodePromoAktif {
   label: string;
 }
 
@@ -41,7 +56,10 @@ export interface KelasCardPreview {
    * diskonPersen > 0 untuk memutuskan tampil harga coret atau tidak. */
   hargaSetelahDiskon: number;
   mentorNama: string | null;
+  /** Diskon kelas sendiri (null kalau diskonPersen = 0). TIDAK pernah berisi diskon kode. */
   diskonAktif: DiskonAktif | null;
+  /** Kode promo yang aktif/berlaku/berkuota untuk kelas ini (label terpisah dari diskon kelas). */
+  kodePromoAktif: KodePromoAktif | null;
   kapasitas: number;
   sisaSlot: number;
   deskripsi: string | null;
@@ -84,7 +102,7 @@ export interface KelasCardRow {
   mentor: NamaJoin;
 }
 
-export function toCardPreview(row: KelasCardRow, diskonAktif: DiskonAktif | null, sisaSlot: number): KelasCardPreview {
+export function toCardPreview(row: KelasCardRow, kodePromoAktif: KodePromoAktif | null, sisaSlot: number): KelasCardPreview {
   const harga = Number(row.harga);
   const diskonPersen = normalizeDiskonPersen(row.diskon_persen);
   return {
@@ -98,11 +116,11 @@ export function toCardPreview(row: KelasCardRow, diskonAktif: DiskonAktif | null
     diskonPersen,
     hargaSetelahDiskon: hitungHargaSetelahDiskon(harga, diskonPersen),
     mentorNama: firstNama(row.mentor),
-    // Ribbon + border merah di card (KelasCardFrame/KelasCardVisual) sudah ada
-    // untuk kode promo. Diskon yang melekat ke kelas (`diskon_persen`) ikut
-    // memakainya kalau kelas ini TIDAK sedang kena kode promo — kode promo
-    // tetap prioritas supaya labelnya tidak saling menimpa.
-    diskonAktif: diskonAktif ?? (diskonPersen > 0 ? { label: `Diskon ${diskonPersen}%` } : null),
+    // Ribbon "Diskon X%" HANYA untuk diskon yang ikut terlihat di harga kartu
+    // (diskon_persen kelas). Kode promo (butuh diketik di checkout) punya label
+    // sendiri — tidak digabung jadi satu persen.
+    diskonAktif: diskonPersen > 0 ? { label: `Diskon ${diskonPersen}%` } : null,
+    kodePromoAktif,
     kapasitas: row.kapasitas,
     sisaSlot,
     deskripsi: row.deskripsi,
@@ -146,48 +164,37 @@ export async function getSisaSlotByKelasId(
   return result;
 }
 
-interface ActivePromoRow {
-  id: string;
-  tipe_diskon: "persen" | "nominal";
-  nilai_diskon: number;
-  berlaku_semua_kelas: boolean;
-}
-
-function formatDiskonLabel(tipe: "persen" | "nominal", nilai: number): string {
-  return tipe === "persen"
-    ? `Diskon ${Math.round(nilai)}%`
-    : `Diskon Rp${Math.round(nilai).toLocaleString("id-ID")}`;
-}
-
 /** Kode promo aktif per kelas (PRD Bagian 13, db/schema.sql `kode_promo` +
- * `kode_promo_kelas`) — dipakai buat badge ribbon diskon di card Kelas
- * publik. Kalau lebih dari satu kode berlaku untuk 1 kelas, ambil yang
- * `nilai_diskon` PALING BESAR (bukan digabung/di-stack). */
-export async function getDiskonAktifByKelasId(kelasIds: string[]): Promise<Map<string, DiskonAktif>> {
-  const result = new Map<string, DiskonAktif>();
+ * `kode_promo_kelas`) — dipakai buat label "Kode X: -Y%" di card Kelas publik.
+ * Hanya kode yang status aktif, dalam periode, KUOTA BELUM HABIS, dan berlaku
+ * untuk kelas itu (berlaku_semua_kelas / baris kode_promo_kelas) — aturan sama
+ * dengan validatePromoCode, lihat lib/shared/kodePromoAktif.ts. Kalau lebih dari
+ * satu kode berlaku, ambil yang potongan rupiahnya PALING BESAR untuk harga
+ * kelas itu (bukan digabung/di-stack). `hargaByKelas` = harga yang akan ditagih
+ * checkout (setelah diskon kelas). Murni tampilan, tidak dipakai jalur bayar. */
+export async function getKodePromoAktifByKelasId(hargaByKelas: Map<string, number>): Promise<Map<string, KodePromoAktif>> {
+  const result = new Map<string, KodePromoAktif>();
+  const kelasIds = [...hargaByKelas.keys()];
   if (kelasIds.length === 0) return result;
-
-  const today = new Date().toISOString().slice(0, 10);
 
   const { data: promoRows, error: promoError } = await supabaseServer
     .from("kode_promo")
-    .select("id, tipe_diskon, nilai_diskon, berlaku_semua_kelas")
-    .eq("status", "aktif")
-    .or(`tanggal_mulai.is.null,tanggal_mulai.lte.${today}`)
-    .or(`tanggal_selesai.is.null,tanggal_selesai.gte.${today}`);
+    .select("id, kode, tipe_diskon, nilai_diskon, tanggal_mulai, tanggal_selesai, kuota_pemakaian, jumlah_terpakai, status, berlaku_semua_kelas")
+    .eq("status", "aktif");
 
   if (promoError) {
-    console.error("[getDiskonAktifByKelasId] query kode_promo failed:", promoError);
+    console.error("[getKodePromoAktifByKelasId] query kode_promo failed:", promoError);
     return result;
   }
 
-  const promos = (promoRows ?? []) as unknown as ActivePromoRow[];
+  const today = tanggalHariIni();
+  const promos = ((promoRows ?? []) as unknown as KodePromoKandidat[]).filter((p) => isKodePromoBerlaku(p, today));
   if (promos.length === 0) return result;
 
   const globalPromos = promos.filter((p) => p.berlaku_semua_kelas);
   const scopedPromoIds = promos.filter((p) => !p.berlaku_semua_kelas).map((p) => p.id);
 
-  const scopedByKelas = new Map<string, ActivePromoRow[]>();
+  const scopedByKelas = new Map<string, KodePromoKandidat[]>();
   if (scopedPromoIds.length > 0) {
     const { data: scopeRows, error: scopeError } = await supabaseServer
       .from("kode_promo_kelas")
@@ -196,7 +203,7 @@ export async function getDiskonAktifByKelasId(kelasIds: string[]): Promise<Map<s
       .in("kelas_id", kelasIds);
 
     if (scopeError) {
-      console.error("[getDiskonAktifByKelasId] query kode_promo_kelas failed:", scopeError);
+      console.error("[getKodePromoAktifByKelasId] query kode_promo_kelas failed:", scopeError);
     } else {
       const promoById = new Map(promos.map((p) => [p.id, p]));
       for (const row of (scopeRows ?? []) as { kode_promo_id: string; kelas_id: string }[]) {
@@ -209,12 +216,9 @@ export async function getDiskonAktifByKelasId(kelasIds: string[]): Promise<Map<s
     }
   }
 
-  for (const kelasId of kelasIds) {
-    const candidates = [...globalPromos, ...(scopedByKelas.get(kelasId) ?? [])];
-    if (candidates.length === 0) continue;
-
-    const best = candidates.reduce((max, p) => (Number(p.nilai_diskon) > Number(max.nilai_diskon) ? p : max));
-    result.set(kelasId, { label: formatDiskonLabel(best.tipe_diskon, Number(best.nilai_diskon)) });
+  for (const [kelasId, harga] of hargaByKelas) {
+    const best = pilihKodePromoTerbaik([...globalPromos, ...(scopedByKelas.get(kelasId) ?? [])], harga);
+    if (best) result.set(kelasId, { label: labelKodePromo(best) });
   }
 
   return result;
@@ -235,18 +239,24 @@ export function queryKelasKatalog() {
   return supabaseServer.from("kelas").select(KELAS_CARD_SELECT).eq("tampil_di_katalog", true);
 }
 
-/** Baris kelas -> card jualan lengkap (badge diskon + sisa slot). */
+/** Harga yang ditagih checkout untuk kelas ini (harga setelah diskon kelas). */
+function hargaTagih(harga: number, diskonPersen: number | null): number {
+  return hitungHargaSetelahDiskon(Number(harga), normalizeDiskonPersen(diskonPersen));
+}
+
+/** Baris kelas -> card jualan lengkap (diskon kelas + label kode + sisa slot). */
 export async function toCardPreviewList(rows: KelasCardRow[]): Promise<KelasCardPreview[]> {
   if (rows.length === 0) return [];
 
   const kelasIds = rows.map((row) => row.id);
   const kapasitasById = new Map(rows.map((row) => [row.id, row.kapasitas]));
-  const [diskonByKelas, sisaSlotByKelas] = await Promise.all([
-    getDiskonAktifByKelasId(kelasIds),
+  const hargaByKelas = new Map(rows.map((row) => [row.id, hargaTagih(row.harga, row.diskon_persen)]));
+  const [kodeByKelas, sisaSlotByKelas] = await Promise.all([
+    getKodePromoAktifByKelasId(hargaByKelas),
     getSisaSlotByKelasId(kelasIds, kapasitasById),
   ]);
   return rows.map((row) =>
-    toCardPreview(row, diskonByKelas.get(row.id) ?? null, sisaSlotByKelas.get(row.id) ?? row.kapasitas),
+    toCardPreview(row, kodeByKelas.get(row.id) ?? null, sisaSlotByKelas.get(row.id) ?? row.kapasitas),
   );
 }
 
@@ -356,7 +366,9 @@ export interface KelasDetailPublic {
   mentors: KelasMentorInfo[];
   kapasitas: number;
   sisaSlot: number;
+  /** Diskon kelas sendiri saja — lihat KelasCardPreview.diskonAktif. */
   diskonAktif: DiskonAktif | null;
+  kodePromoAktif: KodePromoAktif | null;
   /** kelas.link_lynkid ("Input Link Pendaftaran") — tujuan tombol Daftar
    * Sekarang kalau terisi, lihat lib/shared/kelasDaftarTarget.ts. */
   linkLynkid: string | null;
@@ -409,13 +421,16 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     users: { id: string; nama: string; avatar_url: string | null; mentor_profiles: { asal_ptn: string | null } | { asal_ptn: string | null }[] | null } | null;
   };
 
-  const [{ count, error: countError }, diskonByKelas, mentorRelResult] = await Promise.all([
+  const hargaDetail = Number(row.harga);
+  const diskonPersenDetail = normalizeDiskonPersen(row.diskon_persen);
+
+  const [{ count, error: countError }, kodeByKelas, mentorRelResult] = await Promise.all([
     supabaseServer
       .from("enrollments")
       .select("id", { count: "exact", head: true })
       .eq("kelas_id", kelasId)
       .eq("status_pembayaran", "lunas"),
-    getDiskonAktifByKelasId([kelasId]),
+    getKodePromoAktifByKelasId(new Map([[kelasId, hitungHargaSetelahDiskon(hargaDetail, diskonPersenDetail)]])),
     supabaseServer
       .from("kelas_mentor")
       .select("users:mentor_id(id, nama, avatar_url, mentor_profiles(asal_ptn))")
@@ -436,9 +451,6 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
       const profile = Array.isArray(u.mentor_profiles) ? (u.mentor_profiles[0] ?? null) : u.mentor_profiles;
       return { nama: u.nama, avatarUrl: u.avatar_url, asalPtn: profile?.asal_ptn ?? null };
     });
-
-  const hargaDetail = Number(row.harga);
-  const diskonPersenDetail = normalizeDiskonPersen(row.diskon_persen);
 
   return {
     id: row.id,
@@ -462,9 +474,8 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     mentors,
     kapasitas: row.kapasitas,
     sisaSlot: row.kapasitas - (count ?? 0),
-    diskonAktif:
-      (diskonByKelas.get(kelasId) ?? null) ??
-      (diskonPersenDetail > 0 ? { label: `Diskon ${diskonPersenDetail}%` } : null),
+    diskonAktif: diskonPersenDetail > 0 ? { label: `Diskon ${diskonPersenDetail}%` } : null,
+    kodePromoAktif: kodeByKelas.get(kelasId) ?? null,
     linkLynkid: row.link_lynkid,
     tampilDiKatalog: row.tampil_di_katalog !== false,
   };

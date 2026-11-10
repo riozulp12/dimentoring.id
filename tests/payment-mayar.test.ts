@@ -545,6 +545,34 @@ describe("POST /api/payment/create (Mayar)", () => {
     assert.ok(mayarPayments[baru.gateway_reference as string], "gateway_reference = id payment request Mayar");
     assert.deepEqual(mayarCalls, ["POST https://api.mayar.io/hl/v2/payments/create"]);
   });
+
+  it("Mayar menolak create -> 502 ramah, log server memuat status HTTP + pesan Mayar, TANPA API key/email/Bearer", async () => {
+    const fetchAsli = globalThis.fetch;
+    const consoleErrorAsli = console.error;
+    const log: string[] = [];
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ statusCode: 400, messages: "amount tidak valid" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch;
+    console.error = (...args: unknown[]) => log.push(args.map(String).join(" "));
+    let res: Response;
+    try {
+      res = await withFlag("true", postCreate);
+    } finally {
+      globalThis.fetch = fetchAsli;
+      console.error = consoleErrorAsli;
+    }
+    assert.equal(res.status, 502);
+    assert.match((await res.json()).error, /Gagal membuat transaksi pembayaran ke gateway/);
+    const teksLog = log.join("\n");
+    assert.match(teksLog, /\[payment\/create\] mayar createPayment failed/);
+    assert.match(teksLog, /HTTP 400/);
+    assert.match(teksLog, /amount tidak valid/);
+    assert.ok(!teksLog.includes("kunci-tiruan"), "API key bocor ke log");
+    assert.ok(!teksLog.includes("siswa@example.com"), "email bocor ke log");
+    assert.ok(!/bearer/i.test(teksLog), "header Authorization bocor ke log");
+  });
 });
 
 describe("harga aktif = harga asli setelah diskon_persen kelas (tagihan sama dengan harga tampil)", () => {
