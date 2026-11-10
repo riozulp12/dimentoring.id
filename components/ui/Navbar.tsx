@@ -273,12 +273,15 @@ export default function Navbar({
           className="flex w-full flex-nowrap items-center justify-between gap-x-2 gap-y-3 px-4 py-3 min-[360px]:gap-x-4 min-[360px]:px-5 min-[360px]:py-4 sm:px-8 md:px-12 lg:gap-4 lg:px-20 lg:py-5 min-[1440px]:gap-16 min-[1440px]:py-8"
         >
           <Link href="/" aria-label="Ke landing page" className="flex shrink-0 items-center">
+            {/* Lebar < 340px: cuma mark "d" (varian icon) supaya bilah atas muat;
+                >= 340px: logo lengkap seperti biasa. Tepat salah satunya yang tampil. */}
             <Logo
               variant="primary"
               mark="full"
               priority
-              className="h-6 w-auto min-[360px]:h-7 sm:h-8 lg:h-9 min-[1440px]:h-10"
+              className="h-6 w-auto max-[339px]:hidden min-[360px]:h-7 sm:h-8 lg:h-9 min-[1440px]:h-10"
             />
+            <Logo variant="primary" mark="icon" className="hidden h-7 w-auto max-[339px]:block" />
           </Link>
 
           <div className="hidden items-center gap-4 lg:flex min-[1440px]:gap-16">
@@ -319,23 +322,16 @@ export default function Navbar({
               </div>
             ) : (
               <>
-                {/* Mobile: Daftar (terisi) + Login (outline), kompak, satu baris. */}
-                <div className="flex items-center gap-2 lg:hidden">
+                {/* Mobile: SATU tombol Daftar (terisi). Login pindah ke paling atas
+                    menu hamburger supaya bilah atas lebih lega. */}
+                <div className="flex items-center lg:hidden">
                   <Button
                     variant="primary"
                     size="sm"
                     onClick={handleRegisterClick}
-                    className="!px-3 !py-2.5 !text-xs min-[360px]:!px-4"
+                    className="min-h-10 !px-4 !text-sm"
                   >
                     Daftar
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleLoginClick}
-                    className="!px-3 !py-2.5 !text-xs min-[360px]:!px-4"
-                  >
-                    Login
                   </Button>
                 </div>
                 {/* Desktop: tidak berubah (Login primary, Daftar secondary). */}
@@ -368,6 +364,25 @@ export default function Navbar({
             id="navbar-mobile-menu"
             className="flex w-full flex-col items-center gap-6 border-t border-[#E3E3E3] px-5 pt-5 pb-5 sm:px-8 md:px-12 lg:hidden"
           >
+            {/* Sebelum login: Login (outline) paling atas di menu, dengan teks
+                kecil "Sudah punya akun?" di atasnya. */}
+            {!isLoggedIn ? (
+              <div className="flex w-full max-w-xs flex-col items-center gap-1.5">
+                <span className="text-xs text-[#7E7C7C]">Sudah punya akun?</span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    handleLoginClick();
+                  }}
+                  className="min-h-10 w-full !text-sm"
+                >
+                  Login
+                </Button>
+              </div>
+            ) : null}
+
             <div className="flex w-full flex-col items-center gap-5">
               <NavLink
                 label={homeItem.label}

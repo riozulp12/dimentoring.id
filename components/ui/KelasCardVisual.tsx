@@ -69,6 +69,13 @@ export interface KelasCardVisualDiskon {
   label: string;
 }
 
+/** Label kode promo (mis. "Kode PROMO 9.9: -9%") — BUKAN diskon kelas: butuh
+ * kode diketik di checkout, jadi tampil sebagai pil terpisah, bukan ribbon
+ * "Diskon X%" yang sejalan dengan harga kartu. */
+export interface KelasCardVisualKodePromo {
+  label: string;
+}
+
 /**
  * "jual" (default) — /program & /program/[kategori] & Rekomendasi Kelas
  * (kelas BELUM dibeli, treatment jualan lengkap tetap relevan).
@@ -83,8 +90,10 @@ export interface KelasCardVisualProps {
   namaKelas: string;
   index: number;
   variant?: KelasCardVisualVariant;
-  /** Dipakai variant "jual" saja. */
+  /** Dipakai variant "jual" saja. Hanya diskon yang ikut terlihat di harga kartu. */
   diskonAktif?: KelasCardVisualDiskon | null;
+  /** Dipakai variant "jual" saja. Label kode promo aktif (terpisah dari diskonAktif). */
+  kodePromo?: KelasCardVisualKodePromo | null;
   /** Dipakai variant "jual" saja. */
   sisaSlot?: number;
   /** Dipakai variant "jual" saja. */
@@ -121,6 +130,7 @@ export default function KelasCardVisual({
   index,
   variant = "jual",
   diskonAktif,
+  kodePromo,
   sisaSlot = 0,
   kapasitas = 0,
   selesai = false,
@@ -225,15 +235,27 @@ export default function KelasCardVisual({
           "tanpa prefix" berlaku di SEMUA ukuran termasuk mobile sampai
           di-override sm: — kebalikan urutan dari media query desktop-first
           di spek asli, tapi angka pxnya sama persis, tidak dihitung ulang). */}
-      {isJual && (isPenuh || isMenipis) ? (
-        <span
-          className={[
-            "absolute top-2 left-2 z-20 rounded-full px-2 py-[3px] text-[10px] font-medium sm:top-3 sm:left-3 sm:px-3 sm:py-1 sm:text-xs",
-            isPenuh ? "bg-[#6B7280] text-white" : "bg-[#FACC15] text-[#422006]",
-          ].join(" ")}
-        >
-          {isPenuh ? "Kelas Penuh" : `Tersisa ${sisaSlot} Slot!!!`}
-        </span>
+      {isJual && (isPenuh || isMenipis || kodePromo) ? (
+        <div className="absolute top-2 left-2 z-20 flex max-w-[calc(100%-3.5rem)] flex-col items-start gap-1 sm:top-3 sm:left-3 sm:max-w-[calc(100%-5rem)]">
+          {isPenuh || isMenipis ? (
+            <span
+              className={[
+                "rounded-full px-2 py-[3px] text-[10px] font-medium sm:px-3 sm:py-1 sm:text-xs",
+                isPenuh ? "bg-[#6B7280] text-white" : "bg-[#FACC15] text-[#422006]",
+              ].join(" ")}
+            >
+              {isPenuh ? "Kelas Penuh" : `Tersisa ${sisaSlot} Slot!!!`}
+            </span>
+          ) : null}
+          {kodePromo ? (
+            <span
+              title={kodePromo.label}
+              className="block max-w-full truncate rounded-full border border-dashed border-[#DC2626] bg-white px-2 py-[2px] text-[9px] font-bold text-[#B91C1C] sm:px-2.5 sm:py-[3px] sm:text-[11px]"
+            >
+              {kodePromo.label}
+            </span>
+          ) : null}
+        </div>
       ) : variant === "diampu" ? (
         <span className="absolute top-2 left-2 z-20 rounded-full bg-[#FACC15] px-2 py-[3px] text-[10px] font-medium text-[#422006] sm:top-3 sm:left-3 sm:px-3 sm:py-1 sm:text-xs">
           {jumlahSiswaAktif} Siswa

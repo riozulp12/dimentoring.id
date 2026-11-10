@@ -39,17 +39,61 @@ describe("jumlah siswa landing page", () => {
 describe("Navbar mobile: aksi di bilah atas", () => {
   const navbar = baca("components/ui/Navbar.tsx");
   const [bilahAtas, menuHamburger] = navbar.split('id="navbar-mobile-menu"');
+  // Blok aksi mobile sebelum login = dari komentar "Mobile: SATU tombol Daftar"
+  // sampai blok desktop.
+  const blokMobileTamu = bilahAtas.slice(
+    bilahAtas.indexOf("Mobile: SATU tombol Daftar"),
+    bilahAtas.indexOf("Desktop: tidak berubah"),
+  );
 
-  it("bilah atas memuat AccountMenu (mobileBar), Daftar/Login, dan hamburger", () => {
+  it("bilah atas memuat AccountMenu (mobileBar), Daftar, dan hamburger", () => {
     assert.ok(menuHamburger, "menu hamburger (#navbar-mobile-menu) harus ada");
     assert.match(bilahAtas, /<AccountMenu[\s\S]*?mobileBar/);
-    assert.match(bilahAtas, /Daftar/);
-    assert.match(bilahAtas, /Login/);
+    assert.match(blokMobileTamu, /Daftar/);
     assert.match(bilahAtas, /aria-label=\{isMenuOpen \? "Tutup menu" : "Buka menu"\}/);
   });
 
-  it("menu hamburger hanya berisi link navigasi (tanpa AccountMenu/Daftar/Login)", () => {
+  it("sebelum login: bilah atas mobile hanya SATU tombol (Daftar), tanpa Login", () => {
+    assert.ok(blokMobileTamu.length > 0, "blok aksi mobile tamu tidak ditemukan");
+    assert.equal((blokMobileTamu.match(/<Button/g) ?? []).length, 1);
+    assert.doesNotMatch(blokMobileTamu, />\s*Login\s*</, "teks tombol Login tidak boleh ada di bilah atas mobile");
+    assert.doesNotMatch(blokMobileTamu, /onClick=\{handleLoginClick\}/);
+    assert.match(blokMobileTamu, /onClick=\{handleRegisterClick\}/);
+    assert.match(blokMobileTamu, /min-h-10/);
+  });
+
+  it("menu hamburger: Login outline paling atas (sebelum link navigasi) dengan teks 'Sudah punya akun?', hanya untuk tamu", () => {
+    assert.match(menuHamburger, /!isLoggedIn \? \(/);
+    assert.match(menuHamburger, /Sudah punya akun\?/);
+    assert.match(menuHamburger, /variant="secondary"/);
+    assert.match(menuHamburger, /handleLoginClick\(\)/);
+    assert.ok(
+      menuHamburger.indexOf("Sudah punya akun?") < menuHamburger.indexOf("<NavLink"),
+      "Login harus di atas link navigasi",
+    );
+    assert.match(menuHamburger, /Sudah punya akun\?[\s\S]*?Login[\s\S]*?<NavLink/);
+    assert.match(menuHamburger, /min-h-10/);
+  });
+
+  it("menu hamburger tidak memuat AccountMenu dan tidak ada tombol Daftar", () => {
     assert.doesNotMatch(menuHamburger, /<AccountMenu/);
-    assert.doesNotMatch(menuHamburger, /<Button/);
+    assert.doesNotMatch(menuHamburger, /handleRegisterClick|Daftar/);
+  });
+
+  it("desktop tidak berubah: Login primary + Daftar secondary tetap di blok lg", () => {
+    assert.match(bilahAtas, /hidden lg:flex[\s\S]*?variant="primary" size="md" onClick=\{handleLoginClick\}[\s\S]*?variant="secondary" size="md" onClick=\{handleRegisterClick\}/);
+  });
+});
+
+describe("Navbar mobile: logo adaptif", () => {
+  const navbar = baca("components/ui/Navbar.tsx");
+
+  it("logo lengkap disembunyikan < 340px, varian icon (mark d) hanya tampil < 340px", () => {
+    assert.match(navbar, /mark="full"[\s\S]*?max-\[339px\]:hidden/);
+    assert.match(navbar, /mark="icon" className="hidden [^"]*max-\[339px\]:block"/);
+  });
+
+  it("aria-label link logo tetap", () => {
+    assert.match(navbar, /aria-label="Ke landing page"/);
   });
 });
