@@ -70,7 +70,6 @@ export default async function ProgramKategoriPage({
                 namaKelas={item.nama}
                 index={idx}
                 diskonAktif={item.diskonAktif}
-                kodePromoAktif={item.kodePromoAktif}
                 sisaSlot={item.sisaSlot}
                 kapasitas={item.kapasitas}
                 programKategori={item.programKategori}

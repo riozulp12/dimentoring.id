@@ -1,9 +1,9 @@
 /**
- * Test label diskon di kartu kelas /program: ribbon "Diskon X%" hanya untuk
- * diskon kelas sendiri (ikut terlihat di harga), sedangkan kode promo punya
- * label terpisah "Kode X: -Y%" — hanya kalau kode aktif, dalam periode, kuota
- * belum habis, dan berlaku untuk kelas itu. Dijalankan terhadap Supabase
- * TIRUAN di memori. Tidak menyentuh logika pembayaran.
+ * Test label diskon di kartu kelas /program: ribbon "Diskon X%" + border merah
+ * HANYA untuk diskon_persen kelas sendiri (yang terlihat di harga coret). Kode
+ * promo (diketik siswa di checkout) TIDAK menghasilkan ribbon/label apa pun di
+ * kartu. Dijalankan terhadap Supabase TIRUAN di memori. Tidak menyentuh logika
+ * pembayaran.
  *
  * Jalankan: npm test
  */
@@ -12,13 +12,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { before, beforeEach, describe, it } from "node:test";
-import {
-  hitungPotonganKode,
-  isKodePromoBerlaku,
-  labelKodePromo,
-  pilihKodePromoTerbaik,
-  type KodePromoKandidat,
-} from "@/lib/shared/kodePromoAktif";
+import type { KelasCardRow } from "@/lib/dashboard/getProgramData";
 
 type Row = Record<string, unknown>;
 
@@ -35,6 +29,9 @@ class FakeQuery implements PromiseLike<{ data: Row[]; error: null; count: number
     this.rows = this.rows.filter((row) => values.includes(row[column]));
     return this;
   }
+  maybeSingle() {
+    return Promise.resolve({ data: this.rows[0] ?? null, error: null });
+  }
   then<A, B>(
     onfulfilled?: ((value: { data: Row[]; error: null; count: number }) => A | PromiseLike<A>) | null,
     onrejected?: ((reason: unknown) => B | PromiseLike<B>) | null,
@@ -44,19 +41,23 @@ class FakeQuery implements PromiseLike<{ data: Row[]; error: null; count: number
 }
 
 let db: Record<string, Row[]>;
+let tabelDiakses: string[];
 type ProgramModule = typeof import("@/lib/dashboard/getProgramData");
 let programData: ProgramModule;
 
 before(async () => {
   const { supabaseServer } = await import("@/lib/supabase/server");
-  (supabaseServer as unknown as { from: (t: string) => FakeQuery }).from = (table: string) => new FakeQuery(db[table] ?? []);
+  (supabaseServer as unknown as { from: (t: string) => FakeQuery }).from = (table: string) => {
+    tabelDiakses.push(table);
+    return new FakeQuery(db[table] ?? []);
+  };
   programData = await import("@/lib/dashboard/getProgramData");
 });
 
 const HARI = 24 * 60 * 60 * 1000;
 const tanggal = (offsetHari: number) => new Date(Date.now() + offsetHari * HARI).toISOString().slice(0, 10);
 
-function kelasRow(id: string, extra: Row = {}): programModuleRow {
+function kelasRow(id: string, extra: Row = {}): KelasCardRow {
   return {
     id,
     nama: `Kelas ${id}`,
@@ -72,13 +73,13 @@ function kelasRow(id: string, extra: Row = {}): programModuleRow {
     subtes: null,
     mentor: null,
     ...extra,
-  } as programModuleRow;
+  } as KelasCardRow;
 }
-type programModuleRow = import("@/lib/dashboard/getProgramData").KelasCardRow;
 
-function promo(id: string, extra: Row = {}): Row {
+/** Kode promo yang AKTIF, dalam periode, berkuota, dan berlaku untuk semua kelas. */
+function promoAktifSemuaKelas(): Row {
   return {
-    id,
+    id: "p1",
     kode: "PROMO 9.9",
     tipe_diskon: "persen",
     nilai_diskon: 9,
@@ -88,153 +89,117 @@ function promo(id: string, extra: Row = {}): Row {
     jumlah_terpakai: 0,
     status: "aktif",
     berlaku_semua_kelas: true,
-    ...extra,
   };
 }
 
 beforeEach(() => {
   db = { kode_promo: [], kode_promo_kelas: [], enrollments: [] };
+  tabelDiakses = [];
 });
 
-async function kartu(...rows: programModuleRow[]) {
+async function kartu(...rows: KelasCardRow[]) {
   const hasil = await programData.toCardPreviewList(rows);
   return new Map(hasil.map((k) => [k.id, k]));
 }
 
-describe("label diskon kartu: sumber data", () => {
-  it("kelas tanpa diskon kelas dan tanpa kode -> tanpa ribbon dan tanpa label kode", async () => {
+describe("ribbon kartu kelas: hanya diskon_persen kelas", () => {
+  it("kelas tanpa diskon_persen tidak punya ribbon, harga tidak berubah", async () => {
     const k = (await kartu(kelasRow("A"))).get("A")!;
     assert.equal(k.diskonAktif, null);
-    assert.equal(k.kodePromoAktif, null);
     assert.equal(k.hargaSetelahDiskon, k.harga);
   });
 
-  it("kode aktif berlaku semua kelas -> label kode di SEMUA kartu, ribbon diskon kelas tetap kosong, harga tidak berubah", async () => {
-    db.kode_promo = [promo("p1")];
+  it("diskon_persen kosong/NULL/0 -> tanpa ribbon", async () => {
+    const map = await kartu(kelasRow("N", { diskon_persen: null }), kelasRow("Z", { diskon_persen: 0 }));
+    assert.equal(map.get("N")!.diskonAktif, null);
+    assert.equal(map.get("Z")!.diskonAktif, null);
+  });
+
+  it("kode promo aktif untuk SEMUA kelas tidak menghasilkan ribbon atau label di kartu mana pun", async () => {
+    db.kode_promo = [promoAktifSemuaKelas()];
     const map = await kartu(kelasRow("A"), kelasRow("B", { harga: 500000 }));
     for (const id of ["A", "B"]) {
       const k = map.get(id)!;
-      assert.equal(k.kodePromoAktif?.label, "Kode PROMO 9.9: -9%");
-      assert.equal(k.diskonAktif, null, "kode tidak boleh menjadi ribbon 'Diskon 9%'");
+      assert.equal(k.diskonAktif, null, "kode promo tidak boleh menjadi ribbon");
       assert.equal(k.hargaSetelahDiskon, k.harga, "harga kartu tidak berubah oleh kode");
+      assert.ok(!("kodePromoAktif" in k), "kartu tidak membawa label kode promo");
+      assert.doesNotMatch(JSON.stringify(k), /PROMO 9\.9|Kode /, "tidak ada teks kode di data kartu");
     }
   });
 
-  it("kode hanya untuk kelas tertentu -> label hanya di kelas itu", async () => {
-    db.kode_promo = [promo("p1", { berlaku_semua_kelas: false })];
+  it("kode promo untuk kelas tertentu juga tidak menghasilkan ribbon/label", async () => {
+    db.kode_promo = [{ ...promoAktifSemuaKelas(), berlaku_semua_kelas: false }];
     db.kode_promo_kelas = [{ kode_promo_id: "p1", kelas_id: "B" }];
-    const map = await kartu(kelasRow("A"), kelasRow("B"), kelasRow("C"));
-    assert.equal(map.get("A")!.kodePromoAktif, null);
-    assert.equal(map.get("B")!.kodePromoAktif?.label, "Kode PROMO 9.9: -9%");
-    assert.equal(map.get("C")!.kodePromoAktif, null);
+    const map = await kartu(kelasRow("A"), kelasRow("B"));
+    assert.equal(map.get("A")!.diskonAktif, null);
+    assert.equal(map.get("B")!.diskonAktif, null);
+    assert.doesNotMatch(JSON.stringify(map.get("B")), /PROMO 9\.9|Kode /);
   });
 
-  it("kode kedaluwarsa, belum mulai, nonaktif, atau kuota habis -> tanpa label", async () => {
-    db.kode_promo = [
-      promo("kedaluwarsa", { tanggal_selesai: tanggal(-1) }),
-      promo("belum", { tanggal_mulai: tanggal(1) }),
-      promo("nonaktif", { status: "nonaktif" }),
-      promo("habis", { kuota_pemakaian: 50, jumlah_terpakai: 50 }),
-      promo("lebih", { kuota_pemakaian: 50, jumlah_terpakai: 51 }),
-    ];
-    assert.equal((await kartu(kelasRow("A"))).get("A")!.kodePromoAktif, null);
-  });
-
-  it("kuota masih tersisa / tanpa batas waktu -> label tampil", async () => {
-    db.kode_promo = [promo("p1", { kuota_pemakaian: 50, jumlah_terpakai: 49, tanggal_mulai: null, tanggal_selesai: null })];
-    assert.equal((await kartu(kelasRow("A"))).get("A")!.kodePromoAktif?.label, "Kode PROMO 9.9: -9%");
-  });
-
-  it("kelas berdiskon sendiri + kode -> dua label terpisah, tidak digabung jadi satu persen", async () => {
-    db.kode_promo = [promo("p1")];
+  it('kelas berdiskon sendiri ("[UJI]") + kode aktif -> hanya ribbon diskon kelas, persen kelas saja', async () => {
+    db.kode_promo = [promoAktifSemuaKelas()];
     const k = (await kartu(kelasRow("UJI", { harga: 15000, diskon_persen: 50 }))).get("UJI")!;
     assert.equal(k.diskonAktif?.label, "Diskon 50%");
-    assert.equal(k.kodePromoAktif?.label, "Kode PROMO 9.9: -9%");
     assert.equal(k.hargaSetelahDiskon, 7500);
+    assert.doesNotMatch(JSON.stringify(k), /9%|PROMO 9\.9|Kode /);
   });
 
-  it("kelas berdiskon sendiri tanpa kode -> hanya ribbon diskon kelas", async () => {
+  it("kelas berdiskon sendiri tanpa kode -> ribbon diskon kelas", async () => {
     const k = (await kartu(kelasRow("D", { diskon_persen: 20 }))).get("D")!;
     assert.equal(k.diskonAktif?.label, "Diskon 20%");
-    assert.equal(k.kodePromoAktif, null);
   });
 
-  it("beberapa kode berlaku -> dipilih potongan rupiah terbesar untuk harga kelas (bukan angka nilai_diskon mentah)", async () => {
-    db.kode_promo = [
-      promo("persen", { kode: "PERSEN", nilai_diskon: 9 }),
-      promo("nominal", { kode: "HEMAT", tipe_diskon: "nominal", nilai_diskon: 50000 }),
-    ];
-    // 9% x 900.000 = 81.000 > 50.000 -> PERSEN; 9% x 100.000 = 9.000 < 50.000 -> HEMAT.
-    const map = await kartu(kelasRow("MAHAL"), kelasRow("MURAH", { harga: 100000 }));
-    assert.equal(map.get("MAHAL")!.kodePromoAktif?.label, "Kode PERSEN: -9%");
-    assert.equal(map.get("MURAH")!.kodePromoAktif?.label, "Kode HEMAT: -Rp50.000");
+  it("data kartu tidak lagi membaca tabel kode_promo / kode_promo_kelas", async () => {
+    db.kode_promo = [promoAktifSemuaKelas()];
+    await kartu(kelasRow("A"));
+    assert.ok(!tabelDiakses.includes("kode_promo"));
+    assert.ok(!tabelDiakses.includes("kode_promo_kelas"));
   });
 
-  it("detail kelas publik memakai aturan yang sama", async () => {
-    db.kode_promo = [promo("p1")];
-    db.kelas = [{ ...kelasRow("DETAIL", { diskon_persen: 10, jumlah_sesi: 4, jadwal: null, tampil_di_katalog: true }) }];
+  it("detail kelas publik: ribbon hanya dari diskon_persen, kode aktif diabaikan", async () => {
+    db.kode_promo = [promoAktifSemuaKelas()];
+    db.kelas = [kelasRow("DETAIL", { diskon_persen: 10, jumlah_sesi: 4, jadwal: null, tampil_di_katalog: true }) as unknown as Row];
     db.kelas_mentor = [];
-    const { supabaseServer } = await import("@/lib/supabase/server");
-    const fromAsli = (supabaseServer as unknown as { from: (t: string) => unknown }).from;
-    (supabaseServer as unknown as { from: (t: string) => unknown }).from = (table: string) => {
-      const q = new FakeQuery(db[table] ?? []) as FakeQuery & { maybeSingle: () => Promise<unknown> };
-      q.maybeSingle = () => Promise.resolve({ data: (db[table] ?? [])[0] ?? null, error: null });
-      return q;
-    };
-    try {
-      const detail = await programData.getKelasDetailPublic("DETAIL");
-      assert.equal(detail?.diskonAktif?.label, "Diskon 10%");
-      assert.equal(detail?.kodePromoAktif?.label, "Kode PROMO 9.9: -9%");
-    } finally {
-      (supabaseServer as unknown as { from: unknown }).from = fromAsli;
-    }
-  });
-});
+    const detail = await programData.getKelasDetailPublic("DETAIL");
+    assert.equal(detail?.diskonAktif?.label, "Diskon 10%");
+    assert.ok(detail && !("kodePromoAktif" in detail));
 
-describe("helper kode promo (aturan sama dengan checkout)", () => {
-  const dasar: KodePromoKandidat = promo("x") as unknown as KodePromoKandidat;
-
-  it("isKodePromoBerlaku: batas hari ini ikut berlaku (inklusif), kuota pas habis tidak", () => {
-    assert.equal(isKodePromoBerlaku({ ...dasar, tanggal_mulai: "2026-09-09", tanggal_selesai: "2026-09-09" }, "2026-09-09"), true);
-    assert.equal(isKodePromoBerlaku({ ...dasar, tanggal_selesai: "2026-09-08" }, "2026-09-09"), false);
-    assert.equal(isKodePromoBerlaku({ ...dasar, kuota_pemakaian: 1, jumlah_terpakai: 1 }, "2026-09-09"), false);
-  });
-
-  it("hitungPotonganKode tidak pernah melebihi harga; label nominal & persen", () => {
-    assert.equal(hitungPotonganKode({ tipe_diskon: "nominal", nilai_diskon: 99999 }, 5000), 5000);
-    assert.equal(hitungPotonganKode({ tipe_diskon: "persen", nilai_diskon: 9 }, 7500), 675);
-    assert.equal(labelKodePromo({ kode: "PROMO 9.9", tipe_diskon: "persen", nilai_diskon: 9 }), "Kode PROMO 9.9: -9%");
-    assert.equal(pilihKodePromoTerbaik([dasar], 0), null);
+    db.kelas = [kelasRow("TANPA", { jumlah_sesi: 4, jadwal: null, tampil_di_katalog: true }) as unknown as Row];
+    assert.equal((await programData.getKelasDetailPublic("TANPA"))?.diskonAktif, null);
   });
 });
 
 describe("tampilan kartu (statis)", () => {
   const baca = (rel: string) => readFileSync(path.resolve(__dirname, "..", rel), "utf8");
 
-  it("ribbon diagonal hanya dari diskonAktif; label kode dirender terpisah dari kodePromo", () => {
-    const visual = baca("components/ui/KelasCardVisual.tsx");
-    const [sebelumRibbon, ribbonDst] = visual.split("Ribbon diskon");
-    assert.match(sebelumRibbon, /kodePromo\.label/);
-    assert.match(ribbonDst, /diskonAktif\.label/);
-    assert.doesNotMatch(ribbonDst, /kodePromo\.label/);
+  it("tidak ada pil/label kode promo di komponen kartu", () => {
+    for (const rel of ["components/ui/KelasCardVisual.tsx", "components/program/KelasCardFrame.tsx", "components/program/KelasCardMeta.tsx"]) {
+      assert.doesNotMatch(baca(rel), /kodePromo|KodePromo|Kode \$\{/, rel);
+    }
   });
 
-  it("border merah kartu hanya mengikuti diskon kelas, bukan kode", () => {
+  it("ribbon diagonal dan border merah hanya mengikuti diskonAktif (diskon kelas)", () => {
+    const visual = baca("components/ui/KelasCardVisual.tsx");
+    assert.match(visual, /\{isJual && diskonAktif \? \(/);
     const frame = baca("components/program/KelasCardFrame.tsx");
     assert.match(frame, /\r?\n\s+diskonAktif\r?\n\s+\? "border-2 border-\[#DC2626\]/);
-    assert.doesNotMatch(frame, /kodePromoAktif\r?\n\s+\? "border-2/);
   });
 
-  it("semua pemakai kartu meneruskan kodePromoAktif", () => {
-    for (const rel of ["app/program/page.tsx", "app/program/[kategori]/page.tsx", "app/(protected)/(siswa)/kelas/page.tsx"]) {
-      assert.match(baca(rel), /kodePromoAktif=\{item\.kodePromoAktif\}/, rel);
+  it("tidak ada pemakai kartu yang meneruskan kode promo", () => {
+    for (const rel of [
+      "app/program/page.tsx",
+      "app/program/[kategori]/page.tsx",
+      "app/program/kelas/[kelasId]/page.tsx",
+      "app/(protected)/(siswa)/kelas/page.tsx",
+      "lib/dashboard/getProgramData.ts",
+    ]) {
+      assert.doesNotMatch(baca(rel), /kodePromo|getKodePromo|kode_promo/, rel);
     }
-    assert.match(baca("app/program/kelas/[kelasId]/page.tsx"), /kodePromo=\{kelas\.kodePromoAktif\}/);
   });
 
-  it("jalur pembayaran & validate-promo tidak menyentuh helper tampilan", () => {
-    for (const rel of ["app/api/payment/create/route.ts", "app/api/payment/validate-promo/route.ts", "lib/payment/validatePromoCode.ts"]) {
-      assert.doesNotMatch(baca(rel), /kodePromoAktif/, rel);
-    }
+  it("checkout tetap menerima kode: create memakai validatePromoCode, validate-promo masih ada", () => {
+    assert.match(baca("app/api/payment/create/route.ts"), /validatePromoCode\(kodePromo, kelasId, kelas\.hargaAktif\)/);
+    assert.match(baca("app/api/payment/validate-promo/route.ts"), /validatePromoCode/);
+    assert.match(baca("components/siswa/CheckoutForm.tsx"), /kodePromo: appliedPromo\?\.kode/);
   });
 });

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import KelasCardVisual from "@/components/ui/KelasCardVisual";
-import type { DiskonAktif, KodePromoAktif } from "@/lib/dashboard/getProgramData";
+import type { DiskonAktif } from "@/lib/dashboard/getProgramData";
 
 /**
  * Frame card Kelas publik (dipakai app/program/page.tsx Template A/B/C +
@@ -15,10 +15,8 @@ export interface KelasCardFrameProps {
   href: string;
   namaKelas: string;
   index: number;
-  /** Diskon kelas sendiri (ikut terlihat di harga) — satu-satunya pemicu border merah. */
+  /** Diskon kelas sendiri (ikut terlihat di harga) — satu-satunya pemicu ribbon & border merah. */
   diskonAktif: DiskonAktif | null;
-  /** Label kode promo aktif (butuh kode di checkout) — pil terpisah, tidak mengubah border/harga. */
-  kodePromoAktif?: KodePromoAktif | null;
   sisaSlot: number;
   kapasitas: number;
   programKategori: string;
@@ -40,7 +38,6 @@ export default function KelasCardFrame({
   namaKelas,
   index,
   diskonAktif,
-  kodePromoAktif = null,
   sisaSlot,
   kapasitas,
   programKategori,
@@ -77,7 +74,6 @@ export default function KelasCardFrame({
         namaKelas={namaKelas}
         index={index}
         diskonAktif={diskonAktif}
-        kodePromo={kodePromoAktif}
         sisaSlot={sisaSlot}
         kapasitas={kapasitas}
         programKategori={programKategori}
