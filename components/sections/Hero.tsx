@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
+import { JUMLAH_SISWA, JUMLAH_SISWA_LABEL } from "@/lib/shared/jumlahSiswa";
 
 /**
  * PRD Bagian 4.3 #1: Hero sempat punya 2 CTA setara bobot (bingungkan user
@@ -83,10 +84,10 @@ export default function Hero() {
             </div>
             <div className="flex flex-col items-center gap-2 lg:items-start">
               <p className="text-lg font-medium leading-[1.5] tracking-[-0.36px] text-black">
-                30+ Siswa
+                {JUMLAH_SISWA_LABEL} Siswa
               </p>
               <p className="w-full max-w-[382px] text-center text-base leading-[1.5] tracking-[-0.36px] text-black lg:text-left">
-                Lebih dari 30 siswa telah belajar dengan kami dan mendapatkan
+                Lebih dari {JUMLAH_SISWA} siswa telah belajar dengan kami dan mendapatkan
                 PTN impiannya
               </p>
             </div>

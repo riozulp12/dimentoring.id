@@ -37,6 +37,12 @@ export interface AccountMenuProps {
   mentorStatus?: "pending";
   /** Level gamifikasi referral (mis. "Rookie Referrer") — ditampilkan di bawah nama pada item "Profil". */
   referralLevel?: string | null;
+  /** Dipakai Navbar landing: AccountMenu tampil di bilah atas mobile (samping hamburger).
+   * Di bawah breakpoint lg, panel notifikasi/profil di-anchor ke tepi viewport (bukan ke
+   * tombolnya) supaya tidak keluar layar, target sentuh dibesarkan ke 40px, dan badge
+   * "On Review" dikecilkan (disembunyikan <360px — Navbar menampilkannya di menu hamburger).
+   * Di lg ke atas tidak ada bedanya. Default false (Header dashboard tidak berubah). */
+  mobileBar?: boolean;
 }
 
 interface NotifikasiItem {
@@ -56,13 +62,19 @@ const MENU_ICONS: Record<Exclude<AccountMenuIconKey, "profil">, ComponentType<{ 
   logout: LogoutIcon,
 };
 
-function OnReviewBadge() {
+export function OnReviewBadge({ className = "" }: { className?: string }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium leading-none whitespace-nowrap text-amber-700 sm:text-sm">
+    <span
+      className={`inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium leading-none whitespace-nowrap text-amber-700 sm:text-sm ${className}`}
+    >
       On Review
     </span>
   );
 }
+
+// Fokus terlihat untuk tombol ikon di bilah atas (keyboard / a11y).
+const FOCUS_RING =
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#081EEA]";
 
 export default function AccountMenu({
   firstName,
@@ -71,6 +83,7 @@ export default function AccountMenu({
   menuItems,
   mentorStatus,
   referralLevel,
+  mobileBar = false,
 }: AccountMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -128,14 +141,21 @@ export default function AccountMenu({
   }
 
   return (
-    <div className="flex items-center gap-3 sm:gap-4">
-      {mentorStatus === "pending" ? <OnReviewBadge /> : null}
+    <div className={mobileBar ? "flex items-center gap-1 sm:gap-4" : "flex items-center gap-3 sm:gap-4"}>
+      {mentorStatus === "pending" ? (
+        <OnReviewBadge
+          className={mobileBar ? "mr-1 !px-2 !text-[10px] max-[359px]:hidden sm:!px-3 sm:!text-sm" : ""}
+        />
+      ) : null}
 
       <Dropdown
         open={notifOpen}
         onOpenChange={setNotifOpen}
         align="right"
-        panelClassName="max-h-[70vh] w-80 max-w-[calc(100vw-2.5rem)] overflow-y-auto"
+        className={mobileBar ? "max-lg:static" : undefined}
+        panelClassName={`max-h-[70vh] w-80 max-w-[calc(100vw-2.5rem)] overflow-y-auto ${
+          mobileBar ? "max-lg:right-3 max-lg:max-w-[calc(100vw-1.5rem)]" : ""
+        }`}
         trigger={
           <button
             type="button"
@@ -143,7 +163,9 @@ export default function AccountMenu({
             aria-label="Notifikasi"
             aria-haspopup="menu"
             aria-expanded={notifOpen}
-            className="relative flex size-8 items-center justify-center rounded-lg text-[#7e7c7c] hover:bg-gray-100"
+            className={`relative flex items-center justify-center rounded-lg text-[#7e7c7c] hover:bg-gray-100 ${FOCUS_RING} ${
+              mobileBar ? "size-10 lg:size-8" : "size-8"
+            }`}
           >
             <NotificationIcon className="size-5" />
             {unreadCount > 0 ? (
@@ -200,14 +222,18 @@ export default function AccountMenu({
         open={open}
         onOpenChange={setOpen}
         align="right"
-        panelClassName="w-56"
+        className={mobileBar ? "max-lg:static" : undefined}
+        panelClassName={`w-56 ${mobileBar ? "max-lg:right-3" : ""}`}
         trigger={
           <button
             type="button"
             onClick={() => setOpen((prev) => !prev)}
+            aria-label={`Menu akun ${firstName}`}
             aria-haspopup="menu"
             aria-expanded={open}
-            className="flex items-center gap-2 rounded-lg sm:gap-3"
+            className={`flex items-center gap-2 rounded-lg sm:gap-3 ${FOCUS_RING} ${
+              mobileBar ? "max-lg:p-1" : ""
+            }`}
           >
             <span className="hidden text-sm text-[#081eea] sm:inline">{firstName}</span>
             <Avatar avatarUrl={avatarUrl} nama={fullName} size="sm" />
