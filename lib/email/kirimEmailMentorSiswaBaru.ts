@@ -2,6 +2,11 @@ import "server-only";
 import { Resend } from "resend";
 import { resolveAppBaseUrl } from "@/lib/payment/mayarLogic";
 import { bersihkanGalat, samarkanEmail } from "@/lib/notifikasi/logAman";
+import { escapeHtml, satuBaris } from "@/lib/email/layoutEmail";
+import { buatEmailSiswaBaru, buatSubjekSiswaBaru, type IsiEmailSiswaBaru } from "@/lib/email/templateEmail";
+
+export { escapeHtml, buatSubjekSiswaBaru };
+export type { IsiEmailSiswaBaru };
 
 /**
  * Email ke Mentor saat ada siswa baru di kelas yang diampunya (PRD Bagian 7.5).
@@ -11,7 +16,8 @@ import { bersihkanGalat, samarkanEmail } from "@/lib/notifikasi/logAman";
  *
  * Isi sengaja minim: nama siswa, kelas, jadwal (kalau ada), tautan ke web.
  * TANPA nomor WA / email siswa. Semua teks dari luar di-escape (nama siswa
- * dari pengguna, jadi tidak boleh masuk HTML mentah).
+ * dari pengguna, jadi tidak boleh masuk HTML mentah). Tampilan memakai layout
+ * bersama di lib/email/layoutEmail.ts (isi per event: lib/email/templateEmail.ts).
  *
  * Env (semua opsional kecuali RESEND_API_KEY):
  *   RESEND_API_KEY      — kunci Resend. Kosong = email dilewati dengan satu peringatan.
@@ -24,28 +30,10 @@ import { bersihkanGalat, samarkanEmail } from "@/lib/notifikasi/logAman";
 export const EMAIL_FROM_ADDRESS_BAWAAN = "notifikasi@dimentoring.id";
 export const EMAIL_FROM_NAME_BAWAAN = "Dimentoring";
 const BASE_URL_BAWAAN = "https://dimentoring.id";
-/** Gambar email selalu dari produksi (di Preview belum tentu ada). */
-const ASSET_BASE_URL = "https://dimentoring.id";
-const LOGO_URL = `${ASSET_BASE_URL}/icons/logo-full-primary.svg`;
-const MASCOT_URL = `${ASSET_BASE_URL}/mascots/mascot-guidance.png`;
 
 type EnvLike = Readonly<Record<string, string | undefined>>;
 
 const POLA_ALAMAT_EMAIL = /^[^\s<>"@,;]+@[^\s<>"@,;]+\.[^\s<>"@,;]+$/;
-
-export function escapeHtml(teks: string): string {
-  return teks
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-/** Satu baris saja (tanpa baris baru) supaya aman untuk subjek / nama pengirim. */
-function satuBaris(teks: string, maks: number): string {
-  return teks.replace(/[\u0000-\u001F\u007F]+/g, " ").replace(/\s+/g, " ").trim().slice(0, maks);
-}
 
 /** "Dimentoring <notifikasi@dimentoring.id>" — bisa diatur env, nilai tak valid jatuh ke bawaan. */
 export function buatPengirim(env: EnvLike): { from: string; replyTo?: string } {
@@ -59,97 +47,12 @@ export function buatPengirim(env: EnvLike): { from: string; replyTo?: string } {
   };
 }
 
-export interface IsiEmailSiswaBaru {
-  namaMentor: string;
-  namaSiswa: string;
-  kelasNama: string;
-  /** null = jadwal belum diatur -> baris jadwal tidak ditampilkan. */
-  jadwalDisplay: string | null;
-  tautan: string;
-}
-
-export function buatSubjekSiswaBaru(kelasNama: string): string {
-  return `Ada siswa baru di kelas ${satuBaris(kelasNama, 100)}`;
-}
-
 export function buatTeksSiswaBaru(isi: IsiEmailSiswaBaru): string {
-  return [
-    `Halo ${isi.namaMentor},`,
-    "",
-    `Ada siswa baru di kelas ${isi.kelasNama}.`,
-    "",
-    `Siswa: ${isi.namaSiswa}`,
-    `Kelas: ${isi.kelasNama}`,
-    ...(isi.jadwalDisplay ? [`Jadwal: ${isi.jadwalDisplay}`] : []),
-    "",
-    "Penerimaan siswa dilakukan di web, bukan lewat email ini. Buka tautan ini untuk melihat dan menerimanya:",
-    isi.tautan,
-    "",
-    "Tim Dimentoring",
-  ].join("\n");
+  return buatEmailSiswaBaru(isi).teks;
 }
 
 export function buatHtmlSiswaBaru(isi: IsiEmailSiswaBaru): string {
-  const mentor = escapeHtml(isi.namaMentor);
-  const siswa = escapeHtml(isi.namaSiswa);
-  const kelas = escapeHtml(isi.kelasNama);
-  const jadwal = isi.jadwalDisplay ? escapeHtml(isi.jadwalDisplay) : null;
-  const tautan = escapeHtml(isi.tautan);
-
-  const baris = (label: string, nilai: string, akhir = false) => `
-                  <tr><td style="font-size:13px;color:#7E7C7C;padding-bottom:4px;">${label}</td></tr>
-                  <tr><td style="font-size:15px;color:#000000;font-weight:600;${akhir ? "" : "padding-bottom:12px;"}">${nilai}</td></tr>`;
-
-  return `
-<!doctype html>
-<html>
-  <body style="margin:0;padding:0;background-color:#F9FAFF;font-family:Arial,Helvetica,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F9FAFF;padding:32px 16px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:24px;border:1px solid #E3E3E3;padding:32px;">
-            <tr>
-              <td style="text-align:center;padding-bottom:8px;">
-                <img src="${LOGO_URL}" width="150" height="40" alt="Dimentoring" style="display:inline-block;width:150px;height:40px;border:0;outline:none;text-decoration:none;" />
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-top:20px;">
-                <p style="margin:0 0 12px;font-size:16px;color:#000000;">Halo ${mentor},</p>
-                <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#333333;">
-                  Ada siswa baru di kelas <strong>${kelas}</strong>.
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-bottom:20px;">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F9FAFF;border-radius:16px;padding:16px 20px;">${baris("Siswa", siswa)}${baris("Kelas", kelas, !jadwal)}${jadwal ? baris("Jadwal", jadwal, true) : ""}
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td style="text-align:center;padding-bottom:20px;">
-                <a href="${tautan}" style="display:inline-block;background-color:#081EEA;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 24px;border-radius:12px;">Buka Kelas Saya</a>
-              </td>
-            </tr>
-            <tr>
-              <td style="text-align:center;padding-bottom:20px;">
-                <img src="${MASCOT_URL}" width="110" alt="" style="display:inline-block;width:110px;height:auto;border:0;outline:none;text-decoration:none;" />
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <p style="margin:0;font-size:13px;line-height:1.6;color:#7E7C7C;">
-                  Penerimaan siswa dilakukan di web, bukan lewat email ini.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+  return buatEmailSiswaBaru(isi).html;
 }
 
 export interface KirimEmailMentorSiswaBaruInput {
