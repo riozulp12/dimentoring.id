@@ -195,7 +195,17 @@ describe("email template: escape HTML", () => {
     const hasil = [
       buatEmailSiswaBaru({ namaMentor: JAHAT, namaSiswa: JAHAT, kelasNama: JAHAT, jadwalDisplay: JAHAT, tautan: "https://dimentoring.id/kelas-saya/k" }),
       buatEmailResetPassword({ nama: JAHAT, resetLink: "https://dimentoring.id/reset-password?token=a&b=<c>" }),
-      buatEmailPembayaranBerhasil({ namaSiswa: JAHAT, kelasNama: JAHAT, jadwalDisplay: JAHAT, tautan: "https://dimentoring.id/kelas/k" }),
+      buatEmailPembayaranBerhasil({
+        namaSiswa: JAHAT,
+        kelasNama: JAHAT,
+        namaMentor: JAHAT,
+        jadwalDisplay: JAHAT,
+        jumlahDibayar: JAHAT,
+        kodePromo: JAHAT,
+        tanggalPembayaran: JAHAT,
+        nomorPesanan: JAHAT,
+        tautan: "https://dimentoring.id/kelas/k",
+      }),
     ];
     for (const { html } of hasil) {
       assert.ok(!html.includes("<script"), "tag script lolos");
