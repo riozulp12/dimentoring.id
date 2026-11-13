@@ -77,34 +77,48 @@ export function buatEmailResetPassword(isi: IsiEmailResetPassword, opsi: OpsiTam
   return { subjek: SUBJEK_RESET_PASSWORD, html, teks };
 }
 
-// ---- Pembayaran berhasil -> Siswa -------------------------------------------
-// Template saja: BELUM ada pengiriman email untuk event ini (notifikasi
-// pembayaran berhasil sekarang hanya di dalam web). Tidak dipanggil dari alur
-// pembayaran/webhook manapun.
+// ---- Pembayaran berhasil -> Siswa (bukti pembayaran) ------------------------
+// Dikirim dari lib/email/kirimEmailPembayaranBerhasil.ts lewat
+// lib/notifikasi/pembayaranBerhasil.ts, hanya pada eksekusi PERTAMA setelah lunas.
 
 export interface IsiEmailPembayaranBerhasil {
   namaSiswa: string;
   kelasNama: string;
+  /** null = kelas belum punya mentor -> baris Mentor tidak ditampilkan. */
+  namaMentor: string | null;
+  /** null = jadwal belum diatur -> baris jadwal tidak ditampilkan. */
   jadwalDisplay: string | null;
+  /** Sudah terformat untuk tampilan, mis. "Rp90.000". */
+  jumlahDibayar: string;
+  /** null = tanpa kode promo -> baris Kode promo tidak ditampilkan. */
+  kodePromo: string | null;
+  /** Sudah terformat untuk tampilan, mis. "14 November 2026 01.44 WIB". */
+  tanggalPembayaran: string;
+  nomorPesanan: string;
   tautan: string;
 }
 
 export function buatSubjekPembayaranBerhasil(kelasNama: string): string {
-  return `Pembayaran berhasil untuk kelas ${satuBaris(kelasNama, 100)}`;
+  return `Pembayaran berhasil: ${satuBaris(kelasNama, 100)}`;
 }
 
 export function buatEmailPembayaranBerhasil(isi: IsiEmailPembayaranBerhasil, opsi: OpsiTampilanEmail = {}): HasilEmail {
   const baris: BarisKartu[] = [
     { label: "Kelas", nilai: isi.kelasNama },
+    ...(isi.namaMentor ? [{ label: "Mentor", nilai: isi.namaMentor }] : []),
     ...(isi.jadwalDisplay ? [{ label: "Jadwal", nilai: isi.jadwalDisplay }] : []),
+    { label: "Jumlah dibayar", nilai: isi.jumlahDibayar },
+    ...(isi.kodePromo ? [{ label: "Kode promo", nilai: isi.kodePromo }] : []),
+    { label: "Tanggal pembayaran", nilai: isi.tanggalPembayaran },
+    { label: "Nomor pesanan", nilai: isi.nomorPesanan },
   ];
   const { html, teks } = renderEmailLayout({
     namaEvent: "Pembayaran Berhasil",
     paragrafPendukung: "Terima kasih, pembayaran kamu sudah kami terima.",
     namaPenerima: isi.namaSiswa,
-    pembuka: "Pembayaran kamu sudah kami konfirmasi dan kamu resmi terdaftar di kelas berikut. Selamat belajar, kami dampingi sampai berhasil!",
+    pembuka: "Pembayaran kamu sudah kami konfirmasi dan kamu resmi terdaftar di kelas berikut. Simpan email ini sebagai bukti pembayaran. Selamat belajar, kami dampingi sampai berhasil!",
     isi: baris,
-    tombol: { label: "Lihat Detail Kelas", url: isi.tautan },
+    tombol: { label: "Buka Kelas Saya", url: isi.tautan },
     asetBaseUrl: opsi.asetBaseUrl,
   });
   return { subjek: buatSubjekPembayaranBerhasil(isi.kelasNama), html, teks };

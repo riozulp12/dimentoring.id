@@ -61,13 +61,18 @@ export const CONTOH_EVENT_EMAIL: readonly ContohEmail[] = [
   },
   {
     kunci: "pembayaran-berhasil",
-    judul: "Pembayaran berhasil -> Siswa (template saja, belum dikirim)",
+    judul: "Pembayaran berhasil -> Siswa (bukti pembayaran)",
     buat: (opsi) =>
       buatEmailPembayaranBerhasil(
         {
           namaSiswa: "Budi Santoso",
           kelasNama: "Intensif UTBK 2027",
+          namaMentor: "Rina Mentor",
           jadwalDisplay: "Senin & Rabu, 16.00 - 17.30 WIB",
+          jumlahDibayar: "Rp90.000",
+          kodePromo: "MERDEKA17",
+          tanggalPembayaran: "14 November 2026 01.44 WIB",
+          nomorPesanan: "DMT-20261114-0001",
           tautan: "https://dimentoring.id/kelas/contoh-kelas-id",
         },
         opsi,
