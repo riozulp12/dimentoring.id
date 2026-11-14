@@ -12,5 +12,5 @@ function bersihkan(teks: string, maks: number): string {
 export function buatPesanWaSiswaBaru(namaMentor: string, namaKelas: string): string {
   const mentor = bersihkan(namaMentor, 60) || "Mentor";
   const kelas = bersihkan(namaKelas, 80) || "kamu";
-  return `Halo Kak ${mentor}, ada siswa baru di kelas ${kelas}. Buka dimentoring.id/kelas-saya untuk melihat dan menerimanya. Terima kasih, tim Dimentoring.`;
+  return `Halo Kak ${mentor}, ada siswa baru di kelas ${kelas}. Buka dimentoring.id/kelas-saya untuk melihat kelas dan siswa barumu. Terima kasih, tim Dimentoring.`;
 }

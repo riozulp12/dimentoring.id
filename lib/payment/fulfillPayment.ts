@@ -8,6 +8,7 @@ import {
 } from "@/lib/notifikasi/notify";
 import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
 import { generateSesiKelasUntukEnrollment, type GenerateSesiResult } from "@/lib/absensi/generateSesiKelas";
+import { kabariSiswaPembayaranBerhasil } from "@/lib/notifikasi/pembayaranBerhasil";
 
 /**
  * Alur pasca-lunas BERSAMA — PRD Bagian 8 BR-19 (status cuma berubah lewat
@@ -97,6 +98,10 @@ export async function jalankanPascaLunas(payment: PaymentRow, opts: { pertamaKal
   const jadwalDisplay = formatJadwalRingkas(hasil.kelas?.jadwal);
 
   await notifyPembayaranBerhasil(payment.user_id, kelasId, kelasNama);
+
+  // Email bukti pembayaran ke siswa: HANYA eksekusi pertama setelah lunas. Berjalan SETELAH
+  // respons (jalankanSetelahRespons), tidak pernah melempar galat, dan tidak menunggu layanan email.
+  if (opts.pertamaKali) await kabariSiswaPembayaranBerhasil(payment.id);
 
   // Offline: notif HANYA ke mentor_offline_id yang dipilih siswa saat checkout
   // (kelas offline tidak punya kelas_subtes_mentor/kelas_mentor).
