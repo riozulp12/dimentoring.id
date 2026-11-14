@@ -8,6 +8,7 @@
  * Jalankan: npm test
  */
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -113,7 +114,7 @@ describe("aturan akses data sama dengan /beasiswa-event", () => {
 describe("komponen yang dipakai ulang tidak diduplikasi", () => {
   it("BeasiswaEventListClient memuat kolom cari, filter tipe konten, dan tab status", () => {
     const klien = baca("components/beasiswa-event/BeasiswaEventListClient.tsx");
-    assert.ok(klien.includes('placeholder="Cari judul beasiswa, internship, atau event..."'));
+    assert.ok(klien.includes('placeholder="Cari judul..."'));
     assert.ok(klien.includes("KONTEN_INFO_TIPE_LABEL"));
     assert.ok(klien.includes("Masih Buka") && klien.includes("Sudah Ditutup"));
     for (const tipe of ["beasiswa", "internship", "webinar", "workshop", "event"]) {
@@ -139,6 +140,110 @@ describe("cakupan perubahan: tampilan saja", () => {
     for (const berkas of ["app/program/[kategori]/page.tsx", "components/program/KategoriKelasGrid.tsx"]) {
       const impor = daftarImpor(baca(berkas));
       assert.deepEqual(impor.filter((spesifier) => /payment|checkout|mayar|midtrans/i.test(spesifier)), [], berkas);
+    }
+  });
+});
+
+/**
+ * Render komponen di PROSES TERPISAH tanpa kondisi "react-server" (runner tes
+ * memakainya, dan react-dom/server menolak kondisi itu), lalu kembalikan HTML-nya.
+ */
+function renderDaftar(items: unknown[]): string {
+  const kode = `
+    const React = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const mod = await import("@/components/beasiswa-event/BeasiswaEventListClient");
+    const Komponen = typeof mod.default === "function" ? mod.default : mod.default.default; // interop CJS/ESM dari tsx
+    process.stdout.write(renderToStaticMarkup(React.createElement(Komponen, { items: JSON.parse(process.argv[1]) })));
+  `;
+  return execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", kode, JSON.stringify(items)], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: { ...process.env, NODE_OPTIONS: "" },
+  });
+}
+
+const CONTOH = [
+  { id: "a", tipe: "beasiswa", judul: "Beasiswa Aktif", deskripsi: null, deadline: "2026-12-20", status: "aktif" },
+  { id: "b", tipe: "internship", judul: "Internship Tutup", deskripsi: null, deadline: "2026-11-01", status: "ditutup" },
+];
+
+describe("baris filter beasiswa/internship/event (render sungguhan)", () => {
+  const html = renderDaftar(CONTOH);
+
+  it('dropdown berlabel "Jenis" yang tertaut ke dropdown, opsi pertama "Semua jenis"', () => {
+    const label = html.match(/<label for="([^"]+)"[^>]*>Jenis<\/label>/);
+    assert.ok(label, 'label "Jenis" ada');
+    assert.ok(html.includes(`id="${label![1]}"`), "label menunjuk ke kontrol yang ada");
+    assert.match(html, /<option value="semua"[^>]*>Semua jenis<\/option>/);
+    assert.ok(!html.includes(">Semua</option>"), 'tidak ada lagi opsi bernama "Semua"');
+    const opsi = Array.from(html.matchAll(/<option value="([^"]+)"[^>]*>([^<]+)<\/option>/g), (m) => m[2]);
+    // "Semua jenis" selalu pertama; sisanya mengikuti KONTEN_INFO_TIPE_LABEL (satu sumber data).
+    assert.equal(opsi[0], "Semua jenis");
+    assert.deepEqual(
+      [...opsi.slice(1)].sort(),
+      ["Beasiswa", "Event", "Internship", "Webinar", "Workshop"],
+    );
+  });
+
+  it("urutan di baris: Jenis -> Cari -> Status", () => {
+    const iJenis = html.indexOf(">Jenis</label>");
+    const iDropdown = html.indexOf('aria-haspopup="listbox"');
+    const iCari = html.indexOf(">Cari</label>");
+    const iInput = html.indexOf('placeholder="Cari judul..."');
+    const iStatus = html.indexOf(">Status</span>");
+    const iTab = html.indexOf('aria-pressed=');
+    const urutan = [iJenis, iDropdown, iCari, iInput, iStatus, iTab];
+    assert.ok(urutan.every((i) => i >= 0), `semua elemen ada: ${urutan}`);
+    assert.deepEqual([...urutan].sort((a, b) => a - b), urutan, "urutan DOM = Jenis, Cari, Status");
+  });
+
+  it("satu baris di desktop (lg:flex-row, sejajar bawah), kolom cari mengisi sisa, mobile boleh turun", () => {
+    assert.ok(html.includes("lg:flex-row") && html.includes("lg:items-end"));
+    assert.match(html, /<div class="flex min-w-0 flex-1 flex-col gap-1\.5"><label for="[^"]+"[^>]*>Cari<\/label>/);
+    // base = kolom (mobile), Jenis + Cari satu baris dibungkus lg:contents agar rata di baris desktop
+    assert.ok(html.includes('class="flex flex-col gap-3 lg:flex-row'));
+    assert.ok(html.includes("lg:contents"));
+  });
+
+  it('status awal "Semua" (bukan "Sudah Ditutup"), tombol berstatus aria-pressed', () => {
+    const tombol = Array.from(html.matchAll(/<button[^>]*aria-pressed="(true|false)"[^>]*>([^<]+)<\/button>/g), (m) => [m[2], m[1]]);
+    assert.deepEqual(tombol, [
+      ["Semua", "true"],
+      ["Masih Buka", "false"],
+      ["Sudah Ditutup", "false"],
+    ]);
+  });
+
+  it("status awal menampilkan SEMUA konten (aktif dan ditutup), bukan daftar kosong", () => {
+    assert.ok(html.includes("Beasiswa Aktif"));
+    assert.ok(html.includes("Internship Tutup"));
+    assert.ok(!html.includes("Tidak ada konten yang cocok"));
+  });
+
+  it("status yang aktif tidak bisa tertukar dengan hover (hover hanya abu-abu)", () => {
+    const klien = baca("components/beasiswa-event/BeasiswaEventListClient.tsx");
+    assert.ok(klien.includes("ring-1 ring-[#081EEA] ring-inset"));
+    assert.ok(klien.includes("hover:bg-gray-50 hover:text-black"));
+    assert.ok(!klien.includes("hover:border-[#081EEA] hover:text-[#081EEA]"));
+  });
+
+  it("daftar kosong sungguhan menampilkan pesan kosong yang sama seperti sebelumnya", () => {
+    assert.ok(renderDaftar([]).includes("Belum ada info beasiswa, internship, atau event saat ini."));
+  });
+
+  it("logika filter/pencarian/status tidak berubah (AND judul, tipe, status)", () => {
+    const klien = baca("components/beasiswa-event/BeasiswaEventListClient.tsx");
+    assert.ok(klien.includes("if (q && !item.judul.toLowerCase().includes(q)) return false;"));
+    assert.ok(klien.includes('if (tipeFilter !== "semua" && item.tipe !== tipeFilter) return false;'));
+    assert.ok(klien.includes('if (statusFilter !== "semua" && item.status !== statusFilter) return false;'));
+    assert.ok(klien.includes('useState<StatusFilter>("semua")'));
+    assert.ok(klien.includes('useState<TipeFilter>("semua")'));
+  });
+
+  it("/beasiswa-event dan /program/pendampingan-mahasiswa memakai komponen yang sama", () => {
+    for (const berkas of ["app/beasiswa-event/page.tsx", "app/program/[kategori]/page.tsx"]) {
+      assert.ok(baca(berkas).includes("<BeasiswaEventListClient"), berkas);
     }
   });
 });
