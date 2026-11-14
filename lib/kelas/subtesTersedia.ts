@@ -3,21 +3,19 @@ import { supabaseServer } from "@/lib/supabase/server";
 
 /**
  * Ketersediaan subtes pada kelas PAKET (siswa memilih subtes): sebuah subtes
- * "tersedia" hanya kalau ada mentor AKTIF yang mengajarnya. Dipakai UI pilihan
- * subtes di checkout ("Belum tersedia", tidak bisa dipilih) dan — SETELAH
- * ditinjau — oleh app/api/payment/create untuk menolak subtes yang tetap
- * dikirim klien. File ini TIDAK mengubah alur pembayaran.
+ * "tersedia" HANYA kalau ada pasangan kelas_subtes_mentor untuk subtes itu
+ * dengan mentor AKTIF. Dipakai SATU aturan yang sama oleh UI pilihan subtes di
+ * checkout ("Belum tersedia", tidak bisa dipilih) dan oleh app/api/payment/create
+ * (menolak subtes yang tetap dikirim klien).
  *
- * Aturan (selaras dengan yang dipakai sekarang, lihat notifyMentorsSiswaBaruDaftar
- * dan getNamaMapelMentor):
- * 1. Kelas yang SUDAH punya pasangan kelas_subtes_mentor: subtes tersedia kalau
- *    punya pasangan dengan mentor aktif. kelas_mentor (daftar datar, tanpa
- *    subtes) TIDAK dihitung — kalau tidak, subtes tanpa mentor khusus bisa
- *    terjual hanya karena ada mentor lain di kelas yang sama.
- * 2. Kelas lama TANPA satu pun pasangan kelas_subtes_mentor: semua subtes
- *    dianggap tersedia kalau ada mentor aktif di kelas_mentor (daftar datar
- *    itu satu-satunya data mentor kelas ini, dan mentor di dalamnya memang
- *    bisa mengajar — lib/mentor/aksesMentor.ts).
+ * Aturan ketat — kelas_mentor (daftar datar, tanpa subtes) TIDAK dihitung sama
+ * sekali, juga bukan sebagai fallback untuk kelas lama tanpa pasangan: sisa
+ * sistem sudah memperlakukan paket lewat pasangan (notifikasi siswa baru hanya
+ * ke mentor subtes yang dipilih, label mapel presensi dari pasangan), jadi
+ * subtes tanpa pasangan mentor aktif tidak boleh dijual. Kelas lama tanpa
+ * pasangan menjadi "Belum tersedia" sampai Admin memasangkan mentor per subtes
+ * di Kelola Kelas.
+ *
  * Mentor aktif = user_roles: role_type 'mentor', status 'active'.
  */
 
@@ -43,25 +41,18 @@ export interface InputKetersediaan {
   pool: SubtesPool[];
   /** Semua baris kelas_subtes_mentor kelas ini (mentor aktif maupun tidak). */
   pasangan: { subtesId: string; mentorId: string }[];
-  /** Semua mentor_id di kelas_mentor kelas ini. */
-  mentorKelasIds: string[];
   aktifIds: ReadonlySet<string>;
 }
 
 /** Murni (tanpa DB). */
 export function hitungKetersediaanSubtes(input: InputKetersediaan): KetersediaanKelas {
-  const { pool, pasangan, mentorKelasIds, aktifIds } = input;
+  const { pool, pasangan, aktifIds } = input;
 
-  const adaPasangan = pasangan.length > 0;
-  const adaMentorKelasAktif = mentorKelasIds.some((id) => aktifIds.has(id));
   const subtesDenganMentorAktif = new Set(
     pasangan.filter((p) => aktifIds.has(p.mentorId)).map((p) => p.subtesId),
   );
 
-  const subtes = pool.map((item) => ({
-    ...item,
-    tersedia: adaPasangan ? subtesDenganMentorAktif.has(item.id) : adaMentorKelasAktif,
-  }));
+  const subtes = pool.map((item) => ({ ...item, tersedia: subtesDenganMentorAktif.has(item.id) }));
 
   return {
     subtes,
@@ -91,16 +82,12 @@ export function cekSubtesDipilihTersedia(ketersediaan: KetersediaanKelas, subtes
  * Baca ketersediaan dari database untuk satu kelas. `pool` = subtes yang
  * ditawarkan kelas (hasil getKelasSubtesOptions, dioper pemanggil supaya tidak
  * ada dua sumber pool). Mengembalikan null kalau query gagal (sudah di-log) —
- * pemanggil memutuskan: UI boleh tetap menampilkan semua, server SEBAIKNYA
- * menolak (fail-closed).
+ * pemanggil memutuskan: UI menampilkan semua subtes, server menolak (fail-closed).
  */
 export async function getKetersediaanSubtes(kelasId: string, pool: SubtesPool[]): Promise<KetersediaanKelas | null> {
-  const [pasanganRes, kelasMentorRes] = await Promise.all([
-    supabaseServer.from("kelas_subtes_mentor").select("subtes_id, mentor_id").eq("kelas_id", kelasId),
-    supabaseServer.from("kelas_mentor").select("mentor_id").eq("kelas_id", kelasId),
-  ]);
-  if (pasanganRes.error || kelasMentorRes.error) {
-    console.error("[getKetersediaanSubtes] query mentor kelas gagal:", pasanganRes.error ?? kelasMentorRes.error);
+  const pasanganRes = await supabaseServer.from("kelas_subtes_mentor").select("subtes_id, mentor_id").eq("kelas_id", kelasId);
+  if (pasanganRes.error) {
+    console.error("[getKetersediaanSubtes] query kelas_subtes_mentor gagal:", pasanganRes.error);
     return null;
   }
 
@@ -108,9 +95,8 @@ export async function getKetersediaanSubtes(kelasId: string, pool: SubtesPool[])
     subtesId: row.subtes_id,
     mentorId: row.mentor_id,
   }));
-  const mentorKelasIds = ((kelasMentorRes.data ?? []) as unknown as { mentor_id: string }[]).map((row) => row.mentor_id);
 
-  const mentorIds = Array.from(new Set([...pasangan.map((p) => p.mentorId), ...mentorKelasIds]));
+  const mentorIds = Array.from(new Set(pasangan.map((p) => p.mentorId)));
   let aktifIds = new Set<string>();
   if (mentorIds.length > 0) {
     const rolesRes = await supabaseServer
@@ -126,5 +112,5 @@ export async function getKetersediaanSubtes(kelasId: string, pool: SubtesPool[])
     aktifIds = new Set(((rolesRes.data ?? []) as unknown as { user_id: string }[]).map((row) => row.user_id));
   }
 
-  return hitungKetersediaanSubtes({ pool, pasangan, mentorKelasIds, aktifIds });
+  return hitungKetersediaanSubtes({ pool, pasangan, aktifIds });
 }
