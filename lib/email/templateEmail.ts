@@ -46,7 +46,7 @@ export function buatEmailSiswaBaru(isi: IsiEmailSiswaBaru, opsi: OpsiTampilanEma
     pembuka: "Kabar baik! Ada siswa baru yang bergabung di kelas yang kamu ampu. Berikut ringkasannya.",
     isi: baris,
     tombol: { label: "Lihat Detail Kelas", url: isi.tautan },
-    catatan: "Penerimaan siswa dilakukan di web, bukan lewat email ini. Buka tombol di atas untuk melihat dan menerimanya.",
+    catatan: "Buka tombol di atas untuk melihat kelas dan siswa barumu.",
     asetBaseUrl: opsi.asetBaseUrl,
   });
   return { subjek: buatSubjekSiswaBaru(isi.kelasNama), html, teks };
