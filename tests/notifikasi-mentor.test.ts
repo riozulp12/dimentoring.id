@@ -290,7 +290,8 @@ describe("email: isi, pengirim, dan keamanan", () => {
       assert.ok(isi.includes("Intensif UTBK"), bagian);
       assert.ok(isi.includes("Senin 16.00"), bagian);
       assert.ok(isi.includes("https://dimentoring.id/kelas-saya/kelas-1"), bagian);
-      assert.match(isi, /Penerimaan siswa dilakukan di web/);
+      assert.ok(isi.includes("Buka tombol di atas untuk melihat kelas dan siswa barumu."), bagian);
+      assert.doesNotMatch(isi, /menerima|Penerimaan siswa/i, bagian);
     }
     assert.deepEqual(kirim.to, ["rina.mentor@contoh.id"]);
   });
@@ -391,7 +392,7 @@ describe("WhatsApp: bendera dan pesan", () => {
   it("teks persis sesuai spesifikasi, hanya nama mentor dan nama kelas", () => {
     assert.equal(
       buatPesanWaSiswaBaru("Rina", "Intensif UTBK"),
-      "Halo Kak Rina, ada siswa baru di kelas Intensif UTBK. Buka dimentoring.id/kelas-saya untuk melihat dan menerimanya. Terima kasih, tim Dimentoring.",
+      "Halo Kak Rina, ada siswa baru di kelas Intensif UTBK. Buka dimentoring.id/kelas-saya untuk melihat kelas dan siswa barumu. Terima kasih, tim Dimentoring.",
     );
   });
 
