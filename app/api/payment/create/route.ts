@@ -107,19 +107,23 @@ export async function POST(request: NextRequest) {
       return errorResponse(`Pilih minimal 1, maksimal ${MAX_SUBTES_PILIHAN} subtes.`, 400);
     }
     resolvedSubtesIds = requested;
-    // Subtes tanpa mentor aktif tidak boleh dijual: aturan SAMA dengan UI checkout
-    // (lib/kelas/subtesTersedia.ts), dihitung ulang di server.
-    const ketersediaan = await getKetersediaanSubtes(kelasId, subtesPool);
-    if (!ketersediaan) {
-      // fail-closed: ketersediaan tidak bisa dipastikan -> jangan jual
-      return errorResponse("Gagal memeriksa ketersediaan subtes. Coba lagi nanti.", 500);
-    }
-    if (!ketersediaan.kelasBisaDibeli) {
-      return errorResponse("Kelas ini belum bisa didaftar karena belum ada mentor untuk subtesnya.", 409);
-    }
-    const cek = cekSubtesDipilihTersedia(ketersediaan, resolvedSubtesIds);
-    if (!cek.ok) {
-      return errorResponse(cek.error, 409);
+    // Hanya kelas paket ONLINE (kondisi SAMA dengan UI: isPaket = !isOffline && subtes > 1).
+    // Kelas offline: mentor dipilih siswa per jarak (getOfflineMentorOptions), bukan pasangan subtes.
+    if (kelas.modePembelajaran !== "offline") {
+      // Subtes tanpa mentor aktif tidak boleh dijual: aturan SAMA dengan UI checkout
+      // (lib/kelas/subtesTersedia.ts), dihitung ulang di server.
+      const ketersediaan = await getKetersediaanSubtes(kelasId, subtesPool);
+      if (!ketersediaan) {
+        // fail-closed: ketersediaan tidak bisa dipastikan -> jangan jual
+        return errorResponse("Gagal memeriksa ketersediaan subtes. Coba lagi nanti.", 500);
+      }
+      if (!ketersediaan.kelasBisaDibeli) {
+        return errorResponse("Kelas ini belum bisa didaftar karena belum ada mentor untuk subtesnya.", 409);
+      }
+      const cek = cekSubtesDipilihTersedia(ketersediaan, resolvedSubtesIds);
+      if (!cek.ok) {
+        return errorResponse(cek.error, 409);
+      }
     }
   } else {
     // Kelas tunggal/tanpa subtes — otomatis, tidak minta siswa pilih apa pun.

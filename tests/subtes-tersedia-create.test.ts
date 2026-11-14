@@ -11,6 +11,8 @@
  * Jalankan: npm test
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { before, beforeEach, describe, it } from "node:test";
 
 type Row = Record<string, unknown>;
@@ -272,6 +274,54 @@ describe("pembacaan ketersediaan gagal -> 500 (fail-closed)", () => {
     assert.equal(res.status, 500);
     assert.equal(json.error, "Gagal memeriksa ketersediaan subtes. Coba lagi nanti.");
     pastikanTidakAdaYangDibuat();
+  });
+});
+
+describe("satu aturan di UI dan server: blok ketersediaan hanya untuk kelas paket ONLINE", () => {
+  it("kelas online paket tanpa pasangan sama sekali (kelas_mentor juga kosong) -> 409", async () => {
+    db.kelas_subtes_mentor = [];
+    db.kelas_mentor = [];
+    const { res, json } = await buat({ subtesIds: ["mtk"] });
+    assert.equal(res.status, 409);
+    assert.equal(json.error, "Kelas ini belum bisa didaftar karena belum ada mentor untuk subtesnya.");
+    pastikanTidakAdaYangDibuat();
+  });
+
+  it("kelas OFFLINE dengan >1 subtes tanpa pasangan TIDAK ditolak 409 oleh blok ini (lanjut ke validasi mentor tatap muka)", async () => {
+    db.kelas[0].mode_pembelajaran = "offline";
+    db.kelas_subtes_mentor = [];
+    db.kelas_mentor = [];
+    const { res, json } = await buat({ subtesIds: ["mtk"] });
+    assert.notEqual(res.status, 409);
+    assert.doesNotMatch(json.error ?? "", /belum tersedia|belum ada mentor untuk subtesnya/);
+    // sampai ke validasi kelas offline (mentor dipilih siswa, bukan pasangan kelas_subtes_mentor)
+    assert.equal(res.status, 400);
+    assert.equal(json.error, "Pilih mentor tatap muka dulu sebelum checkout.");
+    pastikanTidakAdaYangDibuat();
+  });
+
+  it("kelas OFFLINE tidak membaca kelas_subtes_mentor/user_roles sama sekali untuk ketersediaan", async () => {
+    db.kelas[0].mode_pembelajaran = "offline";
+    tabelGagal = "kelas_subtes_mentor"; // kalau dibaca, hasilnya 500 (fail-closed)
+    const { res } = await buat({ subtesIds: ["mtk"] });
+    assert.notEqual(res.status, 500);
+    assert.equal(res.status, 400);
+    pastikanTidakAdaYangDibuat();
+  });
+
+  it("kondisi di server sama dengan kondisi di UI dan halaman checkout (paket online)", () => {
+    const route = readFileSync(path.join(process.cwd(), "app/api/payment/create/route.ts"), "utf8");
+    const form = readFileSync(path.join(process.cwd(), "components/siswa/CheckoutForm.tsx"), "utf8");
+    const halaman = readFileSync(path.join(process.cwd(), "app/(protected)/(siswa)/checkout/[kelasId]/page.tsx"), "utf8");
+    // UI: isPaket = !isOffline && subtesOptions.length > 1
+    assert.ok(form.includes("const isPaket = !isOffline && subtesOptions.length > 1;"));
+    // halaman checkout: hanya kelas paket online
+    assert.ok(halaman.includes('kelas.modePembelajaran !== "offline" && subtesPool.length > 1'));
+    // server: blok ketersediaan dibatasi kondisi yang sama
+    const awalBlok = route.indexOf('if (kelas.modePembelajaran !== "offline") {');
+    const komentar = route.indexOf("// Subtes tanpa mentor aktif tidak boleh dijual");
+    assert.ok(awalBlok > 0 && komentar > awalBlok, "blok ketersediaan berada di dalam kondisi non-offline");
+    assert.ok(route.indexOf("getKetersediaanSubtes(kelasId, subtesPool)") > awalBlok);
   });
 });
 
