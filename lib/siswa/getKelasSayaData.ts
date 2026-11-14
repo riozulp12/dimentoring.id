@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { getNamaMentorKelas } from "@/lib/kelas/namaMentor";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
 import { formatJadwalSiswaTerdaftar } from "@/lib/shared/jadwalPilihan";
 import { getProgresSesiPerPendaftaran } from "@/lib/shared/progresSesiData";
@@ -42,14 +43,6 @@ export interface KelasSayaItem {
   modePembelajaran: string;
 }
 
-type MentorJoin = { nama: string } | { nama: string }[] | null;
-
-function resolveMentorNama(mentor: MentorJoin): string | null {
-  if (!mentor) return null;
-  const row = Array.isArray(mentor) ? mentor[0] : mentor;
-  return row?.nama ?? null;
-}
-
 type SubtesJoin = { nama: string } | { nama: string }[] | null;
 
 function resolveSubtesNama(subtes: SubtesJoin): string | null {
@@ -63,7 +56,7 @@ export async function getKelasSaya(userId: string): Promise<KelasSayaItem[]> {
   const { data, error } = await supabaseServer
     .from("enrollments")
     .select(
-      "id, jadwal_ditetapkan, kelas:kelas_id(id, nama, jadwal, jadwal_pilih_siswa, jumlah_sesi, program_kategori, tingkat_kelas, mode_pembelajaran, subtes:subtes_id(nama), mentor:mentor_id(nama))",
+      "id, jadwal_ditetapkan, kelas:kelas_id(id, nama, jadwal, jadwal_pilih_siswa, jumlah_sesi, program_kategori, tingkat_kelas, mode_pembelajaran, subtes:subtes_id(nama), mentor_id)",
     )
     .eq("user_id", userId)
     .eq("status_pembayaran", "lunas");
@@ -83,7 +76,7 @@ export async function getKelasSaya(userId: string): Promise<KelasSayaItem[]> {
     tingkat_kelas: string;
     mode_pembelajaran: string;
     subtes: SubtesJoin;
-    mentor: MentorJoin;
+    mentor_id: string | null;
   };
   type Row = { id: string; jadwal_ditetapkan: unknown; kelas: KelasJoin | KelasJoin[] | null };
   const rows = (data ?? []) as unknown as Row[];
@@ -96,6 +89,14 @@ export async function getKelasSaya(userId: string): Promise<KelasSayaItem[]> {
     }),
   );
 
+  // Nama mentor dari kelas_subtes_mentor + kelas_mentor (aktif saja), fallback
+  // kelas.mentor_id — lib/kelas/namaMentor.ts (satu kali query untuk semua kelas).
+  const kelasUntukMentor = rows
+    .map((row) => (Array.isArray(row.kelas) ? row.kelas[0] : row.kelas))
+    .filter((kelas): kelas is KelasJoin => Boolean(kelas))
+    .map((kelas) => ({ id: kelas.id, mentorIdLama: kelas.mentor_id ?? null }));
+  const namaMentorByKelas = await getNamaMentorKelas(kelasUntukMentor);
+
   return rows
     .map((row) => {
       const kelas = Array.isArray(row.kelas) ? row.kelas[0] : row.kelas;
@@ -104,7 +105,7 @@ export async function getKelasSaya(userId: string): Promise<KelasSayaItem[]> {
       return {
         id: kelas.id,
         nama: kelas.nama,
-        mentorNama: resolveMentorNama(kelas.mentor),
+        mentorNama: namaMentorByKelas.get(kelas.id) ?? null,
         jadwal:
           formatJadwalSiswaTerdaftar(
             {

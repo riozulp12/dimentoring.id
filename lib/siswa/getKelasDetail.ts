@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { getNamaMentorKelas } from "@/lib/kelas/namaMentor";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
 import { hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
 import { hitungStatusSesi, labelMentorSesi, type StatusSesiEfektif } from "@/lib/shared/statusSesi";
@@ -59,7 +60,7 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      "id, nama, jadwal, jadwal_pilih_siswa, link_meet, deskripsi, mode_pembelajaran, jumlah_sesi, tampil_di_katalog, mentor:mentor_id(nama), subtes:subtes_id(nama)",
+      "id, nama, jadwal, jadwal_pilih_siswa, link_meet, deskripsi, mode_pembelajaran, jumlah_sesi, tampil_di_katalog, mentor_id, subtes:subtes_id(nama)",
     )
     .eq("id", kelasId)
     .maybeSingle();
@@ -80,15 +81,19 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
     mode_pembelajaran: string;
     jumlah_sesi: number;
     tampil_di_katalog: boolean | null;
-    mentor: NamaJoin;
+    mentor_id: string | null;
     subtes: NamaJoin;
   };
   const row = data as unknown as Row;
 
+  // Nama mentor dari kelas_subtes_mentor + kelas_mentor (aktif saja), fallback
+  // kelas.mentor_id — lib/kelas/namaMentor.ts.
+  const namaMentor = await getNamaMentorKelas([{ id: row.id, mentorIdLama: row.mentor_id }]);
+
   return {
     id: row.id,
     nama: row.nama,
-    mentorNama: firstNama(row.mentor),
+    mentorNama: namaMentor.get(row.id) ?? null,
     jadwal: formatJadwal(row.jadwal),
     linkMeet: row.link_meet,
     subtesNama: firstNama(row.subtes),
