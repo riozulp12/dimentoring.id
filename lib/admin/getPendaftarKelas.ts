@@ -50,7 +50,8 @@ export interface PendaftarKelasData {
     modePembelajaran: "online" | "offline";
     /** kelas.tipe_kelas — Link Meet per siswa hanya untuk 'private'. */
     tipeKelas: string | null;
-    kapasitas: number;
+    /** null = kapasitas manual kosong (otomatis / tanpa batas). */
+    kapasitas: number | null;
     /** Enrollment lunas — dasar "Kelas Penuh" (sama dengan katalog). */
     terisi: number;
     jumlahSesi: number;
@@ -145,7 +146,7 @@ export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelas
       slots: parseJadwalSlots(kelas.jadwal),
       modePembelajaran: kelas.mode_pembelajaran === "offline" ? "offline" : "online",
       tipeKelas: (kelas.tipe_kelas as string | null) ?? null,
-      kapasitas: kelas.kapasitas as number,
+      kapasitas: typeof kelas.kapasitas === "number" ? kelas.kapasitas : null,
       terisi: pendaftar.filter((p) => p.statusPembayaran === "lunas").length,
       jumlahSesi: kelas.jumlah_sesi as number,
       subtesPool,

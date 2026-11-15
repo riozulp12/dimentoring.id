@@ -6,6 +6,9 @@ import PageTitle from "@/components/dashboard/PageTitle";
 import CheckoutForm from "@/components/siswa/CheckoutForm";
 import { getCheckoutBlockReason, isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 import { parseJadwalSlots, perluPilihJadwal } from "@/lib/shared/jadwalPilihan";
+import { opsiJadwalCheckout, semuaSlotPenuh } from "@/lib/shared/slotTerisi";
+import { getKetersediaanKelas } from "@/lib/jadwal/slotTerisi";
+import BadgeKapasitas from "@/components/ui/BadgeKapasitas";
 
 /**
  * Halaman Checkout — PRD Bagian 7.5/Bagian 13 (payments, kode_promo,
@@ -52,7 +55,16 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
 
   const subtesOptions = await getKelasSubtesOptions(kelasId);
   // Opsi jadwal cuma dikirim kalau siswa memang perlu memilih (PRD 7.5.8).
-  const jadwalOptions = perluPilihJadwal(kelas) ? parseJadwalSlots(kelas.jadwal) : [];
+  // Slot penuh (kelas private-online-saklar-1subtes, lib/shared/slotTerisi.ts) dinonaktifkan di dropdown.
+  // Galat baca (null) → semua slot tampil terbuka; server (payment/create) tetap penjaga utama.
+  const ketersediaan = await getKetersediaanKelas(kelasId);
+  const statusSlot = ketersediaan?.memakaiSlot ? ketersediaan.slot : null;
+  const jadwalOptions = perluPilihJadwal(kelas) ? opsiJadwalCheckout(parseJadwalSlots(kelas.jadwal), statusSlot) : [];
+  const semuaJadwalPenuh = semuaSlotPenuh(statusSlot);
+  // Kelas penuh (SATU aturan, lib/shared/kapasitasKelas.ts) — termasuk kapasitas manual. Galat baca = tidak
+  // ditandai penuh di sini; server (payment/create) tetap penjaga utama.
+  const kapasitasInfo = ketersediaan?.kapasitas ?? null;
+  const kelasPenuh = kapasitasInfo?.penuh === true;
 
   return (
     <>
@@ -60,6 +72,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
       <div className="mx-auto flex w-full max-w-[700px] flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-10">
         <div className="flex flex-col gap-1 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
           <h1 className="text-xl font-semibold tracking-[-0.02em] text-black sm:text-2xl">{kelas.nama}</h1>
+          <BadgeKapasitas info={kapasitasInfo} />
           {kelas.hargaAktif < kelas.harga ? (
             <p className="flex flex-wrap items-baseline gap-x-2 text-base sm:text-lg">
               <span className="font-semibold text-black">{formatRupiah(kelas.hargaAktif)}</span>
@@ -79,6 +92,8 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
           subtesOptions={subtesOptions}
           modePembelajaran={kelas.modePembelajaran}
           jadwalOptions={jadwalOptions}
+          semuaJadwalPenuh={semuaJadwalPenuh}
+          kelasPenuh={kelasPenuh}
         />
       </div>
     </>

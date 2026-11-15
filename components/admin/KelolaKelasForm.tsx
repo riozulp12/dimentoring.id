@@ -104,7 +104,7 @@ export default function KelolaKelasForm({
   const [generalMentorIds, setGeneralMentorIds] = useState<string[]>(
     (initialKelas?.subtesMentorPairs.length ?? 0) === 0 ? (initialKelas?.mentorIds ?? []) : [],
   );
-  const [kapasitas, setKapasitas] = useState(initialKelas ? String(initialKelas.kapasitas) : "");
+  const [kapasitas, setKapasitas] = useState(initialKelas && initialKelas.kapasitas !== null ? String(initialKelas.kapasitas) : "");
   const [harga, setHarga] = useState(initialKelas ? String(initialKelas.harga) : "");
   // Diskon OPSIONAL (0-100%) — kosong = tanpa diskon, tampilan harga publik
   // tetap seperti biasa (lihat components/program/KelasCardMeta.tsx).
@@ -308,7 +308,7 @@ export default function KelolaKelasForm({
       offlineSubtesId: modePembelajaran === "offline" ? offlineSubtesId : undefined,
       subtesMentorPairs,
       mentorIds: modePembelajaran === "offline" ? [] : generalMentorIds,
-      kapasitas: Number(kapasitas),
+      kapasitas: kapasitas.trim() === "" ? null : Number(kapasitas),
       harga: Number(harga),
       diskonPersen: diskonValue,
       jadwalEntries: completeJadwalEntries,
@@ -374,7 +374,7 @@ export default function KelolaKelasForm({
         mentorIds,
         mentorNamaList,
         subtesMentorPairs: resolvedSubtesMentorPairs,
-        kapasitas: Number(kapasitas),
+        kapasitas: kapasitas.trim() === "" ? null : Number(kapasitas),
         jumlahSiswa: initialKelas?.jumlahSiswa ?? 0,
         harga: Number(harga),
         diskonPersen: diskonValue,
@@ -584,16 +584,18 @@ export default function KelolaKelasForm({
 
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-black">Kapasitas</label>
+          <label className="text-sm font-medium text-black">Kapasitas (opsional)</label>
           <InputField
             type="text"
             size="md"
             inputMode="numeric"
-            required
             value={kapasitas}
             onChange={(e) => setKapasitas(e.target.value.replace(/[^0-9]/g, ""))}
-            placeholder="Mis. 10"
+            placeholder="Kosongkan = otomatis / tanpa batas"
           />
+          <p className="text-xs text-[#7E7C7C]">
+            Kosongkan untuk mengikuti jumlah jadwal dan mentor (kelas private online) atau tanpa batas (kelas lain).
+          </p>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-black">Harga (Rp)</label>
