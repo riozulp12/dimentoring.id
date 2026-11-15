@@ -1,17 +1,20 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
-import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
+import { sebelumPemberlakuan, statusPenerimaanSubtes } from "@/lib/shared/penerimaanSiswa";
 
 /**
  * Mentor "Terima siswa" untuk satu subtes seorang siswa (enrollment_subtes) —
- * aturan siapa-cepat-dia-dapat (lib/shared/penerimaanSiswa.ts). TAHAP A: fungsi
- * ini BELUM dipanggil dari mana pun (tidak ada UI/route), tidak membuat
- * notifikasi, dan tidak menyentuh sesi_kelas.
+ * aturan siapa-cepat-dia-dapat (lib/shared/penerimaanSiswa.ts). BELUM dipanggil
+ * dari mana pun (tidak ada UI/route), tidak membuat notifikasi, dan tidak
+ * menyentuh sesi_kelas.
  *
- * Klaim ATOMIK: satu UPDATE bersyarat `WHERE id = ? AND mentor_id IS NULL ...
- * RETURNING` — bukan baca-lalu-tulis. Dua mentor menekan bersamaan: Postgres
- * menserialkan UPDATE pada baris yang sama, yang kedua melihat mentor_id sudah
- * terisi dan mengubah 0 baris.
+ * Klaim ATOMIK: satu UPDATE bersyarat pada penerima yang TERLIHAT saat validasi
+ * (compare-and-swap) + RETURNING — bukan baca-lalu-tulis:
+ *   - belum ada penerima    → WHERE id = ? AND mentor_id IS NULL
+ *   - penerima lama TIDAK aktif / dilepas dari pasangan
+ *                           → WHERE id = ? AND mentor_id = <penerima lama itu>
+ * Dua mentor menekan bersamaan: Postgres menserialkan UPDATE pada baris yang
+ * sama, yang kedua melihat mentor_id sudah berubah dan mengubah 0 baris.
  */
 
 export type AlasanTolakTerima =
@@ -19,6 +22,10 @@ export type AlasanTolakTerima =
   | "bukan_mentor_subtes"
   | "mentor_tidak_aktif"
   | "tidak_ditemukan"
+  /** Siswa mendaftar sebelum tanggal pemberlakuan — perilaku lama, tidak ada klaim. */
+  | "pendaftaran_sebelum_pemberlakuan"
+  /** Subtes ini <=1 mentor aktif — pemegangnya langsung boleh, tidak ada yang perlu diklaim. */
+  | "tidak_perlu_klaim"
   | "gagal";
 
 export type HasilTerimaSiswa =
@@ -42,7 +49,7 @@ export async function terimaSiswaSubtes(input: { mentorId: string; enrollmentSub
 
   const { data: enrollment, error: enrollmentError } = await supabaseServer
     .from("enrollments")
-    .select("kelas_id")
+    .select("kelas_id, tanggal_daftar")
     .eq("id", baris.enrollment_id as string)
     .maybeSingle();
   if (enrollmentError) {
@@ -51,38 +58,69 @@ export async function terimaSiswaSubtes(input: { mentorId: string; enrollmentSub
   }
   if (!enrollment) return { ok: false, alasan: "tidak_ditemukan" };
 
-  // Mentor harus aktif (BR-2: Pending/Rejected tidak boleh mengajar).
-  if ((await getMentorRoleStatus(mentorId)) !== "active") return { ok: false, alasan: "mentor_tidak_aktif" };
-
-  // Mentor harus pemegang subtes ini DI KELAS ini (kelas_subtes_mentor).
-  const { data: pasangan, error: pasanganError } = await supabaseServer
+  // Semua pemegang subtes ini di kelas ini, lalu mana yang AKTIF (BR-2: Pending/Rejected tidak mengajar).
+  const { data: pemegangRows, error: pemegangError } = await supabaseServer
     .from("kelas_subtes_mentor")
     .select("mentor_id")
     .eq("kelas_id", enrollment.kelas_id as string)
-    .eq("subtes_id", baris.subtes_id as string)
-    .eq("mentor_id", mentorId)
-    .maybeSingle();
-  if (pasanganError) {
-    console.error("[terimaSiswaSubtes] query kelas_subtes_mentor failed:", pasanganError);
+    .eq("subtes_id", baris.subtes_id as string);
+  if (pemegangError) {
+    console.error("[terimaSiswaSubtes] query kelas_subtes_mentor failed:", pemegangError);
     return { ok: false, alasan: "gagal" };
   }
-  if (!pasangan) return { ok: false, alasan: "bukan_mentor_subtes" };
+  const pemegang = Array.from(new Set((pemegangRows ?? []).map((r) => r.mentor_id as string)));
 
-  // Klaim atomik. `.is("mentor_id", null)` = bagian WHERE yang membuat ini aman dari balapan.
-  const { data: diklaim, error: klaimError } = await supabaseServer
+  // Status mentor yang menekan juga dicek (walau bukan pemegang) supaya urutan
+  // alasan tetap: tidak aktif → bukan pemegang.
+  const idCek = Array.from(new Set([...pemegang, mentorId]));
+  const { data: roleRows, error: roleError } = await supabaseServer
+    .from("user_roles")
+    .select("user_id")
+    .in("user_id", idCek)
+    .eq("role_type", "mentor")
+    .eq("status", "active");
+  if (roleError) {
+    console.error("[terimaSiswaSubtes] query user_roles failed:", roleError);
+    return { ok: false, alasan: "gagal" };
+  }
+  const aktifSemua = new Set((roleRows ?? []).map((r) => r.user_id as string));
+  if (!aktifSemua.has(mentorId)) return { ok: false, alasan: "mentor_tidak_aktif" };
+  if (!pemegang.includes(mentorId)) return { ok: false, alasan: "bukan_mentor_subtes" };
+
+  const penerimaLama = (baris.mentor_id as string | null) ?? null;
+
+  // Idempoten: sudah milik mentor ini → sukses tanpa menulis apa pun.
+  if (penerimaLama === mentorId) return { ok: true, sudahMilikSendiri: true };
+
+  if (sebelumPemberlakuan(enrollment.tanggal_daftar as string | null)) {
+    return { ok: false, alasan: "pendaftaran_sebelum_pemberlakuan" };
+  }
+  const mentorAktifSubtes = pemegang.filter((id) => aktifSemua.has(id));
+  const status = statusPenerimaanSubtes({
+    mentorIdPenerima: penerimaLama,
+    mentorAktifSubtes,
+    tanggalDaftar: enrollment.tanggal_daftar as string | null,
+  });
+  if (status === "tidak_perlu_klaim") return { ok: false, alasan: "tidak_perlu_klaim" };
+  if (status === "diterima") return { ok: false, alasan: "sudah_diterima_mentor_lain" };
+
+  // status === "menunggu": penerima NULL, atau penerima lama sudah tidak aktif / dilepas dari pasangan.
+  const klaim = supabaseServer
     .from("enrollment_subtes")
     .update({ mentor_id: mentorId, diterima_pada: new Date().toISOString() })
-    .eq("id", enrollmentSubtesId)
-    .is("mentor_id", null)
-    .select("id");
+    .eq("id", enrollmentSubtesId);
+  const { data: diklaim, error: klaimError } = await (penerimaLama === null
+    ? klaim.is("mentor_id", null)
+    : klaim.eq("mentor_id", penerimaLama)
+  ).select("id");
   if (klaimError) {
     console.error("[terimaSiswaSubtes] klaim enrollment_subtes failed:", klaimError);
     return { ok: false, alasan: "gagal" };
   }
   if (diklaim && diklaim.length > 0) return { ok: true };
 
-  // 0 baris berubah: sudah ada penerima. Baca ulang untuk membedakan "milik saya
-  // (tekan dua kali)" dari "diambil mentor lain".
+  // 0 baris berubah: penerima berubah sejak validasi. Baca ulang untuk membedakan
+  // "milik saya (tekan dua kali)" dari "diambil mentor lain".
   const { data: kini, error: kiniError } = await supabaseServer
     .from("enrollment_subtes")
     .select("mentor_id")
