@@ -20,9 +20,13 @@ import {
 import {
   notifyMentorOfflineSiswaBaruDaftar,
   notifyMentorsSiswaBaruDaftar,
+  notifyJadwalDitetapkan,
   notifySiswaDidaftarkanAdmin,
 } from "@/lib/notifikasi/notify";
 import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
+import { formatSlot, parseJadwalSlot, validateJadwalDitetapkan, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
+import { cariStatusSlot } from "@/lib/shared/slotTerisi";
+import { KELAS_KETERSEDIAAN_SELECT, hitungKetersediaanKelas, normalisasiKelas } from "@/lib/jadwal/slotTerisi";
 
 /**
  * Daftarkan siswa MANUAL ke kelas — PRD 7.5.10 (Admin, halaman Pendaftar di
@@ -39,6 +43,11 @@ import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
  *   pendaftaran manual dan siswa membayar dua kali. payments cuma DIBACA.
  * - Idempotent: requestId (satu per pengisian form) — kirim ulang dengan
  *   requestId sama mengembalikan hasil yang sama tanpa pendaftaran kedua.
+ * - Jadwal (opsional, `jadwal` = {hari, jam_mulai}): divalidasi SEBELUM mendaftar dengan aturan yang sama
+ *   dengan route "Tetapkan jadwal" (validateJadwalDitetapkan), lalu disimpan ke enrollments.jadwal_ditetapkan
+ *   SETELAH fungsi DB sukses (tanpa mengubah SQL). Slot yang sudah penuh TIDAK menolak — Admin boleh
+ *   menimpa; respons membawa `slotPenuh: true`. Bila penyimpanan jadwal gagal, siswa TETAP terdaftar dan
+ *   respons berisi `jadwalGagal: true` + pesan jelas (Admin menetapkan lewat halaman Pendaftar).
  */
 
 interface DaftarManualBody {
@@ -52,6 +61,7 @@ interface DaftarManualBody {
   nominalDibayar?: unknown;
   alasan?: unknown;
   requestId?: unknown;
+  jadwal?: unknown;
 }
 
 type RpcHasil =
@@ -73,6 +83,7 @@ const PESAN_PENUH = "Kelas sudah penuh. Pendaftaran manual tidak bisa melewati k
 const PESAN_MENTOR_SISWA = "Mentor tatap muka tidak boleh akun siswa itu sendiri.";
 const PESAN_REQUEST_BENTROK =
   "Formulir ini sudah dipakai untuk mendaftarkan siswa/kelas lain. Tutup lalu buka lagi formulir Daftarkan Siswa Manual.";
+const PESAN_JADWAL_GAGAL = "Siswa terdaftar, tetapi jadwal gagal ditetapkan. Tetapkan lewat halaman Pendaftar.";
 const PESAN_PAYMENT_MENUNGGU =
   "Siswa ini masih punya pembayaran checkout yang menunggu untuk kelas ini. Tunggu link pembayarannya kedaluwarsa (24 jam sejak checkout dibuat), atau batalkan dulu pembayaran menunggu itu (tutup link di dashboard Mayar lalu jalankan cek ulang pembayaran Admin), baru daftarkan manual.";
 
@@ -113,6 +124,13 @@ export async function POST(request: NextRequest) {
     requestId = body.requestId;
   }
 
+  // Jadwal opsional: kosong/null = daftar tanpa jadwal (perilaku lama). Terisi tapi bukan {hari, jam_mulai} = 400.
+  let jadwalDiminta: JadwalSlot | null = null;
+  if (body.jadwal !== undefined && body.jadwal !== null && body.jadwal !== "") {
+    jadwalDiminta = parseJadwalSlot(body.jadwal);
+    if (!jadwalDiminta) return errorResponse("Jadwal tidak valid.", 400);
+  }
+
   // ---- Klik dobel: requestId yang sudah tercatat = sukses yang sama --------
   if (requestId) {
     const { data: logLama, error: logError } = await supabaseServer
@@ -135,7 +153,7 @@ export async function POST(request: NextRequest) {
   // ---- Kelas & siswa ---------------------------------------------------------
   const { data: kelas, error: kelasError } = await supabaseServer
     .from("kelas")
-    .select("id, nama, kapasitas, jumlah_sesi, mode_pembelajaran, jadwal")
+    .select(`nama, jumlah_sesi, ${KELAS_KETERSEDIAAN_SELECT}`) // KELAS_KETERSEDIAAN_SELECT sudah memuat id & kapasitas
     .eq("id", kelasId)
     .maybeSingle();
   if (kelasError) {
@@ -191,6 +209,18 @@ export async function POST(request: NextRequest) {
   // Kapasitas manual OPSIONAL (kolom boleh kosong): kosong = tanpa batas manual — jangan dianggap penuh.
   if (penuhMenurutKapasitasManual(kelas.kapasitas as number | null, terisi ?? 0)) return errorResponse(PESAN_PENUH, 409);
 
+  // ---- Jadwal: ada di kelas.jadwal & kelas memakai pilihan jadwal (aturan sama dengan "Tetapkan jadwal") ----
+  let jadwalSlot: JadwalSlot | null = null;
+  if (jadwalDiminta) {
+    const cek = validateJadwalDitetapkan(jadwalDiminta, {
+      jadwalPilihSiswa: kelas.jadwal_pilih_siswa === true,
+      modePembelajaran: kelas.mode_pembelajaran as string,
+      jadwal: kelas.jadwal,
+    });
+    if (!cek.ok) return errorResponse(cek.error, cek.status);
+    jadwalSlot = cek.slot;
+  }
+
   // ---- Subtes (pool dari server, sama aturannya dengan checkout) ------------
   const pool = await getKelasSubtesOptions(kelasId);
   const poolIds = new Set(pool.map((s) => s.id));
@@ -227,6 +257,14 @@ export async function POST(request: NextRequest) {
       return errorResponse("Mentor yang dipilih tidak aktif, tidak bersedia tatap muka, atau tidak mengampu mapel kelas ini.", 400);
     }
     mentorOfflineId = body.mentorOfflineId;
+  }
+
+  // Slot penuh = PERINGATAN, bukan penolakan (Admin boleh menimpa). Dihitung SEBELUM siswa ini masuk.
+  // Galat baca ketersediaan -> tanpa peringatan (jangan menggagalkan pendaftaran karena info tambahan).
+  let slotPenuh = false;
+  if (jadwalSlot) {
+    const ketersediaan = await hitungKetersediaanKelas([normalisasiKelas(kelas as unknown as Record<string, unknown>)]);
+    slotPenuh = cariStatusSlot(ketersediaan?.get(kelasId)?.slot ?? [], jadwalSlot)?.penuh === true;
   }
 
   // ---- Transaksi atomik ------------------------------------------------------
@@ -272,9 +310,33 @@ export async function POST(request: NextRequest) {
       return errorResponse("Gagal mendaftarkan siswa. Coba lagi nanti.", 500);
   }
 
+  // ---- Jadwal akhir (langkah kedua, di luar transaksi DB) ---------------------
+  // Gagal = siswa TETAP terdaftar; Admin diberi tahu lewat respons dan menetapkan dari halaman Pendaftar.
+  let jadwalGagal = false;
+  if (jadwalSlot) {
+    try {
+      const { data: diperbarui, error: jadwalError } = await supabaseServer
+        .from("enrollments")
+        .update({ jadwal_ditetapkan: jadwalSlot, jadwal_ditetapkan_at: new Date().toISOString() })
+        .eq("id", hasil.enrollment_id)
+        .eq("kelas_id", kelasId)
+        .eq("status_pembayaran", "lunas")
+        .select("id")
+        .maybeSingle();
+      if (jadwalError || !diperbarui) {
+        console.error("[admin/enrollment-manual] simpan jadwal_ditetapkan gagal:", jadwalError ?? "baris tidak ditemukan");
+        jadwalGagal = true;
+      }
+    } catch (error) {
+      console.error("[admin/enrollment-manual] simpan jadwal_ditetapkan error:", error);
+      jadwalGagal = true;
+    }
+  }
+
   // ---- Notifikasi (gagal cukup di-log, pendaftaran tetap sah) ----------------
   const kelasNama = kelas.nama as string;
   await notifySiswaDidaftarkanAdmin(siswaId, kelasId, kelasNama);
+  if (jadwalSlot && !jadwalGagal) await notifyJadwalDitetapkan(siswaId, kelasId, kelasNama, formatSlot(jadwalSlot));
   const jadwalDisplay = formatJadwalRingkas(kelas.jadwal);
   const siswaBaru = { kejadianId: hasil.enrollment_id as string, siswaUserId: siswaId };
   if (mentorOfflineId) {
@@ -284,7 +346,13 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json(
-    { success: true, enrollmentId: hasil.enrollment_id, jumlahSesi: hasil.jumlah_sesi },
+    {
+      success: true,
+      enrollmentId: hasil.enrollment_id,
+      jumlahSesi: hasil.jumlah_sesi,
+      ...(jadwalSlot && !jadwalGagal ? { jadwalDitetapkan: jadwalSlot, slotPenuh } : {}),
+      ...(jadwalGagal ? { jadwalGagal: true, pesan: PESAN_JADWAL_GAGAL } : {}),
+    },
     { status: 201 },
   );
 }

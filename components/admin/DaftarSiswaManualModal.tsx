@@ -10,6 +10,8 @@ import {
   METODE_PEMBAYARAN_MANUAL,
   panjangKarakter,
 } from "@/lib/shared/enrollmentManual";
+import { formatSlot, slotKey } from "@/lib/shared/jadwalPilihan";
+import type { OpsiJadwalCheckout } from "@/lib/shared/slotTerisi";
 
 /**
  * Form "Daftarkan Siswa Manual" — PRD 7.5.10 (Admin, halaman Pendaftar).
@@ -39,6 +41,7 @@ export default function DaftarSiswaManualModal({
   kelasNama,
   modePembelajaran,
   subtesPool,
+  opsiJadwal,
   onClose,
   onSuccess,
 }: {
@@ -46,6 +49,8 @@ export default function DaftarSiswaManualModal({
   kelasNama: string;
   modePembelajaran: "online" | "offline";
   subtesPool: { id: string; nama: string }[];
+  /** Slot kelas.jadwal + penanda penuh. Kosong = kelas tidak memakai jadwal pilihan → tanpa kolom jadwal. */
+  opsiJadwal: OpsiJadwalCheckout[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -66,6 +71,9 @@ export default function DaftarSiswaManualModal({
   const [mentorId, setMentorId] = useState("");
   const [memuatMentor, setMemuatMentor] = useState(false);
 
+  const [jadwalKey, setJadwalKey] = useState("");
+  const jadwalTerpilih = opsiJadwal.find((o) => slotKey(o) === jadwalKey) ?? null;
+
   const [metode, setMetode] = useState("");
   const [nominal, setNominal] = useState("");
   const [alasan, setAlasan] = useState("");
@@ -73,6 +81,8 @@ export default function DaftarSiswaManualModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selesai, setSelesai] = useState(false);
+  /** Catatan dari server setelah sukses: jadwal gagal disimpan / slot sudah penuh. */
+  const [catatan, setCatatan] = useState<{ pesan: string; peringatan: boolean } | null>(null);
 
   // Cari siswa (debounce 300 ms) — dipicu dari ketikan, bukan effect.
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -157,6 +167,7 @@ export default function DaftarSiswaManualModal({
           nominalDibayar: nominal.trim() || undefined,
           alasan,
           requestId,
+          jadwal: jadwalTerpilih ? { hari: jadwalTerpilih.hari, jam_mulai: jadwalTerpilih.jam_mulai } : undefined,
         }),
       });
       const json = await res.json();
@@ -164,6 +175,16 @@ export default function DaftarSiswaManualModal({
         setError(json.error ?? "Gagal mendaftarkan siswa.");
         setBusy(false);
         return;
+      }
+      if (json.jadwalGagal) {
+        setCatatan({ pesan: (json.pesan as string) ?? "Jadwal gagal ditetapkan. Tetapkan lewat halaman Pendaftar.", peringatan: true });
+      } else if (json.jadwalDitetapkan) {
+        setCatatan({
+          pesan: `Jadwal ditetapkan: ${formatSlot(json.jadwalDitetapkan as { hari: string; jam_mulai: string })}.${
+            json.slotPenuh ? " Slot itu sudah penuh sebelum siswa ini masuk (sengaja diterima)." : ""
+          }`,
+          peringatan: json.slotPenuh === true,
+        });
       }
       setSelesai(true);
       setBusy(false);
@@ -181,6 +202,9 @@ export default function DaftarSiswaManualModal({
         <p className="text-sm text-[#7E7C7C]">
           {siswa.nama} sudah terdaftar di {kelasNama} (lunas, sumber Manual) dan sudah menerima notifikasi.
         </p>
+        {catatan ? (
+          <p className={`text-sm ${catatan.peringatan ? "text-[#E70A0A]" : "text-[#7E7C7C]"}`}>{catatan.pesan}</p>
+        ) : null}
         <Button type="button" variant="primary" size="md" onClick={onClose}>
           Tutup
         </Button>
@@ -302,6 +326,26 @@ export default function DaftarSiswaManualModal({
                 label: `${m.nama} — ${m.asalPtn}${m.jarakKm !== null ? ` (${m.jarakKm.toFixed(1)} km)` : ""}`,
               }))}
             />
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Jadwal (opsional) — hanya untuk kelas yang jadwalnya dipakai; slot penuh tetap bisa dipilih Admin */}
+      {opsiJadwal.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium text-black">Jadwal (opsional)</p>
+          <InputField
+            type="dropdown"
+            size="md"
+            value={jadwalKey}
+            onChange={(e) => setJadwalKey(e.target.value)}
+            options={[
+              { value: "", label: "Tanpa jadwal (tetapkan nanti dari halaman Pendaftar)" },
+              ...opsiJadwal.map((o) => ({ value: slotKey(o), label: `${formatSlot(o)}${o.penuh ? " (Penuh)" : ""}` })),
+            ]}
+          />
+          {jadwalTerpilih?.penuh ? (
+            <p className="text-sm text-[#E70A0A]">Slot ini sudah penuh. Lanjutkan hanya bila disengaja.</p>
           ) : null}
         </div>
       ) : null}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import KelolaKelasForm from "./KelolaKelasForm";
@@ -15,6 +16,7 @@ import type { ProgramKategori } from "@/lib/shared/kelasLabels";
 import type { KelasListItem, MentorOption, SubtesOption } from "@/lib/admin/getKelolaKelasData";
 import { hitungHargaSetelahDiskon } from "@/lib/shared/kelasDiskon";
 import { formatMentorPerSubtes } from "@/lib/shared/mentorPerSubtes";
+import { teksSlotTerisi, teksTerisiDetail, teksTerisiRingkas } from "@/lib/shared/ringkasanKapasitasAdmin";
 
 /**
  * List + Detail (read-only, dengan tombol Edit/Hapus sejajar) + Tambah/Edit
@@ -50,7 +52,14 @@ export default function KelolaKelasClient({
   subtesOptions: SubtesOption[];
   mentorOptions: MentorOption[];
 }) {
+  const router = useRouter();
   const [kelasList, setKelasList] = useState(initialKelasList);
+  // Sinkron ulang dari server setelah router.refresh() (prop baru) — pola "state dari props" tanpa effect.
+  const [initialSebelumnya, setInitialSebelumnya] = useState(initialKelasList);
+  if (initialSebelumnya !== initialKelasList) {
+    setInitialSebelumnya(initialKelasList);
+    setKelasList(initialKelasList);
+  }
   const [formOpen, setFormOpen] = useState(false);
   const [editingKelas, setEditingKelas] = useState<KelasListItem | null>(null);
   const [detailKelas, setDetailKelas] = useState<KelasListItem | null>(null);
@@ -77,6 +86,8 @@ export default function KelolaKelasClient({
     });
     setFormOpen(false);
     setEditingKelas(null);
+    // Kapasitas efektif (slot × mentor) dihitung server — ambil ulang agar angka di daftar akurat.
+    router.refresh();
   }
 
   function openDeleteConfirm(kelas: KelasListItem) {
@@ -164,7 +175,7 @@ export default function KelolaKelasClient({
                   <td className="px-4 py-3 text-[#7E7C7C]">{kelas.subtesNama}</td>
                   <td className="px-4 py-3 text-[#7E7C7C]">{formatMentorDisplay(kelas)}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">
-                    {kelas.jumlahSiswa}/{kelas.kapasitas ?? "∞"}
+                    {teksTerisiRingkas(kelas.kapasitasEfektif)}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">{formatRupiah(kelas.harga)}</td>
                 </tr>
@@ -224,11 +235,10 @@ export default function KelolaKelasClient({
               </div>
               <div>
                 <p className="text-[#7E7C7C]">Siswa Terdaftar</p>
-                <p className="text-black">
-                  {detailKelas.kapasitas === null
-                    ? `${detailKelas.jumlahSiswa} (kapasitas otomatis / tanpa batas)`
-                    : `${detailKelas.jumlahSiswa}/${detailKelas.kapasitas}`}
-                </p>
+                <p className="text-black">{teksTerisiDetail(detailKelas.kapasitasEfektif)}</p>
+                {teksSlotTerisi(detailKelas.slotTerisi) ? (
+                  <p className="text-xs text-[#7E7C7C]">{teksSlotTerisi(detailKelas.slotTerisi)}</p>
+                ) : null}
               </div>
               <div>
                 <p className="text-[#7E7C7C]">Harga</p>

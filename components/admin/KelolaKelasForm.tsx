@@ -4,6 +4,7 @@ import { useCallback, useState, type FormEvent } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
 import type { JadwalEntry, KelasListItem, MentorOption, SubtesOption } from "@/lib/admin/getKelolaKelasData";
+import { hitungKapasitasKelas } from "@/lib/shared/kapasitasKelas";
 import {
   PROGRAM_KATEGORI_LABEL,
   PROGRAM_KATEGORI_ORDER,
@@ -376,7 +377,7 @@ export default function KelolaKelasForm({
           ? completeJadwalEntries.map((e) => `${e.hari}, ${e.jamMulai} WIB`).join(" & ")
           : "Jadwal belum diatur";
 
-      onSuccess({
+      const itemBaru: Omit<KelasListItem, "kapasitasEfektif" | "slotTerisi"> = {
         id: initialKelas?.id ?? (json.id as string),
         nama,
         programKategori,
@@ -402,6 +403,13 @@ export default function KelolaKelasForm({
         linkMeet: trimmedLinkMeet || null,
         linkLynkid: trimmedLinkLynkid || null,
         deskripsi: deskripsi.trim() || null,
+      };
+      onSuccess({
+        ...itemBaru,
+        // Sementara (hanya kapasitas manual) — daftar kelas di-refresh dari server sesudah simpan, yang
+        // membawa kapasitas EFEKTIF (slot × mentor) yang benar.
+        kapasitasEfektif: hitungKapasitasKelas({ kapasitasManual: itemBaru.kapasitas, lunas: itemBaru.jumlahSiswa, otomatis: null }),
+        slotTerisi: initialKelas?.slotTerisi ?? null,
       });
       setIsSubmitting(false);
     } catch {

@@ -7,9 +7,11 @@ import InputField from "@/components/ui/InputField";
 import Modal from "@/components/ui/Modal";
 import DaftarSiswaManualModal from "@/components/admin/DaftarSiswaManualModal";
 import UbahMentorOfflineModal from "@/components/admin/UbahMentorOfflineModal";
-import { penuhMenurutKapasitasManual } from "@/lib/shared/kapasitasKelas";
+import { penuhMenurutKapasitasManual, type KapasitasKelas } from "@/lib/shared/kapasitasKelas";
+import { teksSlotTerisi, teksTerisiDetail, type SlotTerisiRingkas } from "@/lib/shared/ringkasanKapasitasAdmin";
 import type { PendaftarItem, SlotStatus } from "@/lib/admin/getPendaftarKelas";
 import { formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
+import type { OpsiJadwalCheckout } from "@/lib/shared/slotTerisi";
 import { isKelasPrivate, isValidLinkUrl } from "@/lib/shared/linkMeet";
 
 /**
@@ -65,8 +67,11 @@ export default function PendaftarKelasClient({
   subtesPool,
   kapasitas,
   terisi,
+  kapasitasEfektif,
+  slotTerisi,
   jadwalPilihanAktif,
   slots,
+  opsiJadwal,
   initialPendaftar,
 }: {
   kelasId: string;
@@ -77,8 +82,14 @@ export default function PendaftarKelasClient({
   /** null = kapasitas manual kosong — pendaftaran manual hanya dibatasi kapasitas manual (sama dengan server). */
   kapasitas: number | null;
   terisi: number;
+  /** Kapasitas efektif (sama dengan badge kartu) — dasar teks "Terisi X dari Y". */
+  kapasitasEfektif: KapasitasKelas;
+  /** Hanya kelas private-online-slot; null = tidak memakai slot. */
+  slotTerisi: SlotTerisiRingkas | null;
   jadwalPilihanAktif: boolean;
   slots: JadwalSlot[];
+  /** Opsi dropdown jadwal di form pendaftaran manual (kosong = form tanpa kolom jadwal). */
+  opsiJadwal: OpsiJadwalCheckout[];
   initialPendaftar: PendaftarItem[];
 }) {
   const router = useRouter();
@@ -179,11 +190,17 @@ export default function PendaftarKelasClient({
 
   const header = (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-sm text-[#7E7C7C]">
-        {kapasitas === null
-          ? `Terisi ${terisi} siswa (kapasitas otomatis / tanpa batas)`
-          : `Terisi ${terisi} dari ${kapasitas} kursi${penuh ? " — kelas penuh" : ""}`}
-      </p>
+      <div className="flex flex-col gap-0.5 text-sm text-[#7E7C7C]">
+        <p>
+          {teksTerisiDetail(kapasitasEfektif)}
+          {kapasitasEfektif.penuh
+            ? penuh
+              ? " — kelas penuh"
+              : " — penuh untuk checkout siswa (pendaftaran manual Admin masih bisa)"
+            : ""}
+        </p>
+        {teksSlotTerisi(slotTerisi) ? <p>{teksSlotTerisi(slotTerisi)}</p> : null}
+      </div>
       <Button type="button" variant="primary" size="md" disabled={penuh} onClick={() => setManualOpen(true)}>
         Daftarkan Siswa Manual
       </Button>
@@ -215,6 +232,7 @@ export default function PendaftarKelasClient({
           kelasNama={kelasNama}
           modePembelajaran={modePembelajaran}
           subtesPool={subtesPool}
+          opsiJadwal={opsiJadwal}
           onClose={tutupManual}
           onSuccess={() => {
             perluRefresh.current = true;
