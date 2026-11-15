@@ -164,7 +164,7 @@ export default function KelolaKelasClient({
                   <td className="px-4 py-3 text-[#7E7C7C]">{kelas.subtesNama}</td>
                   <td className="px-4 py-3 text-[#7E7C7C]">{formatMentorDisplay(kelas)}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">
-                    {kelas.jumlahSiswa}/{kelas.kapasitas}
+                    {kelas.jumlahSiswa}/{kelas.kapasitas ?? "∞"}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">{formatRupiah(kelas.harga)}</td>
                 </tr>
@@ -225,7 +225,9 @@ export default function KelolaKelasClient({
               <div>
                 <p className="text-[#7E7C7C]">Siswa Terdaftar</p>
                 <p className="text-black">
-                  {detailKelas.jumlahSiswa}/{detailKelas.kapasitas}
+                  {detailKelas.kapasitas === null
+                    ? `${detailKelas.jumlahSiswa} (kapasitas otomatis / tanpa batas)`
+                    : `${detailKelas.jumlahSiswa}/${detailKelas.kapasitas}`}
                 </p>
               </div>
               <div>

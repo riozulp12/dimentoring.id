@@ -375,7 +375,7 @@ describe("jalur pembayaran tidak tersentuh", () => {
 
   it("migrasi hanya aditif: tidak ada DROP/ALTER selain ADD COLUMN IF NOT EXISTS pada enrollments (baris aktif)", () => {
     const sql = readFileSync("db/add_link_meet_enrollment.sql", "utf8");
-    const aktif = sql.split("\n").filter((l) => !l.trim().startsWith("--") && l.trim() !== "");
+    const aktif = sql.split(/\r?\n/).filter((l) => !l.trim().startsWith("--") && l.trim() !== "");
     assert.deepEqual(aktif, [
       "ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS link_meet TEXT;",
       "ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS link_meet_oleh UUID REFERENCES users(id) ON DELETE SET NULL;",

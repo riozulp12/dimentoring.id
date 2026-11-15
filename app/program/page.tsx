@@ -33,8 +33,7 @@ function ProgramSectionGrid({ section, sessionRole }: { section: ProgramSection;
           namaKelas={item.nama}
           index={idx}
           diskonAktif={item.diskonAktif}
-          sisaSlot={item.sisaSlot}
-          kapasitas={item.kapasitas}
+          kapasitasInfo={item.kapasitasInfo}
           programKategori={item.programKategori}
           tingkatKelas={item.tingkatKelas}
           subtesNama={item.subtesNama}

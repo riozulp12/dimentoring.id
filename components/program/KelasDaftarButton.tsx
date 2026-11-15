@@ -19,7 +19,8 @@ import { isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 
 export interface KelasDaftarButtonProps {
   kelasId: string;
-  sisaSlot: number;
+  /** Kelas penuh menurut SATU aturan kapasitas (lib/shared/kapasitasKelas.ts). */
+  penuh: boolean;
   sessionRole: SessionRole | null;
   /** Kolom kelas.link_lynkid ("Input Link Pendaftaran" di Kelola Kelas). */
   linkLynkid: string | null;
@@ -35,7 +36,7 @@ export interface KelasDaftarButtonProps {
 
 export default function KelasDaftarButton({
   kelasId,
-  sisaSlot,
+  penuh,
   sessionRole,
   linkLynkid,
   variant = "card",
@@ -43,7 +44,7 @@ export default function KelasDaftarButton({
 }: KelasDaftarButtonProps) {
   const action = resolveKelasDaftarAction({
     kelasId,
-    sisaSlot,
+    penuh,
     linkPendaftaran: linkLynkid,
     sessionRole,
     isCheckoutInternalReady: isCheckoutInternalReady(),

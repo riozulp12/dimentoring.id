@@ -45,7 +45,7 @@ export interface DropdownInputFieldProps
   extends BaseFieldProps,
     Omit<SelectHTMLAttributes<HTMLSelectElement>, "children" | "size"> {
   type: "dropdown";
-  options: { label: string; value: string }[];
+  options: { label: string; value: string; disabled?: boolean }[];
   placeholder?: string;
 }
 

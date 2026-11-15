@@ -1002,7 +1002,7 @@ describe("Pengaturan: saklar hanya tampil untuk Mentor", () => {
 describe("db/add_notifikasi_wa.sql", () => {
   const sql = baca("db/add_notifikasi_wa.sql");
   const tanpaKomentar = sql
-    .split("\n")
+    .split(/\r?\n/)
     .map((baris) => baris.replace(/--.*$/, ""))
     .join("\n");
 

@@ -61,7 +61,8 @@ export interface KelasInputBody {
    * kosong (kelas Konsultasi/Pendampingan Mahasiswa). Diabaikan kalau
    * subtesMentorPairs terisi atau modePembelajaran='offline'. */
   mentorIds?: string[];
-  kapasitas?: number | string;
+  /** OPSIONAL: kosong/null/"" = ikut otomatis (private-online-saklar-1subtes) atau tanpa batas (kelas lain). */
+  kapasitas?: number | string | null;
   harga?: number | string;
   /** BARU — diskon yang melekat ke kelas, 0-100 (%). Opsional; kosong/undefined
    * dianggap 0 (tanpa diskon). Lihat db/add_kelas_diskon.sql. */
@@ -103,7 +104,8 @@ export interface ValidatedKelasInput {
   subtes_ids: string[];
   /** Dipakai caller untuk replace penuh baris kelas_subtes_mentor. */
   subtes_mentor_pairs: ValidatedSubtesMentorPair[];
-  kapasitas: number;
+  /** null = kosong (opsional) — lihat lib/shared/kapasitasKelas.ts. */
+  kapasitas: number | null;
   harga: number;
   /** 0-100 (%) — 0 berarti kelas ini tidak sedang diskon. */
   diskon_persen: number;
@@ -152,9 +154,15 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
     return { ok: false, error: "Jumlah Sesi harus angka bulat lebih dari 0." };
   }
 
-  const kapasitas = Number(body.kapasitas);
-  if (!Number.isInteger(kapasitas) || kapasitas <= 0) {
-    return { ok: false, error: "Kapasitas harus angka bulat lebih dari 0." };
+  // Kapasitas OPSIONAL: kosong/null/"" = tidak diisi (null). Terisi harus angka bulat > 0.
+  let kapasitas: number | null = null;
+  const kapasitasMentah = body.kapasitas;
+  if (kapasitasMentah !== undefined && kapasitasMentah !== null && String(kapasitasMentah).trim() !== "") {
+    const angka = Number(kapasitasMentah);
+    if (!Number.isInteger(angka) || angka <= 0) {
+      return { ok: false, error: "Kapasitas harus angka bulat lebih dari 0, atau kosongkan." };
+    }
+    kapasitas = angka;
   }
 
   const harga = Number(body.harga);

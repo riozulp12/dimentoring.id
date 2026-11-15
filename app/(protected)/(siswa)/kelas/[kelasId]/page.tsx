@@ -14,6 +14,7 @@ import MateriList from "@/components/siswa/MateriList";
 import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 import SesiKehadiranSection from "@/components/siswa/SesiKehadiranSection";
 import KelasDaftarButton from "@/components/program/KelasDaftarButton";
+import BadgeKapasitas from "@/components/ui/BadgeKapasitas";
 import { getKelasDetailPublic } from "@/lib/dashboard/getProgramData";
 import { formatJadwalSiswaTerdaftar } from "@/lib/shared/jadwalPilihan";
 import { isKelasPrivate, resolveLinkMeet } from "@/lib/shared/linkMeet";
@@ -210,9 +211,10 @@ async function PreviewSection({ kelasId }: { kelasId: string }) {
         {kelasPublic ? (
           <div className="mx-auto flex w-full max-w-[360px] flex-col gap-2">
             {/* Halaman ini cuma bisa dibuka role Siswa (guard di atas). */}
+            <BadgeKapasitas info={kelasPublic.kapasitasInfo} className="self-center" />
             <KelasDaftarButton
               kelasId={kelasId}
-              sisaSlot={kelasPublic.sisaSlot}
+              penuh={kelasPublic.kapasitasInfo.penuh}
               sessionRole="student"
               linkLynkid={kelasPublic.linkLynkid}
               variant="detail"

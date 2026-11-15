@@ -30,7 +30,7 @@ export interface MentorKelasItem {
   tingkatKelasLabel: string;
   jadwal: string;
   jumlahSiswa: number;
-  kapasitas: number;
+  kapasitas: number | null;
   linkMeetBelumDiatur: boolean;
 }
 
@@ -87,7 +87,7 @@ export async function getMentorKelasSaya(userId: string): Promise<MentorKelasIte
     program_kategori: string;
     tingkat_kelas: string;
     jadwal: unknown;
-    kapasitas: number;
+    kapasitas: number | null;
     link_meet: string | null;
     subtes: NamaJoin;
     enrollments: { status_pembayaran: string; mentor_offline_id: string | null }[] | null;
