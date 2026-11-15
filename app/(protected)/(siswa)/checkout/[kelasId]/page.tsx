@@ -6,6 +6,8 @@ import PageTitle from "@/components/dashboard/PageTitle";
 import CheckoutForm from "@/components/siswa/CheckoutForm";
 import { getCheckoutBlockReason, isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 import { parseJadwalSlots, perluPilihJadwal } from "@/lib/shared/jadwalPilihan";
+import { opsiJadwalCheckout, semuaSlotPenuh } from "@/lib/shared/slotTerisi";
+import { getKetersediaanKelas } from "@/lib/jadwal/slotTerisi";
 
 /**
  * Halaman Checkout — PRD Bagian 7.5/Bagian 13 (payments, kode_promo,
@@ -52,7 +54,12 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
 
   const subtesOptions = await getKelasSubtesOptions(kelasId);
   // Opsi jadwal cuma dikirim kalau siswa memang perlu memilih (PRD 7.5.8).
-  const jadwalOptions = perluPilihJadwal(kelas) ? parseJadwalSlots(kelas.jadwal) : [];
+  // Slot penuh (kelas private-online-saklar-1subtes, lib/shared/slotTerisi.ts) dinonaktifkan di dropdown.
+  // Galat baca (null) → semua slot tampil terbuka; server (payment/create) tetap penjaga utama.
+  const ketersediaan = await getKetersediaanKelas(kelasId);
+  const statusSlot = ketersediaan?.memakaiSlot ? ketersediaan.slot : null;
+  const jadwalOptions = perluPilihJadwal(kelas) ? opsiJadwalCheckout(parseJadwalSlots(kelas.jadwal), statusSlot) : [];
+  const semuaJadwalPenuh = semuaSlotPenuh(statusSlot);
 
   return (
     <>
@@ -79,6 +86,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
           subtesOptions={subtesOptions}
           modePembelajaran={kelas.modePembelajaran}
           jadwalOptions={jadwalOptions}
+          semuaJadwalPenuh={semuaJadwalPenuh}
         />
       </div>
     </>

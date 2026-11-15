@@ -18,7 +18,8 @@ export interface SelectFieldProps
   status?: InputFieldStatus;
   size?: InputFieldSize;
   className?: string;
-  options: { label: string; value: string }[];
+  /** `disabled` = opsi tampil tapi tidak bisa dipilih (mis. jadwal "(Penuh)"). */
+  options: { label: string; value: string; disabled?: boolean }[];
   placeholder?: string;
 }
 
@@ -119,7 +120,7 @@ export default function SelectField({
               </option>
             ) : null}
             {options.map((option) => (
-              <option key={option.value} value={option.value}>
+              <option key={option.value} value={option.value} disabled={option.disabled}>
                 {option.label}
               </option>
             ))}
@@ -133,9 +134,15 @@ export default function SelectField({
           type="button"
           role="option"
           aria-selected={option.value === currentValue}
-          onClick={() => selectOption(option.value)}
-          className={`flex w-full items-center px-4 py-2.5 text-left text-sm transition-colors hover:bg-gray-50 ${
-            option.value === currentValue ? "font-medium text-[#081EEA]" : "text-black"
+          aria-disabled={option.disabled ? true : undefined}
+          disabled={option.disabled}
+          onClick={() => !option.disabled && selectOption(option.value)}
+          className={`flex w-full items-center px-4 py-2.5 text-left text-sm transition-colors ${
+            option.disabled
+              ? "cursor-not-allowed text-[#AFAFAF]"
+              : option.value === currentValue
+                ? "font-medium text-[#081EEA] hover:bg-gray-50"
+                : "text-black hover:bg-gray-50"
           }`}
         >
           {option.label}
