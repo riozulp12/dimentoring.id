@@ -27,7 +27,7 @@ export function buatFakeSupabase(db: Db) {
     private filters: Array<(row: Row) => boolean> = [];
     private op: Op = "select";
     private values: Row | Row[] | null = null;
-    private single = false;
+    private satuBaris = false;
 
     constructor(private table: string) {}
 
@@ -68,7 +68,11 @@ export function buatFakeSupabase(db: Db) {
       return this;
     }
     maybeSingle() {
-      this.single = true;
+      this.satuBaris = true;
+      return this;
+    }
+    single() {
+      this.satuBaris = true;
       return this;
     }
     then<A, B>(onfulfilled?: ((value: Hasil) => A | PromiseLike<A>) | null, onrejected?: ((reason: unknown) => B | PromiseLike<B>) | null) {
@@ -82,9 +86,11 @@ export function buatFakeSupabase(db: Db) {
       }
       if (this.op === "insert") {
         const baru = (Array.isArray(this.values) ? this.values : [this.values as Row]).map((r) => ({ ...r }));
+        // Tabel dengan kunci id otomatis (gen_random_uuid) — dipakai route yang membaca id hasil insert.
+        if (this.table === "kelas") for (const r of baru) r.id ??= `kelas-baru-${rows.length + 1}`;
         rows.push(...baru);
         log.push({ op: "insert", table: this.table, rows: baru });
-        return { data: null, error: null };
+        return { data: this.satuBaris ? (baru[0] ?? null) : baru, error: null };
       }
       const cocok = rows.filter((row) => this.filters.every((f) => f(row)));
       if (this.op === "update") {
@@ -94,7 +100,7 @@ export function buatFakeSupabase(db: Db) {
         log.push({ op: "delete", table: this.table, rows: cocok.map((r) => ({ ...r })) });
         for (const row of cocok) rows.splice(rows.indexOf(row), 1);
       }
-      return { data: this.single ? (cocok[0] ?? null) : cocok, error: null };
+      return { data: this.satuBaris ? (cocok[0] ?? null) : cocok, error: null };
     }
   }
 
