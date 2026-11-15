@@ -7,8 +7,10 @@ import InputField from "@/components/ui/InputField";
 import Modal from "@/components/ui/Modal";
 import DaftarSiswaManualModal from "@/components/admin/DaftarSiswaManualModal";
 import UbahMentorOfflineModal from "@/components/admin/UbahMentorOfflineModal";
+import { penuhMenurutKapasitasManual } from "@/lib/shared/kapasitasKelas";
 import type { PendaftarItem, SlotStatus } from "@/lib/admin/getPendaftarKelas";
 import { formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
+import { isKelasPrivate, isValidLinkUrl } from "@/lib/shared/linkMeet";
 
 /**
  * Daftar pendaftar satu kelas + aksi "Tetapkan jadwal" — PRD 7.5.8. Pilihan
@@ -49,12 +51,17 @@ interface RowState extends PendaftarItem {
   selectedKey: string;
   busy: boolean;
   error: string | null;
+  /** Link Meet per siswa (kelas private). */
+  linkInput: string;
+  linkBusy: boolean;
+  linkError: string | null;
 }
 
 export default function PendaftarKelasClient({
   kelasId,
   kelasNama,
   modePembelajaran,
+  tipeKelas,
   subtesPool,
   kapasitas,
   terisi,
@@ -65,8 +72,10 @@ export default function PendaftarKelasClient({
   kelasId: string;
   kelasNama: string;
   modePembelajaran: "online" | "offline";
+  tipeKelas: string | null;
   subtesPool: { id: string; nama: string }[];
-  kapasitas: number;
+  /** null = kapasitas manual kosong — pendaftaran manual hanya dibatasi kapasitas manual (sama dengan server). */
+  kapasitas: number | null;
   terisi: number;
   jadwalPilihanAktif: boolean;
   slots: JadwalSlot[];
@@ -85,7 +94,7 @@ export default function PendaftarKelasClient({
     }
   }
   const [ubahMentorId, setUbahMentorId] = useState<string | null>(null);
-  const penuh = terisi >= kapasitas;
+  const penuh = penuhMenurutKapasitasManual(kapasitas, terisi);
   const slotOptions = slots.map((s) => ({ label: formatSlot(s), value: slotKey(s) }));
   const tersediaKeys = new Set(slotOptions.map((o) => o.value));
 
@@ -94,12 +103,50 @@ export default function PendaftarKelasClient({
       // Default dropdown: jadwal yang sudah ditetapkan, lalu Pilihan 1/2 yang masih tersedia.
       const candidates = [item.ditetapkan, ...item.pilihan].filter((v): v is SlotStatus => Boolean(v));
       const preset = candidates.find((v) => tersediaKeys.has(slotKey(v.slot)));
-      return { ...item, selectedKey: preset ? slotKey(preset.slot) : "", busy: false, error: null };
+      return {
+        ...item,
+        selectedKey: preset ? slotKey(preset.slot) : "",
+        busy: false,
+        error: null,
+        linkInput: item.linkMeet ?? "",
+        linkBusy: false,
+        linkError: null,
+      };
     }),
   );
 
   function updateRow(enrollmentId: string, patch: Partial<RowState>) {
     setRows((prev) => prev.map((r) => (r.enrollmentId === enrollmentId ? { ...r, ...patch } : r)));
+  }
+
+  /** Admin menimpa (atau mengosongkan, linkMeet=null) link Meet per siswa. */
+  async function handleSimpanLink(row: RowState, linkMeet: string | null) {
+    if (linkMeet !== null && !isValidLinkUrl(linkMeet)) {
+      updateRow(row.enrollmentId, { linkError: "Link Meet harus berupa URL yang valid (diawali http:// atau https://)." });
+      return;
+    }
+    updateRow(row.enrollmentId, { linkBusy: true, linkError: null });
+    try {
+      const response = await fetch(`/api/kelola-kelas/${kelasId}/pendaftar/${row.enrollmentId}/link-meet`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkMeet }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.success) {
+        updateRow(row.enrollmentId, { linkBusy: false, linkError: json.error ?? "Gagal menyimpan link Meet." });
+        return;
+      }
+      const baru = (json.linkMeet as string | null) ?? null;
+      updateRow(row.enrollmentId, {
+        linkBusy: false,
+        linkMeet: baru,
+        linkMeetPengisi: baru ? "Admin" : null,
+        linkInput: baru ?? "",
+      });
+    } catch {
+      updateRow(row.enrollmentId, { linkBusy: false, linkError: "Gagal terhubung ke server." });
+    }
   }
 
   async function handleTetapkan(row: RowState) {
@@ -133,7 +180,9 @@ export default function PendaftarKelasClient({
   const header = (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm text-[#7E7C7C]">
-        Terisi {terisi} dari {kapasitas} kursi{penuh ? " — kelas penuh" : ""}
+        {kapasitas === null
+          ? `Terisi ${terisi} siswa (kapasitas otomatis / tanpa batas)`
+          : `Terisi ${terisi} dari ${kapasitas} kursi${penuh ? " — kelas penuh" : ""}`}
       </p>
       <Button type="button" variant="primary" size="md" disabled={penuh} onClick={() => setManualOpen(true)}>
         Daftarkan Siswa Manual
@@ -231,6 +280,47 @@ export default function PendaftarKelasClient({
                   Ubah mentor
                 </Button>
               ) : null}
+            </div>
+          ) : null}
+
+          {isKelasPrivate(tipeKelas) && row.statusPembayaran === "lunas" ? (
+            <div className="flex flex-col gap-2 border-t border-[#E3E3E3] pt-3 text-sm">
+              <p>
+                <span className="text-[#7E7C7C]">Link Meet siswa: </span>
+                {row.linkMeet ? (
+                  <span className="break-all text-black">
+                    {row.linkMeet} <span className="text-xs text-[#7E7C7C]">(diisi {row.linkMeetPengisi ?? "-"})</span>
+                  </span>
+                ) : (
+                  <span className="text-black">Belum diisi</span>
+                )}
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="sm:w-96">
+                  <InputField
+                    type="text"
+                    size="md"
+                    placeholder="https://meet.google.com/..."
+                    value={row.linkInput}
+                    onChange={(e) => updateRow(row.enrollmentId, { linkInput: e.target.value, linkError: null })}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  disabled={row.linkBusy || row.linkInput.trim() === ""}
+                  onClick={() => handleSimpanLink(row, row.linkInput.trim())}
+                >
+                  {row.linkBusy ? "Menyimpan..." : "Simpan link"}
+                </Button>
+                {row.linkMeet ? (
+                  <Button type="button" variant="secondary" size="md" disabled={row.linkBusy} onClick={() => handleSimpanLink(row, null)}>
+                    Hapus link
+                  </Button>
+                ) : null}
+              </div>
+              {row.linkError ? <p className="text-sm text-[#E70A0A]">{row.linkError}</p> : null}
             </div>
           ) : null}
 

@@ -93,7 +93,7 @@ export default function KelasCardMeta({ item, sessionRole, compact = false }: Ke
       <div className="relative z-40 mt-1">
         <KelasDaftarButton
           kelasId={item.id}
-          sisaSlot={item.sisaSlot}
+          penuh={item.kapasitasInfo.penuh}
           sessionRole={sessionRole}
           linkLynkid={item.linkLynkid}
           compact={compact}

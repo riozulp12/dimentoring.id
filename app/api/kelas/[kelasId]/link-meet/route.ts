@@ -2,24 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
+import { bolehKelolaLinkMeetKelas } from "@/lib/mentor/aksesMentor";
+import { isValidLinkUrl } from "@/lib/shared/linkMeet";
 
 /**
  * Update kelas.link_meet — PRD Bagian 7.5.2 (link recurring statis per Kelas).
- * BR-7: cuma mentor yang di-assign eksplisit ke kelas ini (kelas.mentor_id)
- * yang boleh mengubahnya, dan cuma kalau statusnya sudah Active (BR-27).
+ * BR-7: cuma mentor yang terkait kelas ini yang boleh mengubahnya — kelas.mentor_id (kolom lama),
+ * kelas_mentor, atau kelas_subtes_mentor (lib/mentor/aksesMentor.ts bolehKelolaLinkMeetKelas) — dan
+ * cuma kalau statusnya sudah Active (BR-27). Kelas PRIVATE memakai link per siswa
+ * (lib/shared/linkMeet.ts), bukan link kelas ini.
  */
 
 function errorResponse(message: string, status: number) {
   return NextResponse.json({ success: false, error: message }, { status });
-}
-
-function isValidUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ kelasId: string }> }) {
@@ -42,26 +37,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const linkMeet = body.linkMeet?.trim() ?? "";
-  if (!isValidUrl(linkMeet)) {
+  if (!isValidLinkUrl(linkMeet)) {
     return errorResponse("Link Meet harus berupa URL yang valid (diawali http:// atau https://).", 400);
   }
 
   const { kelasId } = await params;
 
-  // BR-7: mentor cuma boleh ubah kelas yang di-assign ke dia.
-  const { data: kelas, error: kelasError } = await supabaseServer
-    .from("kelas")
-    .select("id, mentor_id")
-    .eq("id", kelasId)
-    .maybeSingle();
-
-  if (kelasError) {
-    console.error("[link-meet] query kelas failed:", kelasError);
-    return errorResponse("Gagal memuat kelas. Coba lagi nanti.", 500);
-  }
-  if (!kelas || kelas.mentor_id !== session.userId) {
-    return errorResponse("Kelas tidak ditemukan atau bukan kelas yang kamu ampu.", 403);
-  }
+  // BR-7: mentor cuma boleh ubah kelas yang terkait dengannya (mentor_id lama, kelas_mentor, atau kelas_subtes_mentor).
+  const boleh = await bolehKelolaLinkMeetKelas(session.userId, kelasId);
+  if (boleh === "gagal") return errorResponse("Gagal memuat kelas. Coba lagi nanti.", 500);
+  if (!boleh) return errorResponse("Kelas tidak ditemukan atau bukan kelas yang kamu ampu.", 403);
 
   const { error: updateError } = await supabaseServer
     .from("kelas")

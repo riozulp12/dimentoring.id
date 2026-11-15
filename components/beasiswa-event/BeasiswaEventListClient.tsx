@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import Link from "next/link";
 import InputField from "@/components/ui/InputField";
 import { formatDeadline } from "@/lib/shared/formatDeadline";
@@ -22,13 +22,19 @@ import type { KontenInfoListItem } from "@/lib/dashboard/getInfoBeasiswaEvent";
  * components/program/KategoriFilterBar.tsx), opsinya REUSE
  * KONTEN_INFO_TIPE_LABEL supaya otomatis ikut kalau ada tipe baru lagi.
  * Filter Tipe + search jalan BERSAMAAN (AND, lihat `filtered` di bawah).
+ *
+ * Baris filter (desktop, SATU baris): [Jenis (dropdown)] [Cari (flex-1)] [Status
+ * (Semua | Masih Buka | Sudah Ditutup)] — tiap kontrol berlabel, tinggi seragam,
+ * sejajar di bawah. Di layar sempit: Jenis + Cari di baris atas, Status di bawah.
+ * Status awal = "semua" (bukan "Sudah Ditutup"); tombol aktif ditandai
+ * aria-pressed dan gaya terisi, hover hanya abu-abu supaya tidak terbaca "aktif".
  */
 
 type TipeFilter = "semua" | "beasiswa" | "internship" | "webinar" | "workshop" | "event";
 type StatusFilter = "semua" | "aktif" | "ditutup";
 
 const TIPE_OPTIONS = [
-  { label: "Semua", value: "semua" },
+  { label: "Semua jenis", value: "semua" },
   ...Object.entries(KONTEN_INFO_TIPE_LABEL).map(([value, label]) => ({ label, value })),
 ];
 
@@ -39,6 +45,9 @@ const STATUS_TABS: { key: StatusFilter; label: string }[] = [
 ];
 
 export default function BeasiswaEventListClient({ items }: { items: KontenInfoListItem[] }) {
+  const jenisId = useId();
+  const cariId = useId();
+  const statusLabelId = useId();
   const [search, setSearch] = useState("");
   const [tipeFilter, setTipeFilter] = useState<TipeFilter>("semua");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("semua");
@@ -57,41 +66,62 @@ export default function BeasiswaEventListClient({ items }: { items: KontenInfoLi
 
   return (
     <div className="flex flex-col gap-5 sm:gap-6">
-      <div className="max-w-md">
-        <InputField
-          type="text"
-          size="md"
-          placeholder="Cari judul beasiswa, internship, atau event..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
+        <div className="flex items-end gap-3 lg:contents">
+          <div className="flex w-36 shrink-0 flex-col gap-1.5 sm:w-48">
+            <label htmlFor={jenisId} className="text-sm font-medium text-black">
+              Jenis
+            </label>
+            <InputField
+              id={jenisId}
+              type="dropdown"
+              size="md"
+              value={tipeFilter}
+              onChange={(e) => setTipeFilter(e.target.value as TipeFilter)}
+              options={TIPE_OPTIONS}
+            />
+          </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <InputField
-          type="dropdown"
-          size="md"
-          value={tipeFilter}
-          onChange={(e) => setTipeFilter(e.target.value as TipeFilter)}
-          options={TIPE_OPTIONS}
-          className="sm:w-48"
-        />
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <label htmlFor={cariId} className="text-sm font-medium text-black">
+              Cari
+            </label>
+            <InputField
+              id={cariId}
+              type="text"
+              size="md"
+              placeholder="Cari judul..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          {STATUS_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setStatusFilter(tab.key)}
-              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
-                statusFilter === tab.key
-                  ? "border-[#081EEA] bg-[#F9FAFF] text-[#081EEA]"
-                  : "border-[#E3E3E3] text-[#7E7C7C] hover:border-[#081EEA] hover:text-[#081EEA]"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-1.5 lg:shrink-0">
+          <span id={statusLabelId} className="text-sm font-medium text-black">
+            Status
+          </span>
+          <div
+            role="group"
+            aria-labelledby={statusLabelId}
+            className="flex items-center gap-1 rounded-[16px] border border-[#AFAFAF] bg-white p-1"
+          >
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                aria-pressed={statusFilter === tab.key}
+                onClick={() => setStatusFilter(tab.key)}
+                className={`flex h-[33px] flex-1 items-center justify-center rounded-[12px] px-3.5 text-sm font-medium whitespace-nowrap transition-colors sm:h-10 lg:flex-none ${
+                  statusFilter === tab.key
+                    ? "bg-[#F9FAFF] text-[#081EEA] ring-1 ring-[#081EEA] ring-inset"
+                    : "text-[#7E7C7C] hover:bg-gray-50 hover:text-black"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

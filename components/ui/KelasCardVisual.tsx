@@ -2,6 +2,7 @@ import Mascot from "./Mascot";
 import { getSubtesIconKey } from "@/lib/kelas/subtesIconMap";
 import { SUBTES_ICON_COMPONENTS } from "./subtesIcons";
 import { PROGRAM_KATEGORI_LABEL, TINGKAT_KELAS_LABEL, type ProgramKategori } from "@/lib/shared/kelasLabels";
+import { teksBadgeKapasitas, type KapasitasKelas } from "@/lib/shared/kapasitasKelas";
 
 /**
  * Banner visual kelas (PRD 7.5, 13 — referensi visual Figma: maskot topi
@@ -85,10 +86,9 @@ export interface KelasCardVisualProps {
   variant?: KelasCardVisualVariant;
   /** Dipakai variant "jual" saja. Hanya diskon kelas yang ikut terlihat di harga kartu. */
   diskonAktif?: KelasCardVisualDiskon | null;
-  /** Dipakai variant "jual" saja. */
-  sisaSlot?: number;
-  /** Dipakai variant "jual" saja. */
-  kapasitas?: number;
+  /** Dipakai variant "jual" saja. SATU sumber penuh/hampir habis (lib/shared/kapasitasKelas.ts);
+   * kosong = tanpa badge. Kelas tanpa batas tidak pernah menampilkan badge. */
+  kapasitasInfo?: KapasitasKelas | null;
   /** Dipakai variant "dimiliki" saja — kelas sudah selesai (Progress
    * Kehadiran 100%, lib/shared/progresSesi.ts) → badge "Selesai". */
   selesai?: boolean;
@@ -121,8 +121,7 @@ export default function KelasCardVisual({
   index,
   variant = "jual",
   diskonAktif,
-  sisaSlot = 0,
-  kapasitas = 0,
+  kapasitasInfo = null,
   selesai = false,
   jumlahSiswaAktif = 0,
   programKategori,
@@ -156,8 +155,10 @@ export default function KelasCardVisual({
   const namaDisplay = truncateAtWord(namaKelas, 42);
 
   const isJual = variant === "jual";
-  const isPenuh = isJual && sisaSlot <= 0;
-  const isMenipis = isJual && !isPenuh && kapasitas > 0 && sisaSlot <= kapasitas * 0.3;
+  const isPenuh = isJual && kapasitasInfo?.penuh === true;
+  // "Menipis" = hampir habis menurut aturan tunggal (BATAS_HAMPIR_HABIS), bukan persentase kapasitas.
+  const isMenipis = isJual && kapasitasInfo?.hampirHabis === true;
+  const teksBadge = kapasitasInfo ? teksBadgeKapasitas(kapasitasInfo) : null;
   const hasDiskon = isJual && Boolean(diskonAktif);
 
   const intensifLabel = INTENSIF_LABEL[programKategori] ?? `INTENSIF ${programKategori.toUpperCase()}`;
@@ -225,14 +226,14 @@ export default function KelasCardVisual({
           "tanpa prefix" berlaku di SEMUA ukuran termasuk mobile sampai
           di-override sm: — kebalikan urutan dari media query desktop-first
           di spek asli, tapi angka pxnya sama persis, tidak dihitung ulang). */}
-      {isJual && (isPenuh || isMenipis) ? (
+      {isJual && teksBadge ? (
         <span
           className={[
             "absolute top-2 left-2 z-20 rounded-full px-2 py-[3px] text-[10px] font-medium sm:top-3 sm:left-3 sm:px-3 sm:py-1 sm:text-xs",
             isPenuh ? "bg-[#6B7280] text-white" : "bg-[#FACC15] text-[#422006]",
           ].join(" ")}
         >
-          {isPenuh ? "Kelas Penuh" : `Tersisa ${sisaSlot} Slot!!!`}
+          {teksBadge}
         </span>
       ) : variant === "diampu" ? (
         <span className="absolute top-2 left-2 z-20 rounded-full bg-[#FACC15] px-2 py-[3px] text-[10px] font-medium text-[#422006] sm:top-3 sm:left-3 sm:px-3 sm:py-1 sm:text-xs">
