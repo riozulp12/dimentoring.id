@@ -6,6 +6,8 @@ import { hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
 import { hitungStatusSesi, labelMentorSesi, type StatusSesiEfektif } from "@/lib/shared/statusSesi";
 import { rentangHariWib } from "@/lib/shared/hariWib";
 import { getKelasAksesMentor, type AksesMentor } from "@/lib/mentor/aksesMentor";
+import { getPenerimaanSubtesSiswa } from "@/lib/mentor/statusPenerimaanSiswa";
+import { alasanDiblokirPenerimaan, type AlasanBlokirPenerimaan } from "@/lib/shared/penerimaanSiswa";
 
 /**
  * Data layer "Kelas Saya" (Mentor) — PRD Bagian 7.5 & Bagian 13 (kelas,
@@ -165,6 +167,41 @@ export interface SesiSiswaItem {
   /** Nomor sesi paling kecil yang BELUM ditandai mentor — null kalau semua
    * sesi (1..jumlahSesi) sudah ditandai (tombol "Tandai Selesai" disembunyikan). */
   sesiBerikutnya: number | null;
+  /**
+   * Penjaga penerimaan siswa: null = mentor boleh menandai sesi siswa ini; selain itu
+   * alasan diblokir (menunggu diterima / sudah diterima mentor lain / data gagal dibaca
+   * = fail-closed). UI menonaktifkan tombol tandai bila tidak null.
+   */
+  diblokirPenerimaan: AlasanBlokirPenerimaan | null;
+  /** Subtes siswa ini yang DIPEGANG mentor ini dan masih menunggu diterima (bisa diklaim). */
+  subtesMenunggu: SubtesMenungguItem[];
+}
+
+export interface SubtesMenungguItem {
+  enrollmentSubtesId: string;
+  subtesNama: string;
+}
+
+/** Baris daftar "Menunggu diterima" (satu per siswa-subtes). */
+export interface MenungguDiterimaItem {
+  enrollmentSubtesId: string;
+  enrollmentId: string;
+  siswaNama: string;
+  subtesNama: string;
+}
+
+/** Murni: daftar datar siswa-subtes yang bisa diterima mentor ini, urut nama siswa lalu subtes. */
+export function daftarMenungguDiterima(items: SesiSiswaItem[]): MenungguDiterimaItem[] {
+  return items
+    .flatMap((item) =>
+      item.subtesMenunggu.map((sub) => ({
+        enrollmentSubtesId: sub.enrollmentSubtesId,
+        enrollmentId: item.enrollmentId,
+        siswaNama: item.nama,
+        subtesNama: sub.subtesNama,
+      })),
+    )
+    .sort((a, b) => a.siswaNama.localeCompare(b.siswaNama, "id") || a.subtesNama.localeCompare(b.subtesNama, "id"));
 }
 
 export interface SesiMentorRiwayat {
@@ -245,6 +282,10 @@ export async function getSesiSiswaByKelasId(
     sesiByEnrollment.set(row.enrollment_id, list);
   }
 
+  // Status penerimaan per subtes — SEKALI untuk semua siswa (maks. 4 query). "gagal" =
+  // fail-closed: semua siswa diblokir sementara dan daftar "Menunggu diterima" kosong.
+  const penerimaan = await getPenerimaanSubtesSiswa(mentorId, enrollmentIds);
+
   const now = new Date();
   const hariIni = rentangHariWib(now);
 
@@ -263,6 +304,7 @@ export async function getSesiSiswaByKelasId(
           Date.parse(s.dikonfirmasi_mentor_pada) < Date.parse(hariIni.akhir),
       );
       const sesiBerikutnya = sesiList.find((s) => !s.dikonfirmasi_mentor)?.nomor_sesi ?? null;
+      const subtesSiswa = penerimaan === "gagal" ? "gagal" : (penerimaan.get(row.id) ?? []);
       return {
         enrollmentId: row.id,
         userId: user.id,
@@ -287,6 +329,13 @@ export async function getSesiSiswaByKelasId(
             };
           }),
         sesiBerikutnya,
+        diblokirPenerimaan: alasanDiblokirPenerimaan({ mentorId, subtesSiswa }),
+        subtesMenunggu:
+          subtesSiswa === "gagal"
+            ? []
+            : subtesSiswa
+                .filter((sub) => sub.mentorMemegang && sub.status === "menunggu")
+                .map((sub) => ({ enrollmentSubtesId: sub.enrollmentSubtesId, subtesNama: sub.subtesNama })),
       };
     })
     .filter((item): item is SesiSiswaItem => item !== null);

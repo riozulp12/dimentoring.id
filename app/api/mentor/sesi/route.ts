@@ -62,6 +62,20 @@ export async function POST(request: NextRequest) {
   }
   const { enrollment, kelas } = akses;
 
+  // Penerimaan siswa per subtes (lib/shared/penerimaanSiswa.ts): subtes yang
+  // dipegang >=2 mentor aktif — cuma mentor yang MENERIMA siswa yang boleh
+  // menandai sesi (honor dibayar atas penanda sesi). Fail-closed: data gagal
+  // dibaca = ditolak (503), bukan diloloskan.
+  if (!akses.penerimaan.boleh) {
+    if (akses.penerimaan.alasan === "data_gagal") return errorResponse("Coba lagi sebentar.", 503);
+    return errorResponse(
+      akses.penerimaan.alasan === "menunggu_penerimaan"
+        ? "Siswa ini belum kamu terima. Terima siswa ini lebih dulu di halaman kelas."
+        : "Siswa ini belum kamu terima — sudah diterima mentor lain.",
+      403,
+    );
+  }
+
   const now = new Date();
   const hariIni = rentangHariWib(now);
   // Per mentor: cuma penandaan mentor INI yang dihitung. Sesi yang dibatalkan
@@ -104,7 +118,7 @@ export async function POST(request: NextRequest) {
     return errorResponse("Semua sesi kelas ini sudah ditandai selesai.", 400);
   }
 
-  const namaMapel = await getNamaMapelMentor(session.userId, kelas, enrollment.id);
+  const namaMapel = await getNamaMapelMentor(session.userId, kelas, enrollment.id, akses.subtesPenerimaan);
   if (namaMapel === "gagal") {
     return errorResponse("Gagal memuat data mapel. Coba lagi nanti.", 500);
   }

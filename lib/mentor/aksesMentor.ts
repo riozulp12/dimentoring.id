@@ -1,5 +1,7 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { alasanDiblokirPenerimaan, type AlasanBlokirPenerimaan } from "@/lib/shared/penerimaanSiswa";
+import { getPenerimaanSubtesSiswa, type SubtesSiswaDetail } from "@/lib/mentor/statusPenerimaanSiswa";
 
 /**
  * Otorisasi Mentor atas siswa/enrollment untuk presensi & Kelas Saya (PRD
@@ -14,6 +16,12 @@ import { supabaseServer } from "@/lib/supabase/server";
  * "utama"/"kelas" melihat SEMUA siswa lunas di kelas; "offline" cuma siswa
  * yang ditugaskan ke dia. Selain itu ditolak. Cek status mentor 'active'
  * TETAP dilakukan pemanggil (getMentorRoleStatus).
+ *
+ * Penerimaan siswa per subtes (lib/shared/penerimaanSiswa.ts): untuk subtes yang
+ * dipegang >=2 mentor aktif, mentor baru boleh MENANDAI SESI setelah menerima
+ * siswa itu. Hasilnya di `penerimaan` — pemanggil yang menandai sesi WAJIB
+ * menolak bila `penerimaan.boleh === false`. Gagal membaca datanya = diblokir
+ * (fail-closed, alasan "data_gagal").
  */
 
 export type AksesMentor = "utama" | "kelas" | "offline";
@@ -39,8 +47,14 @@ function first<T>(value: Join<T>): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
+export type PenerimaanMenandai = { boleh: true } | { boleh: false; alasan: AlasanBlokirPenerimaan };
+
 export interface EnrollmentAksesMentor {
   akses: AksesMentor;
+  /** Penjaga penerimaan siswa — lihat catatan di atas. */
+  penerimaan: PenerimaanMenandai;
+  /** Status penerimaan per subtes siswa ini (kosong bila siswa tidak punya pilihan subtes). */
+  subtesPenerimaan: SubtesSiswaDetail[];
   enrollment: { id: string; userId: string; kelasId: string; mentorOfflineId: string | null };
   kelas: { id: string; nama: string; mentorId: string | null; subtesId: string | null; subtesNama: string | null };
 }
@@ -85,8 +99,14 @@ export async function getAksesMentorEnrollment(
   });
   if (!akses) return null;
 
+  const penerimaanSubtes = await getPenerimaanSubtesSiswa(mentorId, [enrollmentId]);
+  const subtesPenerimaan = penerimaanSubtes === "gagal" ? "gagal" : (penerimaanSubtes.get(enrollmentId) ?? []);
+  const alasanBlokir = alasanDiblokirPenerimaan({ mentorId, subtesSiswa: subtesPenerimaan });
+
   return {
     akses,
+    penerimaan: alasanBlokir ? { boleh: false, alasan: alasanBlokir } : { boleh: true },
+    subtesPenerimaan: subtesPenerimaan === "gagal" ? [] : subtesPenerimaan,
     enrollment: {
       id: data.id as string,
       userId: data.user_id as string,

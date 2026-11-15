@@ -107,3 +107,21 @@ export function bolehMenandaiSesi(input: { mentorId: string; subtesSiswa: Subtes
     (s) => s.status === "tidak_perlu_klaim" || (s.status === "diterima" && s.mentorIdPenerima === input.mentorId),
   );
 }
+
+export type AlasanBlokirPenerimaan = "menunggu_penerimaan" | "diterima_mentor_lain" | "data_gagal";
+
+/**
+ * Alasan yang bisa dibedakan saat bolehMenandaiSesi = false (null = boleh).
+ * "menunggu_penerimaan": ada subtes yang dia pegang yang belum diterima siapa pun;
+ * "diterima_mentor_lain": semua subtes yang dia pegang sudah diterima mentor lain.
+ * "gagal" → "data_gagal" (fail-closed).
+ */
+export function alasanDiblokirPenerimaan(input: {
+  mentorId: string;
+  subtesSiswa: SubtesSiswaPenerimaan[] | "gagal";
+}): AlasanBlokirPenerimaan | null {
+  if (input.subtesSiswa === "gagal") return "data_gagal";
+  if (bolehMenandaiSesi(input)) return null;
+  const dipegang = input.subtesSiswa.filter((s) => s.mentorMemegang);
+  return dipegang.some((s) => s.status === "menunggu") ? "menunggu_penerimaan" : "diterima_mentor_lain";
+}
