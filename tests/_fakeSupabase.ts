@@ -19,9 +19,17 @@ export interface CatatanTulis {
   rows: Row[];
 }
 
+export type HasilRpc = { data: unknown; error: { message: string; code?: string } | null };
+
 export function buatFakeSupabase(db: Db) {
   const gagal = new Set<string>();
+  /** "tabel:op" -> mulai pemanggilan ke-N (1-based) semua pemanggilan berikutnya gagal. Untuk menggagalkan query ke-N saja. */
+  const gagalMulaiKe = new Map<string, number>();
+  const hitung = new Map<string, number>();
   const log: CatatanTulis[] = [];
+  /** Pemanggilan rpc() — tes mendaftarkan handler yang meniru fungsi SQL-nya. */
+  const rpcHandlers: Record<string, (args: Record<string, unknown>) => HasilRpc> = {};
+  const rpcLog: { nama: string; args: Record<string, unknown> }[] = [];
 
   class FakeQuery implements PromiseLike<Hasil> {
     private filters: Array<(row: Row) => boolean> = [];
@@ -81,7 +89,10 @@ export function buatFakeSupabase(db: Db) {
 
     private jalankan(): Hasil {
       const rows = (db[this.table] ??= []);
-      if (gagal.has(this.table) || gagal.has(`${this.table}:${this.op}`)) {
+      const kunciOp = `${this.table}:${this.op}`;
+      const ke = (hitung.get(kunciOp) ?? 0) + 1;
+      hitung.set(kunciOp, ke);
+      if (gagal.has(this.table) || gagal.has(kunciOp) || (gagalMulaiKe.has(kunciOp) && ke >= (gagalMulaiKe.get(kunciOp) as number))) {
         return { data: null, error: { message: "galat tiruan" } };
       }
       if (this.op === "insert") {
@@ -106,7 +117,15 @@ export function buatFakeSupabase(db: Db) {
 
   return {
     from: (table: string) => new FakeQuery(table),
+    rpc: (nama: string, args: Record<string, unknown>): Promise<HasilRpc> => {
+      rpcLog.push({ nama, args });
+      const handler = rpcHandlers[nama];
+      return Promise.resolve(handler ? handler(args) : { data: null, error: { message: `Could not find the function public.${nama}`, code: "PGRST202" } });
+    },
+    rpcHandlers,
+    rpcLog,
     gagal,
+    gagalMulaiKe,
     log,
     tulisan: (op?: CatatanTulis["op"], table?: string) => log.filter((l) => (!op || l.op === op) && (!table || l.table === table)),
   };
