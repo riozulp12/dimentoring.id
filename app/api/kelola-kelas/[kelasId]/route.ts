@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { validateKelasInput, type KelasInputBody } from "@/lib/admin/validateKelasInput";
+import { periksaLepasMentorKelas } from "@/lib/admin/rencanaMentorKelas";
 
 /** Edit/Hapus Kelas — PRD Bagian 7.5 & 7.5.3 (Admin, Kelola Kelas). */
 
@@ -51,6 +52,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { mentor_ids: mentorIds, subtes_ids: subtesIds, subtes_mentor_pairs: subtesMentorPairs, ...kelasData } =
     result.data;
+
+  // Penjaga lepas mentor (hanya MEMBACA, sebelum penulisan apa pun): mentor yang dilepas dari sebuah
+  // subtes tidak boleh masih memegang siswa kelas ini pada subtes itu (enrollment_subtes.mentor_id).
+  // 409 = pindahkan siswanya dulu; gagal baca = 500 dan tidak ada yang tersimpan.
+  const periksa = await periksaLepasMentorKelas(
+    kelasId,
+    subtesMentorPairs.map((pair) => ({ subtesId: pair.subtes_id, mentorId: pair.mentor_id })),
+  );
+  if (!periksa.ok) return errorResponse(periksa.error, periksa.status);
 
   const { error: updateError } = await supabaseServer.from("kelas").update(kelasData).eq("id", kelasId);
 
