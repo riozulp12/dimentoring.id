@@ -1,4 +1,5 @@
-import { parseJadwalSlot, parseJadwalSlots, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
+import { formatSlot, parseJadwalSlot, parseJadwalSlots, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
+import type { KapasitasKelas } from "@/lib/shared/kapasitasKelas";
 
 /**
  * Slot jadwal TERISI — logika murni (tanpa DB), dipakai server (payment/create, pembaca
@@ -114,4 +115,41 @@ export function opsiJadwalCheckout(slots: JadwalSlot[], status: StatusSlot[] | n
 /** Semua slot penuh (dan ada slot)? Dasar pesan "Semua jadwal kelas ini sudah terisi" + tombol Bayar nonaktif. */
 export function semuaSlotPenuh(status: StatusSlot[] | null): boolean {
   return Boolean(status && status.length > 0 && status.every((s) => s.penuh));
+}
+
+/** Penolakan checkout karena slot/kapasitas (status HTTP + pesan ramah). */
+export interface PenolakanKetersediaan {
+  status: 409 | 500;
+  error: string;
+}
+
+export interface KetersediaanCheckout {
+  memakaiSlot: boolean;
+  slot: StatusSlot[];
+  kapasitas: KapasitasKelas;
+}
+
+/**
+ * Aturan penolakan di payment/create (dipanggil SEBELUM invoice gateway dan INSERT payments):
+ *  - pembacaan gagal (ketersediaan null) → 500 "Gagal memeriksa ketersediaan jadwal." (fail-closed);
+ *  - kelas yang memakai slot: SETIAP slot yang dipilih (Pilihan 1; Pilihan 2 juga bila ada) yang penuh →
+ *    409 "Jadwal {slot} sudah terisi. Pilih jadwal lain, ya.";
+ *  - kelas penuh menurut hitungKapasitasKelas (SATU aturan yang sama dengan UI) → 409 "Kelas sudah penuh".
+ * null = lolos.
+ */
+export function cekKetersediaanCheckout(
+  ketersediaan: KetersediaanCheckout | null,
+  jadwalDipilih: JadwalSlot[] | null,
+): PenolakanKetersediaan | null {
+  if (!ketersediaan) return { status: 500, error: "Gagal memeriksa ketersediaan jadwal." };
+
+  if (ketersediaan.memakaiSlot && jadwalDipilih) {
+    for (const slot of jadwalDipilih) {
+      if (cariStatusSlot(ketersediaan.slot, slot)?.penuh) {
+        return { status: 409, error: `Jadwal ${formatSlot(slot)} sudah terisi. Pilih jadwal lain, ya.` };
+      }
+    }
+  }
+  if (ketersediaan.kapasitas.penuh) return { status: 409, error: "Kelas sudah penuh" };
+  return null;
 }
