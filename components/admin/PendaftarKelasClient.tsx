@@ -7,6 +7,7 @@ import InputField from "@/components/ui/InputField";
 import Modal from "@/components/ui/Modal";
 import DaftarSiswaManualModal from "@/components/admin/DaftarSiswaManualModal";
 import UbahMentorOfflineModal from "@/components/admin/UbahMentorOfflineModal";
+import { penuhMenurutKapasitasManual } from "@/lib/shared/kapasitasKelas";
 import type { PendaftarItem, SlotStatus } from "@/lib/admin/getPendaftarKelas";
 import { formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
 
@@ -66,7 +67,8 @@ export default function PendaftarKelasClient({
   kelasNama: string;
   modePembelajaran: "online" | "offline";
   subtesPool: { id: string; nama: string }[];
-  kapasitas: number;
+  /** null = kapasitas manual kosong — pendaftaran manual hanya dibatasi kapasitas manual (sama dengan server). */
+  kapasitas: number | null;
   terisi: number;
   jadwalPilihanAktif: boolean;
   slots: JadwalSlot[];
@@ -85,7 +87,7 @@ export default function PendaftarKelasClient({
     }
   }
   const [ubahMentorId, setUbahMentorId] = useState<string | null>(null);
-  const penuh = terisi >= kapasitas;
+  const penuh = penuhMenurutKapasitasManual(kapasitas, terisi);
   const slotOptions = slots.map((s) => ({ label: formatSlot(s), value: slotKey(s) }));
   const tersediaKeys = new Set(slotOptions.map((o) => o.value));
 
@@ -133,7 +135,9 @@ export default function PendaftarKelasClient({
   const header = (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm text-[#7E7C7C]">
-        Terisi {terisi} dari {kapasitas} kursi{penuh ? " — kelas penuh" : ""}
+        {kapasitas === null
+          ? `Terisi ${terisi} siswa (kapasitas otomatis / tanpa batas)`
+          : `Terisi ${terisi} dari ${kapasitas} kursi${penuh ? " — kelas penuh" : ""}`}
       </p>
       <Button type="button" variant="primary" size="md" disabled={penuh} onClick={() => setManualOpen(true)}>
         Daftarkan Siswa Manual

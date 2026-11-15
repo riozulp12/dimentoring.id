@@ -87,3 +87,13 @@ export function teksBadgeKapasitas(info: KapasitasKelas): string | null {
   if (info.hampirHabis && info.sisa !== null) return `Hampir habis · sisa ${info.sisa}`;
   return null;
 }
+
+/**
+ * Penuh menurut kapasitas MANUAL saja (kolom kosong = tidak pernah penuh). Dipakai jalur yang hanya
+ * mengenal kapasitas manual: pendaftaran manual Admin (app/api/admin/enrollment-manual + fungsi SQL
+ * daftar_siswa_manual, yang membandingkan `lunas >= kapasitas` dan NULL = tidak penuh) dan header halaman
+ * Pendaftar. Katalog, detail, checkout, dan payment/create memakai hitungKapasitasKelas.
+ */
+export function penuhMenurutKapasitasManual(kapasitas: number | null | undefined, lunas: number): boolean {
+  return angkaValid(kapasitas) && lunas >= kapasitas;
+}

@@ -489,7 +489,7 @@ describe("customer journey: Kelas Saya → detail jualan → checkout", () => {
     assert.deepEqual(rekomendasi.filter((id) => lunas.includes(id)), []);
   });
 
-  const dasar = { kelasId: "X1", sisaSlot: 5, linkPendaftaran: null, sessionRole: "student" as const };
+  const dasar = { kelasId: "X1", penuh: false, linkPendaftaran: null, sessionRole: "student" as const };
 
   it('"Daftar Sekarang" → /checkout/[id] HANYA kalau tanpa link pendaftaran DAN flag persis "true"', () => {
     assert.deepEqual(resolveKelasDaftarAction({ ...dasar, isCheckoutInternalReady: true }), {

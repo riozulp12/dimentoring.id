@@ -44,7 +44,8 @@ export interface PendaftarKelasData {
     jadwalPilihanAktif: boolean;
     slots: JadwalSlot[];
     modePembelajaran: "online" | "offline";
-    kapasitas: number;
+    /** null = kapasitas manual kosong (otomatis / tanpa batas). */
+    kapasitas: number | null;
     /** Enrollment lunas — dasar "Kelas Penuh" (sama dengan katalog). */
     terisi: number;
     jumlahSesi: number;
@@ -129,7 +130,7 @@ export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelas
       }),
       slots: parseJadwalSlots(kelas.jadwal),
       modePembelajaran: kelas.mode_pembelajaran === "offline" ? "offline" : "online",
-      kapasitas: kelas.kapasitas as number,
+      kapasitas: typeof kelas.kapasitas === "number" ? kelas.kapasitas : null,
       terisi: pendaftar.filter((p) => p.statusPembayaran === "lunas").length,
       jumlahSesi: kelas.jumlah_sesi as number,
       subtesPool,

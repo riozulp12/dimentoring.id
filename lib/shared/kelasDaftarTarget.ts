@@ -49,7 +49,8 @@ export function parseLinkPendaftaran(value: string | null | undefined): URL | nu
 
 export interface ResolveKelasDaftarParams {
   kelasId: string;
-  sisaSlot: number;
+  /** Kelas penuh? SATU aturan: lib/shared/kapasitasKelas.ts (KapasitasKelas.penuh). */
+  penuh: boolean;
   linkPendaftaran: string | null;
   sessionRole: SessionRole | null;
   isCheckoutInternalReady: boolean;
@@ -57,12 +58,12 @@ export interface ResolveKelasDaftarParams {
 
 export function resolveKelasDaftarAction({
   kelasId,
-  sisaSlot,
+  penuh,
   linkPendaftaran,
   sessionRole,
   isCheckoutInternalReady,
 }: ResolveKelasDaftarParams): KelasDaftarAction {
-  if (sisaSlot <= 0) {
+  if (penuh) {
     return {
       kind: "disabled",
       label: "Kelas Penuh",

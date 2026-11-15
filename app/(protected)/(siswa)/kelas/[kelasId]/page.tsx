@@ -192,7 +192,7 @@ async function PreviewSection({ kelasId }: { kelasId: string }) {
             {/* Halaman ini cuma bisa dibuka role Siswa (guard di atas). */}
             <KelasDaftarButton
               kelasId={kelasId}
-              sisaSlot={kelasPublic.sisaSlot}
+              penuh={kelasPublic.kapasitasInfo.penuh}
               sessionRole="student"
               linkLynkid={kelasPublic.linkLynkid}
               variant="detail"

@@ -11,9 +11,12 @@ import {
 } from "@/lib/shared/kelasLabels";
 import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
 import { hitungHargaSetelahDiskon, normalizeDiskonPersen } from "@/lib/shared/kelasDiskon";
+import { hitungKapasitasKelas, type KapasitasKelas } from "@/lib/shared/kapasitasKelas";
+import { hitungKetersediaanKelas } from "@/lib/jadwal/slotTerisi";
 
+// jadwal, jadwal_pilih_siswa, subtes_id: dasar kapasitas otomatis kelas private (lib/shared/kapasitasKelas.ts).
 export const KELAS_CARD_SELECT =
-  "id, nama, tipe_kelas, mode_pembelajaran, harga, diskon_persen, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, subtes:subtes_id(nama), mentor:mentor_id(nama)";
+  "id, nama, tipe_kelas, mode_pembelajaran, harga, diskon_persen, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, jadwal, jadwal_pilih_siswa, subtes_id, subtes:subtes_id(nama), mentor:mentor_id(nama)";
 
 /**
  * Data layer halaman publik /program (PRD Bagian 4.3 poin 5, 7.5.4) — 5
@@ -45,6 +48,10 @@ export interface KelasCardPreview {
   mentorNama: string | null;
   /** Diskon kelas sendiri (null kalau diskonPersen = 0). Kode promo TIDAK pernah menghasilkan ribbon. */
   diskonAktif: DiskonAktif | null;
+  /** SATU sumber kapasitas/penuh/hampir habis (lib/shared/kapasitasKelas.ts). */
+  kapasitasInfo: KapasitasKelas;
+  /** LEGACY untuk KelasCardVisual lama (badge "Tersisa N Slot"): turunan kapasitasInfo —
+   * 0 / MAX_SAFE_INTEGER bila tanpa batas. Jangan dipakai kode baru. */
   kapasitas: number;
   sisaSlot: number;
   deskripsi: string | null;
@@ -78,16 +85,28 @@ export interface KelasCardRow {
   mode_pembelajaran: string;
   harga: number;
   diskon_persen: number | null;
-  kapasitas: number;
+  /** Opsional (boleh kosong) — lihat lib/shared/kapasitasKelas.ts. */
+  kapasitas: number | null;
   deskripsi: string | null;
   program_kategori: string;
   tingkat_kelas: string;
   link_lynkid: string | null;
+  jadwal?: unknown;
+  jadwal_pilih_siswa?: boolean | null;
+  subtes_id?: string | null;
   subtes: NamaJoin;
   mentor: NamaJoin;
 }
 
-export function toCardPreview(row: KelasCardRow, sisaSlot: number): KelasCardPreview {
+/** Turunan legacy untuk KelasCardVisual lama: tanpa batas → kapasitas 0 (tanpa badge) & sisa tak berhingga. */
+function nilaiLegacy(info: KapasitasKelas): { kapasitas: number; sisaSlot: number } {
+  return {
+    kapasitas: info.kapasitas ?? 0,
+    sisaSlot: info.sisa ?? Number.MAX_SAFE_INTEGER,
+  };
+}
+
+export function toCardPreview(row: KelasCardRow, kapasitasInfo: KapasitasKelas): KelasCardPreview {
   const harga = Number(row.harga);
   const diskonPersen = normalizeDiskonPersen(row.diskon_persen);
   return {
@@ -105,8 +124,8 @@ export function toCardPreview(row: KelasCardRow, sisaSlot: number): KelasCardPre
     // (diskon_persen kelas). Kode promo (diketik di checkout) TIDAK pernah
     // menghasilkan ribbon/label apa pun di kartu.
     diskonAktif: diskonPersen > 0 ? { label: `Diskon ${diskonPersen}%` } : null,
-    kapasitas: row.kapasitas,
-    sisaSlot,
+    kapasitasInfo,
+    ...nilaiLegacy(kapasitasInfo),
     deskripsi: row.deskripsi,
     programKategori: row.program_kategori,
     tingkatKelas: row.tingkat_kelas,
@@ -115,36 +134,35 @@ export function toCardPreview(row: KelasCardRow, sisaSlot: number): KelasCardPre
   };
 }
 
-/** Sisa slot per kelas (PRD Bagian 13 `enrollments`, kolom `kapasitas` di
- * `kelas`) — kapasitas dikurangi jumlah enrollment `status_pembayaran='lunas'`.
- * Dipakai buat badge kuota "Tersisa X Slot!"/"Kelas Penuh" di KelasCardVisual. */
-export async function getSisaSlotByKelasId(
-  kelasIds: string[],
-  kapasitasById: Map<string, number>,
-): Promise<Map<string, number>> {
-  const result = new Map<string, number>();
-  if (kelasIds.length === 0) return result;
+/**
+ * Kapasitas per kelas (SATU aturan, lib/shared/kapasitasKelas.ts) untuk daftar kelas katalog.
+ * Kelas private-online-saklar-1subtes: otomatis dari slot × mentor aktif; kelas lain: kapasitas manual
+ * (kosong = tanpa batas). Galat baca → jatuh ke aturan kapasitas manual dengan 0 siswa (sama seperti perilaku
+ * lama saat query enrollments gagal) — server (payment/create) tetap penjaga penjualan.
+ */
+export async function getKapasitasByKelasId(rows: KelasCardRow[]): Promise<Map<string, KapasitasKelas>> {
+  const result = new Map<string, KapasitasKelas>();
+  if (rows.length === 0) return result;
 
-  const { data, error } = await supabaseServer
-    .from("enrollments")
-    .select("kelas_id")
-    .eq("status_pembayaran", "lunas")
-    .in("kelas_id", kelasIds);
+  const peta = await hitungKetersediaanKelas(
+    rows.map((row) => ({
+      id: row.id,
+      tipe_kelas: row.tipe_kelas,
+      mode_pembelajaran: row.mode_pembelajaran,
+      jadwal_pilih_siswa: row.jadwal_pilih_siswa ?? null,
+      jadwal: row.jadwal,
+      kapasitas: typeof row.kapasitas === "number" ? row.kapasitas : null,
+      subtes_id: row.subtes_id ?? null,
+    })),
+  );
 
-  if (error) {
-    console.error("[getSisaSlotByKelasId] query enrollments failed:", error);
+  for (const row of rows) {
+    result.set(
+      row.id,
+      peta?.get(row.id)?.kapasitas ??
+        hitungKapasitasKelas({ kapasitasManual: typeof row.kapasitas === "number" ? row.kapasitas : null, lunas: 0, otomatis: null }),
+    );
   }
-
-  const lunasCount = new Map<string, number>();
-  for (const row of (data ?? []) as { kelas_id: string }[]) {
-    lunasCount.set(row.kelas_id, (lunasCount.get(row.kelas_id) ?? 0) + 1);
-  }
-
-  for (const kelasId of kelasIds) {
-    const kapasitas = kapasitasById.get(kelasId) ?? 0;
-    result.set(kelasId, kapasitas - (lunasCount.get(kelasId) ?? 0));
-  }
-
   return result;
 }
 
@@ -167,10 +185,8 @@ export function queryKelasKatalog() {
 export async function toCardPreviewList(rows: KelasCardRow[]): Promise<KelasCardPreview[]> {
   if (rows.length === 0) return [];
 
-  const kelasIds = rows.map((row) => row.id);
-  const kapasitasById = new Map(rows.map((row) => [row.id, row.kapasitas]));
-  const sisaSlotByKelas = await getSisaSlotByKelasId(kelasIds, kapasitasById);
-  return rows.map((row) => toCardPreview(row, sisaSlotByKelas.get(row.id) ?? row.kapasitas));
+  const kapasitasByKelas = await getKapasitasByKelasId(rows);
+  return rows.map((row) => toCardPreview(row, kapasitasByKelas.get(row.id)!));
 }
 
 /** Preview tiap kategori (max 4 terbaru) — dipakai app/program/page.tsx. Cuma
@@ -277,6 +293,9 @@ export interface KelasDetailPublic {
   hargaSetelahDiskon: number;
   mentorNama: string | null;
   mentors: KelasMentorInfo[];
+  /** SATU sumber kapasitas/penuh/hampir habis (lib/shared/kapasitasKelas.ts). */
+  kapasitasInfo: KapasitasKelas;
+  /** LEGACY untuk KelasCardVisual lama — turunan kapasitasInfo (lihat KelasCardPreview). */
   kapasitas: number;
   sisaSlot: number;
   /** Diskon kelas sendiri saja — lihat KelasCardPreview.diskonAktif. */
@@ -298,7 +317,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tipe_kelas, mode_pembelajaran, jumlah_sesi, tingkat_kelas, deskripsi, harga, diskon_persen, jadwal, kapasitas, link_lynkid, tampil_di_katalog,
+      `id, nama, program_kategori, tipe_kelas, mode_pembelajaran, jumlah_sesi, tingkat_kelas, deskripsi, harga, diskon_persen, jadwal, jadwal_pilih_siswa, kapasitas, link_lynkid, tampil_di_katalog, subtes_id,
        subtes:subtes_id(nama)`,
     )
     .eq("id", kelasId)
@@ -322,9 +341,11 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     harga: number;
     diskon_persen: number | null;
     jadwal: unknown;
-    kapasitas: number;
+    jadwal_pilih_siswa: boolean | null;
+    kapasitas: number | null;
     link_lynkid: string | null;
     tampil_di_katalog: boolean | null;
+    subtes_id: string | null;
     subtes: NamaJoin;
   };
   const row = data as unknown as Row;
@@ -333,21 +354,28 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     users: { id: string; nama: string; avatar_url: string | null; mentor_profiles: { asal_ptn: string | null } | { asal_ptn: string | null }[] | null } | null;
   };
 
-  const [{ count, error: countError }, mentorRelResult] = await Promise.all([
-    supabaseServer
-      .from("enrollments")
-      .select("id", { count: "exact", head: true })
-      .eq("kelas_id", kelasId)
-      .eq("status_pembayaran", "lunas"),
+  const [ketersediaan, mentorRelResult] = await Promise.all([
+    hitungKetersediaanKelas([
+      {
+        id: row.id,
+        tipe_kelas: row.tipe_kelas,
+        mode_pembelajaran: row.mode_pembelajaran,
+        jadwal_pilih_siswa: row.jadwal_pilih_siswa,
+        jadwal: row.jadwal,
+        kapasitas: typeof row.kapasitas === "number" ? row.kapasitas : null,
+        subtes_id: row.subtes_id,
+      },
+    ]),
     supabaseServer
       .from("kelas_mentor")
       .select("users:mentor_id(id, nama, avatar_url, mentor_profiles(asal_ptn))")
       .eq("kelas_id", kelasId),
   ]);
 
-  if (countError) {
-    console.error("[getKelasDetailPublic] query enrollments count failed:", countError);
-  }
+  // Galat baca → aturan kapasitas manual dengan 0 siswa (sama dengan perilaku lama saat count gagal).
+  const kapasitasInfo =
+    ketersediaan?.get(row.id)?.kapasitas ??
+    hitungKapasitasKelas({ kapasitasManual: typeof row.kapasitas === "number" ? row.kapasitas : null, lunas: 0, otomatis: null });
   if (mentorRelResult.error) {
     console.error("[getKelasDetailPublic] query kelas_mentor failed:", mentorRelResult.error);
   }
@@ -383,8 +411,8 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     hargaSetelahDiskon: hitungHargaSetelahDiskon(hargaDetail, diskonPersenDetail),
     mentorNama: mentors[0]?.nama ?? null,
     mentors,
-    kapasitas: row.kapasitas,
-    sisaSlot: row.kapasitas - (count ?? 0),
+    kapasitasInfo,
+    ...nilaiLegacy(kapasitasInfo),
     diskonAktif: diskonPersenDetail > 0 ? { label: `Diskon ${diskonPersenDetail}%` } : null,
     linkLynkid: row.link_lynkid,
     tampilDiKatalog: row.tampil_di_katalog !== false,

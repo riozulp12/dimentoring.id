@@ -244,7 +244,7 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
             ) : (
               <KelasDaftarButton
                 kelasId={kelas.id}
-                sisaSlot={kelas.sisaSlot}
+                penuh={kelas.kapasitasInfo.penuh}
                 sessionRole={session?.role ?? null}
                 linkLynkid={kelas.linkLynkid}
                 variant="detail"
