@@ -30,6 +30,13 @@ function formatTanggal(tanggal: string | null): string | null {
   return new Date(`${tanggal}T00:00:00Z`).toLocaleDateString("id-ID", { timeZone: "UTC", day: "numeric", month: "short" });
 }
 
+/** Penjaga penerimaan siswa: tombol tandai diganti keterangan (server tetap menolak walau tombol dipaksa). */
+const PESAN_DIBLOKIR: Record<NonNullable<SesiSiswaItem["diblokirPenerimaan"]>, string> = {
+  menunggu_penerimaan: "Terima siswa dulu untuk menandai sesi",
+  diterima_mentor_lain: "Siswa diterima mentor lain",
+  data_gagal: "Gagal memuat status penerimaan, muat ulang halaman",
+};
+
 interface RowState extends SesiSiswaItem {
   busy: boolean;
   error: string | null;
@@ -140,7 +147,11 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
           </div>
 
           <div className="flex flex-col items-start gap-1 sm:items-end">
-            {row.sesiBerikutnya !== null && row.ditandaiHariIni ? (
+            {row.diblokirPenerimaan !== null ? (
+              <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                {PESAN_DIBLOKIR[row.diblokirPenerimaan]}
+              </span>
+            ) : row.sesiBerikutnya !== null && row.ditandaiHariIni ? (
               <span className="inline-flex items-center rounded-full bg-[#F0F0F0] px-2.5 py-0.5 text-xs font-medium text-[#7E7C7C]">
                 Sudah ditandai hari ini
               </span>

@@ -4,10 +4,16 @@ import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
 import { getAksesMentorKelas } from "@/lib/mentor/aksesMentor";
-import { getMentorKelasDetail, getMentorMateriList, getSesiSiswaByKelasId } from "@/lib/mentor/getKelasSayaData";
+import {
+  daftarMenungguDiterima,
+  getMentorKelasDetail,
+  getMentorMateriList,
+  getSesiSiswaByKelasId,
+} from "@/lib/mentor/getKelasSayaData";
 import PageTitle from "@/components/dashboard/PageTitle";
 import LinkMeetForm from "@/components/mentor/LinkMeetForm";
 import SesiSiswaList from "@/components/mentor/SesiSiswaList";
+import MenungguDiterimaList from "@/components/mentor/MenungguDiterimaList";
 
 /**
  * Detail Kelas (Mentor) — PRD Bagian 7.5.1. GUARD: mentor yang login harus
@@ -72,6 +78,11 @@ export default async function KelasSayaDetailMentorPage({
     getSesiSiswaByKelasId(kelasId, session.userId, akses),
   ]);
 
+  const menungguDiterima = daftarMenungguDiterima(sesiSiswa);
+  // SesiSiswaList menyimpan state sendiri; key berubah saat status penerimaan berubah
+  // (setelah router.refresh()) supaya tombol tandai mengikuti keadaan server.
+  const kunciSesiSiswa = sesiSiswa.map((item) => `${item.enrollmentId}:${item.diblokirPenerimaan ?? "ok"}`).join("|");
+
   return (
     <>
       <PageTitle value={kelas.nama} />
@@ -97,9 +108,11 @@ export default async function KelasSayaDetailMentorPage({
           {bisaKelolaKelas ? <LinkMeetForm kelasId={kelas.id} initialLinkMeet={kelas.linkMeet} /> : null}
         </div>
 
+        <MenungguDiterimaList items={menungguDiterima} />
+
         <div className="flex flex-col gap-3">
           <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Absensi Sesi</h2>
-          <SesiSiswaList items={sesiSiswa} jumlahSesi={kelas.jumlahSesi} />
+          <SesiSiswaList key={kunciSesiSiswa} items={sesiSiswa} jumlahSesi={kelas.jumlahSesi} />
         </div>
 
         <div className="flex items-center justify-between gap-3">
