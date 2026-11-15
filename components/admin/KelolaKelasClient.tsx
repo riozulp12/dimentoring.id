@@ -14,6 +14,7 @@ import {
 import type { ProgramKategori } from "@/lib/shared/kelasLabels";
 import type { KelasListItem, MentorOption, SubtesOption } from "@/lib/admin/getKelolaKelasData";
 import { hitungHargaSetelahDiskon } from "@/lib/shared/kelasDiskon";
+import { formatMentorPerSubtes } from "@/lib/shared/mentorPerSubtes";
 
 /**
  * List + Detail (read-only, dengan tombol Edit/Hapus sejajar) + Tambah/Edit
@@ -27,15 +28,15 @@ function formatRupiah(value: number): string {
   return `Rp${Math.round(value).toLocaleString("id-ID")}`;
 }
 
-/** "Matematika: Budi, Fisika: Siti" kalau kelas ini punya pairing eksplisit
- * (kelas_subtes_mentor); fallback ke daftar mentor generik (kelas_mentor)
+/** "Kimia: Andi, Budi; Fisika: Siti" kalau kelas ini punya pairing eksplisit
+ * (kelas_subtes_mentor; satu subtes boleh beberapa mentor); fallback ke daftar mentor generik (kelas_mentor)
  * untuk kelas tanpa subtes tertentu (Konsultasi/Pendampingan Mahasiswa). */
 function formatMentorDisplay(kelas: KelasListItem): string {
   if (kelas.modePembelajaran === "offline") {
     return "Otomatis (jarak terdekat saat checkout)";
   }
   if (kelas.subtesMentorPairs.length > 0) {
-    return kelas.subtesMentorPairs.map((p) => `${p.subtesNama}: ${p.mentorNama}`).join(", ");
+    return formatMentorPerSubtes(kelas.subtesMentorPairs);
   }
   return kelas.mentorNamaList.length > 0 ? kelas.mentorNamaList.join(", ") : "Belum ada mentor";
 }

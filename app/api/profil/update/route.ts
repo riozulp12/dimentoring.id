@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
+import { rencanakanUbahSubtes, terapkanUbahSubtes, type RencanaSubtes } from "@/lib/mentor/ubahSubtesMentor";
 
 /**
  * Update Profil (PATCH) — PRD 7 poin 3. Field yang di-update tergantung role
@@ -8,9 +9,16 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
  * Mentor tambah field spesifik role masing-masing.
  *
  * Mapel Tersulit / Subtes yang Diampu dikirim sebagai NAMA (bukan id, sama
- * seperti checklist di Register) — di-resolve ke subtes.id di sini, lalu
- * user_mapel_tersulit/mentor_subtes_diampu di-replace penuh (hapus semua baris
- * lama, insert ulang) sesuai instruksi PRD poin 3.
+ * seperti checklist di Register) — di-resolve ke subtes.id di sini.
+ * user_mapel_tersulit di-replace penuh (hapus semua baris lama, insert ulang)
+ * sesuai instruksi PRD poin 3.
+ *
+ * mentor_subtes_diampu BUKAN replace penuh: penulisan berbasis DIFF (sisipkan yang
+ * baru, lepas HANYA yang dilepas) dengan penjaga yang sama dengan
+ * PATCH /api/mentor/subtes-diampu — subtes yang masih dipakai di kelas
+ * (kelas_subtes_mentor) atau pendaftaran offline tidak boleh dilepas (409). Penjaga
+ * dicek SEBELUM penulisan apa pun, supaya nama/WA/PTN tidak tersimpan sebagian
+ * saat subtes ditolak. Lihat lib/mentor/ubahSubtesMentor.ts.
  */
 
 const VALID_TINGKAT_KELAS = ["kelas_10", "kelas_11", "kelas_12", "gap_year"];
@@ -27,7 +35,7 @@ interface UpdateProfilBody {
   asalPtn?: string;
   semester?: number | string;
   jurusan?: string;
-  subtesDiampu?: string[];
+  subtesDiampu?: unknown;
 }
 
 function errorResponse(message: string, status: number) {
@@ -115,7 +123,7 @@ export async function PATCH(request: NextRequest) {
 
   // ---- Khusus Mentor ----
   let mentorUpdate: { asal_ptn: string; semester: number; jurusan: string } | null = null;
-  let subtesDiampuIds: string[] = [];
+  let rencanaSubtes: Extract<RencanaSubtes, { ok: true }> | null = null;
   if (session.role === "mentor") {
     const asalPtn = typeof body.asalPtn === "string" ? body.asalPtn.trim() : "";
     const jurusan = typeof body.jurusan === "string" ? body.jurusan.trim() : "";
@@ -126,18 +134,16 @@ export async function PATCH(request: NextRequest) {
       return errorResponse("Semester tidak valid.", 400);
     }
 
-    const subtesNames = Array.isArray(body.subtesDiampu)
-      ? body.subtesDiampu.filter((n): n is string => typeof n === "string")
-      : [];
-    if (subtesNames.length === 0) {
-      return errorResponse("Pilih minimal satu Subtes yang Diampu.", 400);
+    // Validasi + penjaga (hanya MEMBACA) — sebelum penulisan apa pun di bawah.
+    const rencana = await rencanakanUbahSubtes(session.userId, body.subtesDiampu);
+    if (!rencana.ok) {
+      if (rencana.status === 404) return errorResponse("Gagal menyimpan profil mentor. Coba lagi nanti.", 500);
+      return NextResponse.json(
+        { success: false, error: rencana.error, ...(rencana.tertahan ? { tertahan: rencana.tertahan } : {}) },
+        { status: rencana.status },
+      );
     }
-
-    const resolved = await resolveSubtesIds(subtesNames);
-    if (resolved === null) {
-      return errorResponse("Salah satu Subtes yang Diampu tidak dikenali sistem.", 400);
-    }
-    subtesDiampuIds = resolved;
+    rencanaSubtes = rencana;
 
     mentorUpdate = { asal_ptn: asalPtn, semester, jurusan };
   }
@@ -176,8 +182,8 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  // ---- Mentor: update mentor_profiles + replace penuh mentor_subtes_diampu ----
-  if (session.role === "mentor" && mentorUpdate) {
+  // ---- Mentor: update mentor_profiles + diff mentor_subtes_diampu ----
+  if (session.role === "mentor" && mentorUpdate && rencanaSubtes) {
     const { data: profileRow, error: profileError } = await supabaseServer
       .from("mentor_profiles")
       .update(mentorUpdate)
@@ -190,22 +196,8 @@ export async function PATCH(request: NextRequest) {
       return errorResponse("Gagal menyimpan profil mentor. Coba lagi nanti.", 500);
     }
 
-    const { error: deleteError } = await supabaseServer
-      .from("mentor_subtes_diampu")
-      .delete()
-      .eq("mentor_profile_id", profileRow.id);
-    if (deleteError) {
-      console.error("[profil/update] delete mentor_subtes_diampu failed:", deleteError);
-      return errorResponse("Gagal menyimpan Subtes yang Diampu. Coba lagi nanti.", 500);
-    }
-
-    const { error: insertError } = await supabaseServer.from("mentor_subtes_diampu").insert(
-      subtesDiampuIds.map((subtesId) => ({ mentor_profile_id: profileRow.id, subtes_id: subtesId })),
-    );
-    if (insertError) {
-      console.error("[profil/update] insert mentor_subtes_diampu failed:", insertError);
-      return errorResponse("Gagal menyimpan Subtes yang Diampu. Coba lagi nanti.", 500);
-    }
+    const hasilSubtes = await terapkanUbahSubtes(rencanaSubtes);
+    if (!hasilSubtes.ok) return errorResponse(hasilSubtes.error, 500);
   }
 
   return NextResponse.json({ success: true });

@@ -11,14 +11,20 @@ import {
   JUMLAH_SESI_DEFAULT,
 } from "@/lib/shared/kelasLabels";
 import { formatRupiah, hitungHargaSetelahDiskon } from "@/lib/shared/kelasDiskon";
+import {
+  petaMentorPerSubtes,
+  subtesTanpaMentor,
+  subtesUnikDariPasangan,
+  susunPasangan,
+} from "@/lib/shared/mentorPerSubtes";
 
 /**
  * Form Tambah/Edit Kelas — SATU komponen dipakai kedua mode (initialKelas
  * ada = edit, tidak ada = tambah), PRD Bagian 7.5/7.5.3/7.5.4. Subtes
  * multi-select (checklist) — tiap Subtes yang dicentang WAJIB dipasangkan
- * SATU Mentor spesifik lewat dropdown di baris yang sama (kelas_subtes_mentor),
- * dropdown difilter dinamis (cuma mentor aktif yang mapel_dasar/subtes-nya
- * cocok dengan Subtes baris itu). Kalau TIDAK ADA Subtes dicentang sama sekali
+ * minimal SATU Mentor spesifik, dan boleh BEBERAPA (chip + "+ Tambah mentor" di
+ * baris yang sama, kelas_subtes_mentor); pilihan mentor difilter dinamis (cuma
+ * mentor aktif yang mapel_dasar/subtes-nya cocok dengan Subtes baris itu). Kalau TIDAK ADA Subtes dicentang sama sekali
  * (kelas Konsultasi/Pendampingan Mahasiswa yang tidak terikat mapel), fallback
  * ke checklist Mentor generik (semua mentor aktif, tanpa cross-check subtes).
  * Jadwal bisa lebih dari satu slot (hari + jam masing-masing lewat picker).
@@ -93,11 +99,16 @@ export default function KelolaKelasForm({
     initialKelas?.modePembelajaran === "offline" ? (initialKelas?.subtesId ?? "") : "",
   );
   const [selectedSubtesIds, setSelectedSubtesIds] = useState<string[]>(
-    initialKelas?.subtesMentorPairs.map((p) => p.subtesId) ?? [],
+    subtesUnikDariPasangan(initialKelas?.subtesMentorPairs ?? []),
   );
-  const [subtesMentorMap, setSubtesMentorMap] = useState<Record<string, string>>(
-    Object.fromEntries((initialKelas?.subtesMentorPairs ?? []).map((p) => [p.subtesId, p.mentorId])),
+  // subtesId -> SEMUA mentor tersimpan (kelas_subtes_mentor boleh >1 baris per kelas+subtes).
+  const [subtesMentorMap, setSubtesMentorMap] = useState<Record<string, string[]>>(
+    petaMentorPerSubtes(initialKelas?.subtesMentorPairs ?? []),
   );
+  // Nama mentor tersimpan tetap tampil di chip walau sudah tidak ada di daftar pilihan
+  // (mis. nonaktif / tidak lagi mengampu subtes itu) — jangan jadi "-".
+  const namaMentorTersimpan = new Map((initialKelas?.subtesMentorPairs ?? []).map((p) => [p.mentorId, p.mentorNama]));
+  const namaMentor = (id: string) => mentorOptions.find((m) => m.id === id)?.nama ?? namaMentorTersimpan.get(id) ?? "-";
   // Fallback TANPA subtes tertentu (Konsultasi/Pendampingan Mahasiswa) — cuma
   // relevan kalau selectedSubtesIds kosong, prefill dari mentorIds lama HANYA
   // kalau kelas ini memang tidak punya pairing (edit kelas lama).
@@ -169,8 +180,20 @@ export default function KelolaKelasForm({
     });
   }
 
-  function setMentorForSubtes(subtesIdValue: string, mentorIdValue: string) {
-    setSubtesMentorMap((prev) => ({ ...prev, [subtesIdValue]: mentorIdValue }));
+  function tambahMentorSubtes(subtesIdValue: string, mentorIdValue: string) {
+    if (!mentorIdValue) return;
+    setSubtesMentorMap((prev) => {
+      const daftar = prev[subtesIdValue] ?? [];
+      if (daftar.includes(mentorIdValue)) return prev; // tanpa duplikat
+      return { ...prev, [subtesIdValue]: [...daftar, mentorIdValue] };
+    });
+  }
+
+  function lepasMentorSubtes(subtesIdValue: string, mentorIdValue: string) {
+    setSubtesMentorMap((prev) => ({
+      ...prev,
+      [subtesIdValue]: (prev[subtesIdValue] ?? []).filter((id) => id !== mentorIdValue),
+    }));
   }
 
   function toggleGeneralMentor(mentorIdValue: string) {
@@ -270,10 +293,10 @@ export default function KelolaKelasForm({
     } else {
       // Tiap Subtes yang dicentang wajib punya pasangan Mentor — cek di sini
       // dulu supaya errornya jelas per-baris, bukan cuma pesan generik dari API.
-      const missingMentorFor = selectedSubtesIds.find((id) => !subtesMentorMap[id]);
+      const missingMentorFor = subtesTanpaMentor(selectedSubtesIds, subtesMentorMap)[0];
       if (missingMentorFor) {
         const subtesNamaMissing = subtesOptions.find((s) => s.id === missingMentorFor)?.nama ?? "Subtes ini";
-        setSubmitError(`Pilih Mentor untuk "${subtesNamaMissing}" sebelum menyimpan.`);
+        setSubmitError(`Pilih minimal satu Mentor untuk "${subtesNamaMissing}" sebelum menyimpan.`);
         return;
       }
     }
@@ -289,13 +312,7 @@ export default function KelolaKelasForm({
         return;
       }
     }
-    const subtesMentorPairs =
-      modePembelajaran === "offline"
-        ? []
-        : selectedSubtesIds.map((subtesIdValue) => ({
-            subtesId: subtesIdValue,
-            mentorId: subtesMentorMap[subtesIdValue],
-          }));
+    const subtesMentorPairs = modePembelajaran === "offline" ? [] : susunPasangan(selectedSubtesIds, subtesMentorMap);
 
     setIsSubmitting(true);
     const payload = {
@@ -338,14 +355,14 @@ export default function KelolaKelasForm({
         subtesId: pair.subtesId,
         subtesNama: subtesOptions.find((s) => s.id === pair.subtesId)?.nama ?? "-",
         mentorId: pair.mentorId,
-        mentorNama: mentorOptions.find((m) => m.id === pair.mentorId)?.nama ?? "-",
+        mentorNama: namaMentor(pair.mentorId),
       }));
       const offlineSubtesNama = subtesOptions.find((s) => s.id === offlineSubtesId)?.nama ?? "-";
       const subtesNama =
         modePembelajaran === "offline"
           ? offlineSubtesNama
           : resolvedSubtesMentorPairs.length > 0
-            ? resolvedSubtesMentorPairs.map((p) => p.subtesNama).join(", ")
+            ? Array.from(new Set(resolvedSubtesMentorPairs.map((p) => p.subtesNama))).join(", ")
             : "-";
       const mentorIds =
         modePembelajaran === "offline"
@@ -529,24 +546,48 @@ export default function KelolaKelasForm({
               <div className="flex flex-col gap-2">
                 {selectedSubtesIds.map((subtesIdValue) => {
                   const subtesNamaValue = subtesOptions.find((s) => s.id === subtesIdValue)?.nama ?? "-";
-                  const options = mentorOptionsBySubtes(subtesIdValue);
+                  const terpilih = subtesMentorMap[subtesIdValue] ?? [];
+                  const options = mentorOptionsBySubtes(subtesIdValue).filter((o) => !terpilih.includes(o.value));
+                  const adaPilihan = mentorOptionsBySubtes(subtesIdValue).length > 0;
                   return (
-                    <div key={subtesIdValue} className="flex items-center gap-3">
-                      <span className="w-1/3 shrink-0 truncate text-sm text-black" title={subtesNamaValue}>
+                    <div key={subtesIdValue} className="flex items-start gap-3">
+                      <span className="w-1/3 shrink-0 truncate pt-2 text-sm text-black" title={subtesNamaValue}>
                         {subtesNamaValue}
                       </span>
-                      <div className="flex-1">
-                        {options.length === 0 ? (
+                      <div className="flex flex-1 flex-col gap-2">
+                        {terpilih.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {terpilih.map((mentorIdValue) => (
+                              <span
+                                key={mentorIdValue}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-[#E3E3E3] bg-[#F9F9F9] px-3 py-1 text-sm text-black"
+                              >
+                                {namaMentor(mentorIdValue)}
+                                <button
+                                  type="button"
+                                  aria-label={`Lepas mentor ${namaMentor(mentorIdValue)} dari ${subtesNamaValue}`}
+                                  onClick={() => lepasMentorSubtes(subtesIdValue, mentorIdValue)}
+                                  className="flex h-4 w-4 items-center justify-center rounded-full text-[#7E7C7C] hover:bg-[#E3E3E3] hover:text-black"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                        {!adaPilihan ? (
                           <p className="text-sm text-[#7E7C7C]">Belum ada mentor aktif yang mengampu subtes ini.</p>
-                        ) : (
+                        ) : options.length > 0 ? (
                           <InputField
                             type="dropdown"
                             size="md"
-                            placeholder="Pilih mentor"
-                            value={subtesMentorMap[subtesIdValue] ?? ""}
-                            onChange={(e) => setMentorForSubtes(subtesIdValue, e.target.value)}
+                            placeholder={terpilih.length === 0 ? "Pilih mentor" : "+ Tambah mentor"}
+                            value=""
+                            onChange={(e) => tambahMentorSubtes(subtesIdValue, e.target.value)}
                             options={options}
                           />
+                        ) : (
+                          <p className="text-xs text-[#7E7C7C]">Semua mentor yang cocok sudah dipilih.</p>
                         )}
                       </div>
                     </div>
