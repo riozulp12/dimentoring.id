@@ -386,7 +386,10 @@ describe("getSesiSiswaByKelasId — Link Meet per siswa di daftar mentor", () =>
     await mentorPut({ enrollmentId: "e-baru" });
     const privat = await kelasSaya.getSesiSiswaByKelasId("K-PRIV", A, "kelas", { tipeKelas: "private" });
     assert.deepEqual(privat.find((i) => i.enrollmentId === "e-baru")!.linkMeetSiswa, { link: LINK_A, tidakBerlaku: false });
-    assert.deepEqual(privat.find((i) => i.enrollmentId === "e-menunggu")!.linkMeetSiswa, { link: null, tidakBerlaku: false });
+    // Privasi antar mentor (keputusan Rio): siswa yang MENUNGGU diterima bukan milik A — tidak ada di daftar
+    // Absensi sama sekali, jadi tidak ada link Meet-nya pun (sebelumnya tampil dengan link null). Dulu tes ini
+    // mengunci perilaku lama itu; diubah mengikuti keputusan produk, bukan dilemahkan.
+    assert.equal(privat.find((i) => i.enrollmentId === "e-menunggu"), undefined);
     const grup = await kelasSaya.getSesiSiswaByKelasId("K-GRUP", GRUP_MENTOR, "utama", { tipeKelas: "grouping" });
     assert.equal(grup[0].linkMeetSiswa, null);
   });
@@ -403,6 +406,7 @@ describe("getSesiSiswaByKelasId — Link Meet per siswa di daftar mentor", () =>
     await mentorPut({ enrollmentId: "e-baru" });
     tabelGagal = new Set(["user_roles"]);
     const items = await diam(() => kelasSaya.getSesiSiswaByKelasId("K-PRIV", A, "kelas", { tipeKelas: "private" }));
-    for (const item of items) assert.equal(item.linkMeetSiswa?.link ?? null, null);
+    // Fail-closed: kepemilikan tidak bisa dipastikan → tidak ada siswa (dan tidak ada link) yang ditampilkan.
+    assert.deepEqual(items, []);
   });
 });

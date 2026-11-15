@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { siswaMilikMentor, type SubtesKepemilikan } from "@/lib/shared/siswaMentor";
-import { getPenerimaanSubtesSiswa } from "@/lib/mentor/statusPenerimaanSiswa";
+import { getPenerimaanSubtesSiswa, type SubtesSiswaDetail } from "@/lib/mentor/statusPenerimaanSiswa";
 
 /**
  * Pembaca server untuk aturan kepemilikan siswa (lib/shared/siswaMentor.ts — SATU-SATUNYA tempat aturannya).
@@ -141,4 +141,21 @@ export async function getEnrollmentMilikMentor(mentorId: string): Promise<Set<st
   const hasil = await getKepemilikanSiswa([mentorId]);
   if (hasil === "gagal") return new Set();
   return new Set(hasil.map((row) => row.enrollmentId));
+}
+
+/**
+ * Aturan yang SAMA (siswaMilikMentor) untuk pemanggil yang SUDAH memegang data penerimaan per subtes
+ * (SubtesSiswaDetail dari getPenerimaanSubtesSiswa) — mis. detail Kelas Saya — supaya tidak membaca dua kali.
+ */
+export function milikDariPenerimaan(input: {
+  mentorId: string;
+  tanggalDaftar: string | Date | null | undefined;
+  mentorOfflineId: string | null | undefined;
+  terkaitKelas: boolean;
+  subtes: SubtesSiswaDetail[];
+}): boolean {
+  return siswaMilikMentor({
+    ...input,
+    subtes: input.subtes.map((s) => ({ mentorIdPenerima: s.mentorIdPenerima, mentorAktifSubtes: s.mentorAktifSubtes })),
+  });
 }

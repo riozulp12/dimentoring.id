@@ -12,6 +12,9 @@ import type { MenungguDiterimaItem } from "@/lib/mentor/getKelasSayaData";
  * /api/mentor/terima-siswa). Bila sudah keduluan (409) baris menampilkan
  * "Siswa sudah diterima mentor lain" beberapa detik, lalu dilepas dari daftar
  * dan halaman disegarkan supaya mengikuti keadaan server.
+ *
+ * Info seminimal untuk memutuskan (nama, subtes, jadwal pilihan). Siswa yang sudah diterima mentor lain
+ * tidak dikirim server ke daftar ini (privasi antar mentor).
  */
 
 const JEDA_LEPAS_MS = 2500;
@@ -98,6 +101,9 @@ export default function MenungguDiterimaList({ items }: { items: MenungguDiterim
               <span className="inline-flex w-fit items-center rounded-full bg-[#F9FAFF] px-2.5 py-0.5 text-xs font-medium text-[#081EEA]">
                 {item.subtesNama || "Subtes"}
               </span>
+              {item.jadwalPilihan.length > 0 ? (
+                <p className="text-xs text-[#7E7C7C]">Jadwal pilihan: {item.jadwalPilihan.join(" · ")}</p>
+              ) : null}
             </div>
             <div className="flex flex-col items-start gap-1 sm:items-end">
               {st.diterima ? (
