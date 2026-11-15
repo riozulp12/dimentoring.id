@@ -7,6 +7,7 @@ import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import ChecklistGrid from "@/components/ui/ChecklistGrid";
+import SubtesDiampuEditor from "@/components/profil/SubtesDiampuEditor";
 import Toggle from "@/components/ui/Toggle";
 import type { ProfilData, ProvinsiOption } from "@/lib/profil/getProfilData";
 
@@ -450,7 +451,19 @@ export default function ProfilClient({
               <InfoRow label="Semester" value={profil.mentorSemester ?? "-"} />
               <InfoRow label="Jurusan" value={profil.mentorJurusan || "-"} />
             </div>
-            <InfoRow label="Subtes yang Diampu" value={<ChipList items={profil.mentorSubtesDiampu} />} />
+            <InfoRow
+              label="Subtes yang Diampu"
+              value={
+                <SubtesDiampuEditor
+                  subtesAwal={profil.mentorSubtesDiampu}
+                  subtesOptions={subtesOptions}
+                  onTersimpan={(subtes) => {
+                    setProfil((prev) => ({ ...prev, mentorSubtesDiampu: subtes }));
+                    router.refresh();
+                  }}
+                />
+              }
+            />
 
             <div className="flex items-start justify-between gap-4 border-t border-[#E3E3E3] pt-4">
               <div className="flex flex-col gap-0.5">

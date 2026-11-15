@@ -180,5 +180,7 @@ export async function getRekomendasiKelas(
   }
 
   const previews = await toCardPreviewList(candidates);
-  return previews.sort((a, b) => b.sisaSlot - a.sisaSlot).slice(0, MAX_REKOMENDASI);
+  // Urut kursi tersisa terbanyak; kelas tanpa batas (sisa null) dianggap paling lega. Tie: urutan asli (sort stabil).
+  const sisa = (kelas: (typeof previews)[number]) => kelas.kapasitasInfo.sisa ?? Number.POSITIVE_INFINITY;
+  return previews.sort((a, b) => (sisa(b) === sisa(a) ? 0 : sisa(b) > sisa(a) ? 1 : -1)).slice(0, MAX_REKOMENDASI);
 }

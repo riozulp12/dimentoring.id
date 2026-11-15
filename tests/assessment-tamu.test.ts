@@ -55,7 +55,7 @@ describe("tombol beli di detail kelas untuk tamu", () => {
   it("mengarah ke login dengan returnTo ke detail kelas yang sama", () => {
     const aksi = resolveKelasDaftarAction({
       kelasId: KELAS_ID,
-      sisaSlot: 5,
+      penuh: false,
       linkPendaftaran: null,
       sessionRole: null,
       isCheckoutInternalReady: true,
@@ -70,7 +70,7 @@ describe("tombol beli di detail kelas untuk tamu", () => {
   it("siswa yang sudah login langsung ke checkout", () => {
     const aksi = resolveKelasDaftarAction({
       kelasId: KELAS_ID,
-      sisaSlot: 5,
+      penuh: false,
       linkPendaftaran: null,
       sessionRole: "student",
       isCheckoutInternalReady: true,

@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
 import MaskotLoading from "@/components/ui/MaskotLoading";
-import { MAX_JADWAL_PILIHAN, formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
+import { MAX_JADWAL_PILIHAN, formatSlot, slotKey } from "@/lib/shared/jadwalPilihan";
+import type { OpsiJadwalCheckout } from "@/lib/shared/slotTerisi";
 import Link from "next/link";
 import { HREF_KEBIJAKAN_PRIVASI, HREF_KEBIJAKAN_REFUND, RINGKASAN_REFUND_CHECKOUT } from "@/lib/shared/kebijakan";
 
@@ -29,6 +30,9 @@ interface AppliedPromo {
 export interface CheckoutSubtesOption {
   id: string;
   nama: string;
+  /** false = belum ada mentor aktif untuk subtes ini (lib/kelas/subtesTersedia.ts):
+   * tampil "Belum tersedia" dan tidak bisa dipilih. Kosong/true = bisa dipilih. */
+  tersedia?: boolean;
 }
 
 interface OfflineMentorOption {
@@ -51,6 +55,8 @@ export default function CheckoutForm({
   subtesOptions,
   modePembelajaran,
   jadwalOptions,
+  semuaJadwalPenuh = false,
+  kelasPenuh = false,
 }: {
   kelasId: string;
   /** Harga yang DITAGIH (sudah setelah diskon kelas, dihitung server). */
@@ -66,10 +72,17 @@ export default function CheckoutForm({
   /** Slot kelas.jadwal yang dipilih siswa (PRD 7.5.8) — HANYA diisi server
    * kalau saklar kelas menyala, bukan offline, dan slot >= 2. Kosong = tanpa
    * pilihan jadwal (perilaku lama). */
-  jadwalOptions: JadwalSlot[];
+  /** Slot kelas + penanda penuh (penuh = tampil "(Penuh)" dan tidak bisa dipilih). */
+  jadwalOptions: OpsiJadwalCheckout[];
+  /** Semua jadwal kelas penuh → pesan "Semua jadwal kelas ini sudah terisi" dan tombol Bayar nonaktif. */
+  semuaJadwalPenuh?: boolean;
+  /** Kelas penuh menurut kapasitas (otomatis/manual) → pesan + tombol Bayar nonaktif. */
+  kelasPenuh?: boolean;
 }) {
   const isOffline = modePembelajaran === "offline";
   const isPaket = !isOffline && subtesOptions.length > 1;
+  const tidakTersediaIds = new Set(subtesOptions.filter((s) => s.tersedia === false).map((s) => s.id));
+  const adaSubtesTersedia = subtesOptions.some((s) => s.tersedia !== false);
   const [kodePromoInput, setKodePromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
@@ -165,6 +178,7 @@ export default function CheckoutForm({
 
   function toggleSubtes(subtesId: string) {
     setSubtesError(null);
+    if (tidakTersediaIds.has(subtesId)) return;
     setSelectedSubtesIds((prev) => {
       if (prev.includes(subtesId)) return prev.filter((id) => id !== subtesId);
       if (prev.length >= MAX_SUBTES_PILIHAN) return prev;
@@ -232,7 +246,8 @@ export default function CheckoutForm({
     const jadwalPilihan = jadwalPilihanKeys
       .filter(Boolean)
       .map((key) => jadwalOptions.find((slot) => slotKey(slot) === key))
-      .filter((slot): slot is JadwalSlot => Boolean(slot));
+      .filter((slot): slot is OpsiJadwalCheckout => Boolean(slot) && !slot!.penuh)
+      .map(({ hari, jam_mulai }) => ({ hari, jam_mulai }));
     if (isPilihJadwal && jadwalPilihan.length < 1) {
       setJadwalError("Pilih minimal 1 jadwal dulu.");
       return;
@@ -240,6 +255,10 @@ export default function CheckoutForm({
 
     if (isPaket && (selectedSubtesIds.length < 1 || selectedSubtesIds.length > MAX_SUBTES_PILIHAN)) {
       setSubtesError(`Pilih minimal 1, maksimal ${MAX_SUBTES_PILIHAN} subtes dulu.`);
+      return;
+    }
+    if (isPaket && selectedSubtesIds.some((id) => tidakTersediaIds.has(id))) {
+      setSubtesError("Ada subtes yang belum tersedia. Muat ulang halaman, lalu pilih lagi ya.");
       return;
     }
 
@@ -375,12 +394,13 @@ export default function CheckoutForm({
           </div>
           <div className="flex flex-col gap-1.5">
             {subtesOptions.map((subtes) => {
-              const checked = selectedSubtesIds.includes(subtes.id);
-              const disabled = !checked && selectedSubtesIds.length >= MAX_SUBTES_PILIHAN;
+              const tidakTersedia = subtes.tersedia === false;
+              const checked = !tidakTersedia && selectedSubtesIds.includes(subtes.id);
+              const disabled = tidakTersedia || (!checked && selectedSubtesIds.length >= MAX_SUBTES_PILIHAN);
               return (
                 <label
                   key={subtes.id}
-                  className={`flex items-center gap-2 rounded-[8px] px-1.5 py-1 text-sm text-black ${disabled ? "opacity-50" : "hover:bg-gray-50"}`}
+                  className={`flex items-center gap-2 rounded-[8px] px-1.5 py-1 text-sm ${tidakTersedia ? "cursor-not-allowed text-[#7E7C7C]" : "text-black"} ${disabled ? "opacity-50" : "hover:bg-gray-50"}`}
                 >
                   <input
                     type="checkbox"
@@ -390,10 +410,20 @@ export default function CheckoutForm({
                     className="size-4 accent-[#081EEA]"
                   />
                   {subtes.nama}
+                  {tidakTersedia ? (
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-[#7E7C7C]">
+                      Belum tersedia
+                    </span>
+                  ) : null}
                 </label>
               );
             })}
           </div>
+          {!adaSubtesTersedia ? (
+            <p className="text-sm text-[#E70A0A]">
+              Kelas ini belum bisa didaftar karena belum ada mentor untuk subtes yang ditawarkan. Coba lagi nanti, ya.
+            </p>
+          ) : null}
           {subtesError ? <p className="text-sm text-[#E70A0A]">{subtesError}</p> : null}
         </div>
       ) : null}
@@ -416,7 +446,11 @@ export default function CheckoutForm({
                 placeholder="Pilih jadwal"
                 value={jadwalPilihanKeys[0]}
                 onChange={(e) => setJadwalPilihan(0, e.target.value)}
-                options={jadwalOptions.map((slot) => ({ label: formatSlot(slot), value: slotKey(slot) }))}
+                options={jadwalOptions.map((slot) => ({
+                  label: slot.penuh ? `${formatSlot(slot)} (Penuh)` : formatSlot(slot),
+                  value: slotKey(slot),
+                  disabled: slot.penuh,
+                }))}
                 status={jadwalError ? "error" : "default"}
               />
             </div>
@@ -430,7 +464,11 @@ export default function CheckoutForm({
                 onChange={(e) => setJadwalPilihan(1, e.target.value)}
                 options={jadwalOptions
                   .filter((slot) => slotKey(slot) !== jadwalPilihanKeys[0])
-                  .map((slot) => ({ label: formatSlot(slot), value: slotKey(slot) }))}
+                  .map((slot) => ({
+                    label: slot.penuh ? `${formatSlot(slot)} (Penuh)` : formatSlot(slot),
+                    value: slotKey(slot),
+                    disabled: slot.penuh,
+                  }))}
               />
               {jadwalPilihanKeys[1] ? (
                 <button
@@ -445,6 +483,18 @@ export default function CheckoutForm({
           </div>
           {jadwalError ? <p className="text-sm text-[#E70A0A]">{jadwalError}</p> : null}
         </div>
+      ) : null}
+
+      {kelasPenuh && !semuaJadwalPenuh ? (
+        <p role="alert" className="rounded-[16px] bg-[#FFF4E5] px-4 py-3 text-sm font-medium text-[#B45309]">
+          Kelas ini sudah penuh. Coba cek kelas lain ya.
+        </p>
+      ) : null}
+
+      {semuaJadwalPenuh ? (
+        <p role="alert" className="rounded-[16px] bg-[#FFF4E5] px-4 py-3 text-sm font-medium text-[#B45309]">
+          Semua jadwal kelas ini sudah terisi. Coba cek kelas lain ya.
+        </p>
       ) : null}
 
       <div className="flex flex-col gap-6 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
@@ -588,6 +638,9 @@ export default function CheckoutForm({
           disabled={
             isPaying ||
             !setujuKebijakan ||
+            semuaJadwalPenuh ||
+            kelasPenuh ||
+            (isPaket && !adaSubtesTersedia) ||
             (isOffline && (!offlineMentors || offlineMentors.length === 0 || !selectedMentorId))
           }
           className="w-full"

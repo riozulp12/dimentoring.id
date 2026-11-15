@@ -42,7 +42,8 @@ export interface KelasListItem {
    * ini tidak terikat subtes tertentu (mis. Konsultasi/Pendampingan Mahasiswa),
    * pakai mentorIds/mentorNamaList generik sebagai gantinya. */
   subtesMentorPairs: SubtesMentorPair[];
-  kapasitas: number;
+  /** null = kosong (otomatis/tanpa batas) — lihat lib/shared/kapasitasKelas.ts. */
+  kapasitas: number | null;
   jumlahSiswa: number;
   harga: number;
   /** `kelas.diskon_persen` (0-100) — 0 berarti kelas ini tidak sedang diskon.
@@ -118,7 +119,7 @@ interface KelasRow {
   mode_pembelajaran: string;
   jumlah_sesi: number;
   subtes_id: string | null;
-  kapasitas: number;
+  kapasitas: number | null;
   harga: number;
   diskon_persen: number | null;
   jadwal: unknown;
