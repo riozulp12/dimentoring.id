@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getKelasForCheckout, getKelasSubtesOptions, isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
+import { getKetersediaanSubtes } from "@/lib/kelas/subtesTersedia";
 import PageTitle from "@/components/dashboard/PageTitle";
 import CheckoutForm from "@/components/siswa/CheckoutForm";
 import { getCheckoutBlockReason, isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
@@ -53,7 +54,17 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
     redirect(`/kelas/${kelasId}`);
   }
 
-  const subtesOptions = await getKelasSubtesOptions(kelasId);
+  const subtesPool = await getKelasSubtesOptions(kelasId);
+  // Kelas paket (siswa memilih subtes): tandai subtes yang belum punya mentor aktif.
+  // Kalau pembacaan gagal, tampilkan semua — payment/create tetap pengaman utamanya.
+  const ketersediaanSubtes =
+    kelas.modePembelajaran !== "offline" && subtesPool.length > 1
+      ? await getKetersediaanSubtes(kelasId, subtesPool)
+      : null;
+  const subtesOptions = subtesPool.map((subtes) => ({
+    ...subtes,
+    tersedia: ketersediaanSubtes?.subtes.find((s) => s.id === subtes.id)?.tersedia ?? true,
+  }));
   // Opsi jadwal cuma dikirim kalau siswa memang perlu memilih (PRD 7.5.8).
   // Slot penuh (kelas private-online-saklar-1subtes, lib/shared/slotTerisi.ts) dinonaktifkan di dropdown.
   // Galat baca (null) → semua slot tampil terbuka; server (payment/create) tetap penjaga utama.

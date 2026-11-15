@@ -30,6 +30,9 @@ interface AppliedPromo {
 export interface CheckoutSubtesOption {
   id: string;
   nama: string;
+  /** false = belum ada mentor aktif untuk subtes ini (lib/kelas/subtesTersedia.ts):
+   * tampil "Belum tersedia" dan tidak bisa dipilih. Kosong/true = bisa dipilih. */
+  tersedia?: boolean;
 }
 
 interface OfflineMentorOption {
@@ -78,6 +81,8 @@ export default function CheckoutForm({
 }) {
   const isOffline = modePembelajaran === "offline";
   const isPaket = !isOffline && subtesOptions.length > 1;
+  const tidakTersediaIds = new Set(subtesOptions.filter((s) => s.tersedia === false).map((s) => s.id));
+  const adaSubtesTersedia = subtesOptions.some((s) => s.tersedia !== false);
   const [kodePromoInput, setKodePromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
@@ -173,6 +178,7 @@ export default function CheckoutForm({
 
   function toggleSubtes(subtesId: string) {
     setSubtesError(null);
+    if (tidakTersediaIds.has(subtesId)) return;
     setSelectedSubtesIds((prev) => {
       if (prev.includes(subtesId)) return prev.filter((id) => id !== subtesId);
       if (prev.length >= MAX_SUBTES_PILIHAN) return prev;
@@ -249,6 +255,10 @@ export default function CheckoutForm({
 
     if (isPaket && (selectedSubtesIds.length < 1 || selectedSubtesIds.length > MAX_SUBTES_PILIHAN)) {
       setSubtesError(`Pilih minimal 1, maksimal ${MAX_SUBTES_PILIHAN} subtes dulu.`);
+      return;
+    }
+    if (isPaket && selectedSubtesIds.some((id) => tidakTersediaIds.has(id))) {
+      setSubtesError("Ada subtes yang belum tersedia. Muat ulang halaman, lalu pilih lagi ya.");
       return;
     }
 
@@ -384,12 +394,13 @@ export default function CheckoutForm({
           </div>
           <div className="flex flex-col gap-1.5">
             {subtesOptions.map((subtes) => {
-              const checked = selectedSubtesIds.includes(subtes.id);
-              const disabled = !checked && selectedSubtesIds.length >= MAX_SUBTES_PILIHAN;
+              const tidakTersedia = subtes.tersedia === false;
+              const checked = !tidakTersedia && selectedSubtesIds.includes(subtes.id);
+              const disabled = tidakTersedia || (!checked && selectedSubtesIds.length >= MAX_SUBTES_PILIHAN);
               return (
                 <label
                   key={subtes.id}
-                  className={`flex items-center gap-2 rounded-[8px] px-1.5 py-1 text-sm text-black ${disabled ? "opacity-50" : "hover:bg-gray-50"}`}
+                  className={`flex items-center gap-2 rounded-[8px] px-1.5 py-1 text-sm ${tidakTersedia ? "cursor-not-allowed text-[#7E7C7C]" : "text-black"} ${disabled ? "opacity-50" : "hover:bg-gray-50"}`}
                 >
                   <input
                     type="checkbox"
@@ -399,10 +410,20 @@ export default function CheckoutForm({
                     className="size-4 accent-[#081EEA]"
                   />
                   {subtes.nama}
+                  {tidakTersedia ? (
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-[#7E7C7C]">
+                      Belum tersedia
+                    </span>
+                  ) : null}
                 </label>
               );
             })}
           </div>
+          {!adaSubtesTersedia ? (
+            <p className="text-sm text-[#E70A0A]">
+              Kelas ini belum bisa didaftar karena belum ada mentor untuk subtes yang ditawarkan. Coba lagi nanti, ya.
+            </p>
+          ) : null}
           {subtesError ? <p className="text-sm text-[#E70A0A]">{subtesError}</p> : null}
         </div>
       ) : null}
@@ -619,6 +640,7 @@ export default function CheckoutForm({
             !setujuKebijakan ||
             semuaJadwalPenuh ||
             kelasPenuh ||
+            (isPaket && !adaSubtesTersedia) ||
             (isOffline && (!offlineMentors || offlineMentors.length === 0 || !selectedMentorId))
           }
           className="w-full"
