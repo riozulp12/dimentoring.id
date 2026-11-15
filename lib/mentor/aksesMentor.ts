@@ -1,5 +1,7 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { alasanDiblokirPenerimaan, type AlasanBlokirPenerimaan } from "@/lib/shared/penerimaanSiswa";
+import { getPenerimaanSubtesSiswa, type SubtesSiswaDetail } from "@/lib/mentor/statusPenerimaanSiswa";
 
 /**
  * Otorisasi Mentor atas siswa/enrollment untuk presensi & Kelas Saya (PRD
@@ -14,6 +16,12 @@ import { supabaseServer } from "@/lib/supabase/server";
  * "utama"/"kelas" melihat SEMUA siswa lunas di kelas; "offline" cuma siswa
  * yang ditugaskan ke dia. Selain itu ditolak. Cek status mentor 'active'
  * TETAP dilakukan pemanggil (getMentorRoleStatus).
+ *
+ * Penerimaan siswa per subtes (lib/shared/penerimaanSiswa.ts): untuk subtes yang
+ * dipegang >=2 mentor aktif, mentor baru boleh MENANDAI SESI setelah menerima
+ * siswa itu. Hasilnya di `penerimaan` — pemanggil yang menandai sesi WAJIB
+ * menolak bila `penerimaan.boleh === false`. Gagal membaca datanya = diblokir
+ * (fail-closed, alasan "data_gagal").
  */
 
 export type AksesMentor = "utama" | "kelas" | "offline";
@@ -39,10 +47,24 @@ function first<T>(value: Join<T>): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
+export type PenerimaanMenandai = { boleh: true } | { boleh: false; alasan: AlasanBlokirPenerimaan };
+
 export interface EnrollmentAksesMentor {
   akses: AksesMentor;
+  /** Penjaga penerimaan siswa — lihat catatan di atas. */
+  penerimaan: PenerimaanMenandai;
+  /** Status penerimaan per subtes siswa ini (kosong bila siswa tidak punya pilihan subtes). */
+  subtesPenerimaan: SubtesSiswaDetail[];
   enrollment: { id: string; userId: string; kelasId: string; mentorOfflineId: string | null };
-  kelas: { id: string; nama: string; mentorId: string | null; subtesId: string | null; subtesNama: string | null };
+  kelas: {
+    id: string;
+    nama: string;
+    mentorId: string | null;
+    subtesId: string | null;
+    subtesNama: string | null;
+    /** kelas.tipe_kelas (private/semi_private/grouping) — Link Meet per siswa hanya untuk private. */
+    tipeKelas: string | null;
+  };
 }
 
 /**
@@ -56,7 +78,7 @@ export async function getAksesMentorEnrollment(
 ): Promise<EnrollmentAksesMentor | null | "gagal"> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, user_id, kelas_id, mentor_offline_id, kelas:kelas_id(id, nama, mentor_id, subtes_id, subtes:subtes_id(nama))")
+    .select("id, user_id, kelas_id, mentor_offline_id, kelas:kelas_id(id, nama, mentor_id, subtes_id, tipe_kelas, subtes:subtes_id(nama))")
     .eq("id", enrollmentId)
     .maybeSingle();
 
@@ -64,7 +86,14 @@ export async function getAksesMentorEnrollment(
     console.error("[getAksesMentorEnrollment] query enrollment failed:", error);
     return "gagal";
   }
-  type KelasRow = { id: string; nama: string; mentor_id: string | null; subtes_id: string | null; subtes: Join<{ nama: string }> };
+  type KelasRow = {
+    id: string;
+    nama: string;
+    mentor_id: string | null;
+    subtes_id: string | null;
+    tipe_kelas?: string | null;
+    subtes: Join<{ nama: string }>;
+  };
   const kelas = first(data?.kelas as Join<KelasRow>);
   if (!data || !kelas) return null;
 
@@ -85,8 +114,14 @@ export async function getAksesMentorEnrollment(
   });
   if (!akses) return null;
 
+  const penerimaanSubtes = await getPenerimaanSubtesSiswa(mentorId, [enrollmentId]);
+  const subtesPenerimaan = penerimaanSubtes === "gagal" ? "gagal" : (penerimaanSubtes.get(enrollmentId) ?? []);
+  const alasanBlokir = alasanDiblokirPenerimaan({ mentorId, subtesSiswa: subtesPenerimaan });
+
   return {
     akses,
+    penerimaan: alasanBlokir ? { boleh: false, alasan: alasanBlokir } : { boleh: true },
+    subtesPenerimaan: subtesPenerimaan === "gagal" ? [] : subtesPenerimaan,
     enrollment: {
       id: data.id as string,
       userId: data.user_id as string,
@@ -99,6 +134,7 @@ export async function getAksesMentorEnrollment(
       mentorId: kelas.mentor_id,
       subtesId: kelas.subtes_id,
       subtesNama: first(kelas.subtes)?.nama ?? null,
+      tipeKelas: kelas.tipe_kelas ?? null,
     },
   };
 }
@@ -135,4 +171,25 @@ export async function getKelasAksesMentor(mentorId: string): Promise<Map<string,
 export async function getAksesMentorKelas(mentorId: string, kelasId: string): Promise<AksesMentor | null> {
   const map = await getKelasAksesMentor(mentorId);
   return map.get(kelasId) ?? null;
+}
+
+/**
+ * Boleh mengubah Link Meet KELAS (kelas.link_meet — untuk kelas grup/semi-private)? Mentor yang
+ * terkait kelas lewat salah satu dari: kelas.mentor_id (kolom lama), kelas_mentor, atau
+ * kelas_subtes_mentor. Mentor offline (enrollments.mentor_offline_id) TIDAK termasuk. Cek status
+ * mentor 'active' TETAP dilakukan pemanggil. "gagal" = error DB (sudah di-log).
+ */
+export async function bolehKelolaLinkMeetKelas(mentorId: string, kelasId: string): Promise<boolean | "gagal"> {
+  if (!mentorId || !kelasId) return false;
+  const [kelasRes, kmRes, ksmRes] = await Promise.all([
+    supabaseServer.from("kelas").select("id, mentor_id").eq("id", kelasId).maybeSingle(),
+    supabaseServer.from("kelas_mentor").select("mentor_id").eq("kelas_id", kelasId).eq("mentor_id", mentorId),
+    supabaseServer.from("kelas_subtes_mentor").select("mentor_id").eq("kelas_id", kelasId).eq("mentor_id", mentorId),
+  ]);
+  if (kelasRes.error || kmRes.error || ksmRes.error) {
+    console.error("[bolehKelolaLinkMeetKelas] query failed:", kelasRes.error ?? kmRes.error ?? ksmRes.error);
+    return "gagal";
+  }
+  if (!kelasRes.data) return false;
+  return kelasRes.data.mentor_id === mentorId || (kmRes.data ?? []).length > 0 || (ksmRes.data ?? []).length > 0;
 }

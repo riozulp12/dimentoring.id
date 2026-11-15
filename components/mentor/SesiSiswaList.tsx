@@ -30,16 +30,72 @@ function formatTanggal(tanggal: string | null): string | null {
   return new Date(`${tanggal}T00:00:00Z`).toLocaleDateString("id-ID", { timeZone: "UTC", day: "numeric", month: "short" });
 }
 
+/** Penjaga penerimaan siswa: tombol tandai diganti keterangan (server tetap menolak walau tombol dipaksa). */
+const PESAN_DIBLOKIR: Record<NonNullable<SesiSiswaItem["diblokirPenerimaan"]>, string> = {
+  menunggu_penerimaan: "Terima siswa dulu untuk menandai sesi",
+  diterima_mentor_lain: "Siswa diterima mentor lain",
+  data_gagal: "Gagal memuat status penerimaan, muat ulang halaman",
+};
+
 interface RowState extends SesiSiswaItem {
   busy: boolean;
   error: string | null;
   info: string | null;
+  /** Link Meet per siswa (kelas private): isi input + status simpan. */
+  linkInput: string;
+  linkBusy: boolean;
+  linkError: string | null;
+  linkInfo: string | null;
 }
 
 export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaItem[]; jumlahSesi: number }) {
   const [rows, setRows] = useState<RowState[]>(
-    items.map((item) => ({ ...item, busy: false, error: null, info: null })),
+    items.map((item) => ({
+      ...item,
+      busy: false,
+      error: null,
+      info: null,
+      linkInput: item.linkMeetSiswa?.link ?? "",
+      linkBusy: false,
+      linkError: null,
+      linkInfo: null,
+    })),
   );
+
+  async function handleSimpanLink(enrollmentId: string, linkMeet: string) {
+    setRows((prev) => prev.map((r) => (r.enrollmentId === enrollmentId ? { ...r, linkBusy: true, linkError: null, linkInfo: null } : r)));
+    try {
+      const response = await fetch(`/api/mentor/enrollment/${encodeURIComponent(enrollmentId)}/link-meet`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkMeet }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.success) {
+        setRows((prev) =>
+          prev.map((r) =>
+            r.enrollmentId === enrollmentId ? { ...r, linkBusy: false, linkError: json.error ?? "Gagal menyimpan link Meet." } : r,
+          ),
+        );
+        return;
+      }
+      setRows((prev) =>
+        prev.map((r) =>
+          r.enrollmentId === enrollmentId
+            ? {
+                ...r,
+                linkBusy: false,
+                linkInput: json.linkMeet as string,
+                linkInfo: "Link Meet tersimpan.",
+                linkMeetSiswa: { link: json.linkMeet as string, tidakBerlaku: false },
+              }
+            : r,
+        ),
+      );
+    } catch {
+      setRows((prev) => prev.map((r) => (r.enrollmentId === enrollmentId ? { ...r, linkBusy: false, linkError: "Gagal terhubung ke server." } : r)));
+    }
+  }
 
   async function handleTandai(enrollmentId: string) {
     setRows((prev) =>
@@ -140,7 +196,11 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
           </div>
 
           <div className="flex flex-col items-start gap-1 sm:items-end">
-            {row.sesiBerikutnya !== null && row.ditandaiHariIni ? (
+            {row.diblokirPenerimaan !== null ? (
+              <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                {PESAN_DIBLOKIR[row.diblokirPenerimaan]}
+              </span>
+            ) : row.sesiBerikutnya !== null && row.ditandaiHariIni ? (
               <span className="inline-flex items-center rounded-full bg-[#F0F0F0] px-2.5 py-0.5 text-xs font-medium text-[#7E7C7C]">
                 Sudah ditandai hari ini
               </span>
@@ -163,6 +223,59 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
             {row.error ? <p className="text-xs text-[#E70A0A]">{row.error}</p> : null}
           </div>
           </div>
+
+          {row.linkMeetSiswa ? (
+            <div className="flex flex-col gap-2 border-t border-[#F0F0F0] pt-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <label htmlFor={`link-meet-${row.enrollmentId}`} className="text-xs font-medium text-black sm:text-sm">
+                  Link Meet siswa ini
+                </label>
+                {row.linkMeetSiswa.link ? (
+                  <span className="inline-flex items-center rounded-full bg-[#F0FDF4] px-2.5 py-0.5 text-xs font-medium text-[#0CBA00]">
+                    Link sudah diisi
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                    {row.linkMeetSiswa.tidakBerlaku ? "Link lama tidak berlaku, isi ulang" : "Link belum diisi"}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  id={`link-meet-${row.enrollmentId}`}
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://meet.google.com/..."
+                  value={row.linkInput}
+                  disabled={row.linkBusy || row.diblokirPenerimaan !== null}
+                  onChange={(e) =>
+                    setRows((prev) =>
+                      prev.map((r) => (r.enrollmentId === row.enrollmentId ? { ...r, linkInput: e.target.value, linkError: null, linkInfo: null } : r)),
+                    )
+                  }
+                  className="w-full flex-1 rounded-[12px] border border-[#E3E3E3] px-3 py-2 text-sm text-black outline-none focus:border-[#081EEA] disabled:bg-[#F5F5F5]"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={row.linkBusy || row.diblokirPenerimaan !== null || row.linkInput.trim() === ""}
+                  onClick={() => handleSimpanLink(row.enrollmentId, row.linkInput.trim())}
+                >
+                  {row.linkBusy ? "Menyimpan..." : "Simpan link"}
+                </Button>
+              </div>
+              {row.diblokirPenerimaan !== null ? (
+                <p className="text-xs text-[#7E7C7C]">Terima siswa ini dulu untuk mengisi link Meet-nya.</p>
+              ) : null}
+              {row.linkInfo ? <p className="text-xs text-[#7E7C7C]">{row.linkInfo}</p> : null}
+              {row.linkError ? (
+                <p role="alert" className="text-xs text-[#E70A0A]">
+                  {row.linkError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           {row.riwayat.length > 0 ? (
             <details className="text-xs sm:text-sm">

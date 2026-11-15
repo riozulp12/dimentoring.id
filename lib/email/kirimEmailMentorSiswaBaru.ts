@@ -62,6 +62,8 @@ export interface KirimEmailMentorSiswaBaruInput {
   kelasId: string;
   kelasNama: string;
   jadwalDisplay: string | null;
+  /** Opsional: subtes yang perlu diterima (teks "siapa yang menerima lebih dulu"). Kosong = teks biasa. */
+  subtesKlaim?: string | null;
 }
 
 export type KirimEmailMentorSiswaBaruResult =
@@ -109,6 +111,7 @@ export async function kirimEmailMentorSiswaBaru(
       kelasNama: input.kelasNama,
       jadwalDisplay: input.jadwalDisplay,
       tautan: `${baseUrl}/kelas-saya/${encodeURIComponent(input.kelasId)}`,
+      subtesKlaim: input.subtesKlaim ?? null,
     };
 
     const { error } = await klien.emails.send({
