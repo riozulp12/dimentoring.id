@@ -172,3 +172,24 @@ export async function getAksesMentorKelas(mentorId: string, kelasId: string): Pr
   const map = await getKelasAksesMentor(mentorId);
   return map.get(kelasId) ?? null;
 }
+
+/**
+ * Boleh mengubah Link Meet KELAS (kelas.link_meet — untuk kelas grup/semi-private)? Mentor yang
+ * terkait kelas lewat salah satu dari: kelas.mentor_id (kolom lama), kelas_mentor, atau
+ * kelas_subtes_mentor. Mentor offline (enrollments.mentor_offline_id) TIDAK termasuk. Cek status
+ * mentor 'active' TETAP dilakukan pemanggil. "gagal" = error DB (sudah di-log).
+ */
+export async function bolehKelolaLinkMeetKelas(mentorId: string, kelasId: string): Promise<boolean | "gagal"> {
+  if (!mentorId || !kelasId) return false;
+  const [kelasRes, kmRes, ksmRes] = await Promise.all([
+    supabaseServer.from("kelas").select("id, mentor_id").eq("id", kelasId).maybeSingle(),
+    supabaseServer.from("kelas_mentor").select("mentor_id").eq("kelas_id", kelasId).eq("mentor_id", mentorId),
+    supabaseServer.from("kelas_subtes_mentor").select("mentor_id").eq("kelas_id", kelasId).eq("mentor_id", mentorId),
+  ]);
+  if (kelasRes.error || kmRes.error || ksmRes.error) {
+    console.error("[bolehKelolaLinkMeetKelas] query failed:", kelasRes.error ?? kmRes.error ?? ksmRes.error);
+    return "gagal";
+  }
+  if (!kelasRes.data) return false;
+  return kelasRes.data.mentor_id === mentorId || (kmRes.data ?? []).length > 0 || (ksmRes.data ?? []).length > 0;
+}
