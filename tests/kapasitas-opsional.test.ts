@@ -50,7 +50,7 @@ describe("validateKelasInput — kapasitas OPSIONAL", () => {
 describe("migrasi db/add_kapasitas_opsional.sql — aditif dan belum dijalankan", () => {
   it("hanya satu baris aktif: DROP NOT NULL pada kelas.kapasitas (tanpa DROP kolom/tabel, tanpa UPDATE data)", () => {
     const aktif = readFileSync("db/add_kapasitas_opsional.sql", "utf8")
-      .split("\n")
+      .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l !== "" && !l.startsWith("--"));
     assert.deepEqual(aktif, ["ALTER TABLE kelas ALTER COLUMN kapasitas DROP NOT NULL;"]);
