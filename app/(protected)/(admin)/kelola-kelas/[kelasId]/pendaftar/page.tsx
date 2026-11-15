@@ -45,6 +45,7 @@ export default async function PendaftarKelasPage({ params }: { params: Promise<{
           kelasId={data.kelas.id}
           kelasNama={data.kelas.nama}
           modePembelajaran={data.kelas.modePembelajaran}
+          tipeKelas={data.kelas.tipeKelas}
           subtesPool={data.kelas.subtesPool}
           kapasitas={data.kelas.kapasitas}
           terisi={data.kelas.terisi}

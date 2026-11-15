@@ -34,6 +34,10 @@ export interface PendaftarItem {
   sumber: "checkout" | "manual";
   /** Kelas offline: mentor tatap muka siswa ini (enrollments.mentor_offline_id). */
   mentorOffline: { id: string; nama: string } | null;
+  /** Link Meet PER SISWA (kelas private) — enrollments.link_meet, apa adanya (belum disaring berlaku/tidak). */
+  linkMeet: string | null;
+  /** Siapa yang mengisi: nama mentor, "Admin" (pengisi kosong), atau null bila belum ada link. */
+  linkMeetPengisi: string | null;
 }
 
 export interface PendaftarKelasData {
@@ -44,6 +48,8 @@ export interface PendaftarKelasData {
     jadwalPilihanAktif: boolean;
     slots: JadwalSlot[];
     modePembelajaran: "online" | "offline";
+    /** kelas.tipe_kelas — Link Meet per siswa hanya untuk 'private'. */
+    tipeKelas: string | null;
     /** null = kapasitas manual kosong (otomatis / tanpa batas). */
     kapasitas: number | null;
     /** Enrollment lunas — dasar "Kelas Penuh" (sama dengan katalog). */
@@ -66,14 +72,17 @@ interface EnrollmentRow {
   jadwal_ditetapkan_at: string | null;
   sumber: string | null;
   mentor_offline_id: string | null;
+  link_meet: string | null;
+  link_meet_oleh: string | null;
   users: NamaOnly | NamaOnly[] | null;
   mentor_offline: NamaOnly | NamaOnly[] | null;
+  link_meet_pengisi: NamaOnly | NamaOnly[] | null;
 }
 
 export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelasData | null> {
   const { data: kelas, error: kelasError } = await supabaseServer
     .from("kelas")
-    .select("id, nama, jadwal, jadwal_pilih_siswa, mode_pembelajaran, kapasitas, jumlah_sesi")
+    .select("id, nama, jadwal, jadwal_pilih_siswa, mode_pembelajaran, tipe_kelas, kapasitas, jumlah_sesi")
     .eq("id", kelasId)
     .maybeSingle();
   if (kelasError) {
@@ -85,7 +94,7 @@ export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelas
   const { data, error } = await supabaseServer
     .from("enrollments")
     .select(
-      "id, status_pembayaran, tanggal_daftar, jadwal_pilihan, jadwal_ditetapkan, jadwal_ditetapkan_at, sumber, mentor_offline_id, users:user_id(nama), mentor_offline:mentor_offline_id(nama)",
+      "id, status_pembayaran, tanggal_daftar, jadwal_pilihan, jadwal_ditetapkan, jadwal_ditetapkan_at, sumber, mentor_offline_id, link_meet, link_meet_oleh, users:user_id(nama), mentor_offline:mentor_offline_id(nama), link_meet_pengisi:link_meet_oleh(nama)",
     )
     .eq("kelas_id", kelasId)
     .order("tanggal_daftar", { ascending: true });
@@ -114,6 +123,12 @@ export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelas
             nama: (Array.isArray(row.mentor_offline) ? row.mentor_offline[0] : row.mentor_offline)?.nama ?? "-",
           }
         : null,
+      linkMeet: row.link_meet ?? null,
+      linkMeetPengisi: row.link_meet
+        ? row.link_meet_oleh
+          ? ((Array.isArray(row.link_meet_pengisi) ? row.link_meet_pengisi[0] : row.link_meet_pengisi)?.nama ?? "Mentor")
+          : "Admin"
+        : null,
     };
   });
 
@@ -130,6 +145,7 @@ export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelas
       }),
       slots: parseJadwalSlots(kelas.jadwal),
       modePembelajaran: kelas.mode_pembelajaran === "offline" ? "offline" : "online",
+      tipeKelas: (kelas.tipe_kelas as string | null) ?? null,
       kapasitas: typeof kelas.kapasitas === "number" ? kelas.kapasitas : null,
       terisi: pendaftar.filter((p) => p.statusPembayaran === "lunas").length,
       jumlahSesi: kelas.jumlah_sesi as number,

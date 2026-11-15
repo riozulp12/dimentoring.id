@@ -278,7 +278,7 @@ function resendTiruan(perilaku: "ok" | "ditolak" | "lempar" = "ok") {
 }
 
 describe("email: isi, pengirim, dan keamanan", () => {
-  it("subjek 'Ada siswa baru di kelas [nama kelas]'; isi memuat nama siswa, kelas, jadwal, tautan, dan kalimat penerimaan di web", async () => {
+  it("subjek 'Ada siswa baru di kelas [nama kelas]'; isi memuat nama siswa, kelas, jadwal, tautan, dan kalimat penerimaan di web (kasus TIDAK perlu klaim)", async () => {
     const r = resendTiruan();
     const { hasil } = await denganLog(() => kirimEmailMentorSiswaBaru(inputEmail(), { env: { RESEND_API_KEY: API_KEY }, buatKlien: r.buatKlien }));
     assert.deepEqual(hasil, { success: true });
@@ -291,6 +291,8 @@ describe("email: isi, pengirim, dan keamanan", () => {
       assert.ok(isi.includes("Senin 16.00"), bagian);
       assert.ok(isi.includes("https://dimentoring.id/kelas-saya/kelas-1"), bagian);
       assert.ok(isi.includes("Buka tombol di atas untuk melihat kelas dan siswa barumu."), bagian);
+      // Larangan frasa ini HANYA untuk kasus tidak perlu klaim (tanpa subtesKlaim). Teks untuk subtes
+      // yang perlu diterima (>=2 mentor aktif) diuji di tests/penerimaan-siswa-notifikasi.test.ts.
       assert.doesNotMatch(isi, /menerima|Penerimaan siswa/i, bagian);
     }
     assert.deepEqual(kirim.to, ["rina.mentor@contoh.id"]);
