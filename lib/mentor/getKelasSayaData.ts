@@ -6,6 +6,7 @@ import { hitungSesiTerkonfirmasi } from "@/lib/shared/progresSesi";
 import { hitungStatusSesi, labelMentorSesi, type StatusSesiEfektif } from "@/lib/shared/statusSesi";
 import { rentangHariWib } from "@/lib/shared/hariWib";
 import { getKelasAksesMentor, type AksesMentor } from "@/lib/mentor/aksesMentor";
+import { getEnrollmentMilikMentor } from "@/lib/mentor/siswaMilikMentor";
 import { getPenerimaanSubtesSiswa } from "@/lib/mentor/statusPenerimaanSiswa";
 import { getMentorBerhakLinkMeet } from "@/lib/mentor/linkMeetSiswa";
 import { isKelasPrivate, resolveLinkMeet } from "@/lib/shared/linkMeet";
@@ -66,13 +67,13 @@ function firstNama(value: NamaJoin): string | null {
 
 /** Halaman list — semua kelas yang terkait mentor ini (lib/mentor/aksesMentor.ts). */
 export async function getMentorKelasSaya(userId: string): Promise<MentorKelasItem[]> {
-  const aksesMap = await getKelasAksesMentor(userId);
+  const [aksesMap, milik] = await Promise.all([getKelasAksesMentor(userId), getEnrollmentMilikMentor(userId)]);
   if (aksesMap.size === 0) return [];
 
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      "id, nama, program_kategori, tingkat_kelas, jadwal, kapasitas, link_meet, subtes:subtes_id(nama), enrollments(status_pembayaran, mentor_offline_id)",
+      "id, nama, program_kategori, tingkat_kelas, jadwal, kapasitas, link_meet, subtes:subtes_id(nama), enrollments(id, status_pembayaran)",
     )
     .in("id", Array.from(aksesMap.keys()));
 
@@ -90,7 +91,7 @@ export async function getMentorKelasSaya(userId: string): Promise<MentorKelasIte
     kapasitas: number | null;
     link_meet: string | null;
     subtes: NamaJoin;
-    enrollments: { status_pembayaran: string; mentor_offline_id: string | null }[] | null;
+    enrollments: { id: string; status_pembayaran: string }[] | null;
   };
 
   return ((data ?? []) as unknown as Row[]).map((row) => ({
@@ -101,21 +102,24 @@ export async function getMentorKelasSaya(userId: string): Promise<MentorKelasIte
     tingkatKelas: row.tingkat_kelas,
     tingkatKelasLabel: TINGKAT_KELAS_LABEL[row.tingkat_kelas] ?? row.tingkat_kelas,
     jadwal: formatJadwal(row.jadwal),
-    // Mentor offline cuma menghitung siswa yang ditugaskan ke dia.
-    jumlahSiswa: (row.enrollments ?? []).filter(
-      (e) => e.status_pembayaran === "lunas" && (aksesMap.get(row.id) !== "offline" || e.mentor_offline_id === userId),
-    ).length,
+    // Hanya siswa MILIK mentor ini (lib/shared/siswaMentor.ts): diterima mentor ini / pemilik implisit /
+    // siswa lama / ditugaskan tatap muka — sama dengan profil mentor di Admin dan dashboard.
+    jumlahSiswa: (row.enrollments ?? []).filter((e) => e.status_pembayaran === "lunas" && milik.has(e.id)).length,
     kapasitas: row.kapasitas,
     linkMeetBelumDiatur: !row.link_meet,
   }));
 }
 
-/** Halaman detail — 1 kelas, plus data buat guard (mentorId). */
-export async function getMentorKelasDetail(kelasId: string): Promise<MentorKelasDetail | null> {
+/**
+ * Halaman detail — 1 kelas, plus data buat guard (mentorId). `mentorUserId` diisi → `jumlahSiswa` = siswa
+ * MILIK mentor itu (sama dengan kartu di daftar Kelas Saya); kosong → semua siswa lunas kelas.
+ */
+export async function getMentorKelasDetail(kelasId: string, mentorUserId?: string): Promise<MentorKelasDetail | null> {
+  const milik = mentorUserId ? await getEnrollmentMilikMentor(mentorUserId) : null;
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      "id, nama, mentor_id, tingkat_kelas, tipe_kelas, link_meet, jumlah_sesi, subtes:subtes_id(nama), enrollments(status_pembayaran)",
+      "id, nama, mentor_id, tingkat_kelas, tipe_kelas, link_meet, jumlah_sesi, subtes:subtes_id(nama), enrollments(id, status_pembayaran)",
     )
     .eq("id", kelasId)
     .maybeSingle();
@@ -135,7 +139,7 @@ export async function getMentorKelasDetail(kelasId: string): Promise<MentorKelas
     jumlah_sesi: number;
     tipe_kelas?: string | null;
     subtes: NamaJoin;
-    enrollments: { status_pembayaran: string }[] | null;
+    enrollments: { id: string; status_pembayaran: string }[] | null;
   };
   const row = data as unknown as Row;
 
@@ -145,7 +149,7 @@ export async function getMentorKelasDetail(kelasId: string): Promise<MentorKelas
     mentorId: row.mentor_id,
     subtesNama: firstNama(row.subtes),
     tingkatKelasLabel: TINGKAT_KELAS_LABEL[row.tingkat_kelas] ?? row.tingkat_kelas,
-    jumlahSiswa: (row.enrollments ?? []).filter((e) => e.status_pembayaran === "lunas").length,
+    jumlahSiswa: (row.enrollments ?? []).filter((e) => e.status_pembayaran === "lunas" && (!milik || milik.has(e.id))).length,
     linkMeet: row.link_meet,
     jumlahSesi: row.jumlah_sesi,
     tipeKelas: row.tipe_kelas ?? null,

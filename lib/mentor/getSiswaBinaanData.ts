@@ -1,12 +1,14 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getPendaftaranKeluar, getProgresSesiPerPendaftaran } from "@/lib/shared/progresSesiData";
+import { getKelasAksesMentor } from "@/lib/mentor/aksesMentor";
+import { getEnrollmentMilikMentor } from "@/lib/mentor/siswaMilikMentor";
 
 /**
  * Data layer "Siswa Saya" (Mentor) — PRD Bagian 7.5 & Bagian 13 (enrollments,
- * kelas, materi_progress, users). BR-7: seluruh query di sini scoped ke
- * kelas.mentor_id = mentor yang login — mentor cuma boleh lihat siswa di
- * kelas yang di-assign eksplisit ke dia.
+ * kelas, materi_progress, users). BR-7: kelas = kelas yang terkait mentor yang login
+ * (lib/mentor/aksesMentor.ts); siswa = siswa MILIK mentor itu (lib/shared/siswaMentor.ts) — mentor cuma
+ * boleh lihat siswa yang diterimanya (atau pemilik implisit / siswa lama menurut aturan itu).
  */
 
 export interface SiswaBinaanItem {
@@ -52,10 +54,13 @@ function firstOrNull<T>(value: T | T[] | null): T | null {
  * interaksi instan tanpa round-trip — lihat components/mentor/SiswaBinaanList.tsx.
  */
 export async function getSiswaBinaanGrouped(mentorId: string): Promise<SiswaBinaanGroup[]> {
+  const [aksesMap, milik] = await Promise.all([getKelasAksesMentor(mentorId), getEnrollmentMilikMentor(mentorId)]);
+  if (aksesMap.size === 0) return [];
+
   const { data: kelasList, error: kelasError } = await supabaseServer
     .from("kelas")
     .select("id, nama, jumlah_sesi")
-    .eq("mentor_id", mentorId)
+    .in("id", Array.from(aksesMap.keys()))
     .order("nama", { ascending: true });
 
   if (kelasError) {
@@ -81,7 +86,7 @@ export async function getSiswaBinaanGrouped(mentorId: string): Promise<SiswaBina
 
   // Progress = Progress Kehadiran (lib/shared/progresSesi.ts), sama dengan
   // dashboard & halaman kelas. Siswa yang sudah resmi keluar tidak ditampilkan.
-  const rows = (enrollmentRows ?? []) as unknown as Row[];
+  const rows = ((enrollmentRows ?? []) as unknown as Row[]).filter((row) => milik.has(row.id));
   const jumlahSesiByKelas = new Map(kelasList.map((k) => [k.id as string, (k.jumlah_sesi as number | null) ?? 0]));
   const keluar = await getPendaftaranKeluar(rows.map((row) => row.id));
   const aktif = rows.filter((row) => !keluar.has(row.id));
@@ -113,7 +118,7 @@ export async function getSiswaBinaanGrouped(mentorId: string): Promise<SiswaBina
 /**
  * Guard + data detail satu siswa DI SATU kelas spesifik — BR-7. Cuma valid
  * kalau: (1) enrollment user_id+kelas_id ini benar-benar ada & lunas, DAN
- * (2) kelas itu di-assign ke mentorId ini. Salah satu tidak terpenuhi = null,
+ * (2) siswa itu milik mentorId ini. Salah satu tidak terpenuhi = null,
  * page.tsx WAJIB redirect (jangan pernah render data siswa yang bukan
  * binaan mentor ini, termasuk kombinasi userId benar tapi kelasId salah).
  */
@@ -124,7 +129,7 @@ export async function getSiswaBinaanDetail(
 ): Promise<SiswaBinaanDetail | null> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, kelas:kelas_id(id, nama, mentor_id, jumlah_sesi), users:user_id(id, nama, avatar_url)")
+    .select("id, kelas:kelas_id(id, nama, jumlah_sesi), users:user_id(id, nama, avatar_url)")
     .eq("user_id", siswaUserId)
     .eq("kelas_id", kelasId)
     .eq("status_pembayaran", "lunas")
@@ -136,11 +141,12 @@ export async function getSiswaBinaanDetail(
   }
   if (!data) return null;
 
-  type KelasJoin = { id: string; nama: string; mentor_id: string | null; jumlah_sesi: number | null };
+  type KelasJoin = { id: string; nama: string; jumlah_sesi: number | null };
   const kelas = firstOrNull(data.kelas as KelasJoin | KelasJoin[] | null);
   const user = firstOrNull(data.users as UserJoin | UserJoin[] | null);
   if (!kelas || !user) return null;
-  if (kelas.mentor_id !== mentorId) return null;
+  // Aturan kepemilikan SAMA dengan daftar & jumlah siswa di semua halaman mentor.
+  if (!(await getEnrollmentMilikMentor(mentorId)).has(data.id as string)) return null;
 
   const progres = (await getProgresSesiPerPendaftaran([{ id: data.id as string, jumlahSesi: kelas.jumlah_sesi }])).get(
     data.id as string,

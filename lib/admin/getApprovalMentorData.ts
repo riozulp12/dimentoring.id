@@ -1,5 +1,7 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { getKelasAksesMentor } from "@/lib/mentor/aksesMentor";
+import { getKepemilikanSiswa } from "@/lib/mentor/siswaMilikMentor";
 
 /**
  * Data layer "Approval Mentor" (Admin) — PRD Bagian 5 (User Roles), Bagian 8
@@ -113,33 +115,19 @@ function mapRowToItem(row: Row): ApprovalMentorItem | null {
 }
 
 /**
- * Peta mentor_id -> Set distinct user_id siswa binaan (enrollments lunas di
- * kelas mentor itu) lintas SEMUA kelas — sama definisi dengan getMentorDetail,
+ * Peta mentor_id -> Set distinct user_id siswa binaan (siswa MILIK mentor itu menurut
+ * lib/shared/siswaMentor.ts, enrollment lunas) lintas SEMUA kelas — sama definisi dengan getMentorDetail,
  * tapi diagregasi sekali untuk semua mentor sekaligus (hindari N+1 query).
  */
 async function getSiswaBinaanByMentor(): Promise<Map<string, Set<string>>> {
-  const { data, error } = await supabaseServer
-    .from("kelas")
-    .select("mentor_id, enrollments(user_id, status_pembayaran)");
-
-  if (error) {
-    console.error("[getSiswaBinaanByMentor] query failed:", JSON.stringify(error, null, 2));
-    return new Map();
-  }
-
-  type KelasRow = {
-    mentor_id: string | null;
-    enrollments: { user_id: string; status_pembayaran: string }[] | null;
-  };
+  const kepemilikan = await getKepemilikanSiswa(null);
+  if (kepemilikan === "gagal") return new Map();
 
   const map = new Map<string, Set<string>>();
-  for (const kelas of (data ?? []) as unknown as KelasRow[]) {
-    if (!kelas.mentor_id) continue;
-    const set = map.get(kelas.mentor_id) ?? new Set<string>();
-    for (const e of kelas.enrollments ?? []) {
-      if (e.status_pembayaran === "lunas") set.add(e.user_id);
-    }
-    map.set(kelas.mentor_id, set);
+  for (const row of kepemilikan) {
+    const set = map.get(row.mentorId) ?? new Set<string>();
+    set.add(row.userId);
+    map.set(row.mentorId, set);
   }
   return map;
 }
@@ -257,7 +245,7 @@ export async function getCalonMentorList(): Promise<CalonMentorItem[]> {
 export interface MentorDetailKelasItem {
   id: string;
   nama: string;
-  /** enrollments status_pembayaran='lunas' di kelas ini — sama definisi "siswa binaan" dengan lib/mentor/getSiswaBinaanData.ts. */
+  /** Siswa lunas di kelas ini yang MILIK mentor ini (lib/shared/siswaMentor.ts) — sama definisi "siswa binaan" dengan lib/mentor/getSiswaBinaanData.ts. */
   jumlahSiswa: number;
 }
 
@@ -266,7 +254,7 @@ export interface MentorDetail extends ApprovalMentorItem {
   /** users.id mentor ini — dipakai lookup kelas.mentor_id (beda dari userRoleId = user_roles.id). */
   mentorUserId: string;
   kelasDiampu: MentorDetailKelasItem[];
-  /** COUNT DISTINCT enrollments.user_id (lunas) lintas semua kelasDiampu. */
+  /** COUNT DISTINCT user_id siswa milik mentor ini (lunas) lintas semua kelasDiampu. */
   totalSiswaBinaan: number;
   /** PRD Bagian 13 (BARU) — foto PNG background transparan untuk section Mentor landing page. */
   fotoLandingUrl: string | null;
@@ -327,25 +315,29 @@ export async function getMentorDetail(userRoleId: string): Promise<MentorDetail 
     .map((r) => firstOrNull(r.subtes)?.nama)
     .filter((nama): nama is string => Boolean(nama));
 
-  const { data: kelasRows, error: kelasError } = await supabaseServer
-    .from("kelas")
-    .select("id, nama, enrollments(user_id, status_pembayaran)")
-    .eq("mentor_id", user.id)
-    .order("nama", { ascending: true });
+  // Kelas = kelas yang terkait mentor ini (sama dengan Kelas Saya); siswa = yang MILIK mentor ini.
+  const [aksesMap, kepemilikan] = await Promise.all([getKelasAksesMentor(user.id), getKepemilikanSiswa([user.id])]);
+  const milik = kepemilikan === "gagal" ? [] : kepemilikan;
 
-  if (kelasError) {
-    console.error("[getMentorDetail] query kelas failed:", JSON.stringify(kelasError, null, 2));
+  let kelasRows: { id: string; nama: string }[] = [];
+  if (aksesMap.size > 0) {
+    const { data: kelasData, error: kelasError } = await supabaseServer
+      .from("kelas")
+      .select("id, nama")
+      .in("id", Array.from(aksesMap.keys()))
+      .order("nama", { ascending: true });
+    if (kelasError) {
+      console.error("[getMentorDetail] query kelas failed:", JSON.stringify(kelasError, null, 2));
+    }
+    kelasRows = (kelasData ?? []) as { id: string; nama: string }[];
   }
 
-  type KelasRow = { id: string; nama: string; enrollments: { user_id: string; status_pembayaran: string }[] | null };
-  const kelasDiampu: MentorDetailKelasItem[] = [];
-  const siswaBinaanIds = new Set<string>();
-
-  for (const kelas of ((kelasRows ?? []) as unknown as KelasRow[])) {
-    const lunasSiswa = (kelas.enrollments ?? []).filter((e) => e.status_pembayaran === "lunas");
-    lunasSiswa.forEach((e) => siswaBinaanIds.add(e.user_id));
-    kelasDiampu.push({ id: kelas.id, nama: kelas.nama, jumlahSiswa: lunasSiswa.length });
-  }
+  const kelasDiampu: MentorDetailKelasItem[] = kelasRows.map((kelas) => ({
+    id: kelas.id,
+    nama: kelas.nama,
+    jumlahSiswa: milik.filter((row) => row.kelasId === kelas.id).length,
+  }));
+  const siswaBinaanIds = new Set(milik.map((row) => row.userId));
 
   return {
     userRoleId: row.id,

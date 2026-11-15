@@ -64,7 +64,7 @@ export default async function KelasSayaDetailMentorPage({
     redirect("/dashboard/mentor");
   }
 
-  const [kelas, akses] = await Promise.all([getMentorKelasDetail(kelasId), getAksesMentorKelas(session.userId, kelasId)]);
+  const [kelas, akses] = await Promise.all([getMentorKelasDetail(kelasId, session.userId), getAksesMentorKelas(session.userId, kelasId)]);
 
   // BR-7: kelas tidak ada, ATAU ada tapi mentor ini tidak terkait — dua-duanya
   // ditolak dengan pesan yang sama supaya tidak bocorkan informasi kelas
@@ -108,7 +108,7 @@ export default async function KelasSayaDetailMentorPage({
             </div>
           </div>
           <p className="text-sm text-[#7E7C7C] sm:text-base">
-            {akses === "offline" ? `${sesiSiswa.length} siswa ditugaskan ke kamu` : `${kelas.jumlahSiswa} siswa terdaftar`}
+            {akses === "offline" ? `${sesiSiswa.length} siswa ditugaskan ke kamu` : `${kelas.jumlahSiswa} siswa binaan kamu`}
           </p>
 
           {bisaEditLinkMeetKelas ? <LinkMeetForm kelasId={kelas.id} initialLinkMeet={kelas.linkMeet} /> : null}
