@@ -8,6 +8,9 @@ import {
   type JadwalSlot,
 } from "@/lib/shared/jadwalPilihan";
 import { getKelasSubtesOptions, type KelasSubtesOption } from "@/lib/payment/getKelasForCheckout";
+import { KELAS_KETERSEDIAAN_SELECT, hitungKetersediaanKelas, normalisasiKelas } from "@/lib/jadwal/slotTerisi";
+import { opsiJadwalCheckout, type OpsiJadwalCheckout } from "@/lib/shared/slotTerisi";
+import { slotKey } from "@/lib/shared/jadwalPilihan";
 
 /**
  * Data layer halaman "Pendaftar" per kelas (Admin, Kelola Kelas) — PRD 7.5.8.
@@ -47,6 +50,13 @@ export interface PendaftarKelasData {
     /** Saklar menyala DAN bukan offline — aksi "Tetapkan jadwal" cuma ada kalau true. */
     jadwalPilihanAktif: boolean;
     slots: JadwalSlot[];
+    /**
+     * Opsi dropdown "Jadwal (opsional)" di form Daftarkan Siswa Manual: slot kelas.jadwal (tanpa duplikat) +
+     * penanda penuh. KOSONG bila kelas tidak memakai pilihan jadwal (saklar mati/offline) atau tanpa slot —
+     * kondisi yang SAMA dengan aksi "Tetapkan jadwal". Penanda penuh hanya ada untuk kelas yang memakai
+     * aturan slot (private + online + saklar + 1 subtes); selain itu semua slot terbuka.
+     */
+    opsiJadwal: OpsiJadwalCheckout[];
     modePembelajaran: "online" | "offline";
     /** kelas.tipe_kelas — Link Meet per siswa hanya untuk 'private'. */
     tipeKelas: string | null;
@@ -82,7 +92,7 @@ interface EnrollmentRow {
 export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelasData | null> {
   const { data: kelas, error: kelasError } = await supabaseServer
     .from("kelas")
-    .select("id, nama, jadwal, jadwal_pilih_siswa, mode_pembelajaran, tipe_kelas, kapasitas, jumlah_sesi")
+    .select(`nama, jumlah_sesi, ${KELAS_KETERSEDIAAN_SELECT}`)
     .eq("id", kelasId)
     .maybeSingle();
   if (kelasError) {
@@ -134,16 +144,27 @@ export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelas
 
   const subtesPool = await getKelasSubtesOptions(kelasId);
 
+  const jadwalPilihanAktif = isJadwalPilihanAktif({
+    jadwalPilihSiswa: kelas.jadwal_pilih_siswa === true,
+    modePembelajaran: kelas.mode_pembelajaran as string,
+    jadwal: kelas.jadwal,
+  });
+  const slots = parseJadwalSlots(kelas.jadwal);
+  // Galat baca ketersediaan (null) -> semua slot ditampilkan terbuka; server tetap penjaga & memberi peringatan.
+  const ketersediaan = (await hitungKetersediaanKelas([normalisasiKelas(kelas as unknown as Record<string, unknown>)]))?.get(kelasId);
+  const slotUnik = Array.from(new Map(slots.map((slot) => [slotKey(slot), slot])).values());
+  const opsiJadwal =
+    jadwalPilihanAktif && slotUnik.length > 0
+      ? opsiJadwalCheckout(slotUnik, ketersediaan?.memakaiSlot ? ketersediaan.slot : null)
+      : [];
+
   return {
     kelas: {
       id: kelas.id as string,
       nama: kelas.nama as string,
-      jadwalPilihanAktif: isJadwalPilihanAktif({
-        jadwalPilihSiswa: kelas.jadwal_pilih_siswa === true,
-        modePembelajaran: kelas.mode_pembelajaran as string,
-        jadwal: kelas.jadwal,
-      }),
-      slots: parseJadwalSlots(kelas.jadwal),
+      jadwalPilihanAktif,
+      slots,
+      opsiJadwal,
       modePembelajaran: kelas.mode_pembelajaran === "offline" ? "offline" : "online",
       tipeKelas: (kelas.tipe_kelas as string | null) ?? null,
       kapasitas: typeof kelas.kapasitas === "number" ? kelas.kapasitas : null,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { notifyJadwalDitetapkan } from "@/lib/notifikasi/notify";
-import { formatSlot, isJadwalPilihanAktif, parseJadwalSlot, parseJadwalSlots, slotKey } from "@/lib/shared/jadwalPilihan";
+import { formatSlot, parseJadwalSlot, validateJadwalDitetapkan } from "@/lib/shared/jadwalPilihan";
 
 /**
  * Tetapkan jadwal akhir satu pendaftar — PRD 7.5.8 (Admin, halaman Pendaftar
@@ -46,18 +46,14 @@ export async function POST(
   }
   if (!kelas) return errorResponse("Kelas tidak ditemukan.", 404);
 
-  const aktif = isJadwalPilihanAktif({
+  // Aturan yang SAMA dipakai pendaftaran manual (validateJadwalDitetapkan); slot = salinan dari kelas.jadwal.
+  const cek = validateJadwalDitetapkan(requested, {
     jadwalPilihSiswa: kelas.jadwal_pilih_siswa === true,
     modePembelajaran: kelas.mode_pembelajaran as string,
     jadwal: kelas.jadwal,
   });
-  if (!aktif) {
-    return errorResponse("Kelas ini tidak memakai pilihan jadwal oleh siswa.", 409);
-  }
-
-  // Salinan dari kelas.jadwal, bukan objek mentah dari body.
-  const slot = parseJadwalSlots(kelas.jadwal).find((s) => slotKey(s) === slotKey(requested));
-  if (!slot) return errorResponse("Jadwal yang dipilih tidak ada di kelas ini.", 400);
+  if (!cek.ok) return errorResponse(cek.error, cek.status);
+  const slot = cek.slot;
 
   const { data: updated, error: updateError } = await supabaseServer
     .from("enrollments")

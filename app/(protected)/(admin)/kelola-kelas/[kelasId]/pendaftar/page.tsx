@@ -51,6 +51,7 @@ export default async function PendaftarKelasPage({ params }: { params: Promise<{
           terisi={data.kelas.terisi}
           jadwalPilihanAktif={data.kelas.jadwalPilihanAktif}
           slots={data.kelas.slots}
+          opsiJadwal={data.kelas.opsiJadwal}
           initialPendaftar={data.pendaftar}
         />
       </div>

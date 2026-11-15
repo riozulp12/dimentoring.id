@@ -10,6 +10,7 @@ import UbahMentorOfflineModal from "@/components/admin/UbahMentorOfflineModal";
 import { penuhMenurutKapasitasManual } from "@/lib/shared/kapasitasKelas";
 import type { PendaftarItem, SlotStatus } from "@/lib/admin/getPendaftarKelas";
 import { formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
+import type { OpsiJadwalCheckout } from "@/lib/shared/slotTerisi";
 import { isKelasPrivate, isValidLinkUrl } from "@/lib/shared/linkMeet";
 
 /**
@@ -67,6 +68,7 @@ export default function PendaftarKelasClient({
   terisi,
   jadwalPilihanAktif,
   slots,
+  opsiJadwal,
   initialPendaftar,
 }: {
   kelasId: string;
@@ -79,6 +81,8 @@ export default function PendaftarKelasClient({
   terisi: number;
   jadwalPilihanAktif: boolean;
   slots: JadwalSlot[];
+  /** Opsi dropdown jadwal di form pendaftaran manual (kosong = form tanpa kolom jadwal). */
+  opsiJadwal: OpsiJadwalCheckout[];
   initialPendaftar: PendaftarItem[];
 }) {
   const router = useRouter();
@@ -215,6 +219,7 @@ export default function PendaftarKelasClient({
           kelasNama={kelasNama}
           modePembelajaran={modePembelajaran}
           subtesPool={subtesPool}
+          opsiJadwal={opsiJadwal}
           onClose={tutupManual}
           onSuccess={() => {
             perluRefresh.current = true;
