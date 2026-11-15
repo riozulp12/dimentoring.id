@@ -23,6 +23,8 @@ export interface SubtesSiswaDetail extends SubtesSiswaPenerimaan {
   subtesId: string;
   /** Kosong bila subtes tidak punya pasangan mentor di kelas itu. */
   subtesNama: string;
+  /** Mentor AKTIF pemegang subtes ini di kelas ini (semua mentor, bukan hanya yang bertanya). */
+  mentorAktifSubtes: string[];
 }
 
 export async function getPenerimaanSubtesSiswa(
@@ -95,6 +97,7 @@ export async function getPenerimaanSubtesSiswa(
       status: statusPenerimaanSubtes({ mentorIdPenerima, mentorAktifSubtes, tanggalDaftar: enrollment.tanggalDaftar }),
       mentorMemegang: mentorAktifSubtes.includes(mentorId),
       mentorIdPenerima,
+      mentorAktifSubtes,
     });
     hasil.set(row.enrollment_id as string, daftar);
   }

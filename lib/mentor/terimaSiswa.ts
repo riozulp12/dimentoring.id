@@ -117,7 +117,20 @@ export async function terimaSiswaSubtes(input: { mentorId: string; enrollmentSub
     console.error("[terimaSiswaSubtes] klaim enrollment_subtes failed:", klaimError);
     return { ok: false, alasan: "gagal" };
   }
-  if (diklaim && diklaim.length > 0) return { ok: true };
+  if (diklaim && diklaim.length > 0) {
+    // Penerima BERGANTI (bukan klaim pertama): link Meet yang diisi penerima lama tidak boleh dipakai
+    // siswa dengan mentor baru. Hanya link milik penerima lama yang dikosongkan (link Admin dibiarkan).
+    // Klaim sudah sah — kegagalan reset hanya di-log (link itu pun sudah tidak berlaku lewat resolveLinkMeet).
+    if (penerimaLama !== null) {
+      const { error: resetError } = await supabaseServer
+        .from("enrollments")
+        .update({ link_meet: null, link_meet_oleh: null })
+        .eq("id", baris.enrollment_id as string)
+        .eq("link_meet_oleh", penerimaLama);
+      if (resetError) console.error("[terimaSiswaSubtes] reset link_meet gagal:", resetError);
+    }
+    return { ok: true };
+  }
 
   // 0 baris berubah: penerima berubah sejak validasi. Baca ulang untuk membedakan
   // "milik saya (tekan dua kali)" dari "diambil mentor lain".

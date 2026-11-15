@@ -3,7 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
-import { getAksesMentorKelas } from "@/lib/mentor/aksesMentor";
+import { bolehKelolaLinkMeetKelas, getAksesMentorKelas } from "@/lib/mentor/aksesMentor";
+import { isKelasPrivate } from "@/lib/shared/linkMeet";
 import {
   daftarMenungguDiterima,
   getMentorKelasDetail,
@@ -72,10 +73,15 @@ export default async function KelasSayaDetailMentorPage({
     redirect(`/kelas-saya?error=${encodeURIComponent("Kelas tidak ditemukan atau bukan kelas yang kamu ampu.")}`);
   }
   const bisaKelolaKelas = kelas.mentorId === session.userId;
+  // Link Meet KELAS bisa diubah semua mentor terkait kelas (bukan hanya kelas.mentor_id); Tambah Materi
+  // tetap khusus kelas.mentor_id. Kelas private memakai link per siswa (di daftar siswa di bawah), jadi
+  // formulir link kelas disembunyikan. Gagal baca = formulir disembunyikan (route tetap menolak).
+  const kelasPrivate = isKelasPrivate(kelas.tipeKelas);
+  const bisaEditLinkMeetKelas = !kelasPrivate && (await bolehKelolaLinkMeetKelas(session.userId, kelasId)) === true;
 
   const [materiList, sesiSiswa] = await Promise.all([
     getMentorMateriList(kelasId),
-    getSesiSiswaByKelasId(kelasId, session.userId, akses),
+    getSesiSiswaByKelasId(kelasId, session.userId, akses, { tipeKelas: kelas.tipeKelas }),
   ]);
 
   const menungguDiterima = daftarMenungguDiterima(sesiSiswa);
@@ -105,7 +111,12 @@ export default async function KelasSayaDetailMentorPage({
             {akses === "offline" ? `${sesiSiswa.length} siswa ditugaskan ke kamu` : `${kelas.jumlahSiswa} siswa terdaftar`}
           </p>
 
-          {bisaKelolaKelas ? <LinkMeetForm kelasId={kelas.id} initialLinkMeet={kelas.linkMeet} /> : null}
+          {bisaEditLinkMeetKelas ? <LinkMeetForm kelasId={kelas.id} initialLinkMeet={kelas.linkMeet} /> : null}
+          {kelasPrivate ? (
+            <p className="text-sm text-[#7E7C7C]">
+              Kelas private memakai link Meet per siswa. Isi link tiap siswa di daftar Absensi Sesi di bawah setelah kamu menerima siswa itu.
+            </p>
+          ) : null}
         </div>
 
         <MenungguDiterimaList items={menungguDiterima} />

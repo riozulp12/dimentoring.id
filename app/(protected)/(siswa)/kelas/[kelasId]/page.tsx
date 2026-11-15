@@ -16,6 +16,8 @@ import SesiKehadiranSection from "@/components/siswa/SesiKehadiranSection";
 import KelasDaftarButton from "@/components/program/KelasDaftarButton";
 import { getKelasDetailPublic } from "@/lib/dashboard/getProgramData";
 import { formatJadwalSiswaTerdaftar } from "@/lib/shared/jadwalPilihan";
+import { isKelasPrivate, resolveLinkMeet } from "@/lib/shared/linkMeet";
+import { getMentorBerhakLinkMeet } from "@/lib/mentor/linkMeetSiswa";
 
 /**
  * Detail Kelas — PRD Bagian 7.5.1. Guard akses: cuma siswa dengan enrollment
@@ -72,6 +74,22 @@ export default async function KelasDetailPage({
   }
   const sesiKehadiran =
     isLunas && enrollment.enrollmentId ? await getSesiKehadiran(enrollment.enrollmentId) : null;
+  // Link Meet: kelas private memakai link PER SISWA (hanya berlaku selama pengisinya masih mentor
+  // penerima/pemegang aktif) dan TIDAK PERNAH jatuh ke link kelas; kelas lain memakai link kelas.
+  const kelasPrivate = isKelasPrivate(kelas.tipeKelas);
+  let penerimaMentorIds: string[] = [];
+  if (isLunas && kelasPrivate && enrollment.enrollmentId && enrollment.linkMeet) {
+    const berhak = await getMentorBerhakLinkMeet(kelasId, [enrollment.enrollmentId]);
+    // Data gagal dibaca = link tidak ditampilkan (fail-closed).
+    penerimaMentorIds = berhak === "gagal" ? [] : (berhak.get(enrollment.enrollmentId) ?? []);
+  }
+  const linkSesiLive = resolveLinkMeet({
+    tipeKelas: kelas.tipeKelas,
+    linkEnrollment: enrollment.linkMeet,
+    linkEnrollmentOleh: enrollment.linkMeetOleh,
+    penerimaMentorIds,
+    linkKelas: kelas.linkMeet,
+  }).link;
   // Kelas dengan Pilihan Jadwal (PRD 7.5.8): siswa terdaftar lihat jadwal
   // hasil penetapan Admin, bukan semua slot opsi.
   const jadwalDisplay =
@@ -108,9 +126,9 @@ export default async function KelasDetailPage({
           {kelas.deskripsi ? <p className="text-sm text-black sm:text-base">{kelas.deskripsi}</p> : null}
 
           {isLunas ? (
-            kelas.linkMeet ? (
+            linkSesiLive ? (
               <a
-                href={kelas.linkMeet}
+                href={linkSesiLive}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex w-fit items-center justify-center rounded-[18px] bg-[#081EEA] px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 sm:text-base"
@@ -125,7 +143,9 @@ export default async function KelasDetailPage({
                 >
                   Gabung Sesi Live
                 </span>
-                <p className="text-xs text-[#7E7C7C]">Link akan tersedia menjelang jadwal kelas.</p>
+                <p className="text-xs text-[#7E7C7C]">
+                  {kelasPrivate ? "Menunggu mentor mengisi link" : "Link akan tersedia menjelang jadwal kelas."}
+                </p>
               </div>
             )
           ) : null}

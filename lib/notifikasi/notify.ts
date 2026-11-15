@@ -324,6 +324,23 @@ export async function notifyMentorOfflineSiswaBaruDaftar(
 }
 
 /**
+ * 2k: Link Meet siswa (kelas private) sudah diisi mentor — bell ke SISWA ybs. Hanya info ringan,
+ * tanpa tautan Meet di isi notifikasi (link dibuka dari halaman kelas). Tidak pernah melempar
+ * galat ke pemanggil beyond insertNotifikasi (yang hanya me-log).
+ */
+export async function notifyLinkMeetSiswa(siswaUserId: string, kelasId: string, kelasNama: string) {
+  await insertNotifikasi([
+    {
+      user_id: siswaUserId,
+      tipe: "sistem",
+      judul: "Link Meet kamu sudah tersedia",
+      pesan: `Mentor kelas ${kelasNama} sudah mengisi link Meet untukmu. Buka halaman kelas untuk bergabung.`,
+      link_tujuan: `/kelas/${kelasId}`,
+    },
+  ]);
+}
+
+/**
  * 2i: Siswa DITERIMA mentor (penerimaan siswa per subtes) — bell ke penerima
  * (konfirmasi) dan ke pemegang aktif LAIN subtes itu (info "sudah diterima mentor
  * lain"). Dipanggil dari app/api/mentor/terima-siswa/route.ts SETELAH klaim sukses.

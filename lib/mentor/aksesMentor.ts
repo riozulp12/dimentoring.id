@@ -56,7 +56,15 @@ export interface EnrollmentAksesMentor {
   /** Status penerimaan per subtes siswa ini (kosong bila siswa tidak punya pilihan subtes). */
   subtesPenerimaan: SubtesSiswaDetail[];
   enrollment: { id: string; userId: string; kelasId: string; mentorOfflineId: string | null };
-  kelas: { id: string; nama: string; mentorId: string | null; subtesId: string | null; subtesNama: string | null };
+  kelas: {
+    id: string;
+    nama: string;
+    mentorId: string | null;
+    subtesId: string | null;
+    subtesNama: string | null;
+    /** kelas.tipe_kelas (private/semi_private/grouping) — Link Meet per siswa hanya untuk private. */
+    tipeKelas: string | null;
+  };
 }
 
 /**
@@ -70,7 +78,7 @@ export async function getAksesMentorEnrollment(
 ): Promise<EnrollmentAksesMentor | null | "gagal"> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, user_id, kelas_id, mentor_offline_id, kelas:kelas_id(id, nama, mentor_id, subtes_id, subtes:subtes_id(nama))")
+    .select("id, user_id, kelas_id, mentor_offline_id, kelas:kelas_id(id, nama, mentor_id, subtes_id, tipe_kelas, subtes:subtes_id(nama))")
     .eq("id", enrollmentId)
     .maybeSingle();
 
@@ -78,7 +86,14 @@ export async function getAksesMentorEnrollment(
     console.error("[getAksesMentorEnrollment] query enrollment failed:", error);
     return "gagal";
   }
-  type KelasRow = { id: string; nama: string; mentor_id: string | null; subtes_id: string | null; subtes: Join<{ nama: string }> };
+  type KelasRow = {
+    id: string;
+    nama: string;
+    mentor_id: string | null;
+    subtes_id: string | null;
+    tipe_kelas?: string | null;
+    subtes: Join<{ nama: string }>;
+  };
   const kelas = first(data?.kelas as Join<KelasRow>);
   if (!data || !kelas) return null;
 
@@ -119,6 +134,7 @@ export async function getAksesMentorEnrollment(
       mentorId: kelas.mentor_id,
       subtesId: kelas.subtes_id,
       subtesNama: first(kelas.subtes)?.nama ?? null,
+      tipeKelas: kelas.tipe_kelas ?? null,
     },
   };
 }
@@ -155,4 +171,25 @@ export async function getKelasAksesMentor(mentorId: string): Promise<Map<string,
 export async function getAksesMentorKelas(mentorId: string, kelasId: string): Promise<AksesMentor | null> {
   const map = await getKelasAksesMentor(mentorId);
   return map.get(kelasId) ?? null;
+}
+
+/**
+ * Boleh mengubah Link Meet KELAS (kelas.link_meet — untuk kelas grup/semi-private)? Mentor yang
+ * terkait kelas lewat salah satu dari: kelas.mentor_id (kolom lama), kelas_mentor, atau
+ * kelas_subtes_mentor. Mentor offline (enrollments.mentor_offline_id) TIDAK termasuk. Cek status
+ * mentor 'active' TETAP dilakukan pemanggil. "gagal" = error DB (sudah di-log).
+ */
+export async function bolehKelolaLinkMeetKelas(mentorId: string, kelasId: string): Promise<boolean | "gagal"> {
+  if (!mentorId || !kelasId) return false;
+  const [kelasRes, kmRes, ksmRes] = await Promise.all([
+    supabaseServer.from("kelas").select("id, mentor_id").eq("id", kelasId).maybeSingle(),
+    supabaseServer.from("kelas_mentor").select("mentor_id").eq("kelas_id", kelasId).eq("mentor_id", mentorId),
+    supabaseServer.from("kelas_subtes_mentor").select("mentor_id").eq("kelas_id", kelasId).eq("mentor_id", mentorId),
+  ]);
+  if (kelasRes.error || kmRes.error || ksmRes.error) {
+    console.error("[bolehKelolaLinkMeetKelas] query failed:", kelasRes.error ?? kmRes.error ?? ksmRes.error);
+    return "gagal";
+  }
+  if (!kelasRes.data) return false;
+  return kelasRes.data.mentor_id === mentorId || (kmRes.data ?? []).length > 0 || (ksmRes.data ?? []).length > 0;
 }
