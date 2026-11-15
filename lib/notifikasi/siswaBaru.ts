@@ -34,6 +34,11 @@ export interface MentorPenerima {
   id: string;
   nama: string;
   email: string;
+  /**
+   * Nama subtes (digabung koma) yang PERLU DITERIMA mentor ini untuk siswa baru ini
+   * (subtes dipegang >=2 mentor aktif). Kosong = teks biasa tanpa kata menerima.
+   */
+  subtesKlaim?: string | null;
 }
 
 export interface KejadianSiswaBaru {
@@ -167,6 +172,7 @@ export async function kabariMentorSiswaBaru(kejadian: KejadianSiswaBaru, deps: D
         kelasId: kejadian.kelasId,
         kelasNama: kejadian.kelasNama,
         jadwalDisplay: kejadian.jadwalDisplay,
+        ...(mentor.subtesKlaim ? { subtesKlaim: mentor.subtesKlaim } : {}),
       });
       tambah(ringkasan.email, hasil.success ? "terkirim" : hasil.error);
     } catch {
@@ -195,7 +201,7 @@ export async function kabariMentorSiswaBaru(kejadian: KejadianSiswaBaru, deps: D
           userId: mentor.id,
           noWa: info?.noWa,
           setuju: info?.setuju === true,
-          pesan: buatPesanWaSiswaBaru(mentor.nama, kejadian.kelasNama),
+          pesan: buatPesanWaSiswaBaru(mentor.nama, kejadian.kelasNama, mentor.subtesKlaim),
         },
         { env, ambilPenyedia, store: logWa },
       );

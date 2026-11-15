@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { kabariMentorSiswaBaru, type MentorPenerima } from "@/lib/notifikasi/siswaBaru";
 import { jalankanSetelahRespons } from "@/lib/notifikasi/setelahRespons";
+import { statusPenerimaanSubtes } from "@/lib/shared/penerimaanSiswa";
 
 /**
  * Helper INSERT notifikasi — dipanggil dari route yang memicu kejadian nyata
@@ -136,6 +137,48 @@ export async function notifyPembayaranBerhasil(userId: string, kelasId: string, 
 }
 
 /**
+ * Penerimaan siswa per subtes (lib/shared/penerimaanSiswa.ts): untuk tiap mentor, nama
+ * subtes (siswa ini) yang PERLU DITERIMA = dipegang >=2 mentor aktif. Hanya mengubah
+ * ISI TEKS pemberitahuan. Tidak pernah melempar: gagal baca = peta kosong (teks biasa,
+ * tanpa kata "menerima"); penjaga presensi di server tetap berlaku apa pun teksnya.
+ */
+async function hitungSubtesKlaimPerMentor(
+  pairs: { subtesId: string; mentorId: string; subtesNama: string }[],
+): Promise<Map<string, string>> {
+  const hasil = new Map<string, string>();
+  if (pairs.length === 0) return hasil;
+  try {
+    const mentorIds = Array.from(new Set(pairs.map((p) => p.mentorId)));
+    const { data, error } = await supabaseServer
+      .from("user_roles")
+      .select("user_id")
+      .in("user_id", mentorIds)
+      .eq("role_type", "mentor")
+      .eq("status", "active");
+    if (error) {
+      console.error("[notifikasi] query user_roles (klaim siswa_baru) failed:", error);
+      return hasil;
+    }
+    const aktif = new Set((data ?? []).map((row) => row.user_id as string));
+    const namaPerMentor = new Map<string, string[]>();
+    for (const subtesId of Array.from(new Set(pairs.map((p) => p.subtesId)))) {
+      const pemegang = pairs.filter((p) => p.subtesId === subtesId && aktif.has(p.mentorId));
+      const mentorAktifSubtes = Array.from(new Set(pemegang.map((p) => p.mentorId)));
+      // Pendaftaran BARU (sekarang), belum ada penerima.
+      const status = statusPenerimaanSubtes({ mentorIdPenerima: null, mentorAktifSubtes, tanggalDaftar: new Date() });
+      if (status !== "menunggu") continue;
+      const nama = pairs.find((p) => p.subtesId === subtesId)?.subtesNama || "subtes";
+      for (const mentorId of mentorAktifSubtes) namaPerMentor.set(mentorId, [...(namaPerMentor.get(mentorId) ?? []), nama]);
+    }
+    for (const [mentorId, nama] of namaPerMentor) hasil.set(mentorId, Array.from(new Set(nama)).sort((a, b) => a.localeCompare(b, "id")).join(", "));
+  } catch (error) {
+    console.error("[notifikasi] hitung subtes klaim (siswa_baru) failed:", error);
+    hasil.clear();
+  }
+  return hasil;
+}
+
+/**
  * 2f: Siswa Baru Daftar (Payment Berhasil) — notif bell + email + WhatsApp ke
  * mentor yang RELEVAN (PRD Bagian 7.5, Bagian 13 kelas_subtes_mentor — BARU).
  * Bell tetap TANPA nama siswa; email memuat nama siswa; WhatsApp hanya nama
@@ -159,12 +202,13 @@ export async function notifyMentorsSiswaBaruDaftar(
 ) {
   type MentorUserJoin = { id: string; nama: string; email: string } | { id: string; nama: string; email: string }[] | null;
 
-  let mentors: { id: string; nama: string; email: string }[];
+  let mentors: MentorPenerima[];
+  const pairsKlaim: { subtesId: string; mentorId: string; subtesNama: string }[] = [];
 
   if (subtesIds.length > 0) {
     const { data: pairRows, error } = await supabaseServer
       .from("kelas_subtes_mentor")
-      .select("users:mentor_id(id, nama, email)")
+      .select("subtes_id, mentor_id, subtes:subtes_id(nama), users:mentor_id(id, nama, email)")
       .eq("kelas_id", kelasId)
       .in("subtes_id", subtesIds);
 
@@ -173,11 +217,22 @@ export async function notifyMentorsSiswaBaruDaftar(
       return;
     }
 
-    const byId = new Map<string, { id: string; nama: string; email: string }>();
-    ((pairRows ?? []) as unknown as { users: MentorUserJoin }[])
-      .map((row) => (Array.isArray(row.users) ? (row.users[0] ?? null) : row.users))
-      .filter((u): u is { id: string; nama: string; email: string } => Boolean(u))
-      .forEach((u) => byId.set(u.id, u));
+    type PairRow = {
+      subtes_id?: string;
+      mentor_id?: string;
+      subtes?: { nama: string } | { nama: string }[] | null;
+      users: MentorUserJoin;
+    };
+    const byId = new Map<string, MentorPenerima>();
+    for (const row of (pairRows ?? []) as unknown as PairRow[]) {
+      const u = Array.isArray(row.users) ? (row.users[0] ?? null) : row.users;
+      if (!u) continue;
+      byId.set(u.id, u);
+      if (row.subtes_id) {
+        const subtesRow = Array.isArray(row.subtes) ? (row.subtes[0] ?? null) : (row.subtes ?? null);
+        pairsKlaim.push({ subtesId: row.subtes_id, mentorId: row.mentor_id ?? u.id, subtesNama: subtesRow?.nama ?? "" });
+      }
+    }
     mentors = Array.from(byId.values());
   } else {
     const { data: mentorRows, error } = await supabaseServer
@@ -197,6 +252,10 @@ export async function notifyMentorsSiswaBaruDaftar(
 
   if (mentors.length === 0) return;
 
+  // Teks khusus bagi mentor yang subtesnya perlu diterima (>=2 pemegang aktif).
+  const klaimPerMentor = await hitungSubtesKlaimPerMentor(pairsKlaim);
+  mentors = mentors.map((mentor) => ({ ...mentor, subtesKlaim: klaimPerMentor.get(mentor.id) ?? null }));
+
   const jadwalText = jadwalDisplay ?? "Belum diatur";
   const pesan = `Siswa baru mendaftar di kelas ${kelasNama}! Jadwal: ${jadwalText}`;
 
@@ -205,7 +264,9 @@ export async function notifyMentorsSiswaBaruDaftar(
       user_id: mentor.id,
       tipe: "sistem",
       judul: "Siswa baru mendaftar",
-      pesan,
+      pesan: mentor.subtesKlaim
+        ? `Siswa baru di kelas ${kelasNama} (subtes ${mentor.subtesKlaim}). Siapa yang menerima lebih dulu akan mengajar siswa ini. Jadwal: ${jadwalText}`
+        : pesan,
       link_tujuan: `/kelas-saya/${kelasId}`,
     })),
   );
@@ -260,6 +321,83 @@ export async function notifyMentorOfflineSiswaBaruDaftar(
     jadwalDisplay,
     siswa,
   );
+}
+
+/**
+ * 2i: Siswa DITERIMA mentor (penerimaan siswa per subtes) — bell ke penerima
+ * (konfirmasi) dan ke pemegang aktif LAIN subtes itu (info "sudah diterima mentor
+ * lain"). Dipanggil dari app/api/mentor/terima-siswa/route.ts SETELAH klaim sukses.
+ * Lonceng TANPA nama siswa (privasi anak, sama dengan notifikasi siswa baru).
+ * Tidak pernah melempar: gagal baca/kirim hanya di-log dan TIDAK membatalkan klaim.
+ */
+export async function notifyPenerimaanSiswa(enrollmentSubtesId: string, penerimaId: string): Promise<void> {
+  try {
+    const { data: baris, error: barisError } = await supabaseServer
+      .from("enrollment_subtes")
+      .select("enrollment_id, subtes_id")
+      .eq("id", enrollmentSubtesId)
+      .maybeSingle();
+    if (barisError || !baris) {
+      if (barisError) console.error("[notifikasi] query enrollment_subtes (penerimaan) failed:", barisError);
+      return;
+    }
+    const { data: enrollment, error: enrollmentError } = await supabaseServer
+      .from("enrollments")
+      .select("kelas_id")
+      .eq("id", baris.enrollment_id as string)
+      .maybeSingle();
+    if (enrollmentError || !enrollment) {
+      if (enrollmentError) console.error("[notifikasi] query enrollments (penerimaan) failed:", enrollmentError);
+      return;
+    }
+    const kelasId = enrollment.kelas_id as string;
+    const subtesId = baris.subtes_id as string;
+
+    const [kelasRes, subtesRes, pemegangRes] = await Promise.all([
+      supabaseServer.from("kelas").select("nama").eq("id", kelasId).maybeSingle(),
+      supabaseServer.from("subtes").select("nama").eq("id", subtesId).maybeSingle(),
+      supabaseServer.from("kelas_subtes_mentor").select("mentor_id").eq("kelas_id", kelasId).eq("subtes_id", subtesId),
+    ]);
+    if (pemegangRes.error) {
+      console.error("[notifikasi] query kelas_subtes_mentor (penerimaan) failed:", pemegangRes.error);
+      return;
+    }
+    const kelasNama = (kelasRes.data?.nama as string | undefined) ?? "kelas";
+    const subtesNama = (subtesRes.data?.nama as string | undefined) ?? "subtes";
+
+    const pemegangIds = Array.from(new Set((pemegangRes.data ?? []).map((row) => row.mentor_id as string)));
+    const { data: roleRows, error: roleError } = await supabaseServer
+      .from("user_roles")
+      .select("user_id")
+      .in("user_id", pemegangIds)
+      .eq("role_type", "mentor")
+      .eq("status", "active");
+    if (roleError) {
+      console.error("[notifikasi] query user_roles (penerimaan) failed:", roleError);
+      return;
+    }
+    const aktifLain = Array.from(new Set((roleRows ?? []).map((row) => row.user_id as string))).filter((id) => id !== penerimaId);
+
+    const link = `/kelas-saya/${kelasId}`;
+    await insertNotifikasi([
+      {
+        user_id: penerimaId,
+        tipe: "sistem",
+        judul: "Siswa baru kamu terima",
+        pesan: `Kamu menerima siswa baru untuk subtes ${subtesNama} di kelas ${kelasNama}.`,
+        link_tujuan: link,
+      },
+      ...aktifLain.map((mentorId) => ({
+        user_id: mentorId,
+        tipe: "sistem" as const,
+        judul: "Siswa sudah diterima mentor lain",
+        pesan: `Siswa baru untuk subtes ${subtesNama} di kelas ${kelasNama} sudah diterima mentor lain.`,
+        link_tujuan: link,
+      })),
+    ]);
+  } catch (error) {
+    console.error("[notifikasi] notifyPenerimaanSiswa failed:", error);
+  }
 }
 
 /**

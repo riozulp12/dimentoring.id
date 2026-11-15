@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { terimaSiswaSubtes, type AlasanTolakTerima } from "@/lib/mentor/terimaSiswa";
+import { notifyPenerimaanSiswa } from "@/lib/notifikasi/notify";
 
 /**
  * "Terima siswa" (Mentor) — penerimaan siswa per subtes, siapa cepat dia dapat
@@ -51,6 +52,15 @@ export async function POST(request: NextRequest) {
   if (!hasil.ok) {
     const { status, pesan } = PESAN_TOLAK[hasil.alasan];
     return errorResponse(pesan, status);
+  }
+
+  // Notifikasi cuma untuk klaim BARU (bukan tekan-dua-kali). Gagal kirim tidak membatalkan klaim.
+  if (!hasil.sudahMilikSendiri) {
+    try {
+      await notifyPenerimaanSiswa(enrollmentSubtesId, session.userId);
+    } catch (error) {
+      console.error("[terima-siswa] notifikasi penerimaan gagal:", error);
+    }
   }
 
   return NextResponse.json({ success: true, sudahMilikSendiri: hasil.sudahMilikSendiri === true });

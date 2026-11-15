@@ -61,7 +61,14 @@ class FakeQuery implements PromiseLike<Hasil> {
 
 function fakeFrom(table: string) {
   db[table] ??= [];
-  return new FakeQuery(db[table], tabelGagal.has(table));
+  const query = new FakeQuery(db[table], tabelGagal.has(table));
+  // Notifikasi penerimaan (B2) menulis ke tabel notifikasi — cukup ditampung.
+  return Object.assign(query, {
+    insert(values: Row | Row[]) {
+      db[table].push(...(Array.isArray(values) ? values : [values]));
+      return Promise.resolve({ data: null, error: null });
+    },
+  });
 }
 
 const A = "mentor-a";

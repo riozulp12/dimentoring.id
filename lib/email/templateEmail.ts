@@ -27,6 +27,11 @@ export interface IsiEmailSiswaBaru {
   /** null = jadwal belum diatur -> baris jadwal tidak ditampilkan. */
   jadwalDisplay: string | null;
   tautan: string;
+  /**
+   * Nama subtes yang perlu DITERIMA (siswa baru, >=2 mentor aktif memegangnya). Terisi =
+   * teks "siapa yang menerima lebih dulu"; kosong = teks biasa TANPA kata menerima.
+   */
+  subtesKlaim?: string | null;
 }
 
 export function buatSubjekSiswaBaru(kelasNama: string): string {
@@ -39,14 +44,19 @@ export function buatEmailSiswaBaru(isi: IsiEmailSiswaBaru, opsi: OpsiTampilanEma
     { label: "Kelas", nilai: isi.kelasNama },
     ...(isi.jadwalDisplay ? [{ label: "Jadwal", nilai: isi.jadwalDisplay }] : []),
   ];
+  const subtesKlaim = isi.subtesKlaim ? satuBaris(isi.subtesKlaim, 120) : "";
   const { html, teks } = renderEmailLayout({
     namaEvent: "Siswa Baru di Kelasmu",
-    paragrafPendukung: "Ada siswa yang baru saja bergabung dan menunggu sambutan hangat darimu.",
+    paragrafPendukung: subtesKlaim
+      ? "Ada siswa baru yang menunggu mentor yang menerimanya."
+      : "Ada siswa yang baru saja bergabung dan menunggu sambutan hangat darimu.",
     namaPenerima: isi.namaMentor,
-    pembuka: "Kabar baik! Ada siswa baru yang bergabung di kelas yang kamu ampu. Berikut ringkasannya.",
+    pembuka: subtesKlaim
+      ? `Ada siswa baru di kelas ${satuBaris(isi.kelasNama, 100)} (subtes ${subtesKlaim}). Siapa yang menerima lebih dulu akan mengajar siswa ini.`
+      : "Kabar baik! Ada siswa baru yang bergabung di kelas yang kamu ampu. Berikut ringkasannya.",
     isi: baris,
-    tombol: { label: "Lihat Detail Kelas", url: isi.tautan },
-    catatan: "Buka tombol di atas untuk melihat kelas dan siswa barumu.",
+    tombol: { label: subtesKlaim ? "Terima Siswa" : "Lihat Detail Kelas", url: isi.tautan },
+    catatan: subtesKlaim ? "Buka tombol di atas untuk menerima." : "Buka tombol di atas untuk melihat kelas dan siswa barumu.",
     asetBaseUrl: opsi.asetBaseUrl,
   });
   return { subjek: buatSubjekSiswaBaru(isi.kelasNama), html, teks };
