@@ -1,3 +1,4 @@
+import { penuhMenurutKapasitasManual } from "@/lib/shared/kapasitasKelas";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
@@ -58,7 +59,7 @@ type RpcHasil =
   | { status: "sudah_diproses"; enrollment_id: string | null }
   | { status: "duplikat"; status_pembayaran?: string }
   | { status: "payment_menunggu" }
-  | { status: "penuh"; kapasitas: number; terisi: number }
+  | { status: "penuh"; kapasitas: number | null; terisi: number }
   | { status: "kelas_tidak_ada" }
   | { status: "mentor_sama_dengan_siswa" }
   | { status: "request_id_bentrok" };
@@ -187,7 +188,8 @@ export async function POST(request: NextRequest) {
     console.error("[admin/enrollment-manual] count enrollments failed:", countError);
     return errorResponse("Gagal memeriksa kapasitas kelas. Coba lagi nanti.", 500);
   }
-  if ((terisi ?? 0) >= (kelas.kapasitas as number)) return errorResponse(PESAN_PENUH, 409);
+  // Kapasitas manual OPSIONAL (kolom boleh kosong): kosong = tanpa batas manual — jangan dianggap penuh.
+  if (penuhMenurutKapasitasManual(kelas.kapasitas as number | null, terisi ?? 0)) return errorResponse(PESAN_PENUH, 409);
 
   // ---- Subtes (pool dari server, sama aturannya dengan checkout) ------------
   const pool = await getKelasSubtesOptions(kelasId);

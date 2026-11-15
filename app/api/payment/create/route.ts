@@ -9,6 +9,8 @@ import { getPaymentProvider } from "@/lib/payment/provider";
 import { MayarError } from "@/lib/payment/mayar";
 import { computeExpiredAt, computeTagihan, parseFeeBorneByCustomer, resolveAppBaseUrl } from "@/lib/payment/mayarLogic";
 import { validateJadwalPilihan } from "@/lib/shared/jadwalPilihan";
+import { cekKetersediaanCheckout } from "@/lib/shared/slotTerisi";
+import { getKetersediaanKelas } from "@/lib/jadwal/slotTerisi";
 import { CHECKOUT_BLOCK_MESSAGE, getCheckoutBlockReason, isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 import { cekSubtesDipilihTersedia, getKetersediaanSubtes } from "@/lib/kelas/subtesTersedia";
 
@@ -168,6 +170,11 @@ export async function POST(request: NextRequest) {
   if (!jadwalPilihanResult.ok) {
     return errorResponse(jadwalPilihanResult.error, 400);
   }
+
+  // Ketersediaan jadwal & kapasitas (lib/shared/slotTerisi.ts + kapasitasKelas.ts): slot penuh / kelas penuh /
+  // gagal baca ditolak DI SINI — sebelum promo, invoice gateway, dan INSERT payments (fail-closed).
+  const penolakan = cekKetersediaanCheckout(await getKetersediaanKelas(kelasId), jadwalPilihanResult.value);
+  if (penolakan) return errorResponse(penolakan.error, penolakan.status);
 
   let kodePromoId: string | null = null;
   let total = kelas.hargaAktif;

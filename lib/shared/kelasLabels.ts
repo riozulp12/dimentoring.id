@@ -86,3 +86,21 @@ const SLUG_TO_KATEGORI: Record<string, ProgramKategori> = Object.fromEntries(
 export function programKategoriFromSlug(slug: string): ProgramKategori | null {
   return SLUG_TO_KATEGORI[slug] ?? null;
 }
+
+/**
+ * Jenis tampilan halaman /program/[kategori]:
+ * - "kelas_sma": grid kelas dengan filter Tipe & Tingkat (kelas SMA/gap year).
+ * - "mahasiswa": info beasiswa/internship/event (konten_info) + kolom cari &
+ *   filter tipe konten; filter Tipe & Tingkat kelas SMA TIDAK relevan, jadi
+ *   disembunyikan. Daftar kelas (kalau ada) tampil di bawahnya.
+ * Hanya tampilan — tidak mengubah data kelas, checkout, atau pembayaran.
+ */
+export type ProgramTampilan = "kelas_sma" | "mahasiswa";
+
+export const PROGRAM_KATEGORI_TAMPILAN: Record<ProgramKategori, ProgramTampilan> = {
+  konsultasi: "kelas_sma",
+  tka: "kelas_sma",
+  snbt: "kelas_sma",
+  ujian_mandiri: "kelas_sma",
+  pendampingan_mahasiswa: "mahasiswa",
+};

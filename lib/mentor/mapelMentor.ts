@@ -26,6 +26,12 @@ export interface InputNamaMapel {
   subtesSiswaIds: string[];
   /** Nama subtes kelas (kelas.subtes_id) — dipakai kalau kelas tidak punya pasangan. */
   subtesKelasNama: string | null;
+  /**
+   * Status penerimaan per subtes siswa (lib/mentor/statusPenerimaanSiswa.ts). Opsional:
+   * kosong/tidak diberikan = perilaku lama. Untuk subtes multi-mentor (status bukan
+   * "tidak_perlu_klaim") label dipersempit ke subtes yang DITERIMA mentor ini.
+   */
+  penerimaanSubtes?: { subtesId: string; status: "tidak_perlu_klaim" | "menunggu" | "diterima"; mentorIdPenerima: string | null }[];
 }
 
 /**
@@ -40,7 +46,16 @@ export function tentukanNamaMapel(input: InputNamaMapel): string | null {
   if (milikMentor.length === 0) return null;
 
   const dipilihSiswa = milikMentor.filter((p) => input.subtesSiswaIds.includes(p.subtesId));
-  const dipakai = dipilihSiswa.length > 0 ? dipilihSiswa : milikMentor;
+  let dipakai = dipilihSiswa.length > 0 ? dipilihSiswa : milikMentor;
+  if (input.penerimaanSubtes && input.penerimaanSubtes.length > 0) {
+    const multiMentor = new Set(input.penerimaanSubtes.filter((p) => p.status !== "tidak_perlu_klaim").map((p) => p.subtesId));
+    const diterimaSaya = new Set(
+      input.penerimaanSubtes.filter((p) => p.status === "diterima" && p.mentorIdPenerima === input.mentorId).map((p) => p.subtesId),
+    );
+    const sempit = dipakai.filter((p) => !multiMentor.has(p.subtesId) || diterimaSaya.has(p.subtesId));
+    // Kosong (mestinya tak terjadi — penjaga presensi sudah menolak): jangan jatuh ke label kosong.
+    if (sempit.length > 0) dipakai = sempit;
+  }
   const nama = Array.from(new Set(dipakai.map((p) => p.subtesNama))).sort((a, b) => a.localeCompare(b, "id"));
   return nama.join(", ");
 }
@@ -56,6 +71,7 @@ export async function getNamaMapelMentor(
   mentorId: string,
   kelas: { id: string; subtesNama: string | null },
   enrollmentId: string,
+  penerimaanSubtes?: InputNamaMapel["penerimaanSubtes"],
 ): Promise<string | null | "gagal"> {
   const [pasanganRes, pilihanRes] = await Promise.all([
     supabaseServer.from("kelas_subtes_mentor").select("mentor_id, subtes_id, subtes:subtes_id(nama)").eq("kelas_id", kelas.id),
@@ -76,5 +92,6 @@ export async function getNamaMapelMentor(
     pasanganKelas,
     subtesSiswaIds: (pilihanRes.data ?? []).map((r) => r.subtes_id as string),
     subtesKelasNama: kelas.subtesNama,
+    penerimaanSubtes,
   });
 }

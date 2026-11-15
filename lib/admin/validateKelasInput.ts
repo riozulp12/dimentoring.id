@@ -51,8 +51,9 @@ export interface KelasInputBody {
    * otomatis nanti saat checkout). subtesMentorPairs/mentorIds diabaikan
    * total kalau field ini terisi. */
   offlineSubtesId?: string;
-  /** Pasangan Subtes-Mentor eksplisit (kelas_subtes_mentor) — satu mentor per
-   * Subtes terpilih. Kosongkan (array kosong) untuk kelas tanpa subtes
+  /** Pasangan Subtes-Mentor eksplisit (kelas_subtes_mentor) — SATU ATAU LEBIH
+   * mentor per Subtes terpilih (satu subtes boleh muncul di beberapa pasangan,
+   * asal mentornya berbeda). Kosongkan (array kosong) untuk kelas tanpa subtes
    * tertentu (mis. Konsultasi/Pendampingan Mahasiswa), lalu pakai mentorIds.
    * CUMA relevan untuk modePembelajaran='online'. */
   subtesMentorPairs?: SubtesMentorPairInput[];
@@ -60,7 +61,8 @@ export interface KelasInputBody {
    * kosong (kelas Konsultasi/Pendampingan Mahasiswa). Diabaikan kalau
    * subtesMentorPairs terisi atau modePembelajaran='offline'. */
   mentorIds?: string[];
-  kapasitas?: number | string;
+  /** OPSIONAL: kosong/null/"" = ikut otomatis (private-online-saklar-1subtes) atau tanpa batas (kelas lain). */
+  kapasitas?: number | string | null;
   harga?: number | string;
   /** BARU — diskon yang melekat ke kelas, 0-100 (%). Opsional; kosong/undefined
    * dianggap 0 (tanpa diskon). Lihat db/add_kelas_diskon.sql. */
@@ -102,7 +104,8 @@ export interface ValidatedKelasInput {
   subtes_ids: string[];
   /** Dipakai caller untuk replace penuh baris kelas_subtes_mentor. */
   subtes_mentor_pairs: ValidatedSubtesMentorPair[];
-  kapasitas: number;
+  /** null = kosong (opsional) — lihat lib/shared/kapasitasKelas.ts. */
+  kapasitas: number | null;
   harga: number;
   /** 0-100 (%) — 0 berarti kelas ini tidak sedang diskon. */
   diskon_persen: number;
@@ -151,9 +154,15 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
     return { ok: false, error: "Jumlah Sesi harus angka bulat lebih dari 0." };
   }
 
-  const kapasitas = Number(body.kapasitas);
-  if (!Number.isInteger(kapasitas) || kapasitas <= 0) {
-    return { ok: false, error: "Kapasitas harus angka bulat lebih dari 0." };
+  // Kapasitas OPSIONAL: kosong/null/"" = tidak diisi (null). Terisi harus angka bulat > 0.
+  let kapasitas: number | null = null;
+  const kapasitasMentah = body.kapasitas;
+  if (kapasitasMentah !== undefined && kapasitasMentah !== null && String(kapasitasMentah).trim() !== "") {
+    const angka = Number(kapasitasMentah);
+    if (!Number.isInteger(angka) || angka <= 0) {
+      return { ok: false, error: "Kapasitas harus angka bulat lebih dari 0, atau kosongkan." };
+    }
+    kapasitas = angka;
   }
 
   const harga = Number(body.harga);
@@ -240,38 +249,49 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
     if (!subtes) return { ok: false, error: "Subtes yang dipilih tidak ditemukan." };
     subtesIds = [offlineSubtesId];
   } else {
-    // Online: subtesMentorPairs = satu Mentor per Subtes terpilih
-    // (kelas_subtes_mentor). Kosong = kelas tanpa subtes tertentu
+    // Online: subtesMentorPairs = satu ATAU LEBIH Mentor per Subtes terpilih
+    // (kelas_subtes_mentor; kunci utamanya (kelas, subtes, mentor), jadi satu
+    // subtes boleh punya beberapa mentor). Kosong = kelas tanpa subtes tertentu
     // (Konsultasi/Pendampingan Mahasiswa), pakai mentorIds generik sebagai
     // gantinya (behavior lama, tanpa cross-check subtes karena memang tidak
     // ada subtes untuk dicocokkan).
     const rawPairs = Array.isArray(body.subtesMentorPairs) ? body.subtesMentorPairs : [];
     const cleanedPairs: { subtesId: string; mentorId: string }[] = [];
-    const seenSubtesIds = new Set<string>();
+    const seenPairs = new Set<string>();
     for (const pair of rawPairs) {
       const pairSubtesId = typeof pair?.subtesId === "string" ? pair.subtesId : "";
       const pairMentorId = typeof pair?.mentorId === "string" ? pair.mentorId : "";
       if (!pairSubtesId || !pairMentorId) {
-        return { ok: false, error: "Tiap Subtes yang dipilih wajib dipasangkan dengan satu Mentor." };
+        return { ok: false, error: "Tiap Subtes yang dipilih wajib dipasangkan dengan minimal satu Mentor." };
       }
-      if (seenSubtesIds.has(pairSubtesId)) {
-        return { ok: false, error: "Satu Subtes tidak boleh muncul lebih dari sekali." };
+      // Satu subtes BOLEH punya beberapa mentor; yang dilarang hanya pasangan (subtes, mentor) kembar.
+      const kunci = `${pairSubtesId}|${pairMentorId}`;
+      if (seenPairs.has(kunci)) {
+        return { ok: false, error: "Mentor yang sama tidak boleh dipilih dua kali pada satu Subtes." };
       }
-      seenSubtesIds.add(pairSubtesId);
+      seenPairs.add(kunci);
       cleanedPairs.push({ subtesId: pairSubtesId, mentorId: pairMentorId });
     }
 
+    // Subtes divalidasi SEKALI per subtes unik (bukan per pasangan); tiap PASANGAN
+    // tetap divalidasi terhadap profil mentornya (aktif + mengampu subtes itu).
+    const subtesCache = new Map<string, { id: string; mapel_dasar: string | null }>();
     for (const pair of cleanedPairs) {
-      const { data: subtes, error: subtesError } = await supabaseServer
-        .from("subtes")
-        .select("id, mapel_dasar")
-        .eq("id", pair.subtesId)
-        .maybeSingle();
-      if (subtesError) {
-        console.error("[validateKelasInput] query subtes failed:", subtesError);
-        return { ok: false, error: "Gagal memvalidasi subtes. Coba lagi nanti." };
+      let subtes = subtesCache.get(pair.subtesId);
+      if (!subtes) {
+        const { data, error: subtesError } = await supabaseServer
+          .from("subtes")
+          .select("id, mapel_dasar")
+          .eq("id", pair.subtesId)
+          .maybeSingle();
+        if (subtesError) {
+          console.error("[validateKelasInput] query subtes failed:", subtesError);
+          return { ok: false, error: "Gagal memvalidasi subtes. Coba lagi nanti." };
+        }
+        if (!data) return { ok: false, error: "Salah satu Subtes yang dipilih tidak ditemukan." };
+        subtes = data as { id: string; mapel_dasar: string | null };
+        subtesCache.set(pair.subtesId, subtes);
       }
-      if (!subtes) return { ok: false, error: "Salah satu Subtes yang dipilih tidak ditemukan." };
 
       const aktifCheck = await validateMentorAktif(pair.mentorId);
       if (!aktifCheck.ok) return { ok: false, error: aktifCheck.error };
@@ -285,7 +305,9 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
       subtesMentorPairs.push({ subtes_id: pair.subtesId, mentor_id: pair.mentorId });
     }
 
-    subtesIds = subtesMentorPairs.map((p) => p.subtes_id);
+    // Subtes unik (urutan kemunculan pertama): satu subtes dengan banyak mentor
+    // tetap SATU baris kelas_subtes (PK kelas_id+subtes_id).
+    subtesIds = Array.from(new Set(subtesMentorPairs.map((p) => p.subtes_id)));
 
     // mentorIds generik — CUMA dipakai/divalidasi kalau tidak ada subtesMentorPairs
     // (kelas tanpa subtes tertentu). Kalau subtesMentorPairs terisi, field ini

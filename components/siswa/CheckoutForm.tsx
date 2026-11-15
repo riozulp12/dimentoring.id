@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import InputField from "@/components/ui/InputField";
 import Button from "@/components/ui/Button";
 import MaskotLoading from "@/components/ui/MaskotLoading";
-import { MAX_JADWAL_PILIHAN, formatSlot, slotKey, type JadwalSlot } from "@/lib/shared/jadwalPilihan";
+import { MAX_JADWAL_PILIHAN, formatSlot, slotKey } from "@/lib/shared/jadwalPilihan";
+import type { OpsiJadwalCheckout } from "@/lib/shared/slotTerisi";
 import Link from "next/link";
 import { HREF_KEBIJAKAN_PRIVASI, HREF_KEBIJAKAN_REFUND, RINGKASAN_REFUND_CHECKOUT } from "@/lib/shared/kebijakan";
 
@@ -54,6 +55,8 @@ export default function CheckoutForm({
   subtesOptions,
   modePembelajaran,
   jadwalOptions,
+  semuaJadwalPenuh = false,
+  kelasPenuh = false,
 }: {
   kelasId: string;
   /** Harga yang DITAGIH (sudah setelah diskon kelas, dihitung server). */
@@ -69,7 +72,12 @@ export default function CheckoutForm({
   /** Slot kelas.jadwal yang dipilih siswa (PRD 7.5.8) — HANYA diisi server
    * kalau saklar kelas menyala, bukan offline, dan slot >= 2. Kosong = tanpa
    * pilihan jadwal (perilaku lama). */
-  jadwalOptions: JadwalSlot[];
+  /** Slot kelas + penanda penuh (penuh = tampil "(Penuh)" dan tidak bisa dipilih). */
+  jadwalOptions: OpsiJadwalCheckout[];
+  /** Semua jadwal kelas penuh → pesan "Semua jadwal kelas ini sudah terisi" dan tombol Bayar nonaktif. */
+  semuaJadwalPenuh?: boolean;
+  /** Kelas penuh menurut kapasitas (otomatis/manual) → pesan + tombol Bayar nonaktif. */
+  kelasPenuh?: boolean;
 }) {
   const isOffline = modePembelajaran === "offline";
   const isPaket = !isOffline && subtesOptions.length > 1;
@@ -238,7 +246,8 @@ export default function CheckoutForm({
     const jadwalPilihan = jadwalPilihanKeys
       .filter(Boolean)
       .map((key) => jadwalOptions.find((slot) => slotKey(slot) === key))
-      .filter((slot): slot is JadwalSlot => Boolean(slot));
+      .filter((slot): slot is OpsiJadwalCheckout => Boolean(slot) && !slot!.penuh)
+      .map(({ hari, jam_mulai }) => ({ hari, jam_mulai }));
     if (isPilihJadwal && jadwalPilihan.length < 1) {
       setJadwalError("Pilih minimal 1 jadwal dulu.");
       return;
@@ -437,7 +446,11 @@ export default function CheckoutForm({
                 placeholder="Pilih jadwal"
                 value={jadwalPilihanKeys[0]}
                 onChange={(e) => setJadwalPilihan(0, e.target.value)}
-                options={jadwalOptions.map((slot) => ({ label: formatSlot(slot), value: slotKey(slot) }))}
+                options={jadwalOptions.map((slot) => ({
+                  label: slot.penuh ? `${formatSlot(slot)} (Penuh)` : formatSlot(slot),
+                  value: slotKey(slot),
+                  disabled: slot.penuh,
+                }))}
                 status={jadwalError ? "error" : "default"}
               />
             </div>
@@ -451,7 +464,11 @@ export default function CheckoutForm({
                 onChange={(e) => setJadwalPilihan(1, e.target.value)}
                 options={jadwalOptions
                   .filter((slot) => slotKey(slot) !== jadwalPilihanKeys[0])
-                  .map((slot) => ({ label: formatSlot(slot), value: slotKey(slot) }))}
+                  .map((slot) => ({
+                    label: slot.penuh ? `${formatSlot(slot)} (Penuh)` : formatSlot(slot),
+                    value: slotKey(slot),
+                    disabled: slot.penuh,
+                  }))}
               />
               {jadwalPilihanKeys[1] ? (
                 <button
@@ -466,6 +483,18 @@ export default function CheckoutForm({
           </div>
           {jadwalError ? <p className="text-sm text-[#E70A0A]">{jadwalError}</p> : null}
         </div>
+      ) : null}
+
+      {kelasPenuh && !semuaJadwalPenuh ? (
+        <p role="alert" className="rounded-[16px] bg-[#FFF4E5] px-4 py-3 text-sm font-medium text-[#B45309]">
+          Kelas ini sudah penuh. Coba cek kelas lain ya.
+        </p>
+      ) : null}
+
+      {semuaJadwalPenuh ? (
+        <p role="alert" className="rounded-[16px] bg-[#FFF4E5] px-4 py-3 text-sm font-medium text-[#B45309]">
+          Semua jadwal kelas ini sudah terisi. Coba cek kelas lain ya.
+        </p>
       ) : null}
 
       <div className="flex flex-col gap-6 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
@@ -609,6 +638,8 @@ export default function CheckoutForm({
           disabled={
             isPaying ||
             !setujuKebijakan ||
+            semuaJadwalPenuh ||
+            kelasPenuh ||
             (isPaket && !adaSubtesTersedia) ||
             (isOffline && (!offlineMentors || offlineMentors.length === 0 || !selectedMentorId))
           }

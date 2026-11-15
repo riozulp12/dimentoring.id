@@ -28,6 +28,8 @@ export interface KelasDetailData {
    * siswa terdaftar tetap bisa buka kelas tersembunyi; halaman yang menolak
    * siswa yang belum terdaftar. */
   tampilDiKatalog: boolean;
+  /** `kelas.tipe_kelas` — kelas private memakai link Meet PER SISWA (lib/shared/linkMeet.ts). */
+  tipeKelas: string | null;
 }
 
 export interface MateriItem {
@@ -59,7 +61,7 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      "id, nama, jadwal, jadwal_pilih_siswa, link_meet, deskripsi, mode_pembelajaran, jumlah_sesi, tampil_di_katalog, mentor:mentor_id(nama), subtes:subtes_id(nama)",
+      "id, nama, jadwal, jadwal_pilih_siswa, link_meet, deskripsi, mode_pembelajaran, jumlah_sesi, tampil_di_katalog, tipe_kelas, mentor:mentor_id(nama), subtes:subtes_id(nama)",
     )
     .eq("id", kelasId)
     .maybeSingle();
@@ -80,6 +82,7 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
     mode_pembelajaran: string;
     jumlah_sesi: number;
     tampil_di_katalog: boolean | null;
+    tipe_kelas?: string | null;
     mentor: NamaJoin;
     subtes: NamaJoin;
   };
@@ -98,6 +101,7 @@ export async function getKelasDetail(kelasId: string): Promise<KelasDetailData |
     jadwalRaw: row.jadwal,
     jadwalPilihSiswa: row.jadwal_pilih_siswa === true,
     tampilDiKatalog: row.tampil_di_katalog !== false,
+    tipeKelas: row.tipe_kelas ?? null,
   };
 }
 
@@ -110,25 +114,30 @@ export async function getEnrollmentStatus(
   progresPersen: number;
   /** enrollments.jadwal_ditetapkan (PRD 7.5.8). */
   jadwalDitetapkan: unknown;
+  /** enrollments.link_meet / link_meet_oleh — Link Meet PER SISWA (kelas private). */
+  linkMeet: string | null;
+  linkMeetOleh: string | null;
 }> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, status_pembayaran, progres_persen, jadwal_ditetapkan")
+    .select("id, status_pembayaran, progres_persen, jadwal_ditetapkan, link_meet, link_meet_oleh")
     .eq("user_id", userId)
     .eq("kelas_id", kelasId)
     .maybeSingle();
 
   if (error) {
     console.error("[getEnrollmentStatus] query failed:", error);
-    return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null };
+    return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null, linkMeet: null, linkMeetOleh: null };
   }
-  if (!data) return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null };
+  if (!data) return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null, linkMeet: null, linkMeetOleh: null };
 
   return {
     enrollmentId: data.id as string,
     statusPembayaran: data.status_pembayaran as "menunggu" | "lunas" | "batal",
     progresPersen: data.progres_persen as number,
     jadwalDitetapkan: data.jadwal_ditetapkan,
+    linkMeet: (data.link_meet as string | null) ?? null,
+    linkMeetOleh: (data.link_meet_oleh as string | null) ?? null,
   };
 }
 
