@@ -56,7 +56,15 @@ export interface EnrollmentAksesMentor {
   /** Status penerimaan per subtes siswa ini (kosong bila siswa tidak punya pilihan subtes). */
   subtesPenerimaan: SubtesSiswaDetail[];
   enrollment: { id: string; userId: string; kelasId: string; mentorOfflineId: string | null };
-  kelas: { id: string; nama: string; mentorId: string | null; subtesId: string | null; subtesNama: string | null };
+  kelas: {
+    id: string;
+    nama: string;
+    mentorId: string | null;
+    subtesId: string | null;
+    subtesNama: string | null;
+    /** kelas.tipe_kelas (private/semi_private/grouping) — Link Meet per siswa hanya untuk private. */
+    tipeKelas: string | null;
+  };
 }
 
 /**
@@ -70,7 +78,7 @@ export async function getAksesMentorEnrollment(
 ): Promise<EnrollmentAksesMentor | null | "gagal"> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, user_id, kelas_id, mentor_offline_id, kelas:kelas_id(id, nama, mentor_id, subtes_id, subtes:subtes_id(nama))")
+    .select("id, user_id, kelas_id, mentor_offline_id, kelas:kelas_id(id, nama, mentor_id, subtes_id, tipe_kelas, subtes:subtes_id(nama))")
     .eq("id", enrollmentId)
     .maybeSingle();
 
@@ -78,7 +86,14 @@ export async function getAksesMentorEnrollment(
     console.error("[getAksesMentorEnrollment] query enrollment failed:", error);
     return "gagal";
   }
-  type KelasRow = { id: string; nama: string; mentor_id: string | null; subtes_id: string | null; subtes: Join<{ nama: string }> };
+  type KelasRow = {
+    id: string;
+    nama: string;
+    mentor_id: string | null;
+    subtes_id: string | null;
+    tipe_kelas?: string | null;
+    subtes: Join<{ nama: string }>;
+  };
   const kelas = first(data?.kelas as Join<KelasRow>);
   if (!data || !kelas) return null;
 
@@ -119,6 +134,7 @@ export async function getAksesMentorEnrollment(
       mentorId: kelas.mentor_id,
       subtesId: kelas.subtes_id,
       subtesNama: first(kelas.subtes)?.nama ?? null,
+      tipeKelas: kelas.tipe_kelas ?? null,
     },
   };
 }

@@ -75,7 +75,7 @@ export default async function KelasSayaDetailMentorPage({
 
   const [materiList, sesiSiswa] = await Promise.all([
     getMentorMateriList(kelasId),
-    getSesiSiswaByKelasId(kelasId, session.userId, akses),
+    getSesiSiswaByKelasId(kelasId, session.userId, akses, { tipeKelas: kelas.tipeKelas }),
   ]);
 
   const menungguDiterima = daftarMenungguDiterima(sesiSiswa);

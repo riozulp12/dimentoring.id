@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
-import { getPenerimaanSubtesSiswa } from "@/lib/mentor/statusPenerimaanSiswa";
+import { getPenerimaanSubtesSiswa, type SubtesSiswaDetail } from "@/lib/mentor/statusPenerimaanSiswa";
 import { mentorBerhakDariSubtes } from "@/lib/shared/linkMeet";
 
 /**
@@ -12,12 +12,16 @@ import { mentorBerhakDariSubtes } from "@/lib/shared/linkMeet";
  * Query: status penerimaan (maks. 4, untuk BANYAK enrollment sekaligus) + — hanya bila ada
  * siswa tanpa pemegang subtes aktif — mentor tingkat kelas (3 query). "gagal" = galat database
  * (sudah di-log); pemanggil memperlakukannya sebagai TIDAK ADA mentor berhak (fail-closed).
+ *
+ * `penerimaanSiap` (opsional): hasil getPenerimaanSubtesSiswa yang SUDAH dibaca pemanggil untuk
+ * enrollment yang sama, supaya tidak membaca dua kali (mis. getSesiSiswaByKelasId).
  */
 export async function getMentorBerhakLinkMeet(
   kelasId: string,
   enrollmentIds: string[],
+  penerimaanSiap?: Map<string, SubtesSiswaDetail[]>,
 ): Promise<Map<string, string[]> | "gagal"> {
-  const penerimaan = await getPenerimaanSubtesSiswa("", enrollmentIds);
+  const penerimaan = penerimaanSiap ?? (await getPenerimaanSubtesSiswa("", enrollmentIds));
   if (penerimaan === "gagal") return "gagal";
 
   const perluFallback = enrollmentIds.some((id) => {
