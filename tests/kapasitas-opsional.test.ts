@@ -181,21 +181,18 @@ describe("katalog: kartu memakai hitungKapasitasKelas (satu aturan) dan tombol d
     db = { enrollments: [...lunas("BEBAS", 40), ...lunas("MANUAL10", 10), ...lunas("MANUAL10B", 6)], kelas_subtes: [], kelas_subtes_mentor: [], user_roles: [] };
   });
 
-  it("kapasitas kosong -> tanpa batas: bukan penuh, tanpa badge, legacy 0 / tak berhingga (kartu lama tidak menampilkan badge)", async () => {
+  it("kapasitas kosong -> tanpa batas: bukan penuh, tanpa badge", async () => {
     const [kartu] = await program.toCardPreviewList([baris("BEBAS", null)]);
     assert.deepEqual(kartu.kapasitasInfo, { terbatas: false, kapasitas: null, terisi: 40, sisa: null, penuh: false, hampirHabis: false });
-    assert.equal(kartu.kapasitas, 0);
-    assert.equal(kartu.sisaSlot, Number.MAX_SAFE_INTEGER);
   });
 
   it("kapasitas manual: lunas >= kapasitas -> penuh; sisa dari angka nyata", async () => {
     const [penuh, sisa] = await program.toCardPreviewList([baris("MANUAL10", 10), baris("MANUAL10B", 10)]);
     assert.equal(penuh.kapasitasInfo.penuh, true);
-    assert.equal(penuh.sisaSlot, 0);
+    assert.equal(penuh.kapasitasInfo.sisa, 0);
     assert.equal(sisa.kapasitasInfo.penuh, false);
     assert.equal(sisa.kapasitasInfo.sisa, 4);
-    assert.equal(sisa.sisaSlot, 4);
-    assert.equal(sisa.kapasitas, 10);
+    assert.equal(sisa.kapasitasInfo.kapasitas, 10);
   });
 
   it("tombol daftar 'Kelas Penuh' HANYA bila kapasitasInfo.penuh; tanpa batas tidak pernah penuh", async () => {

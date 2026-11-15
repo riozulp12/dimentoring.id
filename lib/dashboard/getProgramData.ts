@@ -50,10 +50,6 @@ export interface KelasCardPreview {
   diskonAktif: DiskonAktif | null;
   /** SATU sumber kapasitas/penuh/hampir habis (lib/shared/kapasitasKelas.ts). */
   kapasitasInfo: KapasitasKelas;
-  /** LEGACY untuk KelasCardVisual lama (badge "Tersisa N Slot"): turunan kapasitasInfo —
-   * 0 / MAX_SAFE_INTEGER bila tanpa batas. Jangan dipakai kode baru. */
-  kapasitas: number;
-  sisaSlot: number;
   deskripsi: string | null;
   programKategori: string;
   tingkatKelas: string;
@@ -98,14 +94,6 @@ export interface KelasCardRow {
   mentor: NamaJoin;
 }
 
-/** Turunan legacy untuk KelasCardVisual lama: tanpa batas → kapasitas 0 (tanpa badge) & sisa tak berhingga. */
-function nilaiLegacy(info: KapasitasKelas): { kapasitas: number; sisaSlot: number } {
-  return {
-    kapasitas: info.kapasitas ?? 0,
-    sisaSlot: info.sisa ?? Number.MAX_SAFE_INTEGER,
-  };
-}
-
 export function toCardPreview(row: KelasCardRow, kapasitasInfo: KapasitasKelas): KelasCardPreview {
   const harga = Number(row.harga);
   const diskonPersen = normalizeDiskonPersen(row.diskon_persen);
@@ -125,7 +113,6 @@ export function toCardPreview(row: KelasCardRow, kapasitasInfo: KapasitasKelas):
     // menghasilkan ribbon/label apa pun di kartu.
     diskonAktif: diskonPersen > 0 ? { label: `Diskon ${diskonPersen}%` } : null,
     kapasitasInfo,
-    ...nilaiLegacy(kapasitasInfo),
     deskripsi: row.deskripsi,
     programKategori: row.program_kategori,
     tingkatKelas: row.tingkat_kelas,
@@ -295,9 +282,6 @@ export interface KelasDetailPublic {
   mentors: KelasMentorInfo[];
   /** SATU sumber kapasitas/penuh/hampir habis (lib/shared/kapasitasKelas.ts). */
   kapasitasInfo: KapasitasKelas;
-  /** LEGACY untuk KelasCardVisual lama — turunan kapasitasInfo (lihat KelasCardPreview). */
-  kapasitas: number;
-  sisaSlot: number;
   /** Diskon kelas sendiri saja — lihat KelasCardPreview.diskonAktif. */
   diskonAktif: DiskonAktif | null;
   /** kelas.link_lynkid ("Input Link Pendaftaran") — tujuan tombol Daftar
@@ -412,7 +396,6 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     mentorNama: mentors[0]?.nama ?? null,
     mentors,
     kapasitasInfo,
-    ...nilaiLegacy(kapasitasInfo),
     diskonAktif: diskonPersenDetail > 0 ? { label: `Diskon ${diskonPersenDetail}%` } : null,
     linkLynkid: row.link_lynkid,
     tampilDiKatalog: row.tampil_di_katalog !== false,

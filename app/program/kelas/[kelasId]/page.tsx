@@ -21,6 +21,7 @@ import { hrefLoginKembali } from "@/lib/shared/saranProdukAssessment";
 import Avatar from "@/components/ui/Avatar";
 import KelasCardVisual from "@/components/ui/KelasCardVisual";
 import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
+import BadgeKapasitas from "@/components/ui/BadgeKapasitas";
 
 /** Detail publik 1 kelas (PRD 7.5.4) — TIGA card independen (masing-masing
  * border+shadow+padding sendiri, dipisah gap yang jelas, bukan satu card besar
@@ -142,8 +143,7 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
               namaKelas={kelas.nama}
               index={0}
               diskonAktif={kelas.diskonAktif}
-              sisaSlot={kelas.sisaSlot}
-              kapasitas={kelas.kapasitas}
+              kapasitasInfo={kelas.kapasitasInfo}
               programKategori={kelas.programKategori}
               tingkatKelas={kelas.tingkatKelas}
               subtesNama={kelas.subtesNama}
@@ -242,13 +242,16 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
                 <p className="text-center text-sm text-[#7E7C7C]">Kamu sudah terdaftar di kelas ini.</p>
               </>
             ) : (
-              <KelasDaftarButton
-                kelasId={kelas.id}
-                penuh={kelas.kapasitasInfo.penuh}
-                sessionRole={session?.role ?? null}
-                linkLynkid={kelas.linkLynkid}
-                variant="detail"
-              />
+              <>
+                <BadgeKapasitas info={kelas.kapasitasInfo} className="self-center" />
+                <KelasDaftarButton
+                  kelasId={kelas.id}
+                  penuh={kelas.kapasitasInfo.penuh}
+                  sessionRole={session?.role ?? null}
+                  linkLynkid={kelas.linkLynkid}
+                  variant="detail"
+                />
+              </>
             )}
           </div>
         </div>

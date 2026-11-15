@@ -1,3 +1,4 @@
+import type { KapasitasKelas } from "@/lib/shared/kapasitasKelas";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import KelasCardVisual from "@/components/ui/KelasCardVisual";
@@ -17,8 +18,8 @@ export interface KelasCardFrameProps {
   index: number;
   /** Diskon kelas sendiri (ikut terlihat di harga) — satu-satunya pemicu ribbon & border merah. */
   diskonAktif: DiskonAktif | null;
-  sisaSlot: number;
-  kapasitas: number;
+  /** Hasil hitungKapasitasKelas (lib/shared/kapasitasKelas.ts) — badge Hampir habis / Penuh. */
+  kapasitasInfo: KapasitasKelas;
   programKategori: string;
   tingkatKelas: string;
   subtesNama: string | null;
@@ -38,8 +39,7 @@ export default function KelasCardFrame({
   namaKelas,
   index,
   diskonAktif,
-  sisaSlot,
-  kapasitas,
+  kapasitasInfo,
   programKategori,
   tingkatKelas,
   subtesNama,
@@ -74,8 +74,7 @@ export default function KelasCardFrame({
         namaKelas={namaKelas}
         index={index}
         diskonAktif={diskonAktif}
-        sisaSlot={sisaSlot}
-        kapasitas={kapasitas}
+        kapasitasInfo={kapasitasInfo}
         programKategori={programKategori}
         tingkatKelas={tingkatKelas}
         subtesNama={subtesNama}

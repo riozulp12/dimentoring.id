@@ -53,6 +53,7 @@ export default function CheckoutForm({
   modePembelajaran,
   jadwalOptions,
   semuaJadwalPenuh = false,
+  kelasPenuh = false,
 }: {
   kelasId: string;
   /** Harga yang DITAGIH (sudah setelah diskon kelas, dihitung server). */
@@ -72,6 +73,8 @@ export default function CheckoutForm({
   jadwalOptions: OpsiJadwalCheckout[];
   /** Semua jadwal kelas penuh → pesan "Semua jadwal kelas ini sudah terisi" dan tombol Bayar nonaktif. */
   semuaJadwalPenuh?: boolean;
+  /** Kelas penuh menurut kapasitas (otomatis/manual) → pesan + tombol Bayar nonaktif. */
+  kelasPenuh?: boolean;
 }) {
   const isOffline = modePembelajaran === "offline";
   const isPaket = !isOffline && subtesOptions.length > 1;
@@ -461,6 +464,12 @@ export default function CheckoutForm({
         </div>
       ) : null}
 
+      {kelasPenuh && !semuaJadwalPenuh ? (
+        <p role="alert" className="rounded-[16px] bg-[#FFF4E5] px-4 py-3 text-sm font-medium text-[#B45309]">
+          Kelas ini sudah penuh. Coba cek kelas lain ya.
+        </p>
+      ) : null}
+
       {semuaJadwalPenuh ? (
         <p role="alert" className="rounded-[16px] bg-[#FFF4E5] px-4 py-3 text-sm font-medium text-[#B45309]">
           Semua jadwal kelas ini sudah terisi. Coba cek kelas lain ya.
@@ -609,6 +618,7 @@ export default function CheckoutForm({
             isPaying ||
             !setujuKebijakan ||
             semuaJadwalPenuh ||
+            kelasPenuh ||
             (isOffline && (!offlineMentors || offlineMentors.length === 0 || !selectedMentorId))
           }
           className="w-full"
