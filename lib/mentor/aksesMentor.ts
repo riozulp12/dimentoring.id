@@ -55,7 +55,7 @@ export interface EnrollmentAksesMentor {
   penerimaan: PenerimaanMenandai;
   /** Status penerimaan per subtes siswa ini (kosong bila siswa tidak punya pilihan subtes). */
   subtesPenerimaan: SubtesSiswaDetail[];
-  enrollment: { id: string; userId: string; kelasId: string; mentorOfflineId: string | null };
+  enrollment: { id: string; userId: string; kelasId: string; mentorOfflineId: string | null; tanggalDaftar: string | null };
   kelas: {
     id: string;
     nama: string;
@@ -78,7 +78,7 @@ export async function getAksesMentorEnrollment(
 ): Promise<EnrollmentAksesMentor | null | "gagal"> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, user_id, kelas_id, mentor_offline_id, kelas:kelas_id(id, nama, mentor_id, subtes_id, tipe_kelas, subtes:subtes_id(nama))")
+    .select("id, user_id, kelas_id, mentor_offline_id, tanggal_daftar, kelas:kelas_id(id, nama, mentor_id, subtes_id, tipe_kelas, subtes:subtes_id(nama))")
     .eq("id", enrollmentId)
     .maybeSingle();
 
@@ -127,6 +127,7 @@ export async function getAksesMentorEnrollment(
       userId: data.user_id as string,
       kelasId: data.kelas_id as string,
       mentorOfflineId: (data.mentor_offline_id as string | null) ?? null,
+      tanggalDaftar: (data.tanggal_daftar as string | null) ?? null,
     },
     kelas: {
       id: kelas.id,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
-import { getAksesMentorEnrollment } from "@/lib/mentor/aksesMentor";
+import { guardPemilikSiswa } from "@/lib/mentor/guardPemilikSiswa";
 import { getNamaMapelMentor } from "@/lib/mentor/mapelMentor";
 import { notifySesiDitandaiMentor } from "@/lib/notifikasi/notify";
 import { rentangHariWib, tanggalWib } from "@/lib/shared/hariWib";
@@ -51,30 +51,14 @@ export async function POST(request: NextRequest) {
     return errorResponse("Siswa/kelas tidak valid.", 400);
   }
 
-  const akses = await getAksesMentorEnrollment(session.userId, enrollmentId);
-  if (akses === "gagal") {
-    return errorResponse("Gagal memuat data siswa. Coba lagi nanti.", 500);
-  }
-  // BR-7: dua-duanya (enrollment tidak ada, ATAU ada tapi mentor ini tidak
-  // terkait) ditolak dengan pesan sama supaya tidak bocorkan kelas mentor lain.
-  if (!akses) {
-    return errorResponse("Siswa ini bukan bagian dari kelas yang kamu ampu.", 403);
-  }
+  // Penjaga kepemilikan bersama (lib/mentor/guardPemilikSiswa.ts → siswaMilikMentor): honor dibayar atas
+  // penanda sesi, jadi cuma mentor PEMILIK siswa yang boleh — terkait kelas saja tidak cukup. Tidak ada /
+  // bukan pemilik / masih menunggu diterima = 403 dengan pesan yang sama (tidak membocorkan enrollmentId
+  // atau pemiliknya); data kepemilikan gagal dibaca = 503 dan tidak ada yang ditulis (fail-closed).
+  const guard = await guardPemilikSiswa(session.userId, enrollmentId);
+  if (!guard.ok) return errorResponse(guard.pesan, guard.status);
+  const { akses } = guard;
   const { enrollment, kelas } = akses;
-
-  // Penerimaan siswa per subtes (lib/shared/penerimaanSiswa.ts): subtes yang
-  // dipegang >=2 mentor aktif — cuma mentor yang MENERIMA siswa yang boleh
-  // menandai sesi (honor dibayar atas penanda sesi). Fail-closed: data gagal
-  // dibaca = ditolak (503), bukan diloloskan.
-  if (!akses.penerimaan.boleh) {
-    if (akses.penerimaan.alasan === "data_gagal") return errorResponse("Coba lagi sebentar.", 503);
-    return errorResponse(
-      akses.penerimaan.alasan === "menunggu_penerimaan"
-        ? "Siswa ini belum kamu terima. Terima siswa ini lebih dulu di halaman kelas."
-        : "Siswa ini belum kamu terima — sudah diterima mentor lain.",
-      403,
-    );
-  }
 
   const now = new Date();
   const hariIni = rentangHariWib(now);

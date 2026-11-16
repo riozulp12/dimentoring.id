@@ -4,6 +4,8 @@ import { Inter } from "next/font/google";
 import type { MentorKelasSiswaProgress, MentorKelasTerdaftar, MentorStats } from "@/lib/mentor/dashboardData";
 import type { BeasiswaEventItem } from "@/lib/dashboard/getInfoBeasiswaEvent";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
+import { HREF_KELAS_SAYA_MENTOR, HREF_SISWA_BINAAN, hrefEvent, hrefKelasMentor } from "@/lib/shared/dashboardLinks";
+import BarisKlik from "@/components/dashboard/BarisKlik";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"] });
 
@@ -118,8 +120,8 @@ export default function MentorDashboardOverview({
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4 lg:gap-8">
-            <StatCard label="Kelas Diampu" value={String(stats.kelasDiampu)} unit="Kelas" />
-            <StatCard label="Siswa Binaan" value={String(stats.siswaBinaan)} unit="Siswa" />
+            <StatCard label="Kelas Diampu" value={String(stats.kelasDiampu)} unit="Kelas" href={HREF_KELAS_SAYA_MENTOR} />
+            <StatCard label="Siswa Binaan" value={String(stats.siswaBinaan)} unit="Siswa" href={HREF_SISWA_BINAAN} />
             <StatCard
               label="Rata-rata Progress Siswa Binaan"
               value={stats.rataRataProgress === null ? "-" : String(stats.rataRataProgress)}
@@ -143,19 +145,25 @@ export default function MentorDashboardOverview({
               <div className="flex flex-col gap-6">
                 {progressByKelas.map((kelas) => (
                   <div key={kelas.kelasId} className="flex flex-col gap-3">
-                    <p className="text-base font-medium text-black">{kelas.kelasNama}</p>
+                    <BarisKlik href={hrefKelasMentor(kelas.kelasId)} className="-mx-2 px-2 py-1">
+                      <p className="text-base font-medium text-black">{kelas.kelasNama}</p>
+                    </BarisKlik>
                     {kelas.siswa.length === 0 ? (
                       <p className="text-sm text-[#7E7C7C]">Belum ada siswa terdaftar di kelas ini.</p>
                     ) : (
                       <div className="flex flex-col gap-4">
                         {kelas.siswa.map((s) => (
-                          <div key={s.userId} className="flex flex-col gap-2">
+                          <BarisKlik
+                            key={s.userId}
+                            href={hrefKelasMentor(kelas.kelasId)}
+                            className="-mx-2 flex flex-col gap-2 px-2 py-1"
+                          >
                             <div className="flex items-center justify-between gap-3">
                               <p className="text-base text-black">{s.nama}</p>
                               <p className="text-base text-[#7E7C7C]">{s.progresPersen}%</p>
                             </div>
                             <ProgressBar persen={s.progresPersen} />
-                          </div>
+                          </BarisKlik>
                         ))}
                       </div>
                     )}
@@ -177,10 +185,13 @@ export default function MentorDashboardOverview({
                   {kelasTerdaftar.map((k, index) => (
                     <div key={k.id}>
                       {index > 0 ? <div className="h-px w-full bg-[#E3E3E3]" /> : null}
-                      <div className="flex items-center justify-between gap-3 py-2.5 sm:py-3">
+                      <BarisKlik
+                        href={hrefKelasMentor(k.id)}
+                        className="-mx-2 flex items-center justify-between gap-3 px-2 py-2.5 sm:py-3"
+                      >
                         <p className="min-w-0 truncate text-base text-black">{k.nama}</p>
                         <p className="shrink-0 text-base text-[#7E7C7C]">{formatJadwal(k.jadwal)}</p>
-                      </div>
+                      </BarisKlik>
                     </div>
                   ))}
                 </div>
@@ -198,12 +209,15 @@ export default function MentorDashboardOverview({
                   {beasiswaEvent.map((b, index) => (
                     <div key={b.id}>
                       {index > 0 ? <div className="h-px w-full bg-[#E3E3E3]" /> : null}
-                      <div className="flex items-center justify-between gap-3 py-2.5 sm:py-3">
+                      <BarisKlik
+                        href={hrefEvent(b.id)}
+                        className="-mx-2 flex items-center justify-between gap-3 px-2 py-2.5 sm:py-3"
+                      >
                         <p className="min-w-0 truncate text-base text-black">{b.judul}</p>
                         <p className="shrink-0 text-base text-[#E70A0A]">
                           {b.deadline ?? "Tanpa deadline"}
                         </p>
-                      </div>
+                      </BarisKlik>
                     </div>
                   ))}
                 </div>

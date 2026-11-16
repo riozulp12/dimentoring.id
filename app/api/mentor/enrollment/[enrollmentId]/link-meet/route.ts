@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
-import { getAksesMentorEnrollment } from "@/lib/mentor/aksesMentor";
+import { guardPemilikSiswa } from "@/lib/mentor/guardPemilikSiswa";
 import { getMentorBerhakLinkMeet } from "@/lib/mentor/linkMeetSiswa";
 import { notifyLinkMeetSiswa } from "@/lib/notifikasi/notify";
 import { isKelasPrivate, isValidLinkUrl } from "@/lib/shared/linkMeet";
 
 /**
  * Isi link Meet PER SISWA (Mentor) — khusus kelas PRIVATE (lib/shared/linkMeet.ts). Peran & mentorId
- * dari cookie sesi, bukan body. Otorisasi berlapis: (1) mentor Active, (2) terkait enrollment ini
- * (getAksesMentorEnrollment), (3) penjaga penerimaan siswa (belum diterima = ditolak, data gagal dibaca
+ * dari cookie sesi, bukan body. Otorisasi berlapis: (1) mentor Active, (2) PEMILIK siswa ini
+ * (guardPemilikSiswa → siswaMilikMentor: bukan pemilik/belum diterima = 403 seragam, data gagal dibaca
  * = 503, fail-closed), (4) benar-benar termasuk mentor yang SAAT INI berhak atas siswa ini — sama dengan
  * dasar "link masih berlaku", supaya link yang tersimpan tidak pernah langsung tak berlaku. Admin menimpa
  * lewat /api/kelola-kelas/[kelasId]/pendaftar/[enrollmentId]/link-meet.
@@ -42,18 +42,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const { enrollmentId } = await params;
-  const akses = await getAksesMentorEnrollment(session.userId, enrollmentId);
-  if (akses === "gagal") return errorResponse("Gagal memuat data siswa. Coba lagi nanti.", 500);
-  // Enrollment tidak ada ATAU mentor tidak terkait: pesan sama (tidak membocorkan kelas mentor lain).
-  if (!akses) return errorResponse("Siswa ini bukan bagian dari kelas yang kamu ampu.", 403);
+  // Penjaga kepemilikan bersama: tidak ada / bukan pemilik / menunggu = 403 seragam; gagal baca = 503.
+  const guard = await guardPemilikSiswa(session.userId, enrollmentId);
+  if (!guard.ok) return errorResponse(guard.pesan, guard.status);
+  const { akses } = guard;
 
   if (!isKelasPrivate(akses.kelas.tipeKelas)) {
     return errorResponse("Kelas ini memakai link Meet kelas, bukan link per siswa.", 422);
-  }
-
-  if (!akses.penerimaan.boleh) {
-    if (akses.penerimaan.alasan === "data_gagal") return errorResponse("Coba lagi sebentar.", 503);
-    return errorResponse("Siswa ini belum kamu terima. Terima siswa ini lebih dulu di halaman kelas.", 403);
   }
 
   const berhak = await getMentorBerhakLinkMeet(akses.enrollment.kelasId, [enrollmentId]);

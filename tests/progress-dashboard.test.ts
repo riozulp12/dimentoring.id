@@ -372,7 +372,8 @@ beforeEach(() => {
 describe("Dashboard Siswa — Progress Belajar", () => {
   it("2 dari 10 sesi → 20% (bukan progres materi 77%)", async () => {
     const data = await siswaDashboard.getSiswaDashboardData("s1");
-    assert.deepEqual(data.progressBelajar, [{ subtes: "[UJI] Presensi E2E", persen: 20 }]);
+    // kelasId ditambahkan dengan sengaja (kartu dashboard bisa diklik -> halaman kelas); angka progres tidak berubah.
+    assert.deepEqual(data.progressBelajar, [{ kelasId: "kelas-uji", subtes: "[UJI] Presensi E2E", persen: 20 }]);
   });
 
   it("angkanya sama dengan Kelas Saya (/kelas) dan Progress Kehadiran di detail kelas", async () => {
