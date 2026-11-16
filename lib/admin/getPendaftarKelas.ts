@@ -8,6 +8,11 @@ import {
   type JadwalSlot,
 } from "@/lib/shared/jadwalPilihan";
 import { getKelasSubtesOptions, type KelasSubtesOption } from "@/lib/payment/getKelasForCheckout";
+import { KELAS_KETERSEDIAAN_SELECT, hitungKetersediaanKelas, normalisasiKelas } from "@/lib/jadwal/slotTerisi";
+import { opsiJadwalCheckout, type OpsiJadwalCheckout } from "@/lib/shared/slotTerisi";
+import { slotKey } from "@/lib/shared/jadwalPilihan";
+import { hitungKapasitasKelas, type KapasitasKelas } from "@/lib/shared/kapasitasKelas";
+import { ringkasSlotTerisi, type SlotTerisiRingkas } from "@/lib/shared/ringkasanKapasitasAdmin";
 
 /**
  * Data layer halaman "Pendaftar" per kelas (Admin, Kelola Kelas) — PRD 7.5.8.
@@ -47,13 +52,27 @@ export interface PendaftarKelasData {
     /** Saklar menyala DAN bukan offline — aksi "Tetapkan jadwal" cuma ada kalau true. */
     jadwalPilihanAktif: boolean;
     slots: JadwalSlot[];
+    /**
+     * Opsi dropdown "Jadwal (opsional)" di form Daftarkan Siswa Manual: slot kelas.jadwal (tanpa duplikat) +
+     * penanda penuh. KOSONG bila kelas tidak memakai pilihan jadwal (saklar mati/offline) atau tanpa slot —
+     * kondisi yang SAMA dengan aksi "Tetapkan jadwal". Penanda penuh hanya ada untuk kelas yang memakai
+     * aturan slot (private + online + saklar + 1 subtes); selain itu semua slot terbuka.
+     */
+    opsiJadwal: OpsiJadwalCheckout[];
     modePembelajaran: "online" | "offline";
     /** kelas.tipe_kelas — Link Meet per siswa hanya untuk 'private'. */
     tipeKelas: string | null;
     /** null = kapasitas manual kosong (otomatis / tanpa batas). */
     kapasitas: number | null;
-    /** Enrollment lunas — dasar "Kelas Penuh" (sama dengan katalog). */
+    /** Enrollment lunas. */
     terisi: number;
+    /**
+     * Kapasitas EFEKTIF (hitungKapasitasKelas — sama dengan badge kartu katalog). Header halaman memakai ini;
+     * `kapasitas` mentah di atas hanya untuk aturan pendaftaran manual (server hanya mengenal kapasitas manual).
+     */
+    kapasitasEfektif: KapasitasKelas;
+    /** "Slot terisi A dari B" — hanya kelas yang memakai aturan slot; selain itu null. */
+    slotTerisi: SlotTerisiRingkas | null;
     jumlahSesi: number;
     /** Pool subtes kelas (kelas_subtes) — > 1 = kelas paket, form manual minta pilihan. */
     subtesPool: KelasSubtesOption[];
@@ -82,7 +101,7 @@ interface EnrollmentRow {
 export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelasData | null> {
   const { data: kelas, error: kelasError } = await supabaseServer
     .from("kelas")
-    .select("id, nama, jadwal, jadwal_pilih_siswa, mode_pembelajaran, tipe_kelas, kapasitas, jumlah_sesi")
+    .select(`nama, jumlah_sesi, ${KELAS_KETERSEDIAAN_SELECT}`)
     .eq("id", kelasId)
     .maybeSingle();
   if (kelasError) {
@@ -134,20 +153,40 @@ export async function getPendaftarKelas(kelasId: string): Promise<PendaftarKelas
 
   const subtesPool = await getKelasSubtesOptions(kelasId);
 
+  const jadwalPilihanAktif = isJadwalPilihanAktif({
+    jadwalPilihSiswa: kelas.jadwal_pilih_siswa === true,
+    modePembelajaran: kelas.mode_pembelajaran as string,
+    jadwal: kelas.jadwal,
+  });
+  const slots = parseJadwalSlots(kelas.jadwal);
+  // Galat baca ketersediaan (null) -> semua slot ditampilkan terbuka; server tetap penjaga & memberi peringatan.
+  const ketersediaan = (await hitungKetersediaanKelas([normalisasiKelas(kelas as unknown as Record<string, unknown>)]))?.get(kelasId);
+  const lunas = pendaftar.filter((p) => p.statusPembayaran === "lunas").length;
+  const slotUnik = Array.from(new Map(slots.map((slot) => [slotKey(slot), slot])).values());
+  const opsiJadwal =
+    jadwalPilihanAktif && slotUnik.length > 0
+      ? opsiJadwalCheckout(slotUnik, ketersediaan?.memakaiSlot ? ketersediaan.slot : null)
+      : [];
+
   return {
     kelas: {
       id: kelas.id as string,
       nama: kelas.nama as string,
-      jadwalPilihanAktif: isJadwalPilihanAktif({
-        jadwalPilihSiswa: kelas.jadwal_pilih_siswa === true,
-        modePembelajaran: kelas.mode_pembelajaran as string,
-        jadwal: kelas.jadwal,
-      }),
-      slots: parseJadwalSlots(kelas.jadwal),
+      jadwalPilihanAktif,
+      slots,
+      opsiJadwal,
       modePembelajaran: kelas.mode_pembelajaran === "offline" ? "offline" : "online",
       tipeKelas: (kelas.tipe_kelas as string | null) ?? null,
       kapasitas: typeof kelas.kapasitas === "number" ? kelas.kapasitas : null,
-      terisi: pendaftar.filter((p) => p.statusPembayaran === "lunas").length,
+      terisi: lunas,
+      kapasitasEfektif:
+        ketersediaan?.kapasitas ??
+        hitungKapasitasKelas({
+          kapasitasManual: typeof kelas.kapasitas === "number" ? kelas.kapasitas : null,
+          lunas,
+          otomatis: null,
+        }),
+      slotTerisi: ketersediaan?.memakaiSlot ? ringkasSlotTerisi(ketersediaan.slot) : null,
       jumlahSesi: kelas.jumlah_sesi as number,
       subtesPool,
     },

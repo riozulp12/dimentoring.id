@@ -49,8 +49,11 @@ export default async function PendaftarKelasPage({ params }: { params: Promise<{
           subtesPool={data.kelas.subtesPool}
           kapasitas={data.kelas.kapasitas}
           terisi={data.kelas.terisi}
+          kapasitasEfektif={data.kelas.kapasitasEfektif}
+          slotTerisi={data.kelas.slotTerisi}
           jadwalPilihanAktif={data.kelas.jadwalPilihanAktif}
           slots={data.kelas.slots}
+          opsiJadwal={data.kelas.opsiJadwal}
           initialPendaftar={data.pendaftar}
         />
       </div>

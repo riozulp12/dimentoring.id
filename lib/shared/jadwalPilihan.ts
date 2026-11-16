@@ -111,6 +111,30 @@ export function validateJadwalPilihan(
   return { ok: true, value };
 }
 
+export type ValidateJadwalDitetapkanResult =
+  | { ok: true; slot: JadwalSlot }
+  | { ok: false; status: 400 | 409; error: string };
+
+/**
+ * Validasi penetapan jadwal AKHIR oleh Admin — SATU aturan untuk route "Tetapkan jadwal"
+ * (app/api/kelola-kelas/[kelasId]/pendaftar/[enrollmentId]/jadwal) dan pendaftaran manual
+ * (app/api/admin/enrollment-manual). Syarat: kelas memakai pilihan jadwal (saklar menyala + bukan
+ * offline) dan slot ada di kelas.jadwal SAAT INI. Kapasitas/slot penuh SENGAJA tidak diperiksa di
+ * sini — Admin boleh menimpa, penuh/tidaknya hanya peringatan. `slot` yang dikembalikan adalah
+ * salinan dari kelas.jadwal, bukan objek mentah dari client.
+ */
+export function validateJadwalDitetapkan(
+  requested: JadwalSlot,
+  kelas: KelasJadwalPilihanInfo,
+): ValidateJadwalDitetapkanResult {
+  if (!isJadwalPilihanAktif(kelas)) {
+    return { ok: false, status: 409, error: "Kelas ini tidak memakai pilihan jadwal oleh siswa." };
+  }
+  const slot = parseJadwalSlots(kelas.jadwal).find((s) => slotKey(s) === slotKey(requested));
+  if (!slot) return { ok: false, status: 400, error: "Jadwal yang dipilih tidak ada di kelas ini." };
+  return { ok: true, slot: { hari: slot.hari, jam_mulai: slot.jam_mulai } };
+}
+
 /**
  * Teks jadwal untuk siswa yang SUDAH terdaftar (Kelas Saya, detail kelas).
  * null = fitur tidak aktif untuk kelas ini -> caller pakai formatJadwal() biasa.

@@ -2,6 +2,9 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
 import { normalizeDiskonPersen } from "@/lib/shared/kelasDiskon";
+import { hitungKapasitasKelas, type KapasitasKelas } from "@/lib/shared/kapasitasKelas";
+import { hitungKetersediaanKelas, normalisasiKelas } from "@/lib/jadwal/slotTerisi";
+import { ringkasSlotTerisi, type SlotTerisiRingkas } from "@/lib/shared/ringkasanKapasitasAdmin";
 
 /**
  * Data layer "Kelola Kelas" (Admin) — PRD Bagian 7.5, 7.5.3 (tipe_kelas &
@@ -45,6 +48,14 @@ export interface KelasListItem {
   /** null = kosong (otomatis/tanpa batas) — lihat lib/shared/kapasitasKelas.ts. */
   kapasitas: number | null;
   jumlahSiswa: number;
+  /**
+   * Kapasitas EFEKTIF (hitungKapasitasKelas — sama dengan badge kartu katalog): untuk kelas
+   * private-online-slot = min(slot × mentor aktif, kapasitas manual). Tampilan Admin memakai ini, BUKAN
+   * `kapasitas` mentah di atas (yang tetap ada untuk prefill form edit).
+   */
+  kapasitasEfektif: KapasitasKelas;
+  /** "Slot terisi A dari B" — hanya kelas yang memakai aturan slot; selain itu null. */
+  slotTerisi: SlotTerisiRingkas | null;
   harga: number;
   /** `kelas.diskon_persen` (0-100) — 0 berarti kelas ini tidak sedang diskon.
    * Lihat db/add_kelas_diskon.sql. */
@@ -163,7 +174,13 @@ export async function getKelasList(): Promise<KelasListItem[]> {
     return [];
   }
 
-  return ((data ?? []) as unknown as KelasRow[]).map((row) => {
+  const kelasRows = (data ?? []) as unknown as KelasRow[];
+  // Satu pembacaan untuk semua kelas (jumlah query tetap). Galat baca (null) -> jatuh ke kapasitas manual saja.
+  const ketersediaan = await hitungKetersediaanKelas(
+    kelasRows.map((row) => normalisasiKelas(row as unknown as Record<string, unknown>)),
+  );
+
+  return kelasRows.map((row) => {
     const legacySubtes = firstOrNull(row.subtes);
     const mentors = (row.kelas_mentor ?? []).map((rel) => ({
       id: rel.mentor_id,
@@ -180,6 +197,9 @@ export async function getKelasList(): Promise<KelasListItem[]> {
       mentorNama: firstOrNull(rel.users)?.nama ?? "-",
     }));
     const jumlahSiswa = (row.enrollments ?? []).filter((e) => e.status_pembayaran === "lunas").length;
+    const tersedia = ketersediaan?.get(row.id);
+    const kapasitasEfektif =
+      tersedia?.kapasitas ?? hitungKapasitasKelas({ kapasitasManual: row.kapasitas, lunas: jumlahSiswa, otomatis: null });
 
     // subtesNama tampilan: utamakan kelas_subtes (bisa lebih dari satu), fallback
     // ke kelas.subtes_id lama kalau kelas ini belum pernah disentuh form baru.
@@ -205,6 +225,8 @@ export async function getKelasList(): Promise<KelasListItem[]> {
       subtesMentorPairs,
       kapasitas: row.kapasitas,
       jumlahSiswa,
+      kapasitasEfektif,
+      slotTerisi: tersedia?.memakaiSlot ? ringkasSlotTerisi(tersedia.slot) : null,
       harga: Number(row.harga),
       diskonPersen: normalizeDiskonPersen(row.diskon_persen),
       jadwalEntries: extractJadwalEntries(row.jadwal),
