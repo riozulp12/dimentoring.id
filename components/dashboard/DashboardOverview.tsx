@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Inter } from "next/font/google";
+import {
+  HREF_KELAS_SISWA,
+  HREF_REFERRAL_SISWA,
+  hrefEvent,
+  hrefKelasSiswa,
+} from "@/lib/shared/dashboardLinks";
+import BarisKlik from "@/components/dashboard/BarisKlik";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"] });
 
@@ -19,16 +26,21 @@ const CTA_LINK_CLASS =
  */
 
 export interface ProgressBelajarItem {
+  /** id kelas — dasar link ke halaman kelas (tanpa id = baris tidak diklik). */
+  kelasId?: string | null;
   subtes: string;
   persen: number;
 }
 
 export interface KelasTerdaftarItem {
+  kelasId?: string | null;
   nama: string;
   jadwal: string;
 }
 
 export interface InfoBeasiswaItem {
+  /** konten_info.id — dasar link ke halaman detail (tanpa id = baris tidak diklik). */
+  kontenId?: string | null;
   nama: string;
   tanggal: string;
 }
@@ -82,15 +94,21 @@ function StatCard({
   unit,
   status,
   statusColor = "text-[#0CBA00]",
+  href,
 }: {
   label: string;
   value: string;
   unit?: string;
   status?: string | null;
   statusColor?: string;
+  href?: string;
 }) {
-  return (
-    <Card className="items-center justify-center gap-3 text-center sm:gap-4">
+  const content = (
+    <Card
+      className={`h-full items-center justify-center gap-3 text-center transition-colors sm:gap-4 ${
+        href ? "cursor-pointer hover:border-[#081EEA]" : ""
+      }`}
+    >
       <p className="whitespace-nowrap text-base text-[#7E7C7C]">{label}</p>
       <p className="flex items-end gap-2 text-xl font-semibold tracking-[-0.02em] text-black">
         {value}
@@ -99,6 +117,15 @@ function StatCard({
       {status ? <p className={`text-base ${statusColor}`}>{status}</p> : null}
     </Card>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="block rounded-[20px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#081EEA]">
+        {content}
+      </Link>
+    );
+  }
+  return content;
 }
 
 function ProgressBar({ persen }: { persen: number }) {
@@ -128,7 +155,7 @@ export function ListCard({
   headerAction,
 }: {
   title: string;
-  rows: Array<{ left: string; right: string; rightColor?: string }>;
+  rows: Array<{ left: string; right: string; rightColor?: string; href?: string | null }>;
   emptyText: string;
   headerAction?: { href: string; label: string };
 }) {
@@ -152,12 +179,15 @@ export function ListCard({
           {rows.map((row, index) => (
             <div key={`${row.left}-${index}`}>
               {index > 0 ? <div className="h-px w-full bg-[#E3E3E3]" /> : null}
-              <div className="flex items-center justify-between gap-3 py-2.5 sm:py-3">
+              <BarisKlik
+                href={row.href}
+                className="-mx-2 flex items-center justify-between gap-3 px-2 py-2.5 sm:py-3"
+              >
                 <p className="min-w-0 truncate text-base text-black">{row.left}</p>
                 <p className={`shrink-0 text-base ${row.rightColor ?? "text-[#7E7C7C]"}`}>
                   {row.right}
                 </p>
-              </div>
+              </BarisKlik>
             </div>
           ))}
         </div>
@@ -226,14 +256,14 @@ export default function DashboardOverview({
           )}
         </Card>
 
-        <StatCard label="Kelasmu" value={String(jumlahKelas)} unit="Kelas" status={badgeKelas} />
+        <StatCard label="Kelasmu" value={String(jumlahKelas)} unit="Kelas" status={badgeKelas} href={HREF_KELAS_SISWA} />
         <StatCard
           label="Tryout Terbaikmu"
           value={nilaiTryoutTertinggi === null ? "-" : String(nilaiTryoutTertinggi)}
           unit={nilaiTryoutTertinggi === null ? undefined : (tryoutSubtes ?? undefined)}
           status={nilaiTryoutTertinggi === null ? "Belum ada Try Out" : badgeTryout}
         />
-        <StatCard label="Poin Referralmu" value={String(totalPoin)} unit="Poin" status={level} />
+        <StatCard label="Poin Referralmu" value={String(totalPoin)} unit="Poin" status={level} href={HREF_REFERRAL_SISWA} />
       </div>
 
       <Card className="gap-5 sm:gap-6">
@@ -252,13 +282,17 @@ export default function DashboardOverview({
         ) : (
           <div className="flex flex-col gap-4 sm:gap-5">
             {progressBelajar.map((item, index) => (
-              <div key={`${item.subtes}-${index}`} className="flex flex-col gap-2">
+              <BarisKlik
+                key={`${item.subtes}-${index}`}
+                href={hrefKelasSiswa(item.kelasId)}
+                className="-mx-2 flex flex-col gap-2 px-2 py-1"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-base text-black">{item.subtes}</p>
                   <p className="text-base text-[#7E7C7C]">{item.persen}%</p>
                 </div>
                 <ProgressBar persen={item.persen} />
-              </div>
+              </BarisKlik>
             ))}
           </div>
         )}
@@ -267,12 +301,12 @@ export default function DashboardOverview({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-10">
         <ListCard
           title="Kelas Terdaftar"
-          rows={kelasTerdaftar.map((k) => ({ left: k.nama, right: k.jadwal }))}
+          rows={kelasTerdaftar.map((k) => ({ left: k.nama, right: k.jadwal, href: hrefKelasSiswa(k.kelasId) }))}
           emptyText="Belum ada kelas terdaftar."
         />
         <ListCard
           title="Info Beasiswa & Event"
-          rows={infoBeasiswa.map((b) => ({ left: b.nama, right: b.tanggal, rightColor: "text-[#E70A0A]" }))}
+          rows={infoBeasiswa.map((b) => ({ left: b.nama, right: b.tanggal, rightColor: "text-[#E70A0A]", href: hrefEvent(b.kontenId) }))}
           emptyText="Belum ada info beasiswa atau event aktif saat ini."
         />
       </div>

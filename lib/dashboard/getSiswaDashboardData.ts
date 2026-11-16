@@ -166,7 +166,7 @@ async function getEnrollmentsWithKelas(userId: string): Promise<{
 }> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, status_pembayaran, kelas:kelas_id(nama, jadwal, jumlah_sesi)")
+    .select("id, kelas_id, status_pembayaran, kelas:kelas_id(nama, jadwal, jumlah_sesi)")
     .eq("user_id", userId);
 
   if (error) {
@@ -176,6 +176,7 @@ async function getEnrollmentsWithKelas(userId: string): Promise<{
 
   const rows = (data ?? []) as unknown as {
     id: string;
+    kelas_id: string;
     status_pembayaran: string;
     kelas: { nama: string; jadwal: unknown; jumlah_sesi: number | null } | null;
   }[];
@@ -189,13 +190,14 @@ async function getEnrollmentsWithKelas(userId: string): Promise<{
     kelasLunas.map((r) => ({ id: r.id, jumlahSesi: r.kelas!.jumlah_sesi })),
   );
   const progressBelajar: ProgressBelajarItem[] = kelasLunas.map((r) => ({
+    kelasId: r.kelas_id,
     subtes: r.kelas!.nama,
     persen: progresByEnrollment.get(r.id)?.persen ?? 0,
   }));
 
   const kelasTerdaftar: KelasTerdaftarItem[] = rows
     .filter((r) => r.kelas)
-    .map((r) => ({ nama: r.kelas!.nama, jadwal: formatJadwal(r.kelas!.jadwal) }));
+    .map((r) => ({ kelasId: r.kelas_id, nama: r.kelas!.nama, jadwal: formatJadwal(r.kelas!.jadwal) }));
 
   return { progressBelajar, kelasTerdaftar };
 }
@@ -203,7 +205,7 @@ async function getEnrollmentsWithKelas(userId: string): Promise<{
 /** 7. Info Beasiswa & Event — reuse query shared dengan Dashboard Mentor. */
 async function getInfoBeasiswa(): Promise<InfoBeasiswaItem[]> {
   const items = await getInfoBeasiswaEvent();
-  return items.map((item) => ({ nama: item.judul, tanggal: formatDeadline(item.deadline) }));
+  return items.map((item) => ({ kontenId: item.id, nama: item.judul, tanggal: formatDeadline(item.deadline) }));
 }
 
 export async function getSiswaDashboardData(userId: string): Promise<SiswaDashboardData> {
