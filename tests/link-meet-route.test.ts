@@ -242,7 +242,8 @@ describe("PUT /api/mentor/enrollment/[id]/link-meet — hanya mentor PENERIMA un
   it("mentor BUKAN penerima (sudah diterima mentor lain) ditolak 403 dan link tidak berubah", async () => {
     const res = await mentorPut({ userId: B, enrollmentId: "e-baru" });
     assert.equal(res.status, 403);
-    assert.match(String(res.json.error), /belum kamu terima/);
+    // Diubah dengan sengaja (fix/guard-presensi-pemilik): pesan penolakan kepemilikan seragam.
+    assert.match(String(res.json.error), /bukan bagian dari kelas yang kamu ampu/);
     assert.equal(enr("e-baru").link_meet, null);
   });
 
@@ -257,7 +258,8 @@ describe("PUT /api/mentor/enrollment/[id]/link-meet — hanya mentor PENERIMA un
   it("mentor tingkat kelas yang BUKAN penerima/pemegang subtes ditolak 403 (link yang ia isi tidak akan pernah berlaku)", async () => {
     const res = await mentorPut({ userId: KELAS_SAJA, enrollmentId: "e-baru" });
     assert.equal(res.status, 403);
-    assert.match(String(res.json.error), /Cuma mentor yang menerima siswa ini/);
+    // Diubah dengan sengaja: ditolak lebih awal oleh penjaga kepemilikan (bukan pemilik) dengan pesan seragam.
+    assert.match(String(res.json.error), /bukan bagian dari kelas yang kamu ampu/);
     assert.equal(enr("e-baru").link_meet, null);
   });
 

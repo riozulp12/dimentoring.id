@@ -348,7 +348,8 @@ describe("POST /api/mentor/sesi — penjaga penerimaan", () => {
   it("mentor NON-penerima tidak bisa menandai sesi siswa multi-mentor: 403, sesi tidak berubah", async () => {
     const res = await tandai(A, "e-baru");
     assert.equal(res.status, 403);
-    assert.match(String(res.json.error), /belum kamu terima/);
+    // Diubah dengan sengaja (fix/guard-presensi-pemilik): semua penolakan kepemilikan memakai SATU pesan umum.
+    assert.match(String(res.json.error), /bukan bagian dari kelas yang kamu ampu/);
     assert.equal(ditandai("e-baru").length, 0);
   });
 
@@ -360,11 +361,12 @@ describe("POST /api/mentor/sesi — penjaga penerimaan", () => {
     assert.equal(ditandai("e-baru")[0].mentor_id, A);
   });
 
-  it("mentor lain diblokir 403 walau siswa sudah diterima mentor lain; pesan membedakan", async () => {
+  it("mentor lain diblokir 403 walau siswa sudah diterima mentor lain; pesan seragam (tidak membocorkan pemilik)", async () => {
     penerima("es-baru-mtk", A);
     const res = await tandai(B, "e-baru");
     assert.equal(res.status, 403);
-    assert.match(String(res.json.error), /sudah diterima mentor lain/);
+    // Diubah dengan sengaja: dulu "sudah diterima mentor lain"; kini pesan umum yang sama dengan "tidak ada".
+    assert.match(String(res.json.error), /bukan bagian dari kelas yang kamu ampu/);
     assert.equal(ditandai("e-baru").length, 0);
   });
 
