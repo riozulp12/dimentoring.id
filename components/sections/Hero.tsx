@@ -21,6 +21,21 @@ const AVATARS = [
   "/images/hero-avatar-5.png",
 ];
 
+/**
+ * Ilustrasi hero (maskot menaiki tangga Kelas 10 → Mahasiswa) — dua WebP yang sudah dioptimasi (transparan,
+ * 854px untuk 1x dan 1708px untuk 2x). Sumber PNG 3413x3936 (6 MB) TIDAK ikut ter-deploy (lihat design/hero/).
+ * `loader` kustom membuat next/image menyajikan langsung berkas-berkas ini (bukan /_next/image), jadi ukuran
+ * yang dimuat deterministik: <= 854px lebar tampil memakai berkas 1x, selebihnya berkas 2x.
+ */
+export const HERO_IMAGE_1X = "/images/hero-854.webp";
+export const HERO_IMAGE_2X = "/images/hero-1708.webp";
+export const HERO_IMAGE_LEBAR_1X = 854;
+export const HERO_IMAGE_TINGGI_1X = 985;
+
+function heroLoader({ width }: { src: string; width: number; quality?: number }): string {
+  return width <= HERO_IMAGE_LEBAR_1X ? HERO_IMAGE_1X : HERO_IMAGE_2X;
+}
+
 export default function Hero() {
   const router = useRouter();
 
@@ -95,12 +110,18 @@ export default function Hero() {
         </div>
 
         <Image
-          src="/images/hero-illustration.png"
-          width={716}
-          height={790}
-          alt="Ilustrasi siswa belajar dan dibimbing mentor Dimentoring menuju PTN impian"
+          loader={heroLoader}
+          // src = berkas 2x (bukan 1x): loader harus mengembalikan URL berbeda dari src untuk lebar width, bila tidak
+          // next/image di dev mengira loader mengabaikan width. Yang dimuat browser tetap dipilih dari srcset.
+          src={HERO_IMAGE_2X}
+          width={HERO_IMAGE_LEBAR_1X}
+          height={HERO_IMAGE_TINGGI_1X}
+          // Desktop: dua kolom sama lebar di dalam padding section (px-20 = 80px x2) dan gap-16 (64px).
+          sizes="(min-width: 1024px) calc((100vw - 224px) / 2), (min-width: 768px) 620px, (min-width: 640px) 480px, 230px"
+          alt="Maskot Dimentoring menaiki tangga dari Kelas 10, Kelas 11, Kelas 12, hingga Mahasiswa"
           className="h-auto w-full min-w-0 max-w-[230px] sm:max-w-[480px] md:max-w-[620px] lg:max-w-none lg:flex-1"
           priority
+          fetchPriority="high"
         />
       </div>
     </section>

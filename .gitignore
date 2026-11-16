@@ -70,3 +70,6 @@ db/cleanup_enrollment_uji_*.sql
 
 # pratinjau/scratch lokal (mis. hasil scripts/render-email-contoh.ts)
 /.tmp/
+
+# sumber gambar mentah (berat) — hanya di disk lokal, tidak ikut repo/deploy
+/design/hero/
