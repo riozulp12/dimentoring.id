@@ -33,7 +33,8 @@ function formatTanggal(tanggal: string | null): string | null {
 /** Penjaga penerimaan siswa: tombol tandai diganti keterangan (server tetap menolak walau tombol dipaksa). */
 const PESAN_DIBLOKIR: Record<NonNullable<SesiSiswaItem["diblokirPenerimaan"]>, string> = {
   menunggu_penerimaan: "Terima siswa dulu untuk menandai sesi",
-  diterima_mentor_lain: "Siswa diterima mentor lain",
+  // Siswa mentor lain tidak pernah sampai ke sini (disaring di server); teks netral, tanpa menyebut mentor lain.
+  diterima_mentor_lain: "Sesi siswa ini tidak bisa kamu tandai",
   data_gagal: "Gagal memuat status penerimaan, muat ulang halaman",
 };
 

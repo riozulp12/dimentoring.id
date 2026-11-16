@@ -5,12 +5,7 @@ import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/
 import { getMentorRoleStatus } from "@/lib/mentor/getMentorRoleStatus";
 import { bolehKelolaLinkMeetKelas, getAksesMentorKelas } from "@/lib/mentor/aksesMentor";
 import { isKelasPrivate } from "@/lib/shared/linkMeet";
-import {
-  daftarMenungguDiterima,
-  getMentorKelasDetail,
-  getMentorMateriList,
-  getSesiSiswaByKelasId,
-} from "@/lib/mentor/getKelasSayaData";
+import { getMentorKelasDetail, getMentorMateriList, getSesiKelasMentor } from "@/lib/mentor/getKelasSayaData";
 import PageTitle from "@/components/dashboard/PageTitle";
 import LinkMeetForm from "@/components/mentor/LinkMeetForm";
 import SesiSiswaList from "@/components/mentor/SesiSiswaList";
@@ -64,7 +59,7 @@ export default async function KelasSayaDetailMentorPage({
     redirect("/dashboard/mentor");
   }
 
-  const [kelas, akses] = await Promise.all([getMentorKelasDetail(kelasId), getAksesMentorKelas(session.userId, kelasId)]);
+  const [kelas, akses] = await Promise.all([getMentorKelasDetail(kelasId, session.userId), getAksesMentorKelas(session.userId, kelasId)]);
 
   // BR-7: kelas tidak ada, ATAU ada tapi mentor ini tidak terkait — dua-duanya
   // ditolak dengan pesan yang sama supaya tidak bocorkan informasi kelas
@@ -79,12 +74,13 @@ export default async function KelasSayaDetailMentorPage({
   const kelasPrivate = isKelasPrivate(kelas.tipeKelas);
   const bisaEditLinkMeetKelas = !kelasPrivate && (await bolehKelolaLinkMeetKelas(session.userId, kelasId)) === true;
 
-  const [materiList, sesiSiswa] = await Promise.all([
+  // Privasi antar mentor: Absensi Sesi = HANYA siswa milik mentor ini; "Menunggu diterima" = siswa-subtes
+  // yang dipegang mentor ini dan belum diterima siapa pun (disaring di server, lihat getSesiKelasMentor).
+  const [materiList, { siswa: sesiSiswa, menunggu: menungguDiterima }] = await Promise.all([
     getMentorMateriList(kelasId),
-    getSesiSiswaByKelasId(kelasId, session.userId, akses, { tipeKelas: kelas.tipeKelas }),
+    getSesiKelasMentor(kelasId, session.userId, akses, { tipeKelas: kelas.tipeKelas }),
   ]);
 
-  const menungguDiterima = daftarMenungguDiterima(sesiSiswa);
   // SesiSiswaList menyimpan state sendiri; key berubah saat status penerimaan berubah
   // (setelah router.refresh()) supaya tombol tandai mengikuti keadaan server.
   const kunciSesiSiswa = sesiSiswa.map((item) => `${item.enrollmentId}:${item.diblokirPenerimaan ?? "ok"}`).join("|");
@@ -108,7 +104,7 @@ export default async function KelasSayaDetailMentorPage({
             </div>
           </div>
           <p className="text-sm text-[#7E7C7C] sm:text-base">
-            {akses === "offline" ? `${sesiSiswa.length} siswa ditugaskan ke kamu` : `${kelas.jumlahSiswa} siswa terdaftar`}
+            {akses === "offline" ? `${sesiSiswa.length} siswa ditugaskan ke kamu` : `${kelas.jumlahSiswa} siswa binaan kamu`}
           </p>
 
           {bisaEditLinkMeetKelas ? <LinkMeetForm kelasId={kelas.id} initialLinkMeet={kelas.linkMeet} /> : null}

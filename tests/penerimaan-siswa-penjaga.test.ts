@@ -457,18 +457,25 @@ describe("label mapel (tentukanNamaMapel) untuk subtes multi-mentor", () => {
   });
 });
 
-describe("getSesiSiswaByKelasId — penanda diblokir & daftar 'Menunggu diterima'", () => {
-  it("A: siswa baru Matematika diblokir menunggu; siswa lama dan Fisika tidak; daftar Menunggu memuat subtes yang bisa diterima", async () => {
-    const items = await kelasSaya.getSesiSiswaByKelasId("K1", A, "kelas");
-    const byId = new Map(items.map((i) => [i.enrollmentId, i]));
-    assert.equal(byId.get("e-baru")!.diblokirPenerimaan, "menunggu_penerimaan");
-    assert.equal(byId.get("e-lama")!.diblokirPenerimaan, null);
-    assert.equal(byId.get("e-fis")!.diblokirPenerimaan, null);
-    // e-campur: Kimia 1 pemegang (boleh), Matematika menunggu
-    assert.equal(byId.get("e-campur")!.diblokirPenerimaan, null);
-    const daftar = kelasSaya.daftarMenungguDiterima(items);
+/**
+ * KEPUTUSAN PRODUK (Rio, privasi antar mentor): di kelas multi-mentor, siswa yang sudah diterima mentor A
+ * TIDAK terlihat oleh mentor lain. Absensi Sesi hanya berisi siswa MILIK mentor yang login
+ * (lib/shared/siswaMentor.ts); "Menunggu diterima" tetap untuk semua kandidat sampai ada yang menerima.
+ * Empat tes di bawah dulu mengunci perilaku lama (siswa mentor lain tampil dengan label "Siswa diterima mentor
+ * lain" dan tombol nonaktif; daftar menunggu diturunkan dari item Absensi; data gagal = semua diblokir). Tes
+ * itu DIUBAH dengan sengaja mengikuti keputusan baru — penjaga presensi di server (bolehMenandaiSesi,
+ * POST /api/mentor/sesi) dan jalur klik "Terima siswa" tidak berubah dan tetap diuji di atas.
+ */
+describe("getSesiKelasMentor — Absensi hanya siswa milik mentor; daftar 'Menunggu diterima' untuk kandidat", () => {
+  const ids = (items: { enrollmentId: string }[]) => items.map((i) => i.enrollmentId).sort();
+
+  it("A: Absensi = siswa lama + Kimia (pemilik implisit) saja; siswa baru Matematika (menunggu) TIDAK di Absensi tetapi ada di daftar Menunggu", async () => {
+    const { siswa, menunggu } = await kelasSaya.getSesiKelasMentor("K1", A, "kelas");
+    // e-baru (menunggu), e-fis (milik D) tidak ada di Absensi A. e-lama (legacy) dan e-campur (Kimia: A satu-satunya pemegang) ada.
+    assert.deepEqual(ids(siswa), ["e-campur", "e-lama"]);
+    for (const item of siswa) assert.equal(item.diblokirPenerimaan, null);
     assert.deepEqual(
-      daftar.map((d) => [d.siswaNama, d.subtesNama, d.enrollmentSubtesId]),
+      menunggu.map((d) => [d.siswaNama, d.subtesNama, d.enrollmentSubtesId]),
       [
         ["Siswa Empat", "Matematika TKA", "es-campur-mtk"],
         ["Siswa Satu", "Matematika TKA", "es-baru-mtk"],
@@ -476,39 +483,40 @@ describe("getSesiSiswaByKelasId — penanda diblokir & daftar 'Menunggu diterima
     );
   });
 
-  it("setelah A menerima: A tidak diblokir dan daftar berkurang; B diblokir 'diterima_mentor_lain' tanpa daftar", async () => {
+  it("setelah A menerima: e-baru masuk Absensi A dan keluar dari Menunggu; B TIDAK melihatnya sama sekali (tanpa baris 'diterima mentor lain')", async () => {
     penerima("es-baru-mtk", A);
-    const itemsA = await kelasSaya.getSesiSiswaByKelasId("K1", A, "kelas");
-    assert.equal(itemsA.find((i) => i.enrollmentId === "e-baru")!.diblokirPenerimaan, null);
-    assert.deepEqual(kelasSaya.daftarMenungguDiterima(itemsA).map((d) => d.enrollmentSubtesId), ["es-campur-mtk"]);
+    const a = await kelasSaya.getSesiKelasMentor("K1", A, "kelas");
+    assert.equal(a.siswa.find((i) => i.enrollmentId === "e-baru")!.diblokirPenerimaan, null);
+    assert.deepEqual(a.menunggu.map((d) => d.enrollmentSubtesId), ["es-campur-mtk"]);
 
-    const itemsB = await kelasSaya.getSesiSiswaByKelasId("K1", B, "kelas");
-    assert.equal(itemsB.find((i) => i.enrollmentId === "e-baru")!.diblokirPenerimaan, "diterima_mentor_lain");
-    assert.deepEqual(kelasSaya.daftarMenungguDiterima(itemsB).map((d) => d.enrollmentSubtesId), ["es-campur-mtk"]);
+    const b = await kelasSaya.getSesiKelasMentor("K1", B, "kelas");
+    assert.equal(b.siswa.find((i) => i.enrollmentId === "e-baru"), undefined);
+    assert.equal(b.menunggu.find((d) => d.enrollmentId === "e-baru"), undefined);
+    assert.deepEqual(b.menunggu.map((d) => d.enrollmentSubtesId), ["es-campur-mtk"]);
+    assert.equal(JSON.stringify(b).includes("Siswa Satu"), false);
   });
 
-  it("D (Fisika saja): tidak ada yang diblokir dan daftar kosong", async () => {
-    const items = await kelasSaya.getSesiSiswaByKelasId("K1", D, "kelas");
-    assert.ok(items.every((i) => i.diblokirPenerimaan === null));
-    assert.deepEqual(kelasSaya.daftarMenungguDiterima(items), []);
+  it("D (Fisika saja): Absensi = siswa Fisika (implisit) + siswa lama; tidak ada yang diblokir; daftar Menunggu kosong", async () => {
+    const { siswa, menunggu } = await kelasSaya.getSesiKelasMentor("K1", D, "kelas");
+    assert.deepEqual(ids(siswa), ["e-fis", "e-lama"]);
+    assert.ok(siswa.every((i) => i.diblokirPenerimaan === null));
+    assert.deepEqual(menunggu, []);
   });
 
-  it("data gagal dibaca: SEMUA siswa diblokir (data_gagal) dan daftar kosong (fail-closed)", async () => {
+  it("data gagal dibaca: FAIL-CLOSED — tidak ada siswa sama sekali (kepemilikan tidak bisa dipastikan), bukan 'semua diblokir'", async () => {
     tabelGagal = new Set(["user_roles"]);
     const origError = console.error;
     console.error = () => {};
     try {
-      const items = await kelasSaya.getSesiSiswaByKelasId("K1", A, "kelas");
-      assert.equal(items.length, 4);
-      assert.ok(items.every((i) => i.diblokirPenerimaan === "data_gagal"));
-      assert.deepEqual(kelasSaya.daftarMenungguDiterima(items), []);
+      const hasil = await kelasSaya.getSesiKelasMentor("K1", A, "kelas");
+      assert.deepEqual(hasil, { siswa: [], menunggu: [] });
     } finally {
       console.error = origError;
     }
   });
 
   it("jumlah query penerimaan tetap <= 4 untuk banyak siswa (bukan per siswa)", async () => {
-    await kelasSaya.getSesiSiswaByKelasId("K1", A, "kelas");
+    await kelasSaya.getSesiKelasMentor("K1", A, "kelas");
     const penerimaanQuery = logQuery.filter((t) => t === "enrollment_subtes" || t === "kelas_subtes_mentor" || t === "user_roles");
     assert.equal(penerimaanQuery.length, 3);
   });
