@@ -6,6 +6,7 @@ import type { BeasiswaEventItem } from "@/lib/dashboard/getInfoBeasiswaEvent";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
 import { HREF_KELAS_SAYA_MENTOR, HREF_SISWA_BINAAN, hrefEvent, hrefKelasMentor } from "@/lib/shared/dashboardLinks";
 import BarisKlik from "@/components/dashboard/BarisKlik";
+import IsiBarisDuaKolom from "@/components/dashboard/IsiBarisDuaKolom";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"] });
 
@@ -185,12 +186,8 @@ export default function MentorDashboardOverview({
                   {kelasTerdaftar.map((k, index) => (
                     <div key={k.id}>
                       {index > 0 ? <div className="h-px w-full bg-[#E3E3E3]" /> : null}
-                      <BarisKlik
-                        href={hrefKelasMentor(k.id)}
-                        className="-mx-2 flex items-center justify-between gap-3 px-2 py-2.5 sm:py-3"
-                      >
-                        <p className="min-w-0 truncate text-base text-black">{k.nama}</p>
-                        <p className="shrink-0 text-base text-[#7E7C7C]">{formatJadwal(k.jadwal)}</p>
+                      <BarisKlik href={hrefKelasMentor(k.id)} className="-mx-2 px-2 py-2.5 sm:py-3">
+                        <IsiBarisDuaKolom kiri={k.nama} kanan={formatJadwal(k.jadwal)} />
                       </BarisKlik>
                     </div>
                   ))}

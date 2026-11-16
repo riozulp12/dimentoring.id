@@ -8,6 +8,7 @@ import {
   hrefKelasSiswa,
 } from "@/lib/shared/dashboardLinks";
 import BarisKlik from "@/components/dashboard/BarisKlik";
+import IsiBarisDuaKolom from "@/components/dashboard/IsiBarisDuaKolom";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"] });
 
@@ -153,11 +154,14 @@ export function ListCard({
   rows,
   emptyText,
   headerAction,
+  duaKolom = false,
 }: {
   title: string;
   rows: Array<{ left: string; right: string; rightColor?: string; href?: string | null }>;
   emptyText: string;
   headerAction?: { href: string; label: string };
+  /** Baris dua kolom sama lebar (nama maks. 2 baris + jadwal wrap; ditumpuk di layar sempit) — untuk Kelas Terdaftar. */
+  duaKolom?: boolean;
 }) {
   return (
     <Card className="gap-4 sm:gap-5 lg:w-full">
@@ -179,15 +183,21 @@ export function ListCard({
           {rows.map((row, index) => (
             <div key={`${row.left}-${index}`}>
               {index > 0 ? <div className="h-px w-full bg-[#E3E3E3]" /> : null}
-              <BarisKlik
-                href={row.href}
-                className="-mx-2 flex items-center justify-between gap-3 px-2 py-2.5 sm:py-3"
-              >
-                <p className="min-w-0 truncate text-base text-black">{row.left}</p>
-                <p className={`shrink-0 text-base ${row.rightColor ?? "text-[#7E7C7C]"}`}>
-                  {row.right}
-                </p>
-              </BarisKlik>
+              {duaKolom ? (
+                <BarisKlik href={row.href} className="-mx-2 px-2 py-2.5 sm:py-3">
+                  <IsiBarisDuaKolom kiri={row.left} kanan={row.right} kananClass={row.rightColor} />
+                </BarisKlik>
+              ) : (
+                <BarisKlik
+                  href={row.href}
+                  className="-mx-2 flex items-center justify-between gap-3 px-2 py-2.5 sm:py-3"
+                >
+                  <p className="min-w-0 truncate text-base text-black">{row.left}</p>
+                  <p className={`shrink-0 text-base ${row.rightColor ?? "text-[#7E7C7C]"}`}>
+                    {row.right}
+                  </p>
+                </BarisKlik>
+              )}
             </div>
           ))}
         </div>
@@ -301,6 +311,7 @@ export default function DashboardOverview({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-10">
         <ListCard
           title="Kelas Terdaftar"
+          duaKolom
           rows={kelasTerdaftar.map((k) => ({ left: k.nama, right: k.jadwal, href: hrefKelasSiswa(k.kelasId) }))}
           emptyText="Belum ada kelas terdaftar."
         />
