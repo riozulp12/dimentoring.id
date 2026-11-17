@@ -1,10 +1,10 @@
 /**
- * Test fitur "saran kelas/event + tombol kembali + Beasiswa & Karier di /program" (Supabase TIRUAN di memori):
+ * Test fitur "saran kelas/event + tombol kembali + Beasiswa & Event di /program" (Supabase TIRUAN di memori):
  *   (a) "Kelas lain di program ini": tidak memuat kelas tampil_di_katalog=false (mis. [UJI]), tidak memuat kelas
  *       yang sedang dibuka, hanya program yang sama, maksimal 3, jenjang sama lebih dulu; kosong = tidak dirender.
- *   (b) "Program lainnya": tidak memuat event yang sedang dibuka, tidak memuat yang ditutup / lewat deadline,
- *       hanya jenis (tipe) yang sama, maksimal 3; kosong = tidak dirender.
- *   (c) /program: Beasiswa & Karier Mahasiswa tampil walau belum ada kelas di kategorinya, urutan section tetap,
+ *   (b) "Program lainnya": dari SEMUA jenis, tanpa event yang sedang dibuka, tanpa yang ditutup / lewat deadline,
+ *       maksimal 3, urut deadline terdekat (tanpa deadline terakhir, lalu terbaru dibuat dulu); kosong = tidak dirender.
+ *   (c) /program: Beasiswa & Event (program mahasiswa) tampil walau belum ada kelas di kategorinya, urutan section tetap,
  *       section yang benar-benar kosong tetap disembunyikan.
  *   + struktur halaman: tombol kembali memakai SATU komponen, data saran ikut Promise.all, tombol Daftar Sekarang utuh.
  *
@@ -23,6 +23,7 @@ type Db = Record<string, Row[]>;
 let db: Db;
 
 class FakeQuery implements PromiseLike<{ data: Row[]; error: null; count: number }> {
+  private urutan: Array<{ column: string; dir: 1 | -1 }> = [];
   constructor(private rows: Row[]) {}
   select() {
     return this;
@@ -42,34 +43,47 @@ class FakeQuery implements PromiseLike<{ data: Row[]; error: null; count: number
   or() {
     return this;
   }
+  /** Kunci urut menumpuk (order pertama = utama), seperti PostgREST; null/kosong selalu di akhir. */
   order(column: string, options?: { ascending?: boolean }) {
-    const dir = options?.ascending === false ? -1 : 1;
-    this.rows = [...this.rows].sort((a, b) => {
-      const x = a[column] as string | null;
-      const y = b[column] as string | null;
-      if (x === y) return 0;
-      if (x === null || x === undefined) return 1;
-      if (y === null || y === undefined) return -1;
-      return x < y ? -dir : dir;
-    });
+    this.urutan.push({ column, dir: options?.ascending === false ? -1 : 1 });
     return this;
+  }
+  private terurut(): Row[] {
+    if (this.urutan.length === 0) return this.rows;
+    return [...this.rows].sort((a, b) => {
+      for (const { column, dir } of this.urutan) {
+        const x = a[column] as string | null | undefined;
+        const y = b[column] as string | null | undefined;
+        if (x === y) continue;
+        if (x === null || x === undefined) return 1;
+        if (y === null || y === undefined) return -1;
+        return x < y ? -dir : dir;
+      }
+      return 0;
+    });
   }
   limit(n: number) {
     this.rows = this.rows.slice(0, n);
     return this;
   }
   maybeSingle() {
-    return Promise.resolve({ data: this.rows[0] ?? null, error: null });
+    return Promise.resolve({ data: this.terurut()[0] ?? null, error: null });
   }
   then<A, B>(
     onfulfilled?: ((value: { data: Row[]; error: null; count: number }) => A | PromiseLike<A>) | null,
     onrejected?: ((reason: unknown) => B | PromiseLike<B>) | null,
   ) {
-    return Promise.resolve({ data: this.rows, error: null, count: this.rows.length }).then(onfulfilled, onrejected);
+    const hasil = this.terurut();
+    return Promise.resolve({ data: hasil, error: null, count: hasil.length }).then(onfulfilled, onrejected);
   }
 }
 
-const fakeFrom = (table: string) => new FakeQuery(db[table] ?? []);
+/** Catatan tabel yang dibaca (untuk membuktikan jumlah kueri). */
+const dibacaLog: string[] = [];
+const fakeFrom = (table: string) => {
+  dibacaLog.push(table);
+  return new FakeQuery(db[table] ?? []);
+};
 
 function kelas(id: string, extra: Row = {}): Row {
   return {
@@ -103,7 +117,7 @@ function tanggal(offsetHari: number): string {
 }
 
 function konten(id: string, extra: Row = {}): Row {
-  return { id, tipe: "beasiswa", judul: `Konten ${id}`, deskripsi: null, deadline: tanggal(30), status: "aktif", ...extra };
+  return { id, tipe: "beasiswa", judul: `Konten ${id}`, deskripsi: null, deadline: tanggal(30), status: "aktif", created_at: "2026-01-01", ...extra };
 }
 
 type ProgramModule = typeof import("@/lib/dashboard/getProgramData");
@@ -187,45 +201,74 @@ describe("(b) hanya konten yang MASIH BUKA — kontenMasihBuka", () => {
   });
 });
 
-describe('(b) "Program lainnya" — getKontenInfoLainnya', () => {
+describe('(b) "Program lainnya" — getKontenInfoLainnya (semua jenis)', () => {
   beforeEach(() => {
     db.konten_info = [
-      konten("E-BUKA", { deadline: tanggal(10) }), // event yang sedang dibuka
-      konten("E-1", { deadline: tanggal(5) }),
-      konten("E-2", { deadline: tanggal(20) }),
-      konten("E-TANPA", { deadline: null }),
-      konten("E-TUTUP", { status: "ditutup", deadline: tanggal(3) }),
-      konten("E-LEWAT", { deadline: tanggal(-2) }), // masih 'aktif' tapi deadline lewat
-      konten("E-INTERN", { tipe: "internship", deadline: tanggal(4) }), // jenis lain
-      konten("E-HARI-INI", { deadline: tanggal(0) }),
-      konten("E-3", { deadline: tanggal(40) }),
+      konten("E-BUKA", { tipe: "beasiswa", deadline: tanggal(10) }), // event yang sedang dibuka
+      konten("E-1", { tipe: "beasiswa", deadline: tanggal(5) }),
+      konten("E-2", { tipe: "webinar", deadline: tanggal(20) }),
+      konten("E-TANPA", { tipe: "workshop", deadline: null }),
+      konten("E-TUTUP", { tipe: "event", status: "ditutup", deadline: tanggal(3) }),
+      konten("E-LEWAT", { tipe: "beasiswa", deadline: tanggal(-2) }), // masih 'aktif' tapi deadline lewat
+      konten("E-INTERN", { tipe: "internship", deadline: tanggal(4) }), // jenis lain: SEKARANG ikut
+      konten("E-HARI-INI", { tipe: "event", deadline: tanggal(0) }),
+      konten("E-3", { tipe: "beasiswa", deadline: tanggal(40) }),
     ];
   });
 
-  it("tidak memuat event yang sedang dibuka, yang ditutup, yang lewat deadline, atau jenis lain", async () => {
+  it("memuat event dari jenis lain (beasiswa → internship/webinar/event), tanpa yang sedang dibuka", async () => {
+    const hasil = await infoData.getKontenInfoLainnya("E-BUKA", 99);
+    const ids = hasil.map((k) => k.id);
+    assert.ok(!ids.includes("E-BUKA"), "event yang sedang dibuka ikut tampil");
+    assert.ok(ids.includes("E-INTERN") && ids.includes("E-2"), `jenis lain tidak ikut: ${ids}`);
+    const jenis = new Set(hasil.map((k) => k.tipe));
+    assert.ok(jenis.has("internship") && jenis.has("webinar") && jenis.has("event") && jenis.size >= 4, "jenis: " + [...jenis].join(","));
+  });
+
+  it("tidak memuat yang ditutup atau yang deadline-nya lewat; urut deadline terdekat, tanpa deadline paling akhir", async () => {
     const ids = (await infoData.getKontenInfoLainnya("E-BUKA", 99)).map((k) => k.id);
-    for (const dilarang of ["E-BUKA", "E-TUTUP", "E-LEWAT", "E-INTERN"]) {
+    for (const dilarang of ["E-BUKA", "E-TUTUP", "E-LEWAT"]) {
       assert.ok(!ids.includes(dilarang), `${dilarang} ikut tampil: ${ids}`);
     }
-    assert.deepEqual(ids, ["E-HARI-INI", "E-1", "E-2", "E-3", "E-TANPA"]); // deadline terdekat dulu, tanpa deadline di akhir
+    assert.deepEqual(ids, ["E-HARI-INI", "E-INTERN", "E-1", "E-2", "E-3", "E-TANPA"]);
   });
 
   it("maksimal 3 kartu (bawaan)", async () => {
-    assert.deepEqual((await infoData.getKontenInfoLainnya("E-BUKA")).map((k) => k.id), ["E-HARI-INI", "E-1", "E-2"]);
+    assert.deepEqual((await infoData.getKontenInfoLainnya("E-BUKA")).map((k) => k.id), ["E-HARI-INI", "E-INTERN", "E-1"]);
+  });
+
+  it("deadline sama: yang terakhir dibuat tampil dulu; deadline sama dan dibuat sama: urutan asal tetap (stabil)", async () => {
+    db.konten_info = [
+      konten("X", { deadline: tanggal(7), created_at: "2026-02-01" }),
+      konten("LAMA", { tipe: "webinar", deadline: tanggal(7), created_at: "2026-01-01" }),
+      konten("BARU", { tipe: "internship", deadline: tanggal(7), created_at: "2026-03-01" }),
+      konten("KEMBAR-1", { tipe: "event", deadline: tanggal(9), created_at: "2026-01-05" }),
+      konten("KEMBAR-2", { tipe: "event", deadline: tanggal(9), created_at: "2026-01-05" }),
+      konten("TANPA-LAMA", { deadline: null, created_at: "2026-01-01" }),
+      konten("TANPA-BARU", { deadline: null, created_at: "2026-04-01" }),
+    ];
+    const ids = (await infoData.getKontenInfoLainnya("X", 99)).map((k) => k.id);
+    assert.deepEqual(ids, ["BARU", "LAMA", "KEMBAR-1", "KEMBAR-2", "TANPA-BARU", "TANPA-LAMA"]);
   });
 
   it("event yang sedang dibuka sudah ditutup pun tetap hanya menyarankan yang masih buka", async () => {
-    const ids = (await infoData.getKontenInfoLainnya("E-TUTUP")).map((k) => k.status);
-    assert.ok(ids.length > 0 && ids.every((s) => s === "aktif"));
+    const hasil = await infoData.getKontenInfoLainnya("E-TUTUP");
+    assert.ok(hasil.length > 0 && hasil.every((k) => k.status === "aktif"));
   });
 
-  it("tidak ada yang lain / id tidak dikenal → kosong", async () => {
-    assert.deepEqual(await infoData.getKontenInfoLainnya("E-INTERN"), []); // satu-satunya internship
-    assert.deepEqual(await infoData.getKontenInfoLainnya("tidak-ada"), []);
+  it("tidak ada event lain yang masih buka → kosong (bagian tidak dirender)", async () => {
+    db.konten_info = [konten("SENDIRI"), konten("T", { status: "ditutup" }), konten("L", { deadline: tanggal(-1) })];
+    assert.deepEqual(await infoData.getKontenInfoLainnya("SENDIRI"), []);
+  });
+
+  it("satu kueri saja (tanpa langkah acuan berantai)", async () => {
+    dibacaLog.length = 0;
+    await infoData.getKontenInfoLainnya("E-BUKA");
+    assert.deepEqual(dibacaLog, ["konten_info"]);
   });
 });
 
-describe("(c) /program: Beasiswa & Karier Mahasiswa ikut tampil", () => {
+describe("(c) /program: Beasiswa & Event (program mahasiswa) ikut tampil", () => {
   const susun = async () =>
     susunSectionProgram(await programData.getProgramPreviewSections(), await infoData.getKontenInfoTerbuka({ limit: 3 }));
 
@@ -238,8 +281,8 @@ describe("(c) /program: Beasiswa & Karier Mahasiswa ikut tampil", () => {
     ];
     const sections = await susun();
     const mahasiswa = sections.find((s) => s.kategori === "pendampingan_mahasiswa");
-    assert.ok(mahasiswa, "section Beasiswa & Karier Mahasiswa tidak muncul");
-    assert.equal(mahasiswa.kategoriLabel, "Beasiswa & Karier Mahasiswa");
+    assert.ok(mahasiswa, "section Beasiswa & Event tidak muncul");
+    assert.equal(mahasiswa.kategoriLabel, "Beasiswa & Event");
     assert.equal(mahasiswa.slug, "pendampingan-mahasiswa");
     assert.deepEqual(mahasiswa.kontenInfo.map((k) => k.id), ["B1", "K1"]);
     assert.deepEqual(mahasiswa.items, []);
@@ -285,7 +328,7 @@ describe("struktur halaman", () => {
       assert.ok(sumber.includes("<BackLink href="));
     }
     assert.match(kelasPage, /<BackLink href=\{`\/program\/\$\{PROGRAM_KATEGORI_SLUG\[kelas\.programKategori\]\}`\}>\{kelas\.programKategoriLabel\}<\/BackLink>/);
-    assert.match(eventPage, /<BackLink href="\/beasiswa-event">\{KONTEN_INFO_TIPE_LABEL\[konten\.tipe as string\] \?\? "Beasiswa & Event"\}<\/BackLink>/);
+    assert.ok(eventPage.includes('<BackLink href="/beasiswa-event">{NAMA_BEASISWA_EVENT}</BackLink>'), "label kembali bukan per jenis");
     const komponen = baca("components/ui/BackLink.tsx");
     assert.ok(komponen.includes("&larr; {children}"));
     assert.ok(komponen.includes("text-sm font-medium text-[#081EEA] hover:underline"));

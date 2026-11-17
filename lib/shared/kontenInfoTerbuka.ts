@@ -1,6 +1,6 @@
 /**
  * Aturan "konten info masih buka" (konten_info: beasiswa/internship/event/webinar/workshop) — SATU sumber untuk
- * bagian "Program lainnya" di detail event dan preview Beasiswa & Karier Mahasiswa di /program. Tanpa "server-only"
+ * bagian "Program lainnya" di detail event dan preview Beasiswa & Event di /program. Tanpa "server-only"
  * supaya mudah diuji. Status enum hanya 'aktif' | 'ditutup' (tidak ada draft); yang tampil: status 'aktif' DAN
  * deadline belum lewat (deadline kosong = tanpa batas = tetap buka). Hari ini dihitung di zona WIB.
  */

@@ -12,7 +12,7 @@ import KelasCardFrame from "@/components/program/KelasCardFrame";
 import KelasCardMeta from "@/components/program/KelasCardMeta";
 import KontenInfoCard from "@/components/beasiswa-event/KontenInfoCard";
 
-/** Jumlah kartu info beasiswa/internship/event di preview "Beasiswa & Karier Mahasiswa" (satu baris di desktop). */
+/** Jumlah kartu info beasiswa/internship/event di preview "Beasiswa & Event" (satu baris di desktop). */
 const PREVIEW_KONTEN_MAHASISWA = 3;
 
 /**
@@ -63,7 +63,7 @@ export default async function ProgramPage() {
     getProgramPreviewSections(),
     getKontenInfoTerbuka({ limit: PREVIEW_KONTEN_MAHASISWA }),
   ]);
-  // "Beasiswa & Karier Mahasiswa" isinya info beasiswa/event (konten_info), bukan hanya kelas: section ikut tampil
+  // "Beasiswa & Event" (program mahasiswa) isinya info beasiswa/event (konten_info), bukan hanya kelas: section ikut tampil
   // walau belum ada kelas di kategorinya. Section yang benar-benar kosong tetap disembunyikan.
   const sections = susunSectionProgram(sectionKelas, kontenMahasiswa);
 

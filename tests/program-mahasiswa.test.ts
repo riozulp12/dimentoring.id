@@ -30,7 +30,7 @@ describe("PROGRAM_KATEGORI_TAMPILAN — jenis tampilan per program", () => {
     const kategori = programKategoriFromSlug("pendampingan-mahasiswa");
     assert.equal(kategori, "pendampingan_mahasiswa");
     assert.equal(PROGRAM_KATEGORI_TAMPILAN[kategori!], "mahasiswa");
-    assert.equal(PROGRAM_KATEGORI_LABEL[kategori!], "Beasiswa & Karier Mahasiswa");
+    assert.equal(PROGRAM_KATEGORI_LABEL[kategori!], "Beasiswa & Event");
   });
 
   it("empat program lain tetap tampilan kelas SMA", () => {

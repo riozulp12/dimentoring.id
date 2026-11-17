@@ -70,20 +70,21 @@ const SEMUA_TIPE_KONTEN = ["beasiswa", "internship", "webinar", "workshop", "eve
 
 /**
  * Konten yang MASIH BUKA (status 'aktif' dan deadline belum lewat, lihat lib/shared/kontenInfoTerbuka.ts) —
- * dipakai preview Beasiswa & Karier Mahasiswa di /program dan "Program lainnya" di detail event. Urutan: deadline
- * terdekat dulu (tanpa deadline di akhir). Hanya kolom publik yang sama dengan daftar /beasiswa-event.
+ * dipakai preview Beasiswa & Event di /program dan "Program lainnya" di detail event. Urutan: deadline terdekat
+ * dulu, tanpa deadline paling akhir, lalu (deadline sama) yang terakhir dibuat dulu; filter di JS menjaga urutan
+ * (stabil). Hanya kolom publik yang sama dengan daftar /beasiswa-event.
  */
 export async function getKontenInfoTerbuka(
-  opsi: { limit?: number; tipe?: string; kecualiId?: string } = {},
+  opsi: { limit?: number; kecualiId?: string } = {},
 ): Promise<KontenInfoListItem[]> {
   let query = supabaseServer
     .from("konten_info")
     .select("id, tipe, judul, deskripsi, deadline, status")
     .in("tipe", SEMUA_TIPE_KONTEN)
     .eq("status", "aktif")
-    .order("deadline", { ascending: true, nullsFirst: false });
+    .order("deadline", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
 
-  if (opsi.tipe) query = query.eq("tipe", opsi.tipe);
   if (opsi.kecualiId) query = query.neq("id", opsi.kecualiId);
 
   const { data, error } = await query;
@@ -101,16 +102,10 @@ export async function getKontenInfoTerbuka(
 }
 
 /**
- * "Program lainnya" di detail event: konten lain dengan jenis (tipe) yang sama, bukan yang sedang dibuka, hanya
- * yang masih buka, maksimal `limit`. Dua langkah (tipe konten acuan, lalu daftar) berjalan di dalam SATU
- * pemanggilan sehingga halaman cukup menaruhnya di Promise.all bersama kueri halaman — tidak menambah kedalaman.
+ * "Program lainnya" di detail event: konten dari SEMUA jenis (beasiswa, internship, event, webinar, workshop) selain
+ * yang sedang dibuka, hanya yang masih buka, maksimal `limit`. Satu kueri (tanpa langkah acuan), jadi halaman cukup
+ * menaruhnya di Promise.all bersama kueri halaman — tidak menambah kedalaman.
  */
 export async function getKontenInfoLainnya(id: string, limit = 3): Promise<KontenInfoListItem[]> {
-  const { data: acuan, error } = await supabaseServer.from("konten_info").select("tipe").eq("id", id).maybeSingle();
-  if (error) {
-    console.error("[getKontenInfoLainnya] query acuan failed:", error);
-    return [];
-  }
-  if (!acuan) return [];
-  return getKontenInfoTerbuka({ tipe: acuan.tipe as string, kecualiId: id, limit });
+  return getKontenInfoTerbuka({ kecualiId: id, limit });
 }

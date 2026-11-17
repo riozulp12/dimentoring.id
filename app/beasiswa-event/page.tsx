@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getNavbarProps } from "@/lib/dashboard/getNavbarProps";
 import { getKontenInfoList } from "@/lib/dashboard/getInfoBeasiswaEvent";
+import { NAMA_BEASISWA_EVENT } from "@/lib/shared/kontenInfoLabels";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import BeasiswaEventListClient from "@/components/beasiswa-event/BeasiswaEventListClient";
@@ -30,7 +31,7 @@ export default async function BeasiswaEventPage() {
       <main className="mx-auto w-full max-w-[1600px] flex-1 px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:px-20 lg:py-16">
         <div className="mb-8 flex flex-col gap-2 sm:mb-10">
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-black sm:text-3xl">
-            Beasiswa &amp; Event
+            {NAMA_BEASISWA_EVENT}
           </h1>
           <p className="text-base text-[#7E7C7C]">
             Info beasiswa, internship, dan event terbaru untuk menemani perjalananmu sampai kuliah
