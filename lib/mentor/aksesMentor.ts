@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { supabaseServer } from "@/lib/supabase/server";
 import { alasanDiblokirPenerimaan, type AlasanBlokirPenerimaan } from "@/lib/shared/penerimaanSiswa";
 import { getPenerimaanSubtesSiswa, type SubtesSiswaDetail } from "@/lib/mentor/statusPenerimaanSiswa";
@@ -144,8 +145,12 @@ export async function getAksesMentorEnrollment(
  * Semua kelas yang boleh dibuka mentor ini di Kelas Saya, dengan akses
  * tertingginya per kelas. Offline cuma dihitung dari enrollment LUNAS (siswa
  * yang benar-benar ditugaskan). Map kosong kalau error (sudah di-log).
+ *
+ * cache() React = memoize PER REQUEST (bukan lintas-request): dashboard/Kelas Saya/Siswa Binaan memanggil
+ * ini lebih dari sekali dalam satu render. Kunci = mentorId (string), jadi mentor berbeda tidak pernah
+ * berbagi hasil. Map hasilnya dipakai bersama — pemanggil HANYA membaca (jangan mutasi).
  */
-export async function getKelasAksesMentor(mentorId: string): Promise<Map<string, AksesMentor>> {
+export const getKelasAksesMentor = cache(async (mentorId: string): Promise<Map<string, AksesMentor>> => {
   const [utamaRes, kmRes, offlineRes] = await Promise.all([
     supabaseServer.from("kelas").select("id").eq("mentor_id", mentorId),
     supabaseServer.from("kelas_mentor").select("kelas_id").eq("mentor_id", mentorId),
@@ -166,7 +171,7 @@ export async function getKelasAksesMentor(mentorId: string): Promise<Map<string,
   for (const row of kmRes.data ?? []) map.set(row.kelas_id as string, "kelas");
   for (const row of utamaRes.data ?? []) map.set(row.id as string, "utama");
   return map;
-}
+});
 
 /** Akses mentor ke SATU kelas (guard halaman detail Kelas Saya). null = tidak terkait. */
 export async function getAksesMentorKelas(mentorId: string, kelasId: string): Promise<AksesMentor | null> {

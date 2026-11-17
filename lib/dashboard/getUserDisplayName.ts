@@ -1,5 +1,5 @@
 import "server-only";
-import { supabaseServer } from "@/lib/supabase/server";
+import { getUserRingkas } from "@/lib/dashboard/getUserRingkas";
 
 /**
  * Nama singkat untuk greeting "Haloo [nama]" — dipakai lintas dashboard
@@ -7,11 +7,8 @@ import { supabaseServer } from "@/lib/supabase/server";
  * kata pertama dari nama lengkap.
  */
 export async function getUserDisplayName(userId: string, fallback: string): Promise<string> {
-  const { data } = await supabaseServer
-    .from("users")
-    .select("nama, nama_panggilan")
-    .eq("id", userId)
-    .maybeSingle();
+  // Baris users dibagi dengan layout (getAccountMenuData) lewat getUserRingkas — satu kueri per request.
+  const data = await getUserRingkas(userId);
 
   return data?.nama_panggilan || data?.nama?.split(" ")[0] || fallback;
 }

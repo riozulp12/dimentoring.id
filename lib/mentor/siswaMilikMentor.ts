@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { supabaseServer } from "@/lib/supabase/server";
 import { siswaMilikMentor, type SubtesKepemilikan } from "@/lib/shared/siswaMentor";
 import { getPenerimaanSubtesSiswa, type SubtesSiswaDetail } from "@/lib/mentor/statusPenerimaanSiswa";
@@ -136,12 +137,20 @@ export async function getKepemilikanSiswa(mentorIds: string[] | null): Promise<K
   return hasil;
 }
 
-/** Enrollment id milik SATU mentor (kosong bila galat — sudah di-log; jangan pernah menampilkan yang bukan miliknya). */
-export async function getEnrollmentMilikMentor(mentorId: string): Promise<Set<string>> {
+/**
+ * Enrollment id milik SATU mentor (kosong bila galat — sudah di-log; jangan pernah menampilkan yang bukan miliknya).
+ *
+ * cache() React = memoize PER REQUEST: rantai getKepemilikanSiswa (~10 kueri, 5 round-trip) cukup jalan sekali per
+ * mentor per render, walau dipanggil dashboard/Kelas Saya/Siswa Binaan/detail berkali-kali. Kunci = mentorId (string),
+ * jadi mentor berbeda tidak berbagi hasil. Galat tetap fail-closed (Set kosong) dan ikut di-memoize dalam request itu.
+ * Set hasilnya dipakai bersama — pemanggil HANYA membaca (.has), jangan mutasi.
+ * (getKepemilikanSiswa sendiri sengaja TIDAK di-cache: argumennya array, referensinya beda tiap panggilan.)
+ */
+export const getEnrollmentMilikMentor = cache(async (mentorId: string): Promise<Set<string>> => {
   const hasil = await getKepemilikanSiswa([mentorId]);
   if (hasil === "gagal") return new Set();
   return new Set(hasil.map((row) => row.enrollmentId));
-}
+});
 
 /**
  * Aturan yang SAMA (siswaMilikMentor) untuk pemanggil yang SUDAH memegang data penerimaan per subtes

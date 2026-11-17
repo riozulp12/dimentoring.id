@@ -59,7 +59,14 @@ export default async function KelasSayaDetailMentorPage({
     redirect("/dashboard/mentor");
   }
 
-  const [kelas, akses] = await Promise.all([getMentorKelasDetail(kelasId, session.userId), getAksesMentorKelas(session.userId, kelasId)]);
+  // bolehKelolaLinkMeetKelas independen dari kelas/akses (hanya butuh mentorId + kelasId) — ikut satu gelombang.
+  // Hasilnya baru DIPAKAI setelah guard di bawah lolos dan kelas bukan private (sama seperti sebelumnya); untuk
+  // kelas yang ditolak/redirect hasilnya dibuang dan tidak ada data yang ditampilkan.
+  const [kelas, akses, bolehLinkMeetKelas] = await Promise.all([
+    getMentorKelasDetail(kelasId, session.userId),
+    getAksesMentorKelas(session.userId, kelasId),
+    bolehKelolaLinkMeetKelas(session.userId, kelasId),
+  ]);
 
   // BR-7: kelas tidak ada, ATAU ada tapi mentor ini tidak terkait — dua-duanya
   // ditolak dengan pesan yang sama supaya tidak bocorkan informasi kelas
@@ -72,7 +79,7 @@ export default async function KelasSayaDetailMentorPage({
   // tetap khusus kelas.mentor_id. Kelas private memakai link per siswa (di daftar siswa di bawah), jadi
   // formulir link kelas disembunyikan. Gagal baca = formulir disembunyikan (route tetap menolak).
   const kelasPrivate = isKelasPrivate(kelas.tipeKelas);
-  const bisaEditLinkMeetKelas = !kelasPrivate && (await bolehKelolaLinkMeetKelas(session.userId, kelasId)) === true;
+  const bisaEditLinkMeetKelas = !kelasPrivate && bolehLinkMeetKelas === true;
 
   // Privasi antar mentor: Absensi Sesi = HANYA siswa milik mentor ini; "Menunggu diterima" = siswa-subtes
   // yang dipegang mentor ini dan belum diterima siapa pun (disaring di server, lihat getSesiKelasMentor).

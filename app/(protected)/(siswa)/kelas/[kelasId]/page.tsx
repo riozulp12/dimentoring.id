@@ -60,12 +60,12 @@ export default async function KelasDetailPage({
     redirect(`/kelas?error=${encodeURIComponent("Kelas tidak ditemukan.")}`);
   }
 
-  const kelas = await getKelasDetail(kelasId);
+  // Baris kelas dan status pendaftaran siswa ini saling independen — satu gelombang. Bila kelas tidak ada,
+  // hasil pendaftaran dibuang (redirect), sama seperti sebelumnya.
+  const [kelas, enrollment] = await Promise.all([getKelasDetail(kelasId), getEnrollmentStatus(session.userId, kelasId)]);
   if (!kelas) {
     redirect(`/kelas?error=${encodeURIComponent("Kelas tidak ditemukan.")}`);
   }
-
-  const enrollment = await getEnrollmentStatus(session.userId, kelasId);
   const isLunas = enrollment.statusPembayaran === "lunas";
   // Kelas tersembunyi dari katalog (kelas.tampil_di_katalog = false): cuma
   // siswa yang SUDAH terdaftar yang boleh membukanya — bagi yang lain kelas
@@ -73,17 +73,21 @@ export default async function KelasDetailPage({
   if (!isLunas && !kelas.tampilDiKatalog) {
     redirect(`/kelas?error=${encodeURIComponent("Kelas tidak ditemukan.")}`);
   }
-  const sesiKehadiran =
-    isLunas && enrollment.enrollmentId ? await getSesiKehadiran(enrollment.enrollmentId) : null;
   // Link Meet: kelas private memakai link PER SISWA (hanya berlaku selama pengisinya masih mentor
   // penerima/pemegang aktif) dan TIDAK PERNAH jatuh ke link kelas; kelas lain memakai link kelas.
   const kelasPrivate = isKelasPrivate(kelas.tipeKelas);
-  let penerimaMentorIds: string[] = [];
-  if (isLunas && kelasPrivate && enrollment.enrollmentId && enrollment.linkMeet) {
-    const berhak = await getMentorBerhakLinkMeet(kelasId, [enrollment.enrollmentId]);
-    // Data gagal dibaca = link tidak ditampilkan (fail-closed).
-    penerimaMentorIds = berhak === "gagal" ? [] : (berhak.get(enrollment.enrollmentId) ?? []);
-  }
+  // Riwayat sesi dan daftar mentor berhak link keduanya cuma butuh enrollmentId — dibaca barengan (kondisinya
+  // sama seperti sebelumnya, masing-masing hanya jalan bila memang diperlukan).
+  const enrollmentId = enrollment.enrollmentId;
+  const [sesiKehadiran, berhak] = await Promise.all([
+    isLunas && enrollmentId ? getSesiKehadiran(enrollmentId) : Promise.resolve(null),
+    isLunas && kelasPrivate && enrollmentId && enrollment.linkMeet
+      ? getMentorBerhakLinkMeet(kelasId, [enrollmentId])
+      : Promise.resolve(null),
+  ]);
+  // Data gagal dibaca = link tidak ditampilkan (fail-closed).
+  const penerimaMentorIds: string[] =
+    berhak && enrollmentId && berhak !== "gagal" ? (berhak.get(enrollmentId) ?? []) : [];
   const linkSesiLive = resolveLinkMeet({
     tipeKelas: kelas.tipeKelas,
     linkEnrollment: enrollment.linkMeet,

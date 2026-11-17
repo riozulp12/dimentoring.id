@@ -97,13 +97,10 @@ export default async function KelasSayaPage({
     redirect(ROLE_DASHBOARD_PATH[session.role]);
   }
 
-  const { data: user } = await supabaseServer
-    .from("users")
-    .select("tingkat_kelas")
-    .eq("id", session.userId)
-    .maybeSingle();
-
-  const [kelasSaya, eventBeasiswa] = await Promise.all([
+  // Tingkat kelas siswa, kelas yang diikuti, dan event beasiswa saling independen — satu gelombang.
+  // (Katalog/rekomendasi di bawah TETAP menunggu: cabangnya ditentukan oleh ada/tidaknya kelas lunas.)
+  const [{ data: user }, kelasSaya, eventBeasiswa] = await Promise.all([
+    supabaseServer.from("users").select("tingkat_kelas").eq("id", session.userId).maybeSingle(),
     getKelasSaya(session.userId),
     getInfoBeasiswaEvent(MAX_EVENT_BEASISWA),
   ]);

@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { getUserRingkas } from "@/lib/dashboard/getUserRingkas";
 import type { SessionRole } from "@/lib/auth/session";
 
 /**
@@ -36,20 +37,20 @@ async function getCanApplyMentor(userId: string): Promise<boolean> {
 }
 
 export async function getAccountMenuData(userId: string, role: SessionRole): Promise<AccountMenuData> {
-  const [userRes, canApplyMentor, gamifikasiRes] = await Promise.all([
-    supabaseServer.from("users").select("nama, avatar_url").eq("id", userId).maybeSingle(),
+  const [user, canApplyMentor, gamifikasiRes] = await Promise.all([
+    getUserRingkas(userId),
     role === "student" ? getCanApplyMentor(userId) : Promise.resolve(false),
     supabaseServer.from("gamifikasi_profiles").select("level").eq("user_id", userId).maybeSingle(),
   ]);
 
-  const nama = userRes.data?.nama ?? "";
+  const nama = user?.nama ?? "";
   const firstName = nama.trim().split(/\s+/)[0] || "Pengguna";
   const fullName = nama.trim() || "Pengguna";
 
   return {
     firstName,
     fullName,
-    avatarUrl: userRes.data?.avatar_url ?? null,
+    avatarUrl: user?.avatar_url ?? null,
     canApplyMentor,
     referralLevel: (gamifikasiRes.data?.level as string | undefined) ?? null,
   };

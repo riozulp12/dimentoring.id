@@ -19,8 +19,12 @@ export default async function MentorDashboard() {
     redirect(ROLE_DASHBOARD_PATH[session.role]);
   }
 
-  const pending = (await getMentorRoleStatus(session.userId)) === "pending";
-  const mentorName = await getUserDisplayName(session.userId, "Mentor");
+  // Status mentor dan nama sapaan saling independen — satu gelombang, bukan berurutan.
+  const [mentorStatus, mentorName] = await Promise.all([
+    getMentorRoleStatus(session.userId),
+    getUserDisplayName(session.userId, "Mentor"),
+  ]);
+  const pending = mentorStatus === "pending";
 
   // BR-27: mentor pending belum punya kelas/siswa binaan (belum di-assign
   // Admin) — skip query data mengajar, cukup tampilkan pesan terkunci.

@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { supabaseServer } from "@/lib/supabase/server";
 import { hitungRataRataProgres } from "@/lib/shared/progresSesi";
 import { getPendaftaranKeluar, getProgresSesiPerPendaftaran } from "@/lib/shared/progresSesiData";
@@ -75,8 +76,12 @@ async function getMentorSubtesIds(userId: string): Promise<string[]> {
  * Kelas Saya), MILIK mentor ini (siswa yang diterima mentor lain di kelas multi-mentor tidak ikut), dan
  * belum resmi keluar (enrollments.tanggal_keluar kosong). Siswa yang menunggu bayar / batal / sudah keluar /
  * belum diterima siapa pun tidak ikut hitungan "Siswa Binaan", rata-rata progress, maupun daftar progress.
+ *
+ * cache() React = memoize PER REQUEST: getMentorStats, getMentorProgressByKelas, dan getMentorKelasTerdaftar
+ * (tiga kartu dashboard) memakai hasil yang SAMA lewat satu pembacaan. Kunci = userId (string), jadi mentor
+ * berbeda tidak berbagi hasil. Hasilnya hanya dibaca (di-map ke objek baru), tidak dimutasi.
  */
-async function getMentorKelasWithEnrollments(userId: string): Promise<KelasWithEnrollments[]> {
+const getMentorKelasWithEnrollments = cache(async (userId: string): Promise<KelasWithEnrollments[]> => {
   const [aksesMap, milik] = await Promise.all([getKelasAksesMentor(userId), getEnrollmentMilikMentor(userId)]);
   if (aksesMap.size === 0) return [];
 
@@ -98,14 +103,37 @@ async function getMentorKelasWithEnrollments(userId: string): Promise<KelasWithE
   const keluar = await getPendaftaranKeluar(kelasList.flatMap((k) => lunas(k).map((e) => e.id)));
 
   return kelasList.map((k) => ({ ...k, enrollments: lunas(k).filter((e) => !keluar.has(e.id)) }));
-}
+});
 
-/** Persen Progress Kehadiran tiap pendaftaran aktif (enrollment id → persen). */
-async function getPersenPerPendaftaran(kelasList: KelasWithEnrollments[]): Promise<Map<string, number>> {
+/**
+ * Persen Progress Kehadiran tiap pendaftaran aktif (enrollment id → persen) untuk SATU mentor. cache() per request
+ * (kunci userId): kartu "Rata-rata Progress" dan "Progress Siswa Binaan" membaca sesi_kelas sekali, bukan dua kali.
+ * Masukannya selalu daftar kelas milik mentor yang sama (getMentorKelasWithEnrollments(userId)), jadi hasilnya identik.
+ */
+const getPersenPerPendaftaran = cache(async (userId: string): Promise<Map<string, number>> => {
+  const kelasList = await getMentorKelasWithEnrollments(userId);
   const progres = await getProgresSesiPerPendaftaran(
     kelasList.flatMap((k) => (k.enrollments ?? []).map((e) => ({ id: e.id, jumlahSesi: k.jumlah_sesi }))),
   );
   return new Map(Array.from(progres, ([id, p]) => [id, p.persen]));
+});
+
+/** Soal AI + materi berstatus draft pada subtes yang diampu mentor (0 bila tidak ada subtes). */
+async function hitungKontenMenungguReview(subtesIds: string[]): Promise<number> {
+  if (subtesIds.length === 0) return 0;
+  const [soalRes, materiRes] = await Promise.all([
+    supabaseServer
+      .from("soal_ai")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "draft")
+      .in("subtes_id", subtesIds),
+    supabaseServer
+      .from("materi")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "draft")
+      .in("subtes_id", subtesIds),
+  ]);
+  return (soalRes.count ?? 0) + (materiRes.count ?? 0);
 }
 
 /** Bagian 3: 4 stat card ("Kelas Diampu", "Siswa Binaan", "Rata-rata Progress", "Konten AI Menunggu Review"). */
@@ -119,26 +147,14 @@ export async function getMentorStats(userId: string): Promise<MentorStats> {
   const allEnrollments = kelasList.flatMap((k) => k.enrollments ?? []);
   const siswaIds = new Set(allEnrollments.map((e) => e.user_id));
   const siswaBinaan = siswaIds.size;
+  // Persen progress (sesi_kelas) dan hitungan konten menunggu review (soal_ai/materi) saling independen
+  // — sebelumnya berurutan, sekarang satu gelombang.
+  const [persenPerPendaftaran, kontenMenungguReview] = await Promise.all([
+    getPersenPerPendaftaran(userId),
+    hitungKontenMenungguReview(subtesIds),
+  ]);
   // Rata-rata Progress Kehadiran (sesi terhitung / jumlah_sesi) pendaftaran aktif.
-  const persenPerPendaftaran = await getPersenPerPendaftaran(kelasList);
   const rataRataProgress = hitungRataRataProgres(allEnrollments.map((e) => persenPerPendaftaran.get(e.id) ?? 0));
-
-  let kontenMenungguReview = 0;
-  if (subtesIds.length > 0) {
-    const [soalRes, materiRes] = await Promise.all([
-      supabaseServer
-        .from("soal_ai")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "draft")
-        .in("subtes_id", subtesIds),
-      supabaseServer
-        .from("materi")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "draft")
-        .in("subtes_id", subtesIds),
-    ]);
-    kontenMenungguReview = (soalRes.count ?? 0) + (materiRes.count ?? 0);
-  }
 
   return { kelasDiampu, siswaBinaan, rataRataProgress, kontenMenungguReview };
 }
@@ -146,7 +162,7 @@ export async function getMentorStats(userId: string): Promise<MentorStats> {
 /** Card "Progress Siswa Binaan" — group by kelas, list siswa + progress bar. */
 export async function getMentorProgressByKelas(userId: string): Promise<MentorKelasSiswaProgress[]> {
   const kelasList = await getMentorKelasWithEnrollments(userId);
-  const persenPerPendaftaran = await getPersenPerPendaftaran(kelasList);
+  const persenPerPendaftaran = await getPersenPerPendaftaran(userId);
 
   return kelasList.map((k) => ({
     kelasId: k.id,

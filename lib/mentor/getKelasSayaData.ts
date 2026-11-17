@@ -116,14 +116,17 @@ export async function getMentorKelasSaya(userId: string): Promise<MentorKelasIte
  * MILIK mentor itu (sama dengan kartu di daftar Kelas Saya); kosong → semua siswa lunas kelas.
  */
 export async function getMentorKelasDetail(kelasId: string, mentorUserId?: string): Promise<MentorKelasDetail | null> {
-  const milik = mentorUserId ? await getEnrollmentMilikMentor(mentorUserId) : null;
-  const { data, error } = await supabaseServer
-    .from("kelas")
-    .select(
-      "id, nama, mentor_id, tingkat_kelas, tipe_kelas, link_meet, jumlah_sesi, subtes:subtes_id(nama), enrollments(id, status_pembayaran)",
-    )
-    .eq("id", kelasId)
-    .maybeSingle();
+  // Kepemilikan siswa (rantai round-trip) dan baris kelas saling independen — dibaca barengan.
+  const [milik, { data, error }] = await Promise.all([
+    mentorUserId ? getEnrollmentMilikMentor(mentorUserId) : Promise.resolve(null),
+    supabaseServer
+      .from("kelas")
+      .select(
+        "id, nama, mentor_id, tingkat_kelas, tipe_kelas, link_meet, jumlah_sesi, subtes:subtes_id(nama), enrollments(id, status_pembayaran)",
+      )
+      .eq("id", kelasId)
+      .maybeSingle(),
+  ]);
 
   if (error) {
     console.error("[getMentorKelasDetail] query failed:", error);
