@@ -250,6 +250,44 @@ export async function getKelasKatalog(): Promise<KelasCardPreview[]> {
   return toCardPreviewList((data ?? []) as unknown as KelasCardRow[]);
 }
 
+/** Urutan relevansi saran kelas: jenjang (tingkat_kelas) yang SAMA dengan kelas acuan lebih dulu; di dalam tiap
+ * kelompok urutan bawaan katalog (terbaru dulu) tetap — sort stabil. */
+export function urutkanKelasSaran<T extends { tingkat_kelas: string }>(rows: T[], tingkatAcuan: string): T[] {
+  return [...rows].sort((a, b) => Number(b.tingkat_kelas === tingkatAcuan) - Number(a.tingkat_kelas === tingkatAcuan));
+}
+
+/**
+ * "Kelas lain di program ini" (detail kelas publik): kelas LAIN dengan program_kategori yang sama, maksimal
+ * `limit`. Memakai queryKelasKatalog() — aturan katalog yang SAMA dengan /program (tampil_di_katalog = true),
+ * jadi kelas tersembunyi (mis. [UJI]) tidak pernah lolos. Dua langkah (kategori/jenjang kelas acuan, lalu daftar)
+ * berjalan di dalam satu pemanggilan supaya halaman cukup menaruhnya di Promise.all bersama kueri halaman.
+ */
+export async function getKelasLainDiProgram(kelasId: string, limit = 3): Promise<KelasCardPreview[]> {
+  const { data: acuan, error: errorAcuan } = await supabaseServer
+    .from("kelas")
+    .select("program_kategori, tingkat_kelas")
+    .eq("id", kelasId)
+    .maybeSingle();
+  if (errorAcuan) {
+    console.error("[getKelasLainDiProgram] query acuan failed:", errorAcuan);
+    return [];
+  }
+  if (!acuan) return [];
+
+  const { data, error } = await queryKelasKatalog()
+    .eq("program_kategori", acuan.program_kategori as string)
+    .neq("id", kelasId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[getKelasLainDiProgram] query failed:", error);
+    return [];
+  }
+
+  const rows = ((data ?? []) as unknown as KelasCardRow[]).filter((row) => row.id !== kelasId);
+  // Hitung kapasitas hanya untuk kartu yang benar-benar tampil.
+  return toCardPreviewList(urutkanKelasSaran(rows, acuan.tingkat_kelas as string).slice(0, limit));
+}
+
 export interface KelasMentorInfo {
   nama: string;
   avatarUrl: string | null;

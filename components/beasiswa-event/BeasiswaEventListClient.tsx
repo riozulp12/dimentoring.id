@@ -1,15 +1,9 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import Link from "next/link";
 import InputField from "@/components/ui/InputField";
-import { formatDeadline } from "@/lib/shared/formatDeadline";
-import {
-  KONTEN_INFO_STATUS_BADGE_CLASS,
-  KONTEN_INFO_STATUS_LABEL,
-  KONTEN_INFO_TIPE_BADGE_CLASS,
-  KONTEN_INFO_TIPE_LABEL,
-} from "@/lib/shared/kontenInfoLabels";
+import { KONTEN_INFO_TIPE_LABEL } from "@/lib/shared/kontenInfoLabels";
+import KontenInfoCard from "@/components/beasiswa-event/KontenInfoCard";
 import type { KontenInfoListItem } from "@/lib/dashboard/getInfoBeasiswaEvent";
 
 /**
@@ -137,48 +131,9 @@ export default function BeasiswaEventListClient({ items }: { items: KontenInfoLi
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
-          {filtered.map((item) => {
-            const isDitutup = item.status === "ditutup";
-            return (
-              <Link
-                key={item.id}
-                href={`/beasiswa-event/${item.id}`}
-                className={`flex flex-col gap-3 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white p-[18px] shadow-[1px_2px_4px_0px_rgba(0,0,0,0.1)] transition-colors hover:border-[#081EEA] ${
-                  isDitutup ? "opacity-70" : ""
-                }`}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      KONTEN_INFO_TIPE_BADGE_CLASS[item.tipe] ?? "bg-gray-100 text-[#7E7C7C]"
-                    }`}
-                  >
-                    {KONTEN_INFO_TIPE_LABEL[item.tipe] ?? item.tipe}
-                  </span>
-                  <span
-                    className={`inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      KONTEN_INFO_STATUS_BADGE_CLASS[item.status] ?? "bg-gray-100 text-[#7E7C7C]"
-                    }`}
-                  >
-                    {KONTEN_INFO_STATUS_LABEL[item.status] ?? item.status}
-                  </span>
-                </div>
-                <p className="line-clamp-2 text-lg leading-[1.5] font-semibold tracking-[-0.36px] text-black">
-                  {item.judul}
-                </p>
-                {item.deskripsi ? (
-                  <p className="line-clamp-2 text-sm text-[#7E7C7C]">{item.deskripsi}</p>
-                ) : null}
-                <p
-                  className={`text-sm leading-[1.5] tracking-[-0.28px] ${
-                    isDitutup ? "text-[#7E7C7C]" : "text-[#E70A0A]"
-                  }`}
-                >
-                  {formatDeadline(item.deadline)}
-                </p>
-              </Link>
-            );
-          })}
+          {filtered.map((item) => (
+            <KontenInfoCard key={item.id} item={item} />
+          ))}
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getNavbarProps } from "@/lib/dashboard/getNavbarProps";
 import {
   getKelasDetailPublic,
+  getKelasLainDiProgram,
   getMateriPublicByKelasId,
   type KelasMentorInfo,
   type MateriPublicItem,
@@ -14,6 +15,8 @@ import { PROGRAM_KATEGORI_SLUG } from "@/lib/shared/kelasLabels";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import KelasDaftarButton from "@/components/program/KelasDaftarButton";
+import SaranKelasSection from "@/components/program/SaranKelasSection";
+import BackLink from "@/components/ui/BackLink";
 import { buttonClassName } from "@/components/ui/buttonClassName";
 import { isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
 import { hrefKelasDimiliki } from "@/lib/shared/kelasHref";
@@ -111,7 +114,12 @@ function MateriListItem({ item }: { item: MateriPublicItem }) {
 
 export default async function KelasDetailPublicPage({ params }: { params: Promise<{ kelasId: string }> }) {
   const { kelasId } = await params;
-  const [kelas, materi] = await Promise.all([getKelasDetailPublic(kelasId), getMateriPublicByKelasId(kelasId)]);
+  // Saran "Kelas lain di program ini" ikut satu gelombang dengan data halaman (tidak menambah kedalaman kueri).
+  const [kelas, materi, kelasLain] = await Promise.all([
+    getKelasDetailPublic(kelasId),
+    getMateriPublicByKelasId(kelasId),
+    getKelasLainDiProgram(kelasId),
+  ]);
   // Kelas yang disembunyikan dari katalog (kelas.tampil_di_katalog = false)
   // tidak punya halaman publik — siswa terdaftar tetap mengaksesnya lewat
   // /kelas/[id] (app/(protected)/(siswa)/kelas/[kelasId]/page.tsx).
@@ -132,9 +140,7 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
     <div className="flex w-full flex-col">
       <Navbar {...navbarProps} activeItem="program" />
       <main className="mx-auto w-full max-w-[1040px] flex-1 px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:px-0 lg:py-16">
-        <Link href={`/program/${PROGRAM_KATEGORI_SLUG[kelas.programKategori]}`} className="mb-6 inline-block w-fit text-sm font-medium text-[#081EEA] hover:underline sm:mb-8">
-          &larr; {kelas.programKategoriLabel}
-        </Link>
+        <BackLink href={`/program/${PROGRAM_KATEGORI_SLUG[kelas.programKategori]}`}>{kelas.programKategoriLabel}</BackLink>
 
         <div className="flex flex-col gap-5 sm:gap-6">
           {/* CARD 1 — Banner, full-bleed, tanpa padding tambahan */}
@@ -254,6 +260,9 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
               </>
             )}
           </div>
+
+          {/* Kelas lain di program yang sama (hanya katalog, bukan kelas ini); kosong = tidak dirender */}
+          <SaranKelasSection items={kelasLain} sessionRole={session?.role ?? null} />
         </div>
       </main>
       <Footer />

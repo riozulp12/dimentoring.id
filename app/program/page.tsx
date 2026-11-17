@@ -3,11 +3,17 @@ import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME, verifySessionToken, type SessionRole } from "@/lib/auth/session";
 import { getNavbarProps } from "@/lib/dashboard/getNavbarProps";
 import { getProgramPreviewSections, type ProgramSection } from "@/lib/dashboard/getProgramData";
+import { getKontenInfoTerbuka } from "@/lib/dashboard/getInfoBeasiswaEvent";
+import { susunSectionProgram } from "@/lib/shared/programOverview";
 import { PROGRAM_KATEGORI_TAGLINE } from "@/lib/shared/kelasLabels";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import KelasCardFrame from "@/components/program/KelasCardFrame";
 import KelasCardMeta from "@/components/program/KelasCardMeta";
+import KontenInfoCard from "@/components/beasiswa-event/KontenInfoCard";
+
+/** Jumlah kartu info beasiswa/internship/event di preview "Beasiswa & Karier Mahasiswa" (satu baris di desktop). */
+const PREVIEW_KONTEN_MAHASISWA = 3;
 
 /**
  * Halaman Program (PRD Bagian 4.3 poin 5, 7.5.4) — public route, reuse
@@ -50,12 +56,16 @@ export default async function ProgramPage() {
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
 
-  // navbarProps & sections independen satu sama lain — Promise.all supaya
+  // navbarProps, section kelas, dan info mahasiswa independen satu sama lain — Promise.all supaya
   // tidak menunggu bergantian.
-  const [navbarProps, sections] = await Promise.all([
+  const [navbarProps, sectionKelas, kontenMahasiswa] = await Promise.all([
     getNavbarProps(session),
     getProgramPreviewSections(),
+    getKontenInfoTerbuka({ limit: PREVIEW_KONTEN_MAHASISWA }),
   ]);
+  // "Beasiswa & Karier Mahasiswa" isinya info beasiswa/event (konten_info), bukan hanya kelas: section ikut tampil
+  // walau belum ada kelas di kategorinya. Section yang benar-benar kosong tetap disembunyikan.
+  const sections = susunSectionProgram(sectionKelas, kontenMahasiswa);
 
   return (
     <div className="flex w-full flex-col">
@@ -92,7 +102,14 @@ export default async function ProgramPage() {
                       (poin 13), wrap alami kalau memang tidak muat (mobile). */}
                   <p className="text-sm text-[#7E7C7C] sm:text-base">{PROGRAM_KATEGORI_TAGLINE[section.kategori]}</p>
                 </div>
-                <ProgramSectionGrid section={section} sessionRole={session?.role ?? null} />
+                {section.kontenInfo.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
+                    {section.kontenInfo.map((item) => (
+                      <KontenInfoCard key={item.id} item={item} />
+                    ))}
+                  </div>
+                ) : null}
+                {section.items.length > 0 ? <ProgramSectionGrid section={section} sessionRole={session?.role ?? null} /> : null}
               </section>
             ))}
           </div>
