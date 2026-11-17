@@ -7,6 +7,8 @@
  * import lama — jangan duplikasi map ini di tempat lain.
  */
 
+import { NAMA_BEASISWA_EVENT } from "@/lib/shared/kontenInfoLabels";
+
 export const TINGKAT_KELAS_LABEL: Record<string, string> = {
   kelas_10: "Kelas 10",
   kelas_11: "Kelas 11",
@@ -51,7 +53,7 @@ export const PROGRAM_KATEGORI_LABEL: Record<ProgramKategori, string> = {
   tka: "TKA",
   snbt: "SNBT",
   ujian_mandiri: "Ujian Mandiri",
-  pendampingan_mahasiswa: "Beasiswa & Karier Mahasiswa",
+  pendampingan_mahasiswa: NAMA_BEASISWA_EVENT,
 };
 
 // Kalimat persuasif TETAP per kategori (PRD 7.5 poin 13) — bukan AI-generate,

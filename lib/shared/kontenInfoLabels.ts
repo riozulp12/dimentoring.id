@@ -9,6 +9,11 @@
  * REUSE Object.entries dari sini).
  */
 
+/** SATU nama untuk fitur info beasiswa/internship/event di sisi publik — sama dengan judul halaman /beasiswa-event.
+ * Dipakai label program mahasiswa (navbar, footer, /program, /program/pendampingan-mahasiswa), judul halaman, dan
+ * tombol kembali di detail event. Ganti di sini untuk mengubah nama di semua tempat itu. */
+export const NAMA_BEASISWA_EVENT = "Beasiswa & Event";
+
 export const KONTEN_INFO_TIPE_LABEL: Record<string, string> = {
   beasiswa: "Beasiswa",
   internship: "Internship",

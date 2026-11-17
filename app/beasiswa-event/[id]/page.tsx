@@ -5,6 +5,7 @@ import { getNavbarProps, type NavbarSessionProps } from "@/lib/dashboard/getNavb
 import { getKontenInfoLainnya } from "@/lib/dashboard/getInfoBeasiswaEvent";
 import { formatDeadline } from "@/lib/shared/formatDeadline";
 import {
+  NAMA_BEASISWA_EVENT,
   KONTEN_INFO_STATUS_BADGE_CLASS,
   KONTEN_INFO_STATUS_LABEL,
   KONTEN_INFO_TIPE_BADGE_CLASS,
@@ -91,8 +92,8 @@ export default async function BeasiswaEventDetailPage({ params }: PageProps) {
     <div className="flex w-full flex-col">
       <Navbar {...navbarProps} />
       <main className="mx-auto w-full max-w-[900px] flex-1 px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:py-16">
-        {/* Kembali ke daftar sesuai jenis konten ("← Beasiswa"); komponen & gaya sama dengan detail kelas */}
-        <BackLink href="/beasiswa-event">{KONTEN_INFO_TIPE_LABEL[konten.tipe as string] ?? "Beasiswa & Event"}</BackLink>
+        {/* Kembali ke daftar ("← Beasiswa & Event", satu label untuk semua jenis); komponen & gaya sama dengan detail kelas */}
+        <BackLink href="/beasiswa-event">{NAMA_BEASISWA_EVENT}</BackLink>
         <div className="flex flex-col gap-5 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-6 sm:gap-6 sm:px-8 sm:py-8">
           <div className="flex flex-wrap items-center gap-2">
             <span

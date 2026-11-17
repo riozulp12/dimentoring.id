@@ -20,7 +20,7 @@ import BeasiswaEventListClient from "@/components/beasiswa-event/BeasiswaEventLi
 /** Grid penuh 1 kategori program (PRD 7.5.4) — public route.
  * - Program kelas SMA (konsultasi/tka/snbt/ujian-mandiri): filter Tipe Kelas &
  *   Tingkat Kelas lewat query string (lihat KategoriFilterBar).
- * - Program mahasiswa (pendampingan-mahasiswa, "Beasiswa & Karier Mahasiswa"):
+ * - Program mahasiswa (pendampingan-mahasiswa, "Beasiswa & Event"):
  *   tanpa filter Tipe/Tingkat; menampilkan konten_info (beasiswa/internship/
  *   event/…) dengan komponen & data yang SAMA dengan /beasiswa-event
  *   (getKontenInfoList + BeasiswaEventListClient), lalu bagian Kelas hanya kalau

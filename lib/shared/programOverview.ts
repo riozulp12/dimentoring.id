@@ -8,7 +8,7 @@ import {
 
 /**
  * Susunan section halaman "semua program" (/program). Program kelas SMA hanya berisi kelas katalog; program
- * mahasiswa ("Beasiswa & Karier Mahasiswa") isinya konten info (beasiswa/internship/event) dan/atau kelas —
+ * mahasiswa ("Beasiswa & Event") isinya konten info (beasiswa/internship/event) dan/atau kelas —
  * section ikut tampil kalau SALAH SATUNYA ada, jadi tidak lagi hilang hanya karena belum ada kelas di kategorinya.
  * Section yang keduanya kosong tetap disembunyikan (aturan lama). Urutan = PROGRAM_KATEGORI_ORDER. Fungsi murni
  * (tanpa akses data) supaya mudah diuji.
