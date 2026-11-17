@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getNavbarProps, type NavbarSessionProps } from "@/lib/dashboard/getNavbarProps";
+import { getKontenInfoLainnya } from "@/lib/dashboard/getInfoBeasiswaEvent";
 import { formatDeadline } from "@/lib/shared/formatDeadline";
 import {
   KONTEN_INFO_STATUS_BADGE_CLASS,
@@ -12,6 +13,8 @@ import {
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
 import DetailInteractionButtons from "@/components/beasiswa-event/DetailInteractionButtons";
+import ProgramLainnyaSection from "@/components/beasiswa-event/ProgramLainnyaSection";
+import BackLink from "@/components/ui/BackLink";
 
 /**
  * Detail Beasiswa/Internship/Event — PRD Bagian 4.3/13 (konten_info). HALAMAN
@@ -47,17 +50,20 @@ export default async function BeasiswaEventDetailPage({ params }: PageProps) {
 
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  const navbarProps = await getNavbarProps(session);
-
   if (!UUID_RE.test(id)) {
-    return <NotFoundState navbarProps={navbarProps} />;
+    return <NotFoundState navbarProps={await getNavbarProps(session)} />;
   }
 
-  const { data: konten, error } = await supabaseServer
-    .from("konten_info")
-    .select("id, tipe, judul, deskripsi, deskripsi_lengkap, link_pendaftaran, deadline, status")
-    .eq("id", id)
-    .maybeSingle();
+  // Navbar, data event, dan saran "Program lainnya" independen — satu gelombang (Promise.all), tidak berantai.
+  const [navbarProps, { data: konten, error }, programLainnya] = await Promise.all([
+    getNavbarProps(session),
+    supabaseServer
+      .from("konten_info")
+      .select("id, tipe, judul, deskripsi, deskripsi_lengkap, link_pendaftaran, deadline, status")
+      .eq("id", id)
+      .maybeSingle(),
+    getKontenInfoLainnya(id),
+  ]);
 
   if (error) {
     console.error("[beasiswa-event/detail] query konten_info failed:", error);
@@ -85,6 +91,8 @@ export default async function BeasiswaEventDetailPage({ params }: PageProps) {
     <div className="flex w-full flex-col">
       <Navbar {...navbarProps} />
       <main className="mx-auto w-full max-w-[900px] flex-1 px-5 py-10 sm:px-8 sm:py-12 md:px-12 lg:py-16">
+        {/* Kembali ke daftar sesuai jenis konten ("← Beasiswa"); komponen & gaya sama dengan detail kelas */}
+        <BackLink href="/beasiswa-event">{KONTEN_INFO_TIPE_LABEL[konten.tipe as string] ?? "Beasiswa & Event"}</BackLink>
         <div className="flex flex-col gap-5 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-6 sm:gap-6 sm:px-8 sm:py-8">
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -139,6 +147,8 @@ export default async function BeasiswaEventDetailPage({ params }: PageProps) {
             {session ? <DetailInteractionButtons kontenInfoId={konten.id as string} /> : null}
           </div>
         </div>
+
+        <ProgramLainnyaSection items={programLainnya} />
       </main>
       <Footer />
     </div>
