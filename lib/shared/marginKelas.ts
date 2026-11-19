@@ -187,6 +187,11 @@ export interface PelanggaranPromo {
   kelasId: string;
   namaKelas: string;
   pesan: string;
+  /** Margin (persen, satu desimal) bila promo dipakai di kelas ini. */
+  margin: number | null;
+  hargaBayarMinimal: number | null;
+  /** Potongan promo dalam rupiah untuk kelas ini (sudah dibatasi harga setelah diskon kelas). */
+  potonganPromo: number;
 }
 
 /**
@@ -205,15 +210,25 @@ export function cekPromoTerhadapKelas(
       promo.tipeDiskon === "persen"
         ? bulatkan((k.hargaSetelahDiskonKelas * promo.nilaiDiskon) / 100)
         : bulatkan(promo.nilaiDiskon);
+    const potonganPromo = Math.min(nilaiPromo, k.hargaSetelahDiskonKelas);
     const cek = cekDiskonAman({
       tipeKelas: k.tipeKelas,
       modeKelas: k.modeKelas,
       hargaNormal: k.hargaNormal,
       jumlahSesiKelas: k.jumlahSesiKelas,
       hargaSetelahDiskonKelas: k.hargaSetelahDiskonKelas,
-      nilaiPromo: Math.min(nilaiPromo, k.hargaSetelahDiskonKelas),
+      nilaiPromo: potonganPromo,
     });
-    if (cek.berlaku && !cek.aman) hasil.push({ kelasId: k.id, namaKelas: k.nama, pesan: cek.pesan });
+    if (cek.berlaku && !cek.aman) {
+      hasil.push({
+        kelasId: k.id,
+        namaKelas: k.nama,
+        pesan: cek.pesan,
+        margin: cek.margin,
+        hargaBayarMinimal: cek.hargaBayarMinimal,
+        potonganPromo,
+      });
+    }
   }
   return hasil;
 }
