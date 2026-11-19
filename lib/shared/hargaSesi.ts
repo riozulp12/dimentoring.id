@@ -3,18 +3,51 @@
  *
  * Fungsi MURNI: tanpa impor database/server, tanpa "server-only", tanpa efek samping — supaya kartu
  * kelas, checkout, dan pembayaran memakai SATU rumus yang sama. Semua nilai bilangan bulat rupiah/sesi.
- * Pembulatan ke rupiah terdekat HANYA lewat `bulatkan`.
+ * Pembulatan ke rupiah terdekat HANYA lewat `bulatkan`; pembulatan ke kelipatan Rp1.000 (harga turunan)
+ * hanya lewat `hargaCharm`.
+ *
+ * `hargaNormal` di semua fungsi file ini = HARGA TERCANTUM (`hargaTercantum(kelas.harga)`): harga paket penuh
+ * yang tampil ke siswa SEBELUM diskon kelas (sudah dikurangi Rp1.000, lihat bawah). Dasar honor juga harga ini.
  *
  * Aturan:
  * - Total sesi dipilih (N) default = jumlahSesiKelas, boleh turun sampai 1, naik sampai 2 x jumlahSesiKelas.
  * - Tiap subtes (maks. 3) butuh minimal 1 sesi, jadi N tidak boleh kurang dari jumlahSubtes.
  * - N == dasar : hargaDasar = hargaAktif (harga setelah diskon kelas).
- * - N  > dasar : hargaDasar = hargaAktif + (N - dasar) x hargaPerSesi (tambahan TANPA diskon).
+ * - N  > dasar : hargaAktif + (N - dasar) x hargaPerSesi (tambahan TANPA diskon), lalu harga charm.
  * - N  < dasar : paket kecil, TANPA diskon kelas; N x (hargaPerSesi + premiumPerSesi), dengan premium
  *                per sesi maksimal PREMIUM_MAKS_PER_SESI, dibatasi batas atas supaya tidak pernah
- *                menyamai/melebihi paket penuh.
+ *                menyamai/melebihi paket penuh. Hasilnya lalu harga charm.
+ * - Harga charm (semua N selain paket penuh): dibulatkan ke kelipatan Rp1.000 terdekat (setengah ke atas),
+ *   lalu dikurangi CHARM_POTONGAN. Paket penuh TIDAK diubah: harganya hargaAktif persis.
  * - Diskon kelas & kode promo hanya berlaku untuk N >= dasar.
  */
+
+/** Potongan "harga charm" (Rp1.000): 900.000 tampil 899.000. SATU konstanta untuk semua harga. */
+export const CHARM_POTONGAN = 1000;
+/** Harga katalog (kelas.harga) dari angka ini ke atas dikurangi CHARM_POTONGAN menjadi harga tercantum. */
+export const AMBANG_HARGA_TERCANTUM = 500_000;
+
+/**
+ * HARGA TERCANTUM = harga paket penuh yang tampil ke siswa sebelum diskon kelas.
+ * Masukan: harga katalog BULAT seperti disimpan di kelas.harga (mis. 1.000.000). Dari
+ * AMBANG_HARGA_TERCANTUM ke atas dikurangi CHARM_POTONGAN (1.000.000 -> 999.000); di bawahnya tetap.
+ * null bila bukan bilangan bulat positif. JANGAN diberi harga yang SUDAH dikurangi (akan terpotong dua kali).
+ * Ini SATU-SATUNYA tempat pengurangan harga paket penuh didefinisikan.
+ */
+export function hargaTercantum(hargaKatalog: number): number | null {
+  if (typeof hargaKatalog !== "number" || !Number.isInteger(hargaKatalog) || hargaKatalog <= 0) return null;
+  return hargaKatalog >= AMBANG_HARGA_TERCANTUM ? hargaKatalog - CHARM_POTONGAN : hargaKatalog;
+}
+
+/**
+ * Harga charm untuk harga turunan: kelipatan Rp1.000 terdekat (setengah ke atas) dikurangi CHARM_POTONGAN.
+ * Bila hasilnya tidak positif (harga absurd kecil), harga dikembalikan apa adanya.
+ */
+export function hargaCharm(harga: number): number {
+  const ribuan = Math.floor((harga + 500) / 1000) * 1000;
+  const hasil = ribuan - CHARM_POTONGAN;
+  return hasil > 0 ? hasil : harga;
+}
 
 export const SESI_MIN_TOTAL = 1;
 /** Total sesi maksimal = FAKTOR_SESI_MAKS x jumlahSesiKelas. */
@@ -56,8 +89,11 @@ export interface HasilHargaValid {
   /** max(0, sesiTotal - jumlahSesiKelas). */
   sesiTambahan: number;
   hargaPerSesi: number;
+  /** Paket penuh/lebih: hargaAktif. Paket kecil: harga akhirnya (sudah harga charm). */
   hargaDasar: number;
+  /** totalSebelumPromo - hargaDasar (sudah termasuk harga charm); 0 untuk paket kecil dan penuh. */
   biayaSesiTambahan: number;
+  /** Harga yang dibayar siswa sebelum kode promo — angka SAMA untuk kartu dan checkout. */
   totalSebelumPromo: number;
   diskonKelasBerlaku: boolean;
   kodePromoBerlaku: boolean;
@@ -134,14 +170,16 @@ export function hitungHargaSesi(input: InputHargaSesi): HasilHarga {
   let biayaSesiTambahan = 0;
   let batasAtasAktif = false;
 
-  if (n >= jumlahSesiKelas) {
+  if (n === jumlahSesiKelas) {
     hargaDasar = hargaAktif;
-    biayaSesiTambahan = (n - jumlahSesiKelas) * hargaPerSesi;
+  } else if (n > jumlahSesiKelas) {
+    hargaDasar = hargaAktif;
+    biayaSesiTambahan = hargaCharm(hargaAktif + (n - jumlahSesiKelas) * hargaPerSesi) - hargaAktif;
   } else {
     const hargaMentah = n * (hargaPerSesi + premiumPerSesiPaketKecil(n, jumlahSesiKelas, hargaPerSesi));
     const batasAtas = bulatkan((hargaAktif * (n + jumlahSesiKelas)) / (FAKTOR_SESI_MAKS * jumlahSesiKelas));
     batasAtasAktif = batasAtas < hargaMentah;
-    hargaDasar = Math.min(hargaMentah, batasAtas);
+    hargaDasar = hargaCharm(Math.min(hargaMentah, batasAtas));
   }
 
   const paketPenuhAtauLebih = n >= jumlahSesiKelas;

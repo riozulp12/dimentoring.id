@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { hitungHargaSetelahDiskon, normalizeDiskonPersen } from "@/lib/shared/kelasDiskon";
 import { cekPromoTerhadapKelas, type KelasUntukCekPromo } from "@/lib/shared/marginKelas";
+import { hargaTercantum } from "@/lib/shared/hargaSesi";
 
 /**
  * Validasi body request Tambah/Edit Kode Promo — dipakai bersama oleh
@@ -151,14 +152,15 @@ export async function validateKodePromoInput(
     for (const k of kelasCakupan ?? []) {
       const harga = Number(k.harga);
       if (!Number.isFinite(harga) || harga <= 0) continue;
+      const tercantum = hargaTercantum(harga) ?? harga;
       daftar.push({
         id: k.id as string,
         nama: k.nama as string,
         tipeKelas: k.tipe_kelas as string,
         modeKelas: k.mode_pembelajaran as string,
-        hargaNormal: harga,
+        hargaNormal: tercantum,
         jumlahSesiKelas: Number(k.jumlah_sesi),
-        hargaSetelahDiskonKelas: hitungHargaSetelahDiskon(harga, normalizeDiskonPersen(k.diskon_persen as number | null)),
+        hargaSetelahDiskonKelas: hitungHargaSetelahDiskon(tercantum, normalizeDiskonPersen(k.diskon_persen as number | null)),
       });
     }
     const pelanggaran = cekPromoTerhadapKelas(daftar, {
