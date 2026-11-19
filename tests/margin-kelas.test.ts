@@ -32,7 +32,7 @@ describe("konstanta", () => {
   });
 });
 
-// Semua angka di bagian ini memakai HARGA TERCANTUM (kelas disimpan 1.000.000 -> 999.000) sebagai hargaNormal.
+// Semua angka di bagian ini memakai HARGA TERCANTUM (kelas.harga apa adanya, mis. 999.000) sebagai hargaNormal.
 describe("hitungMargin & hargaBayarMinimal (hargaTercantum 999.000, 10 sesi)", () => {
   const k = { hargaNormal: 999_000, jumlahSesiKelas: 10 };
 
@@ -43,6 +43,12 @@ describe("hitungMargin & hargaBayarMinimal (hargaTercantum 999.000, 10 sesi)", (
 
   it("honor per sesi 64.935 (65% x 99.900), dihitung dari harga tercantum", () => {
     assert.equal(honorPerSesi(999_000, 10), 64_935);
+  });
+
+  it("kelas.harga 899.000: honor per sesi 58.435 (65% x 89.900), paket penuh 584.350", () => {
+    assert.equal(honorPerSesi(899_000, 10), 58_435);
+    const h = hitungMargin({ hargaNormal: 899_000, jumlahSesiKelas: 10, jumlahSesi: 10, hargaDibayar: 899_000 });
+    assert.deepEqual(h, { valid: true, honor: 584_350, sisaDimentoring: 314_650, marginPersen: 35 });
   });
 
   it("honor TIDAK ikut diskon: harga dibayar berubah, honor tetap", () => {
@@ -228,7 +234,7 @@ const baris = (
   tipe: string,
   mode: string,
   diskon = 0,
-  harga = 1_000_000,
+  harga = 999_000,
 ) => ({ id, nama: `Kelas ${id}`, harga, diskon_persen: diskon, jumlah_sesi: 10, tipe_kelas: tipe, mode_pembelajaran: mode });
 
 beforeEach(() => {
@@ -237,7 +243,7 @@ beforeEach(() => {
 });
 
 describe("pagar server: simpan diskon kelas (validateKelasInput)", () => {
-  const body = { nama: "Privat X", programKategori: "tka", tingkatKelas: "kelas_12", tipeKelas: "private", modePembelajaran: "online", jumlahSesi: 10, harga: 1_000_000 };
+  const body = { nama: "Privat X", programKategori: "tka", tingkatKelas: "kelas_12", tipeKelas: "private", modePembelajaran: "online", jumlahSesi: 10, harga: 999_000 };
 
   it("diskon 10% (899.100, margin 27,8%) pada kelas private online ditolak dengan pesan jelas", async () => {
     const hasil = await validateKelas.validateKelasInput({ ...body, diskonPersen: 10 });

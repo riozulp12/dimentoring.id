@@ -6,8 +6,9 @@
  * Pembulatan ke rupiah terdekat HANYA lewat `bulatkan`; pembulatan ke kelipatan Rp1.000 (harga turunan)
  * hanya lewat `hargaCharm`.
  *
- * `hargaNormal` di semua fungsi file ini = HARGA TERCANTUM (`hargaTercantum(kelas.harga)`): harga paket penuh
- * yang tampil ke siswa SEBELUM diskon kelas (sudah dikurangi Rp1.000, lihat bawah). Dasar honor juga harga ini.
+ * `hargaNormal` di semua fungsi file ini = HARGA TERCANTUM kelas: `kelas.harga` apa adanya (diketik admin,
+ * mis. 899.000 — harga paket penuh yang tampil ke siswa SEBELUM diskon kelas). Tidak ada pengurangan otomatis.
+ * Dasar honor juga harga ini.
  *
  * Aturan:
  * - Total sesi dipilih (N) default = jumlahSesiKelas, boleh turun sampai 1, naik sampai 2 x jumlahSesiKelas.
@@ -22,22 +23,8 @@
  * - Diskon kelas & kode promo hanya berlaku untuk N >= dasar.
  */
 
-/** Potongan "harga charm" (Rp1.000): 900.000 tampil 899.000. SATU konstanta untuk semua harga. */
+/** Potongan "harga charm" (Rp1.000) untuk harga TURUNAN (paket kecil dan sesi tambahan). Paket penuh tidak diubah. */
 export const CHARM_POTONGAN = 1000;
-/** Harga katalog (kelas.harga) dari angka ini ke atas dikurangi CHARM_POTONGAN menjadi harga tercantum. */
-export const AMBANG_HARGA_TERCANTUM = 500_000;
-
-/**
- * HARGA TERCANTUM = harga paket penuh yang tampil ke siswa sebelum diskon kelas.
- * Masukan: harga katalog BULAT seperti disimpan di kelas.harga (mis. 1.000.000). Dari
- * AMBANG_HARGA_TERCANTUM ke atas dikurangi CHARM_POTONGAN (1.000.000 -> 999.000); di bawahnya tetap.
- * null bila bukan bilangan bulat positif. JANGAN diberi harga yang SUDAH dikurangi (akan terpotong dua kali).
- * Ini SATU-SATUNYA tempat pengurangan harga paket penuh didefinisikan.
- */
-export function hargaTercantum(hargaKatalog: number): number | null {
-  if (typeof hargaKatalog !== "number" || !Number.isInteger(hargaKatalog) || hargaKatalog <= 0) return null;
-  return hargaKatalog >= AMBANG_HARGA_TERCANTUM ? hargaKatalog - CHARM_POTONGAN : hargaKatalog;
-}
 
 /**
  * Harga charm untuk harga turunan: kelipatan Rp1.000 terdekat (setengah ke atas) dikurangi CHARM_POTONGAN.

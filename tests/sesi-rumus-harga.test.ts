@@ -1,6 +1,6 @@
 /**
  * Test rumus harga per jumlah sesi (lib/shared/hargaSesi.ts). Fungsi murni — tanpa database.
- * `hargaNormal` di rumus = HARGA TERCANTUM (hargaTercantum(kelas.harga)); harga turunan = harga charm
+ * `hargaNormal` di rumus = HARGA TERCANTUM = kelas.harga apa adanya (diketik admin, mis. 899.000); harga turunan = harga charm
  * (kelipatan Rp1.000 terdekat dikurangi Rp1.000), paket penuh = hargaAktif persis.
  *
  * Jalankan: npm test
@@ -9,18 +9,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
-  AMBANG_HARGA_TERCANTUM,
   CHARM_POTONGAN,
   hargaCharm,
   hargaMulaiDari,
-  hargaTercantum,
   hitungHargaSesi,
   rincianHargaSemuaSesi,
   type HasilHargaValid,
 } from "../lib/shared/hargaSesi";
 import { hitungHargaSetelahDiskon } from "../lib/shared/kelasDiskon";
 
-const TERCANTUM = [999_000, 899_000, 299_000, 2_499_000];
+const TERCANTUM = [999_000, 899_000, 299_000, 2_499_000, 491_400, 1_099_000];
 const SESI_KELAS = [10, 8];
 
 interface Kombinasi {
@@ -44,34 +42,36 @@ function harga(k: Kombinasi, n: number, subtes = 1): HasilHargaValid {
   return h as HasilHargaValid;
 }
 
-describe("hargaTercantum: SATU-SATUNYA pengurangan harga paket penuh", () => {
-  it("konstanta: potongan Rp1.000, ambang Rp500.000", () => {
+describe("CHARM_POTONGAN", () => {
+  it("potongan Rp1.000 — hanya untuk harga turunan, tidak ada pengurangan otomatis harga paket penuh", () => {
     assert.equal(CHARM_POTONGAN, 1000);
-    assert.equal(AMBANG_HARGA_TERCANTUM, 500_000);
+    const penuh = hitungHargaSesi({ hargaNormal: 899_000, hargaAktif: 899_000, jumlahSesiKelas: 10, jumlahSesiDipilih: 10, jumlahSubtes: 1 });
+    assert.ok(penuh.valid && penuh.totalSebelumPromo === 899_000);
   });
+});
 
-  it("900.000 -> 899.000; 1.000.000 -> 999.000; batas 500.000 -> 499.000", () => {
-    assert.equal(hargaTercantum(900_000), 899_000);
-    assert.equal(hargaTercantum(1_000_000), 999_000);
-    assert.equal(hargaTercantum(1_500_000), 1_499_000);
-    assert.equal(hargaTercantum(500_000), 499_000);
-  });
+describe("contoh dari data nyata (hargaTercantum = kelas.harga, 10 sesi, tanpa diskon): harga 1 sesi", () => {
+  const nyata: [number, number][] = [
+    [899_000, 102_000],
+    [999_000, 114_000],
+    [1_099_000, 124_000],
+    [1_199_000, 134_000],
+    [1_299_000, 144_000],
+    [491_400, 56_000],
+  ];
+  for (const [tercantum, satuSesi] of nyata) {
+    it(`${tercantum}: 1 sesi = ${satuSesi}, 10 sesi = ${tercantum}, hargaMulaiDari = ${satuSesi}`, () => {
+      const k: Kombinasi = { nama: String(tercantum), hargaNormal: tercantum, hargaAktif: tercantum, jumlahSesiKelas: 10 };
+      assert.equal(harga(k, 1).totalSebelumPromo, satuSesi);
+      assert.equal(harga(k, 10).totalSebelumPromo, tercantum);
+      assert.deepEqual(hargaMulaiDari(k), { valid: true, harga: satuSesi });
+    });
+  }
 
-  it("di bawah Rp500.000 tidak dikurangi", () => {
-    assert.equal(hargaTercantum(499_000), 499_000);
-    assert.equal(hargaTercantum(300_000), 300_000);
-    assert.equal(hargaTercantum(299_000), 299_000);
-  });
-
-  it("bukan bilangan bulat positif -> null (tidak melempar)", () => {
-    for (const x of [0, -1000, 1000.5, Number.NaN, Number.POSITIVE_INFINITY]) assert.equal(hargaTercantum(x), null, String(x));
-  });
-
-  it("kelas yang disimpan bulat 1.000.000 menghasilkan tabel harga IDENTIK dengan 999.000", () => {
-    const t = hargaTercantum(1_000_000) as number;
-    const a = rincianHargaSemuaSesi({ hargaNormal: t, hargaAktif: t, jumlahSesiKelas: 10 });
-    const b = rincianHargaSemuaSesi({ hargaNormal: 999_000, hargaAktif: 999_000, jumlahSesiKelas: 10 });
-    assert.deepEqual(a, b);
+  it("899.000: hargaPerSesi 89.900 dan 20 sesi = 899.000 + 10 x 89.900 -> charm", () => {
+    const k: Kombinasi = { nama: "899", hargaNormal: 899_000, hargaAktif: 899_000, jumlahSesiKelas: 10 };
+    assert.equal(harga(k, 5).hargaPerSesi, 89_900);
+    assert.equal(harga(k, 20).totalSebelumPromo, hargaCharm(899_000 + 10 * 89_900)); // 1.798.000 -> 1.797.000
   });
 });
 
@@ -165,7 +165,7 @@ describe("sifat rumus untuk setiap kombinasi dan setiap N valid", () => {
   }
 });
 
-describe("angka konkret: hargaTercantum 999.000 (kelas disimpan 1.000.000), tanpa diskon, 10 sesi", () => {
+describe("angka konkret: hargaTercantum 999.000, tanpa diskon, 10 sesi", () => {
   const k: Kombinasi = { nama: "999", hargaNormal: 999_000, hargaAktif: 999_000, jumlahSesiKelas: 10 };
   const tabel: Record<number, number> = {
     1: 114_000,
@@ -309,7 +309,6 @@ describe("keamanan: murni dan deterministik", () => {
     assert.deepEqual(hitungHargaSesi(masukan), hitungHargaSesi(masukan));
     const dasar = { hargaNormal: 999_000, hargaAktif: 899_000, jumlahSesiKelas: 10 };
     assert.deepEqual(rincianHargaSemuaSesi(dasar), rincianHargaSemuaSesi(dasar));
-    assert.equal(hargaTercantum(1_000_000), hargaTercantum(1_000_000));
   });
 
   it("masukan tidak diubah", () => {

@@ -56,8 +56,8 @@ beforeEach(() => {
   hitungDari = {};
   db = {
     kelas: [
-      { id: "K1", nama: "Privat Intensif", tipe_kelas: "private", mode_pembelajaran: "online", harga: 1_000_000, diskon_persen: 0, jumlah_sesi: 10 },
-      { id: "K2", nama: "Kelas Lain", tipe_kelas: "private", mode_pembelajaran: "online", harga: 1_000_000, diskon_persen: 0, jumlah_sesi: 10 },
+      { id: "K1", nama: "Privat Intensif", tipe_kelas: "private", mode_pembelajaran: "online", harga: 999_000, diskon_persen: 0, jumlah_sesi: 10 },
+      { id: "K2", nama: "Kelas Lain", tipe_kelas: "private", mode_pembelajaran: "online", harga: 999_000, diskon_persen: 0, jumlah_sesi: 10 },
     ],
     kode_promo: [],
     kode_promo_kelas: [],
@@ -73,7 +73,7 @@ const bodyDasar = {
   tipeKelas: "private",
   modePembelajaran: "online",
   jumlahSesi: 10,
-  harga: 1_000_000,
+  harga: 999_000,
 };
 
 const cookie = () => `${sessionLib.SESSION_COOKIE_NAME}=${sessionLib.createSessionToken({ userId: ADMIN, role: "admin" })}`;
@@ -120,7 +120,8 @@ describe("Kasus A — diskon kelas dinaikkan saat ada promo aktif yang mencakup 
     assert.equal(kelasTersimpan("K1").diskon_persen, 0);
   });
 
-  it("tanpa menaikkan diskon (0%): 999.000 - 50.000 = 949.000 aman, tersimpan normal", async () => {
+  it("diskon dihapus (3% -> 0%): 999.000 - 50.000 = 949.000 aman, tersimpan normal", async () => {
+    db.kelas[0].diskon_persen = 3;
     const { status } = await ubah({ diskonPersen: 0 });
     assert.equal(status, 200);
   });
@@ -135,6 +136,7 @@ describe("Kasus A — diskon kelas dinaikkan saat ada promo aktif yang mencakup 
     db.kode_promo.length = 0;
     db.kode_promo_kelas.length = 0;
     db.kode_promo.push(promo("p2", "HEMAT10", "persen", 10));
+    db.kelas[0].diskon_persen = 3; // tersimpan 3% -> diskon dihapus (0%): ada perubahan, jadi diperiksa
     const { status, json } = await ubah({ diskonPersen: 0 }); // 999.000 - 99.900 = 899.100 -> 27,8%
     assert.equal(status, 400);
     assert.match(String(json.error), /kode promo HEMAT10 masih aktif.*27,8%/);
@@ -143,6 +145,7 @@ describe("Kasus A — diskon kelas dinaikkan saat ada promo aktif yang mencakup 
   it("beberapa promo bermasalah: yang potongannya terbesar disebut + jumlah promo lain", async () => {
     db.kode_promo.push(promo("p3", "BESAR", "nominal", 200_000));
     db.kode_promo.push(promo("p4", "SEDANG", "nominal", 100_000));
+    db.kelas[0].diskon_persen = 3; // ada perubahan diskon (3% -> 0%), jadi diperiksa
     const { status, json } = await ubah({ diskonPersen: 0 });
     assert.equal(status, 400);
     assert.match(String(json.error), /kode promo BESAR masih aktif/);
@@ -194,7 +197,7 @@ describe("Kasus B — kelas diubah menjadi private online saat ada promo aktif y
 describe("yang TIDAK boleh menghalangi", () => {
   it("promo NONAKTIF tidak menghalangi", async () => {
     db.kode_promo.push(promo("p1", "MATI", "persen", 50, { status: "nonaktif" }));
-    const { status } = await ubah({ diskonPersen: 0 });
+    const { status } = await ubah({ diskonPersen: 1 }); // ada perubahan -> diperiksa, tapi promo nonaktif diabaikan
     assert.equal(status, 200);
   });
 
@@ -209,7 +212,7 @@ describe("yang TIDAK boleh menghalangi", () => {
   });
 
   it("kelas private online TANPA promo aktif dan tanpa diskon tersimpan normal (PATCH dan POST)", async () => {
-    const a = await ubah({});
+    const a = await ubah({ diskonPersen: 1 });
     assert.equal(a.status, 200);
     const b = await buat({ nama: "Baru" });
     assert.equal(b.status, 201);
@@ -225,7 +228,7 @@ describe("yang TIDAK boleh menghalangi", () => {
 describe("gagal-tertutup: gagal baca promo menolak penyimpanan", () => {
   it("query kode_promo gagal -> 500, tidak ada yang tersimpan", async () => {
     fake.gagal.add("kode_promo");
-    const { status, json } = await ubah({ diskonPersen: 0 });
+    const { status, json } = await ubah({ diskonPersen: 1 });
     assert.equal(status, 500);
     assert.match(String(json.error), /Gagal memeriksa kode promo aktif/);
     assert.equal(fake.tulisan().length, 0);
@@ -234,7 +237,7 @@ describe("gagal-tertutup: gagal baca promo menolak penyimpanan", () => {
   it("query kode_promo_kelas gagal (ada promo per-kelas aktif) -> 500, tidak ada yang tersimpan", async () => {
     db.kode_promo.push(promo("p1", "KODEX", "nominal", 1_000, { semua: false }));
     fake.gagal.add("kode_promo_kelas");
-    const { status, json } = await ubah({});
+    const { status, json } = await ubah({ diskonPersen: 1 });
     assert.equal(status, 500);
     assert.match(String(json.error), /Gagal memeriksa cakupan kode promo/);
     assert.equal(fake.tulisan().length, 0);
@@ -271,25 +274,93 @@ describe("POST — kelas baru", () => {
   });
 });
 
+describe("PATCH — pagar hanya jalan bila harga/diskon/tipe/mode/jumlah sesi berubah", () => {
+  beforeEach(() => {
+    // Kelas K1 sudah tersimpan private online 999.000 tanpa diskon; promo aktif besar yang SUDAH melanggar.
+    db.kode_promo.push(promo("p1", "MELANGGAR", "persen", 30));
+  });
+
+  it("edit biasa (deskripsi, nama, jadwal) lolos tersimpan normal dan tanpa query tambahan", async () => {
+    const { status } = await ubah({ deskripsi: "Deskripsi baru", nama: "Nama baru" });
+    assert.equal(status, 200);
+    assert.equal(kelasTersimpan("K1").deskripsi, "Deskripsi baru");
+    assert.equal(hitungDari.kode_promo ?? 0, 0);
+    assert.equal(hitungDari.kode_promo_kelas ?? 0, 0);
+  });
+
+  it("mengubah diskon tetap ditolak", async () => {
+    const { status, json } = await ubah({ diskonPersen: 1 });
+    assert.equal(status, 400);
+    assert.match(String(json.error), /kode promo MELANGGAR/);
+  });
+
+  it("mengubah harga tetap ditolak", async () => {
+    const { status } = await ubah({ harga: 1_099_000 });
+    assert.equal(status, 400);
+  });
+
+  it("mengubah jumlah sesi tetap diperiksa", async () => {
+    const { status } = await ubah({ jumlahSesi: 12 });
+    assert.equal(status, 400);
+  });
+
+  it("mengubah tipe (grup -> private online) tetap ditolak; mode (offline -> online) juga", async () => {
+    db.kelas[0].tipe_kelas = "grouping";
+    const a = await ubah({ tipeKelas: "private" });
+    assert.equal(a.status, 400);
+    db.kelas[0].tipe_kelas = "private";
+    db.kelas[0].mode_pembelajaran = "offline";
+    const b = await ubah({ modePembelajaran: "online" });
+    assert.equal(b.status, 400);
+  });
+
+  it("kelas yang diskonnya sama dengan yang tersimpan tidak dianggap berubah (diskon 5% tersimpan, dikirim ulang 5%)", async () => {
+    db.kode_promo.length = 0;
+    db.kode_promo.push(promo("p9", "MELANGGAR2", "nominal", 60_000));
+    db.kelas[0].diskon_persen = 5;
+    const { status } = await ubah({ diskonPersen: 5, deskripsi: "x" });
+    assert.equal(status, 200);
+    assert.equal(hitungDari.kode_promo ?? 0, 0);
+  });
+
+  it("gagal-tertutup tetap berlaku saat pemeriksaan jalan: perubahan diskon + gagal baca promo -> 500", async () => {
+    fake.gagal.add("kode_promo");
+    const { status } = await ubah({ diskonPersen: 1 });
+    assert.equal(status, 500);
+    assert.equal(fake.tulisan().length, 0);
+  });
+
+  it("POST tetap selalu memeriksa", async () => {
+    const { status } = await buat({ nama: "Baru" });
+    assert.equal(status, 400);
+  });
+});
+
 describe("jumlah query tambahan per penyimpanan kelas", () => {
-  it("private online, tanpa promo aktif: 1 query (kode_promo)", async () => {
-    await ubah({});
+  it("private online, tanpa promo aktif, diskon berubah: 1 query (kode_promo)", async () => {
+    await ubah({ diskonPersen: 1 });
     assert.equal(hitungDari.kode_promo, 1);
     assert.equal(hitungDari.kode_promo_kelas ?? 0, 0);
   });
 
   it("private online, hanya promo semua-kelas: 1 query", async () => {
     db.kode_promo.push(promo("p1", "KECIL", "nominal", 1_000));
-    await ubah({});
+    await ubah({ diskonPersen: 1 });
     assert.equal(hitungDari.kode_promo, 1);
     assert.equal(hitungDari.kode_promo_kelas ?? 0, 0);
   });
 
-  it("private online PATCH, ada promo per-kelas aktif: 2 query (kode_promo + kode_promo_kelas)", async () => {
+  it("private online PATCH diskon berubah, ada promo per-kelas aktif: 2 query (kode_promo + kode_promo_kelas)", async () => {
     db.kode_promo.push(promo("p1", "KECIL", "nominal", 1_000, { semua: false }));
-    await ubah({});
+    await ubah({ diskonPersen: 1 });
     assert.equal(hitungDari.kode_promo, 1);
     assert.equal(hitungDari.kode_promo_kelas, 1);
+  });
+
+  it("edit biasa pada private online: 0 query (PATCH tanpa perubahan harga/diskon/tipe/mode/sesi)", async () => {
+    await ubah({ deskripsi: "x" });
+    assert.equal(hitungDari.kode_promo ?? 0, 0);
+    assert.equal(hitungDari.kode_promo_kelas ?? 0, 0);
   });
 
   it("bukan private online: 0 query", async () => {

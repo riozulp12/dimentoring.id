@@ -3,10 +3,10 @@
  * Dipakai Admin (Kelola Kelas & Kode Promo) dan nanti checkout/pembayaran, supaya satu rumus yang sama.
  *
  * Aturan:
- * - `hargaNormal` di file ini = HARGA TERCANTUM (`hargaTercantum(kelas.harga)` di hargaSesi.ts): harga paket
- *   penuh yang tampil ke siswa sebelum diskon kelas (999.000 untuk kelas yang disimpan 1.000.000).
+ * - `hargaNormal` di file ini = HARGA TERCANTUM kelas: `kelas.harga` apa adanya (diketik admin, mis. 899.000),
+ *   harga paket penuh yang tampil ke siswa sebelum diskon kelas.
  * - Honor per sesi kelas PRIVATE = HONOR_PRIVATE_PERSEN% x hargaPerSesi, dengan hargaPerSesi =
- *   bulatkan(hargaTercantum / jumlahSesiKelas) (999.000 / 10 sesi -> 99.900 -> honor 64.935). Dasarnya harga
+ *   bulatkan(hargaNormal / jumlahSesiKelas) (899.000 / 10 sesi -> 89.900 -> honor 58.435). Dasarnya harga
  *   tercantum, BUKAN harga setelah diskon (aturan hibrida: Dimentoring menanggung diskonnya). Rujukan: PRD 7.5.3 (private 65%) dan `PERSEN_PRIVATE` di
  *   scripts/laporan-honor-v2/hitung.ts (dikunci sama oleh tes, supaya tidak berselisih).
  * - Margin = (hargaDibayar - honor) / hargaDibayar. Pagar: margin >= MARGIN_MINIMAL_PERSEN.

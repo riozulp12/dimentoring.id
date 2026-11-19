@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { validateKelasInput, type KelasInputBody } from "@/lib/admin/validateKelasInput";
-import { periksaPromoAktifUntukKelas } from "@/lib/admin/periksaPromoAktifUntukKelas";
+import { perluPeriksaPromo, periksaPromoAktifUntukKelas } from "@/lib/admin/periksaPromoAktifUntukKelas";
 import { periksaLepasMentorKelas, rencanakanBekukanPemilik, simpanMentorKelasAtomik } from "@/lib/admin/rencanaMentorKelas";
 
 /** Edit/Hapus Kelas — PRD Bagian 7.5 & 7.5.3 (Admin, Kelola Kelas). */
@@ -28,7 +28,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { data: existing, error: existingError } = await supabaseServer
     .from("kelas")
-    .select("id")
+    .select("id, harga, diskon_persen, tipe_kelas, mode_pembelajaran, jumlah_sesi")
     .eq("id", kelasId)
     .maybeSingle();
   if (existingError) {
@@ -52,9 +52,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   // Pagar margin dua arah: keadaan AKHIR kelas (private online) tidak boleh tertembus promo aktif yang
-  // mencakupnya. Hanya membaca, dan sebelum penulisan apa pun.
-  const pagarPromo = await periksaPromoAktifUntukKelas(kelasId, result.data);
-  if (!pagarPromo.ok) return errorResponse(pagarPromo.error, pagarPromo.status);
+  // mencakupnya. Hanya diperiksa bila harga, diskon, tipe, mode, atau jumlah sesi berubah dibanding yang
+  // tersimpan — edit lain (deskripsi, jadwal, mentor) lolos tanpa query tambahan. Hanya membaca, sebelum penulisan.
+  if (perluPeriksaPromo(existing as Record<string, unknown>, result.data)) {
+    const pagarPromo = await periksaPromoAktifUntukKelas(kelasId, result.data);
+    if (!pagarPromo.ok) return errorResponse(pagarPromo.error, pagarPromo.status);
+  }
 
   const { mentor_ids: mentorIds, subtes_ids: subtesIds, subtes_mentor_pairs: subtesMentorPairs, ...kelasData } =
     result.data;

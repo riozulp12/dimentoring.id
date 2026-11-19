@@ -13,7 +13,6 @@ import {
 } from "@/lib/shared/kelasLabels";
 import { formatRupiah, hitungHargaSetelahDiskon } from "@/lib/shared/kelasDiskon";
 import { cekDiskonAman } from "@/lib/shared/marginKelas";
-import { hargaTercantum } from "@/lib/shared/hargaSesi";
 import {
   petaMentorPerSubtes,
   subtesTanpaMentor,
@@ -266,13 +265,12 @@ export default function KelolaKelasForm({
   // Pagar margin (kelas private online) — fungsi murni yang SAMA dengan yang dipakai server saat menyimpan.
   const pesanMarginDiskon = (() => {
     if (!(diskonPreviewValue > 0 && diskonPreviewValue <= 100) || !(hargaPreviewValue > 0)) return null;
-    const tercantum = hargaTercantum(hargaPreviewValue) ?? hargaPreviewValue;
     const cek = cekDiskonAman({
       tipeKelas,
       modeKelas: modePembelajaran,
-      hargaNormal: tercantum,
+      hargaNormal: hargaPreviewValue,
       jumlahSesiKelas: Number(jumlahSesi),
-      hargaSetelahDiskonKelas: hitungHargaSetelahDiskon(tercantum, diskonPreviewValue),
+      hargaSetelahDiskonKelas: hitungHargaSetelahDiskon(hargaPreviewValue, diskonPreviewValue),
     });
     return cek.berlaku && !cek.aman ? cek.pesan : null;
   })();
@@ -677,6 +675,7 @@ export default function KelolaKelasForm({
             onChange={(e) => setHarga(e.target.value.replace(/[^0-9]/g, ""))}
             placeholder="Mis. 500000"
           />
+          <p className="text-xs text-[#7E7C7C]">Isi harga yang tampil ke siswa, misalnya 899.000, bukan 900.000.</p>
         </div>
       </div>
 

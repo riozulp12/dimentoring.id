@@ -1,7 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { hitungHargaSetelahDiskon } from "@/lib/shared/kelasDiskon";
-import { hargaTercantum } from "@/lib/shared/hargaSesi";
 import { MARGIN_MINIMAL_PERSEN, cekPromoTerhadapKelas, kelasPrivateOnline, type PelanggaranPromo } from "@/lib/shared/marginKelas";
 
 /**
@@ -24,6 +23,23 @@ export interface KelasAkhir {
   jumlah_sesi: number;
   harga: number;
   diskon_persen: number;
+}
+
+/**
+ * Perlu diperiksa ulang terhadap promo aktif HANYA bila salah satu dari harga, diskon_persen, tipe_kelas,
+ * mode_pembelajaran, jumlah_sesi berubah dibanding baris yang tersimpan. Edit lain (deskripsi, jadwal, mentor, ...)
+ * tidak mengubah margin, jadi tidak ikut terblokir dan tidak memicu query. Nilai lama yang hilang/rusak dianggap
+ * berubah (gagal-aman: diperiksa).
+ */
+export function perluPeriksaPromo(lama: Record<string, unknown> | null | undefined, baru: KelasAkhir): boolean {
+  if (!lama) return true;
+  return (
+    Number(lama.harga) !== baru.harga ||
+    Number(lama.diskon_persen ?? 0) !== baru.diskon_persen ||
+    lama.tipe_kelas !== baru.tipe_kelas ||
+    lama.mode_pembelajaran !== baru.mode_pembelajaran ||
+    Number(lama.jumlah_sesi) !== baru.jumlah_sesi
+  );
 }
 
 export type HasilPeriksaPromoKelas = { ok: true } | { ok: false; error: string; status: number };
@@ -96,16 +112,16 @@ export async function periksaPromoAktifUntukKelas(
   const berlaku = aktif.filter((p) => p.berlaku_semua_kelas || idPerKelas.has(p.id));
   if (berlaku.length === 0) return { ok: true };
 
-  // Dasar sama dengan pagar lain: harga tercantum; promo persen dihitung dari harga setelah diskon kelas.
-  const tercantum = hargaTercantum(kelas.harga) ?? kelas.harga;
+  // Dasar sama dengan pagar lain: kelas.harga apa adanya (harga tercantum); promo persen dihitung dari harga
+  // setelah diskon kelas.
   const kelasUntukCek = {
     id: kelasId ?? "kelas-baru",
     nama: kelas.nama,
     tipeKelas: kelas.tipe_kelas,
     modeKelas: kelas.mode_pembelajaran,
-    hargaNormal: tercantum,
+    hargaNormal: kelas.harga,
     jumlahSesiKelas: kelas.jumlah_sesi,
-    hargaSetelahDiskonKelas: hitungHargaSetelahDiskon(tercantum, kelas.diskon_persen),
+    hargaSetelahDiskonKelas: hitungHargaSetelahDiskon(kelas.harga, kelas.diskon_persen),
   };
 
   const bermasalah: { kode: string; pelanggaran: PelanggaranPromo }[] = [];

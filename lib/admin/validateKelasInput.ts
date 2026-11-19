@@ -2,7 +2,6 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { PROGRAM_KATEGORI_ORDER } from "@/lib/shared/kelasLabels";
 import { hitungHargaSetelahDiskon } from "@/lib/shared/kelasDiskon";
-import { hargaTercantum } from "@/lib/shared/hargaSesi";
 import { cekDiskonAman } from "@/lib/shared/marginKelas";
 
 /**
@@ -184,14 +183,13 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
   // Pagar margin (hanya kelas private online): diskon kelas tidak boleh membuat sisa Dimentoring di bawah
   // batas minimal setelah honor mentor. Hanya diperiksa saat ada diskon, supaya edit lain tidak ikut terblokir.
   if (diskonPersen > 0 && harga > 0) {
-    // Dasar pagar = HARGA TERCANTUM (harga katalog dikurangi Rp1.000 bila >= Rp500.000), sama dengan dasar honor.
-    const tercantum = hargaTercantum(harga) ?? harga;
+    // Dasar pagar = kelas.harga apa adanya (harga tercantum, diketik admin), sama dengan dasar honor.
     const cek = cekDiskonAman({
       tipeKelas: body.tipeKelas,
       modeKelas: modePembelajaran,
-      hargaNormal: tercantum,
+      hargaNormal: harga,
       jumlahSesiKelas: jumlahSesi,
-      hargaSetelahDiskonKelas: hitungHargaSetelahDiskon(tercantum, diskonPersen),
+      hargaSetelahDiskonKelas: hitungHargaSetelahDiskon(harga, diskonPersen),
     });
     if (cek.berlaku && !cek.aman) return { ok: false, error: cek.pesan };
   }
