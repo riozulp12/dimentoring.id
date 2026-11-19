@@ -3233,6 +3233,32 @@ BEGIN
 END $$;
 
 
+-- Sesi PILIHAN siswa — kelas private online (BARU, November 2026, migration
+-- db/add_sesi_pilihan.sql; rollback db/rollback_add_sesi_pilihan.sql). Rumus harga:
+-- lib/shared/hargaSesi.ts. ADITIF SAJA: semua kolom nullable, tanpa nilai bawaan,
+-- semua CHECK meloloskan NULL. NULL di enrollments.jumlah_sesi_total = pakai
+-- kelas.jumlah_sesi. Hanya DISIAPKAN di sini — dipakai kode PR3 (checkout &
+-- pembayaran); jalankan migrasi SEBELUM deploy PR3.
+ALTER TABLE payments ADD COLUMN sesi_tambahan INTEGER;                   -- sesi di atas kelas.jumlah_sesi
+ALTER TABLE payments ADD COLUMN harga_per_sesi_tambahan DECIMAL(12,2);
+ALTER TABLE payments ADD COLUMN biaya_sesi_tambahan DECIMAL(12,2);
+ALTER TABLE payments ADD COLUMN jumlah_sesi_dibeli INTEGER;              -- total sesi dibeli (bisa < jumlah_sesi kelas)
+ALTER TABLE payment_subtes_pilihan ADD COLUMN jumlah_sesi INTEGER;
+ALTER TABLE enrollments ADD COLUMN jumlah_sesi_total INTEGER;            -- NULL = pakai kelas.jumlah_sesi
+ALTER TABLE enrollments ADD COLUMN sesi_tambahan INTEGER;
+ALTER TABLE enrollment_subtes ADD COLUMN kuota_sesi INTEGER;
+ALTER TABLE sesi_kelas ADD COLUMN subtes_id UUID REFERENCES subtes(id);  -- tanpa ON DELETE CASCADE
+ALTER TABLE payments ADD CONSTRAINT payments_jumlah_sesi_dibeli_valid
+    CHECK (jumlah_sesi_dibeli IS NULL OR jumlah_sesi_dibeli BETWEEN 1 AND 20);
+ALTER TABLE payments ADD CONSTRAINT payments_sesi_tambahan_valid
+    CHECK (sesi_tambahan IS NULL OR sesi_tambahan BETWEEN 0 AND 10);
+ALTER TABLE enrollments ADD CONSTRAINT enrollments_jumlah_sesi_total_valid
+    CHECK (jumlah_sesi_total IS NULL OR jumlah_sesi_total BETWEEN 1 AND 20);
+ALTER TABLE enrollments ADD CONSTRAINT enrollments_sesi_tambahan_valid
+    CHECK (sesi_tambahan IS NULL OR sesi_tambahan BETWEEN 0 AND 10);
+ALTER TABLE enrollment_subtes ADD CONSTRAINT enrollment_subtes_kuota_sesi_valid
+    CHECK (kuota_sesi IS NULL OR kuota_sesi >= 1);
+
 -- ============================================================================
 -- ROW LEVEL SECURITY (WAJIB — Supabase mengekspos setiap tabel lewat API publik
 -- secara default. Tanpa RLS, siapa pun dengan anon key bisa baca/tulis langsung
