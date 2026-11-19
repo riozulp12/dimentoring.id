@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { validateKelasInput, type KelasInputBody } from "@/lib/admin/validateKelasInput";
+import { periksaPromoAktifUntukKelas } from "@/lib/admin/periksaPromoAktifUntukKelas";
 
 /** Tambah Kelas baru — PRD Bagian 7.5 & 7.5.3 (Admin, Kelola Kelas). */
 
@@ -29,6 +30,10 @@ export async function POST(request: NextRequest) {
   if (!result.ok) {
     return errorResponse(result.error, 400);
   }
+
+  // Pagar margin dua arah: kelas baru yang private online tidak boleh tertembus promo aktif semua-kelas.
+  const pagarPromo = await periksaPromoAktifUntukKelas(null, result.data);
+  if (!pagarPromo.ok) return errorResponse(pagarPromo.error, pagarPromo.status);
 
   const { mentor_ids: mentorIds, subtes_ids: subtesIds, subtes_mentor_pairs: subtesMentorPairs, ...kelasData } =
     result.data;
