@@ -1,6 +1,8 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { PROGRAM_KATEGORI_ORDER } from "@/lib/shared/kelasLabels";
+import { hitungHargaSetelahDiskon } from "@/lib/shared/kelasDiskon";
+import { cekDiskonAman } from "@/lib/shared/marginKelas";
 
 /**
  * Validasi body request Tambah/Edit Kelas — dipakai bersama oleh
@@ -176,6 +178,19 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
     diskonRaw === undefined || diskonRaw === null || diskonRaw === "" ? 0 : Number(diskonRaw);
   if (!Number.isInteger(diskonPersen) || diskonPersen < 0 || diskonPersen > 100) {
     return { ok: false, error: "Diskon harus angka bulat 0-100." };
+  }
+
+  // Pagar margin (hanya kelas private online): diskon kelas tidak boleh membuat sisa Dimentoring di bawah
+  // batas minimal setelah honor mentor. Hanya diperiksa saat ada diskon, supaya edit lain tidak ikut terblokir.
+  if (diskonPersen > 0 && harga > 0) {
+    const cek = cekDiskonAman({
+      tipeKelas: body.tipeKelas,
+      modeKelas: modePembelajaran,
+      hargaNormal: harga,
+      jumlahSesiKelas: jumlahSesi,
+      hargaSetelahDiskonKelas: hitungHargaSetelahDiskon(harga, diskonPersen),
+    });
+    if (cek.berlaku && !cek.aman) return { ok: false, error: cek.pesan };
   }
 
   // Cross-check "mentor mengampu subtes ini" — cocok lewat mapel_dasar (mapel

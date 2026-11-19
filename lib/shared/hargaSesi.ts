@@ -10,8 +10,9 @@
  * - Tiap subtes (maks. 3) butuh minimal 1 sesi, jadi N tidak boleh kurang dari jumlahSubtes.
  * - N == dasar : hargaDasar = hargaAktif (harga setelah diskon kelas).
  * - N  > dasar : hargaDasar = hargaAktif + (N - dasar) x hargaPerSesi (tambahan TANPA diskon).
- * - N  < dasar : paket kecil, TANPA diskon kelas; hargaPerSesi x N x pengali, dibatasi batas atas
- *                supaya tidak pernah menyamai/melebihi paket penuh.
+ * - N  < dasar : paket kecil, TANPA diskon kelas; N x (hargaPerSesi + premiumPerSesi), dengan premium
+ *                per sesi maksimal PREMIUM_MAKS_PER_SESI, dibatasi batas atas supaya tidak pernah
+ *                menyamai/melebihi paket penuh.
  * - Diskon kelas & kode promo hanya berlaku untuk N >= dasar.
  */
 
@@ -21,17 +22,20 @@ export const FAKTOR_SESI_MAKS = 2;
 export const SUBTES_MIN = 1;
 export const SUBTES_MAKS = 3;
 
+/** Premium per sesi paket kecil TIDAK BOLEH melebihi ini (rupiah), berapa pun harga kelasnya. */
+export const PREMIUM_MAKS_PER_SESI = 15000;
+
 /**
- * Pengali paket kecil (N < jumlahSesiKelas), berbasis persentase N terhadap jumlahSesiKelas.
- * Nilai pengali disimpan sebagai persen bulat (125 = 1,25) supaya hitungan tetap bilangan bulat.
+ * Tier premium paket kecil (N < jumlahSesiKelas), berbasis persentase N terhadap jumlahSesiKelas.
+ * Premium dalam PER MIL dari hargaPerSesi (150 = 15%), bilangan bulat supaya tanpa pecahan.
  * Urut naik; baris pertama yang `sampaiPersen`-nya >= persentase N yang dipakai.
  */
-export const PENGALI_PAKET_KECIL: readonly { sampaiPersen: number; pengaliPersen: number }[] = [
-  { sampaiPersen: 30, pengaliPersen: 125 },
-  { sampaiPersen: 60, pengaliPersen: 110 },
+export const TIER_PREMIUM_PAKET_KECIL: readonly { sampaiPersen: number; premiumPerMil: number }[] = [
+  { sampaiPersen: 30, premiumPerMil: 150 },
+  { sampaiPersen: 60, premiumPerMil: 75 },
 ];
-/** Pengali bila N di atas semua baris tabel (tetap di bawah 100%). */
-export const PENGALI_PAKET_KECIL_DEFAULT_PERSEN = 100;
+/** Premium (per mil) bila N di atas semua tier (tetap di bawah 100%). */
+export const PREMIUM_PER_MIL_DEFAULT = 0;
 
 export interface InputHargaSesi {
   /** kelas.harga (harga normal, sebelum diskon). */
@@ -57,7 +61,7 @@ export interface HasilHargaValid {
   totalSebelumPromo: number;
   diskonKelasBerlaku: boolean;
   kodePromoBerlaku: boolean;
-  /** true bila paket kecil dibatasi batas atas (rumus d), bukan pengali mentah. */
+  /** true bila paket kecil dibatasi batas atas (rumus d), bukan harga mentah. */
   batasAtasAktif: boolean;
 }
 
@@ -73,13 +77,17 @@ export function bulatkan(nilai: number): number {
   return Math.round(nilai);
 }
 
-/** Pengali paket kecil (dalam persen bulat, mis. 125) untuk N < jumlahSesiKelas. */
-export function pengaliPaketKecilPersen(sesiDipilih: number, jumlahSesiKelas: number): number {
-  for (const baris of PENGALI_PAKET_KECIL) {
+/** Premium per sesi (rupiah) untuk paket kecil: min(bulatkan(hargaPerSesi x permil / 1000), PREMIUM_MAKS_PER_SESI). */
+export function premiumPerSesiPaketKecil(sesiDipilih: number, jumlahSesiKelas: number, hargaPerSesi: number): number {
+  let perMil = PREMIUM_PER_MIL_DEFAULT;
+  for (const baris of TIER_PREMIUM_PAKET_KECIL) {
     // sesi/dasar <= sampai/100, dihitung tanpa pecahan.
-    if (sesiDipilih * 100 <= baris.sampaiPersen * jumlahSesiKelas) return baris.pengaliPersen;
+    if (sesiDipilih * 100 <= baris.sampaiPersen * jumlahSesiKelas) {
+      perMil = baris.premiumPerMil;
+      break;
+    }
   }
-  return PENGALI_PAKET_KECIL_DEFAULT_PERSEN;
+  return Math.min(bulatkan((hargaPerSesi * perMil) / 1000), PREMIUM_MAKS_PER_SESI);
 }
 
 const bulat = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n);
@@ -130,7 +138,7 @@ export function hitungHargaSesi(input: InputHargaSesi): HasilHarga {
     hargaDasar = hargaAktif;
     biayaSesiTambahan = (n - jumlahSesiKelas) * hargaPerSesi;
   } else {
-    const hargaMentah = bulatkan((hargaPerSesi * n * pengaliPaketKecilPersen(n, jumlahSesiKelas)) / 100);
+    const hargaMentah = n * (hargaPerSesi + premiumPerSesiPaketKecil(n, jumlahSesiKelas, hargaPerSesi));
     const batasAtas = bulatkan((hargaAktif * (n + jumlahSesiKelas)) / (FAKTOR_SESI_MAKS * jumlahSesiKelas));
     batasAtasAktif = batasAtas < hargaMentah;
     hargaDasar = Math.min(hargaMentah, batasAtas);

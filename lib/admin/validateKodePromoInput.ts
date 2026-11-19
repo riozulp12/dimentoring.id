@@ -1,5 +1,7 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { hitungHargaSetelahDiskon, normalizeDiskonPersen } from "@/lib/shared/kelasDiskon";
+import { cekPromoTerhadapKelas, type KelasUntukCekPromo } from "@/lib/shared/marginKelas";
 
 /**
  * Validasi body request Tambah/Edit Kode Promo — dipakai bersama oleh
@@ -128,6 +130,48 @@ export async function validateKodePromoInput(
     }
     if ((kelasRows ?? []).length !== kelasIds.length) {
       return { ok: false, error: "Salah satu Kelas yang dipilih tidak ditemukan." };
+    }
+  }
+
+  // Pagar margin: promo yang aktif ditumpuk dengan diskon kelas yang berlaku SAAT INI tidak boleh membuat
+  // margin kelas private online di bawah batas. Promo nonaktif tidak diperiksa di sini (diperiksa saat diaktifkan).
+  if (status === "aktif") {
+    let kelasQuery = supabaseServer
+      .from("kelas")
+      .select("id, nama, harga, diskon_persen, jumlah_sesi, tipe_kelas, mode_pembelajaran")
+      .eq("tipe_kelas", "private")
+      .eq("mode_pembelajaran", "online");
+    if (!berlakuSemuaKelas) kelasQuery = kelasQuery.in("id", kelasIds);
+    const { data: kelasCakupan, error: cakupanError } = await kelasQuery;
+    if (cakupanError) {
+      console.error("[validateKodePromoInput] query kelas cakupan failed:", cakupanError);
+      return { ok: false, error: "Gagal memeriksa batas margin kelas. Coba lagi nanti." };
+    }
+    const daftar: KelasUntukCekPromo[] = [];
+    for (const k of kelasCakupan ?? []) {
+      const harga = Number(k.harga);
+      if (!Number.isFinite(harga) || harga <= 0) continue;
+      daftar.push({
+        id: k.id as string,
+        nama: k.nama as string,
+        tipeKelas: k.tipe_kelas as string,
+        modeKelas: k.mode_pembelajaran as string,
+        hargaNormal: harga,
+        jumlahSesiKelas: Number(k.jumlah_sesi),
+        hargaSetelahDiskonKelas: hitungHargaSetelahDiskon(harga, normalizeDiskonPersen(k.diskon_persen as number | null)),
+      });
+    }
+    const pelanggaran = cekPromoTerhadapKelas(daftar, {
+      tipeDiskon: body.tipeDiskon as "persen" | "nominal",
+      nilaiDiskon,
+    });
+    if (pelanggaran.length > 0) {
+      const [pertama] = pelanggaran;
+      const lain = pelanggaran.length - 1;
+      return {
+        ok: false,
+        error: `Kelas "${pertama.namaKelas}": ${pertama.pesan}${lain > 0 ? ` Ada ${lain} kelas private online lain yang juga terlalu murah dengan kode ini.` : ""}`,
+      };
     }
   }
 

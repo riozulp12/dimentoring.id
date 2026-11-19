@@ -12,6 +12,7 @@ import {
   JUMLAH_SESI_DEFAULT,
 } from "@/lib/shared/kelasLabels";
 import { formatRupiah, hitungHargaSetelahDiskon } from "@/lib/shared/kelasDiskon";
+import { cekDiskonAman } from "@/lib/shared/marginKelas";
 import {
   petaMentorPerSubtes,
   subtesTanpaMentor,
@@ -261,6 +262,19 @@ export default function KelolaKelasForm({
         }
       : null;
 
+  // Pagar margin (kelas private online) — fungsi murni yang SAMA dengan yang dipakai server saat menyimpan.
+  const pesanMarginDiskon = (() => {
+    if (!(diskonPreviewValue > 0 && diskonPreviewValue <= 100) || !(hargaPreviewValue > 0)) return null;
+    const cek = cekDiskonAman({
+      tipeKelas,
+      modeKelas: modePembelajaran,
+      hargaNormal: hargaPreviewValue,
+      jumlahSesiKelas: Number(jumlahSesi),
+      hargaSetelahDiskonKelas: hitungHargaSetelahDiskon(hargaPreviewValue, diskonPreviewValue),
+    });
+    return cek.berlaku && !cek.aman ? cek.pesan : null;
+  })();
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError(null);
@@ -283,6 +297,10 @@ export default function KelolaKelasForm({
     const diskonValue = diskonPersen.trim() === "" ? 0 : Number(diskonPersen);
     if (!Number.isInteger(diskonValue) || diskonValue < 0 || diskonValue > 100) {
       setDiskonError("Diskon harus angka bulat 0-100.");
+      return;
+    }
+    if (pesanMarginDiskon) {
+      setDiskonError(pesanMarginDiskon);
       return;
     }
 
@@ -674,7 +692,9 @@ export default function KelolaKelasForm({
           }}
           placeholder="Mis. 20"
         />
-        {diskonError ? <p className="text-sm text-[#E70A0A]">{diskonError}</p> : null}
+        {diskonError ?? pesanMarginDiskon ? (
+          <p className="text-sm text-[#E70A0A]">{diskonError ?? pesanMarginDiskon}</p>
+        ) : null}
         <p className="text-xs text-[#7E7C7C]">
           {hargaPreview
             ? `Harga tampil ke siswa: ${hargaPreview.setelah} (harga asli ${hargaPreview.asli} dicoret).`
