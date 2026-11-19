@@ -66,8 +66,9 @@ SELECT table_name, column_name, is_nullable, column_default
    AND (is_nullable <> 'YES' OR column_default IS NOT NULL);
 
 
--- ---- KUERI 4: 5 CHECK ada dan tervalidasi, plus FK sesi_kelas.subtes_id. Harapan: 6 baris ----
--- 5 baris contype = 'c' (convalidated = true) dan 1 baris contype = 'f' ke subtes dengan hapus = 'a' (NO ACTION, bukan CASCADE).
+-- ---- KUERI 4: 6 CHECK ada dan tervalidasi, plus FK sesi_kelas.subtes_id. Harapan: 7 baris ----
+-- 6 baris contype = 'c' (convalidated = true; definisi HANYA batas bawah, tanpa batas atas, dan memuat "IS NULL OR")
+-- dan 1 baris contype = 'f' ke subtes dengan hapus = 'a' (NO ACTION, bukan CASCADE).
 SELECT conrelid::regclass AS tabel,
        conname,
        contype,
@@ -77,7 +78,7 @@ SELECT conrelid::regclass AS tabel,
   FROM pg_constraint
  WHERE conname IN ('payments_jumlah_sesi_dibeli_valid', 'payments_sesi_tambahan_valid',
                    'enrollments_jumlah_sesi_total_valid', 'enrollments_sesi_tambahan_valid',
-                   'enrollment_subtes_kuota_sesi_valid')
+                   'enrollment_subtes_kuota_sesi_valid', 'payment_subtes_pilihan_jumlah_sesi_valid')
     OR (conrelid = 'sesi_kelas'::regclass AND contype = 'f'
         AND conkey = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'sesi_kelas'::regclass AND attname = 'subtes_id')])
  ORDER BY 1, 2;

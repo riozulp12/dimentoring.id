@@ -10,6 +10,10 @@
 --   * SEMUA kolom baru NULLABLE dan tanpa nilai bawaan (jadi baris lama tidak disentuh sama sekali; kode lama yang
 --     meng-INSERT tanpa kolom ini tetap berhasil dan kolomnya NULL);
 --   * semua CHECK meloloskan NULL (bila kolom tidak NULL baru dibatasi), jadi baris lama otomatis lolos;
+--   * CHECK HANYA batas BAWAH (>= 1 / >= 0), TANPA batas atas. Batas atas (total sesi maksimal 2 x
+--     kelas.jumlah_sesi, sesi tambahan maksimal sebesar jumlah_sesi kelas) ditegakkan APLIKASI lewat
+--     hitungHargaSesi (lib/shared/hargaSesi.ts), bukan database: jumlah_sesi tiap kelas berbeda, dan CHECK yang
+--     lebih ketat daripada aplikasi bisa membuat fulfill gagal SETELAH siswa membayar (pembayaran sudah masuk);
 --   * arti NULL: enrollments.jumlah_sesi_total NULL = pakai kelas.jumlah_sesi; kolom lain NULL = "tidak dicatat".
 --
 -- Kolom baru:
@@ -56,27 +60,32 @@ ALTER TABLE enrollment_subtes ADD COLUMN IF NOT EXISTS kuota_sesi INTEGER;
 -- FK biasa (NO ACTION): subtes tidak bisa dihapus selama masih dirujuk sesi. Sengaja tanpa ON DELETE CASCADE.
 ALTER TABLE sesi_kelas ADD COLUMN IF NOT EXISTS subtes_id UUID REFERENCES subtes(id);
 
--- ---- 6. CHECK (NULL lolos; nama constraint eksplisit) -----------------------
+-- ---- 6. CHECK (NULL lolos; hanya batas bawah; nama constraint eksplisit) ----
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_jumlah_sesi_dibeli_valid' AND conrelid = 'payments'::regclass) THEN
         ALTER TABLE payments ADD CONSTRAINT payments_jumlah_sesi_dibeli_valid
-            CHECK (jumlah_sesi_dibeli IS NULL OR jumlah_sesi_dibeli BETWEEN 1 AND 20);
+            CHECK (jumlah_sesi_dibeli IS NULL OR jumlah_sesi_dibeli >= 1);
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_sesi_tambahan_valid' AND conrelid = 'payments'::regclass) THEN
         ALTER TABLE payments ADD CONSTRAINT payments_sesi_tambahan_valid
-            CHECK (sesi_tambahan IS NULL OR sesi_tambahan BETWEEN 0 AND 10);
+            CHECK (sesi_tambahan IS NULL OR sesi_tambahan >= 0);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payment_subtes_pilihan_jumlah_sesi_valid' AND conrelid = 'payment_subtes_pilihan'::regclass) THEN
+        ALTER TABLE payment_subtes_pilihan ADD CONSTRAINT payment_subtes_pilihan_jumlah_sesi_valid
+            CHECK (jumlah_sesi IS NULL OR jumlah_sesi >= 1);
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollments_jumlah_sesi_total_valid' AND conrelid = 'enrollments'::regclass) THEN
         ALTER TABLE enrollments ADD CONSTRAINT enrollments_jumlah_sesi_total_valid
-            CHECK (jumlah_sesi_total IS NULL OR jumlah_sesi_total BETWEEN 1 AND 20);
+            CHECK (jumlah_sesi_total IS NULL OR jumlah_sesi_total >= 1);
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollments_sesi_tambahan_valid' AND conrelid = 'enrollments'::regclass) THEN
         ALTER TABLE enrollments ADD CONSTRAINT enrollments_sesi_tambahan_valid
-            CHECK (sesi_tambahan IS NULL OR sesi_tambahan BETWEEN 0 AND 10);
+            CHECK (sesi_tambahan IS NULL OR sesi_tambahan >= 0);
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollment_subtes_kuota_sesi_valid' AND conrelid = 'enrollment_subtes'::regclass) THEN

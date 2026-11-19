@@ -3236,7 +3236,8 @@ END $$;
 -- Sesi PILIHAN siswa — kelas private online (BARU, November 2026, migration
 -- db/add_sesi_pilihan.sql; rollback db/rollback_add_sesi_pilihan.sql). Rumus harga:
 -- lib/shared/hargaSesi.ts. ADITIF SAJA: semua kolom nullable, tanpa nilai bawaan,
--- semua CHECK meloloskan NULL. NULL di enrollments.jumlah_sesi_total = pakai
+-- semua CHECK meloloskan NULL dan HANYA batas bawah (batas atas ditegakkan
+-- aplikasi lewat hitungHargaSesi, supaya tidak menolak pembayaran yang sudah masuk). NULL di enrollments.jumlah_sesi_total = pakai
 -- kelas.jumlah_sesi. Hanya DISIAPKAN di sini — dipakai kode PR3 (checkout &
 -- pembayaran); jalankan migrasi SEBELUM deploy PR3.
 ALTER TABLE payments ADD COLUMN sesi_tambahan INTEGER;                   -- sesi di atas kelas.jumlah_sesi
@@ -3249,13 +3250,15 @@ ALTER TABLE enrollments ADD COLUMN sesi_tambahan INTEGER;
 ALTER TABLE enrollment_subtes ADD COLUMN kuota_sesi INTEGER;
 ALTER TABLE sesi_kelas ADD COLUMN subtes_id UUID REFERENCES subtes(id);  -- tanpa ON DELETE CASCADE
 ALTER TABLE payments ADD CONSTRAINT payments_jumlah_sesi_dibeli_valid
-    CHECK (jumlah_sesi_dibeli IS NULL OR jumlah_sesi_dibeli BETWEEN 1 AND 20);
+    CHECK (jumlah_sesi_dibeli IS NULL OR jumlah_sesi_dibeli >= 1);
 ALTER TABLE payments ADD CONSTRAINT payments_sesi_tambahan_valid
-    CHECK (sesi_tambahan IS NULL OR sesi_tambahan BETWEEN 0 AND 10);
+    CHECK (sesi_tambahan IS NULL OR sesi_tambahan >= 0);
+ALTER TABLE payment_subtes_pilihan ADD CONSTRAINT payment_subtes_pilihan_jumlah_sesi_valid
+    CHECK (jumlah_sesi IS NULL OR jumlah_sesi >= 1);
 ALTER TABLE enrollments ADD CONSTRAINT enrollments_jumlah_sesi_total_valid
-    CHECK (jumlah_sesi_total IS NULL OR jumlah_sesi_total BETWEEN 1 AND 20);
+    CHECK (jumlah_sesi_total IS NULL OR jumlah_sesi_total >= 1);
 ALTER TABLE enrollments ADD CONSTRAINT enrollments_sesi_tambahan_valid
-    CHECK (sesi_tambahan IS NULL OR sesi_tambahan BETWEEN 0 AND 10);
+    CHECK (sesi_tambahan IS NULL OR sesi_tambahan >= 0);
 ALTER TABLE enrollment_subtes ADD CONSTRAINT enrollment_subtes_kuota_sesi_valid
     CHECK (kuota_sesi IS NULL OR kuota_sesi >= 1);
 

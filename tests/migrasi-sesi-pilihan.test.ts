@@ -30,12 +30,14 @@ const KOLOM_BARU: Record<string, string> = {
   "sesi_kelas.subtes_id": "UUID REFERENCES subtes(id)",
 };
 
-const CHECK_BARU: Record<string, { tabel: string; kolom: string; min: number; maks: number | null }> = {
-  payments_jumlah_sesi_dibeli_valid: { tabel: "payments", kolom: "jumlah_sesi_dibeli", min: 1, maks: 20 },
-  payments_sesi_tambahan_valid: { tabel: "payments", kolom: "sesi_tambahan", min: 0, maks: 10 },
-  enrollments_jumlah_sesi_total_valid: { tabel: "enrollments", kolom: "jumlah_sesi_total", min: 1, maks: 20 },
-  enrollments_sesi_tambahan_valid: { tabel: "enrollments", kolom: "sesi_tambahan", min: 0, maks: 10 },
-  enrollment_subtes_kuota_sesi_valid: { tabel: "enrollment_subtes", kolom: "kuota_sesi", min: 1, maks: null },
+// Hanya batas BAWAH; batas atas ditegakkan aplikasi (hitungHargaSesi), bukan database.
+const CHECK_BARU: Record<string, { tabel: string; kolom: string; min: number }> = {
+  payments_jumlah_sesi_dibeli_valid: { tabel: "payments", kolom: "jumlah_sesi_dibeli", min: 1 },
+  payments_sesi_tambahan_valid: { tabel: "payments", kolom: "sesi_tambahan", min: 0 },
+  payment_subtes_pilihan_jumlah_sesi_valid: { tabel: "payment_subtes_pilihan", kolom: "jumlah_sesi", min: 1 },
+  enrollments_jumlah_sesi_total_valid: { tabel: "enrollments", kolom: "jumlah_sesi_total", min: 1 },
+  enrollments_sesi_tambahan_valid: { tabel: "enrollments", kolom: "sesi_tambahan", min: 0 },
+  enrollment_subtes_kuota_sesi_valid: { tabel: "enrollment_subtes", kolom: "kuota_sesi", min: 1 },
 };
 
 const sqlMigrasi = tanpaKomentar(baca(MIGRASI));
@@ -83,17 +85,31 @@ describe("db/add_sesi_pilihan.sql — aditif dan aman untuk kode lama", () => {
     assert.ok(!/CASCADE/i.test(sqlMigrasi));
   });
 
-  it("5 CHECK bernama eksplisit, dipasang idempoten, batasnya benar, dan NULL lolos", () => {
+  it("6 CHECK bernama eksplisit, dipasang idempoten, hanya batas bawah (IS NULL OR kolom >= n), NULL lolos", () => {
+    assert.equal(Object.keys(CHECK_BARU).length, 6);
     for (const [nama, spek] of Object.entries(CHECK_BARU)) {
       assert.ok(sqlMigrasi.includes(`'${nama}'`), `pengecekan pg_constraint ${nama}`);
-      const batas = spek.maks === null ? `${spek.kolom} >= ${spek.min}` : `${spek.kolom} BETWEEN ${spek.min} AND ${spek.maks}`;
       const re = new RegExp(
-        `ALTER\\s+TABLE\\s+${spek.tabel}\\s+ADD\\s+CONSTRAINT\\s+${nama}\\s+CHECK\\s*\\(\\s*${spek.kolom}\\s+IS\\s+NULL\\s+OR\\s+${batas.replace(/\s+/g, "\\s+")}\\s*\\)`,
+        `ALTER\\s+TABLE\\s+${spek.tabel}\\s+ADD\\s+CONSTRAINT\\s+${nama}\\s+CHECK\\s*\\(\\s*${spek.kolom}\\s+IS\\s+NULL\\s+OR\\s+${spek.kolom}\\s*>=\\s*${spek.min}\\s*\\)`,
         "i",
       );
       assert.match(sqlMigrasi, re, nama);
     }
-    assert.equal((sqlMigrasi.match(/ADD\s+CONSTRAINT/gi) ?? []).length, 5);
+    assert.equal((sqlMigrasi.match(/ADD\s+CONSTRAINT/gi) ?? []).length, 6);
+  });
+
+  it("TIDAK ada batas atas di CHECK mana pun (tanpa BETWEEN, < atau <=); alasannya tertulis", () => {
+    const badanCheck = [...sqlMigrasi.matchAll(/CHECK\s*\(([^;]*?)\)\s*;/gi)].map((m) => m[1]);
+    assert.equal(badanCheck.length, 6);
+    for (const b of badanCheck) {
+      assert.ok(!/\bBETWEEN\b/i.test(b), b);
+      assert.ok(!/</.test(b), b);
+      assert.match(b, /^\s*\w+\s+IS\s+NULL\s+OR\s+\w+\s*>=\s*\d+\s*$/i, b);
+    }
+    const mentah = baca(MIGRASI);
+    assert.match(mentah, /TANPA batas atas/);
+    assert.match(mentah, /ditegakkan APLIKASI lewat\s+--\s+hitungHargaSesi/);
+    assert.match(mentah, /fulfill gagal SETELAH siswa membayar/);
   });
 
   it("nama kolom baru belum ada di tabel yang sama (tidak menimpa): CREATE TABLE di schema.sql dan migrasi lama", () => {
@@ -129,9 +145,9 @@ describe("db/add_sesi_pilihan.sql — aditif dan aman untuk kode lama", () => {
 });
 
 describe("db/rollback_add_sesi_pilihan.sql — membatalkan persis", () => {
-  it("menghapus tepat 5 constraint dan 9 kolom yang sama, semuanya IF EXISTS, tidak ada DROP lain", () => {
+  it("menghapus tepat 6 constraint dan 9 kolom yang sama, semuanya IF EXISTS, tidak ada DROP lain", () => {
     const drops = [...sqlRollback.matchAll(/\bDROP\s+[^;]+;/gi)].map((m) => m[0]);
-    assert.equal(drops.length, 14);
+    assert.equal(drops.length, 15);
     for (const d of drops) assert.match(d, /IF\s+EXISTS/i);
 
     const kolomDihapus = new Set(
@@ -187,28 +203,38 @@ describe("db/verify_add_sesi_pilihan.sql — hanya membaca", () => {
     assert.match(sqlVerifikasi, /is_nullable/);
   });
 
-  it("memeriksa 5 constraint, FK (aksi hapus), dan menghitung baris lama yang berubah (harus 0)", () => {
+  it("memeriksa 6 constraint, FK (aksi hapus), dan menghitung baris lama yang berubah (harus 0)", () => {
     for (const nama of Object.keys(CHECK_BARU)) assert.ok(sqlVerifikasi.includes(`'${nama}'`), nama);
     assert.match(sqlVerifikasi, /confdeltype/);
     assert.match(sqlVerifikasi, /baris_berubah/);
     const mentah = baca(VERIFIKASI);
     assert.match(mentah, /SATU PER SATU/);
     assert.match(mentah, /Harapan: semua 0/);
+    assert.match(mentah, /KUERI 4: 6 CHECK[\s\S]*Harapan: 7 baris/);
+    assert.match(mentah, /HANYA batas bawah, tanpa batas atas/);
   });
 });
 
 describe("db/schema.sql dan PRD mengikuti migrasi", () => {
-  it("schema.sql memuat 9 kolom dan 5 constraint yang sama", () => {
+  it("schema.sql memuat 9 kolom dan 6 constraint yang sama, juga hanya batas bawah", () => {
     const schema = tanpaKomentar(baca("db/schema.sql"));
     for (const kunci of Object.keys(KOLOM_BARU)) {
       const [tabel, kolom] = kunci.split(".");
       assert.match(schema, new RegExp(`ALTER\\s+TABLE\\s+${tabel}\\s+ADD\\s+COLUMN\\s+${kolom}\\s`, "i"), kunci);
     }
-    for (const nama of Object.keys(CHECK_BARU)) assert.ok(schema.includes(nama), nama);
+    for (const [nama, spek] of Object.entries(CHECK_BARU)) {
+      assert.match(
+        schema,
+        new RegExp(`ADD\\s+CONSTRAINT\\s+${nama}\\s+CHECK\\s*\\(\\s*${spek.kolom}\\s+IS\\s+NULL\\s+OR\\s+${spek.kolom}\\s*>=\\s*${spek.min}\\s*\\)`, "i"),
+        nama,
+      );
+    }
   });
 
-  it("PRD Bagian 13 menyebut migrasi dan kolom baru", () => {
+  it("PRD Bagian 13 menyebut migrasi, kolom baru, dan bahwa CHECK tanpa batas atas", () => {
     const prd = baca("docs/PRD.md");
+    assert.match(prd, /CHECK hanya batas BAWAH/);
+    assert.ok(!/INT 1–20|INT 0–10/.test(prd));
     assert.match(prd, /db\/add_sesi_pilihan\.sql/);
     for (const kunci of Object.keys(KOLOM_BARU)) assert.ok(prd.includes(kunci.split(".")[1]), kunci);
   });

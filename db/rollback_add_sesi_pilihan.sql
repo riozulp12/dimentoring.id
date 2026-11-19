@@ -1,4 +1,4 @@
--- Rollback untuk db/add_sesi_pilihan.sql: membatalkan PERSIS perubahan migrasi itu (5 constraint dan 9 kolom),
+-- Rollback untuk db/add_sesi_pilihan.sql: membatalkan PERSIS perubahan migrasi itu (6 constraint dan 9 kolom),
 -- tidak menyentuh apa pun yang lain.
 --
 -- PERINGATAN — baca sebelum menjalankan:
@@ -31,6 +31,7 @@ SELECT 'sesi_kelas', count(*) FROM sesi_kelas WHERE subtes_id IS NOT NULL;
 -- ---- 1. CHECK ----
 ALTER TABLE payments          DROP CONSTRAINT IF EXISTS payments_jumlah_sesi_dibeli_valid;
 ALTER TABLE payments          DROP CONSTRAINT IF EXISTS payments_sesi_tambahan_valid;
+ALTER TABLE payment_subtes_pilihan DROP CONSTRAINT IF EXISTS payment_subtes_pilihan_jumlah_sesi_valid;
 ALTER TABLE enrollments       DROP CONSTRAINT IF EXISTS enrollments_jumlah_sesi_total_valid;
 ALTER TABLE enrollments       DROP CONSTRAINT IF EXISTS enrollments_sesi_tambahan_valid;
 ALTER TABLE enrollment_subtes DROP CONSTRAINT IF EXISTS enrollment_subtes_kuota_sesi_valid;
