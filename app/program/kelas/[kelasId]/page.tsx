@@ -23,7 +23,7 @@ import { hrefKelasDimiliki } from "@/lib/shared/kelasHref";
 import { hrefLoginKembali } from "@/lib/shared/saranProdukAssessment";
 import Avatar from "@/components/ui/Avatar";
 import KelasCardVisual from "@/components/ui/KelasCardVisual";
-import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
+import DetailKelasHeader from "@/components/program/DetailKelasHeader";
 import BadgeKapasitas from "@/components/ui/BadgeKapasitas";
 import HargaMulaiDari from "@/components/program/HargaMulaiDari";
 import { ringkasanHargaKartu } from "@/lib/shared/kartuHargaMulai";
@@ -42,25 +42,6 @@ import { sesiPilihanAktif } from "@/lib/shared/sesiPilihanFlag";
 
 function formatRupiah(value: number): string {
   return `Rp${Math.round(value).toLocaleString("id-ID")}`;
-}
-
-function Badge({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex w-fit items-center rounded-full bg-[#F9FAFF] px-3 py-1 text-xs font-medium text-[#081EEA]">
-      {children}
-    </span>
-  );
-}
-
-function CalendarIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <rect x="3.5" y="5" width="17" height="15" rx="2" />
-      <line x1="3.5" y1="9.5" x2="20.5" y2="9.5" />
-      <line x1="8" y1="3" x2="8" y2="6.5" />
-      <line x1="16" y1="3" x2="16" y2="6.5" />
-    </svg>
-  );
 }
 
 function DocumentIcon(props: SVGProps<SVGSVGElement>) {
@@ -172,20 +153,16 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
           <div className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-[2fr_1fr]">
             {/* CARD 2 — Info Kelas */}
             <div className="flex flex-col gap-5 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white p-5 shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)] sm:p-8">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <h1 className="text-2xl font-bold tracking-[-0.02em] text-black sm:text-3xl">{kelas.nama}</h1>
-                  {kelas.jadwalDisplay ? (
-                    <div className="flex items-center gap-1.5 text-sm text-[#7E7C7C]">
-                      <CalendarIcon aria-hidden className="h-4 w-4 shrink-0" />
-                      <span>{kelas.jadwalDisplay}</span>
-                    </div>
-                  ) : null}
-                </div>
-                {/* Harga setelah diskon jadi fokus utama (bold, besar) kalau
-                    kelas.diskon_persen > 0; harga asli dicoret di atasnya.
-                    Tanpa diskon: tampilan lama, tidak berubah. */}
-                {mulaiDari ? (
+              {/* Harga setelah diskon jadi fokus utama (bold, besar) kalau kelas.diskon_persen > 0; harga asli dicoret di
+                  atasnya. Tanpa diskon: tampilan lama. Private online + saklar hidup: HargaMulaiDari (sama dengan kartu). */}
+              <DetailKelasHeader
+                nama={kelas.nama}
+                modePembelajaran={kelas.modePembelajaran}
+                tipeKelasLabel={kelas.tipeKelasLabel}
+                subtesNama={kelas.subtesNama}
+                tingkatKelasLabel={kelas.tingkatKelasLabel}
+                hargaSlot={
+                  mulaiDari ? (
                   <HargaMulaiDari ringkasan={mulaiDari} harga={kelas.harga} diskonAktif={kelas.diskonPersen > 0} varian="detail" />
                 ) : kelas.diskonPersen > 0 ? (
                   <div className="flex shrink-0 flex-col sm:items-end">
@@ -200,16 +177,9 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
                   <p className="text-xl font-semibold whitespace-nowrap text-[#081EEA] sm:text-2xl">
                     {formatRupiah(kelas.harga)}
                   </p>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <ModePembelajaranBadge modePembelajaran={kelas.modePembelajaran} />
-                <Badge>{kelas.tipeKelasLabel}</Badge>
-                {kelas.subtesNama ? <Badge>{kelas.subtesNama}</Badge> : null}
-                <Badge>{kelas.tingkatKelasLabel}</Badge>
-                <span className="text-sm text-[#7E7C7C]">{kelas.jumlahSesi} sesi</span>
-              </div>
+                )
+                }
+              />
 
               {kelas.deskripsi ? (
                 <div className="flex flex-col gap-1.5 border-t border-[#E3E3E3] pt-5">
