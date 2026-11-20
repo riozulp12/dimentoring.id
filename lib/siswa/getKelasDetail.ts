@@ -122,19 +122,21 @@ export async function getEnrollmentStatus(
   /** enrollments.link_meet / link_meet_oleh — Link Meet PER SISWA (kelas private). */
   linkMeet: string | null;
   linkMeetOleh: string | null;
+  /** enrollments.jumlah_sesi_total — null (data lama) = total sesi = kelas.jumlah_sesi (lib/shared/sesiEnrollment.ts). */
+  jumlahSesiTotal: number | null;
 }> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, status_pembayaran, progres_persen, jadwal_ditetapkan, link_meet, link_meet_oleh")
+    .select("id, status_pembayaran, progres_persen, jadwal_ditetapkan, link_meet, link_meet_oleh, jumlah_sesi_total")
     .eq("user_id", userId)
     .eq("kelas_id", kelasId)
     .maybeSingle();
 
   if (error) {
     console.error("[getEnrollmentStatus] query failed:", error);
-    return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null, linkMeet: null, linkMeetOleh: null };
+    return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null, linkMeet: null, linkMeetOleh: null, jumlahSesiTotal: null };
   }
-  if (!data) return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null, linkMeet: null, linkMeetOleh: null };
+  if (!data) return { enrollmentId: null, statusPembayaran: null, progresPersen: 0, jadwalDitetapkan: null, linkMeet: null, linkMeetOleh: null, jumlahSesiTotal: null };
 
   return {
     enrollmentId: data.id as string,
@@ -143,6 +145,7 @@ export async function getEnrollmentStatus(
     jadwalDitetapkan: data.jadwal_ditetapkan,
     linkMeet: (data.link_meet as string | null) ?? null,
     linkMeetOleh: (data.link_meet_oleh as string | null) ?? null,
+    jumlahSesiTotal: typeof data.jumlah_sesi_total === "number" ? (data.jumlah_sesi_total as number) : null,
   };
 }
 

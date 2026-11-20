@@ -55,7 +55,15 @@ export interface EnrollmentAksesMentor {
   penerimaan: PenerimaanMenandai;
   /** Status penerimaan per subtes siswa ini (kosong bila siswa tidak punya pilihan subtes). */
   subtesPenerimaan: SubtesSiswaDetail[];
-  enrollment: { id: string; userId: string; kelasId: string; mentorOfflineId: string | null; tanggalDaftar: string | null };
+  enrollment: {
+    id: string;
+    userId: string;
+    kelasId: string;
+    mentorOfflineId: string | null;
+    tanggalDaftar: string | null;
+    /** enrollments.jumlah_sesi_total — NULL (data lama) = total sesi = kelas.jumlahSesi. */
+    jumlahSesiTotal?: number | null;
+  };
   kelas: {
     id: string;
     nama: string;
@@ -64,6 +72,8 @@ export interface EnrollmentAksesMentor {
     subtesNama: string | null;
     /** kelas.tipe_kelas (private/semi_private/grouping) — Link Meet per siswa hanya untuk private. */
     tipeKelas: string | null;
+    /** kelas.jumlah_sesi — konfigurasi kelas; total sesi milik siswa lewat totalSesiEnrollment. */
+    jumlahSesi?: number | null;
   };
 }
 
@@ -78,7 +88,7 @@ export async function getAksesMentorEnrollment(
 ): Promise<EnrollmentAksesMentor | null | "gagal"> {
   const { data, error } = await supabaseServer
     .from("enrollments")
-    .select("id, user_id, kelas_id, mentor_offline_id, tanggal_daftar, kelas:kelas_id(id, nama, mentor_id, subtes_id, tipe_kelas, subtes:subtes_id(nama))")
+    .select("id, user_id, kelas_id, mentor_offline_id, tanggal_daftar, jumlah_sesi_total, kelas:kelas_id(id, nama, mentor_id, subtes_id, tipe_kelas, jumlah_sesi, subtes:subtes_id(nama))")
     .eq("id", enrollmentId)
     .maybeSingle();
 
@@ -92,6 +102,7 @@ export async function getAksesMentorEnrollment(
     mentor_id: string | null;
     subtes_id: string | null;
     tipe_kelas?: string | null;
+    jumlah_sesi?: number | null;
     subtes: Join<{ nama: string }>;
   };
   const kelas = first(data?.kelas as Join<KelasRow>);
@@ -128,6 +139,7 @@ export async function getAksesMentorEnrollment(
       kelasId: data.kelas_id as string,
       mentorOfflineId: (data.mentor_offline_id as string | null) ?? null,
       tanggalDaftar: (data.tanggal_daftar as string | null) ?? null,
+      jumlahSesiTotal: typeof data.jumlah_sesi_total === "number" ? (data.jumlah_sesi_total as number) : null,
     },
     kelas: {
       id: kelas.id,
@@ -136,6 +148,7 @@ export async function getAksesMentorEnrollment(
       subtesId: kelas.subtes_id,
       subtesNama: first(kelas.subtes)?.nama ?? null,
       tipeKelas: kelas.tipe_kelas ?? null,
+      jumlahSesi: typeof kelas.jumlah_sesi === "number" ? kelas.jumlah_sesi : null,
     },
   };
 }

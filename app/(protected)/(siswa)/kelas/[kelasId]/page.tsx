@@ -18,6 +18,8 @@ import BadgeKapasitas from "@/components/ui/BadgeKapasitas";
 import { getKelasDetailPublic } from "@/lib/dashboard/getProgramData";
 import { formatJadwalSiswaTerdaftar } from "@/lib/shared/jadwalPilihan";
 import { isKelasPrivate, resolveLinkMeet } from "@/lib/shared/linkMeet";
+import { totalSesiEnrollment } from "@/lib/shared/sesiEnrollment";
+import { getSisaSesiPerSubtes } from "@/lib/shared/progresSesiData";
 import { getMentorBerhakLinkMeet } from "@/lib/mentor/linkMeetSiswa";
 
 /**
@@ -75,6 +77,13 @@ export default async function KelasDetailPage({
   }
   const sesiKehadiran =
     isLunas && enrollment.enrollmentId ? await getSesiKehadiran(enrollment.enrollmentId) : null;
+  // Total sesi MILIK siswa (jumlah_sesi_total ?? kelas.jumlah_sesi) dan sisa sesi per subtes (hanya bila ada kuota).
+  const totalSesiSiswa =
+    totalSesiEnrollment({ jumlah_sesi_total: enrollment.jumlahSesiTotal }, { jumlah_sesi: kelas.jumlahSesi }) ?? kelas.jumlahSesi;
+  const sisaSubtes =
+    isLunas && enrollment.enrollmentId
+      ? ((await getSisaSesiPerSubtes([enrollment.enrollmentId])).get(enrollment.enrollmentId) ?? []).map((s) => ({ nama: s.nama, sisa: s.sisa }))
+      : [];
   // Link Meet: kelas private memakai link PER SISWA (hanya berlaku selama pengisinya masih mentor
   // penerima/pemegang aktif) dan TIDAK PERNAH jatuh ke link kelas; kelas lain memakai link kelas.
   const kelasPrivate = isKelasPrivate(kelas.tipeKelas);
@@ -121,7 +130,7 @@ export default async function KelasDetailPage({
           <div className="flex flex-col gap-1 text-sm text-[#7E7C7C] sm:text-base">
             <p>{kelas.mentorNama ? `Mentor: ${kelas.mentorNama}` : "Mentor belum ditentukan"}</p>
             <p>{jadwalDisplay}</p>
-            <p>Jumlah Sesi: {kelas.jumlahSesi} sesi</p>
+            <p>Jumlah Sesi: {totalSesiSiswa} sesi</p>
           </div>
 
           {kelas.deskripsi ? <p className="text-sm text-black sm:text-base">{kelas.deskripsi}</p> : null}
@@ -155,7 +164,8 @@ export default async function KelasDetailPage({
         {isLunas && sesiKehadiran ? (
           <SesiKehadiranSection
             riwayat={sesiKehadiran.riwayat}
-            jumlahSesi={kelas.jumlahSesi}
+            jumlahSesi={totalSesiSiswa}
+            sisaSubtes={sisaSubtes}
             initialValidCount={sesiKehadiran.validCount}
           />
         ) : null}

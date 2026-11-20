@@ -7,6 +7,8 @@ import { getNamaMapelMentor } from "@/lib/mentor/mapelMentor";
 import { notifySesiDitandaiMentor } from "@/lib/notifikasi/notify";
 import { rentangHariWib, tanggalWib } from "@/lib/shared/hariWib";
 import { labelMentorSesi } from "@/lib/shared/statusSesi";
+import { getSubtesPresensiSiswa } from "@/lib/mentor/subtesPresensi";
+import { kandidatSubtesMentor, tentukanSubtesPresensi, totalSesiEnrollment } from "@/lib/shared/sesiEnrollment";
 
 /**
  * "Tandai Sesi Hari Ini Selesai" (Mentor) — PRD Bagian 7.5.5 FR-A1. Selalu
@@ -14,16 +16,23 @@ import { labelMentorSesi } from "@/lib/shared/statusSesi";
  * loncat) — dikonfirmasi_mentor=true, tanggal_dilaksanakan=hari ini. BR-7:
  * cuma mentor yang terkait enrollment ini (kelas.mentor_id, kelas_mentor,
  * atau enrollments.mentor_offline_id — lib/mentor/aksesMentor.ts) yang boleh.
- * Multi-mentor: total sesi per siswa tetap kelas.jumlah_sesi (dibagi antar
+ * Multi-mentor: total sesi per siswa = enrollments.jumlah_sesi_total bila terisi, selain itu kelas.jumlah_sesi (dibagi antar
  * mentor, belum ada kuota per mentor) — mentor mana pun mengambil sesi
  * berikutnya yang belum ditandai dan mencatat mentor_id + nama_mapel
  * (snapshot) di baris itu. Maksimal SATU penandaan per enrollment per MENTOR
  * per hari kalender WIB (Asia/Jakarta) — mentor yang sama dua kali 409, dua
  * mentor berbeda boleh di hari yang sama. tanggal_dilaksanakan = tanggal WIB.
+ *
+ * Sesi pilihan siswa: sesi yang ditandai tidak boleh melebihi total siswa. Bila siswa punya kuota per subtes
+ * (enrollment_subtes.kuota_sesi), sesi ditandai ke SATU subtes (sesi_kelas.subtes_id): otomatis bila mentor
+ * hanya memegang satu subtes siswa itu, eksplisit lewat `subtesId` bila lebih dari satu; per subtes tidak boleh
+ * melebihi kuota. Kuota NULL (data lama) = perilaku lama: tanpa batas per subtes, subtes_id tidak diisi.
  */
 
 interface TandaiSesiBody {
   enrollmentId?: string;
+  /** Wajib hanya bila siswa punya kuota per subtes DAN mentor memegang lebih dari satu subtesnya. */
+  subtesId?: unknown;
 }
 
 function errorResponse(message: string, status: number) {
@@ -59,6 +68,34 @@ export async function POST(request: NextRequest) {
   if (!guard.ok) return errorResponse(guard.pesan, guard.status);
   const { akses } = guard;
   const { enrollment, kelas } = akses;
+
+  // Total sesi MILIK SISWA (jumlah_sesi_total ?? kelas.jumlah_sesi). Penandaan tidak boleh melebihinya; total tidak
+  // diketahui (data kelas tanpa jumlah_sesi) = perilaku lama tanpa pemeriksaan ini.
+  const totalSesi = totalSesiEnrollment({ jumlah_sesi_total: enrollment.jumlahSesiTotal ?? null }, { jumlah_sesi: kelas.jumlahSesi ?? null });
+  if (totalSesi !== null) {
+    const { count: sudahDitandai, error: totalError } = await supabaseServer
+      .from("sesi_kelas")
+      .select("id", { count: "exact", head: true })
+      .eq("enrollment_id", enrollmentId)
+      .eq("dikonfirmasi_mentor", true);
+    if (totalError) {
+      console.error("[mentor/sesi] query jumlah sesi ditandai failed:", totalError);
+      return errorResponse("Gagal memuat sesi. Coba lagi nanti.", 500);
+    }
+    if ((sudahDitandai ?? 0) >= totalSesi) {
+      return errorResponse("Semua sesi kelas ini sudah ditandai selesai.", 400);
+    }
+  }
+
+  // Kuota per subtes (hanya bila siswa punya kuota_sesi terisi). Data lama: subtesPresensi.subtesId = null.
+  const subtesSiswa = await getSubtesPresensiSiswa(enrollmentId);
+  if (subtesSiswa === "gagal") return errorResponse("Gagal memuat sesi. Coba lagi nanti.", 500);
+  const subtesPresensi = tentukanSubtesPresensi({
+    subtes: subtesSiswa,
+    kandidatIds: kandidatSubtesMentor(session.userId, akses.subtesPenerimaan),
+    dipilih: body.subtesId,
+  });
+  if (!subtesPresensi.ok) return errorResponse(subtesPresensi.error, subtesPresensi.status);
 
   const now = new Date();
   const hariIni = rentangHariWib(now);
@@ -102,10 +139,12 @@ export async function POST(request: NextRequest) {
     return errorResponse("Semua sesi kelas ini sudah ditandai selesai.", 400);
   }
 
-  const namaMapel = await getNamaMapelMentor(session.userId, kelas, enrollment.id, akses.subtesPenerimaan);
-  if (namaMapel === "gagal") {
+  const namaMapelOtomatis = await getNamaMapelMentor(session.userId, kelas, enrollment.id, akses.subtesPenerimaan);
+  if (namaMapelOtomatis === "gagal") {
     return errorResponse("Gagal memuat data mapel. Coba lagi nanti.", 500);
   }
+  // Subtes dipilih/ditentukan (sesi pilihan siswa): snapshot mapel = subtes itu saja. Selain itu perilaku lama.
+  const namaMapel = subtesPresensi.nama ?? namaMapelOtomatis;
 
   const tanggalDilaksanakan = tanggalWib(now);
 
@@ -120,6 +159,7 @@ export async function POST(request: NextRequest) {
       tanggal_dilaksanakan: tanggalDilaksanakan,
       mentor_id: session.userId,
       nama_mapel: namaMapel,
+      ...(subtesPresensi.subtesId ? { subtes_id: subtesPresensi.subtesId } : {}),
     })
     .eq("id", nextSesi.id)
     .eq("dikonfirmasi_mentor", false)
