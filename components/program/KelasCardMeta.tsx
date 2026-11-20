@@ -3,6 +3,8 @@ import type { SessionRole } from "@/lib/auth/session";
 import KelasDaftarButton from "./KelasDaftarButton";
 import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 import { formatRupiah } from "@/lib/shared/kelasDiskon";
+import { ringkasanHargaKartu } from "@/lib/shared/kartuHargaMulai";
+import { sesiPilihanAktif } from "@/lib/shared/sesiPilihanFlag";
 
 /**
  * Konten card Kelas publik di BAWAH KelasCardVisual (PRD 7.5 poin 10) — badge
@@ -30,6 +32,15 @@ export interface KelasCardMetaProps {
 
 export default function KelasCardMeta({ item, sessionRole, compact = false }: KelasCardMetaProps) {
   const hasDiskon = item.diskonPersen > 0;
+  // Kelas private online + saklar SESI_PILIHAN_AKTIF hidup: "Mulai dari Rp X" (komponen server, saklar dibaca di sini).
+  const mulai = ringkasanHargaKartu({
+    aktif: sesiPilihanAktif(),
+    tipeKelas: item.tipeKelas,
+    modeKelas: item.modePembelajaran,
+    harga: item.harga,
+    hargaSetelahDiskon: item.hargaSetelahDiskon,
+    jumlahSesi: item.jumlahSesi,
+  });
 
   return (
     <>
@@ -57,7 +68,18 @@ export default function KelasCardMeta({ item, sessionRole, compact = false }: Ke
       {/* Harga — kalau kelas sedang diskon, harga setelah diskon jadi fokus
           utama (bold, lebih besar) dan harga asli dicoret di atasnya dengan
           font lebih kecil. Tanpa diskon: tampilan lama, tidak berubah. */}
-      {hasDiskon ? (
+      {mulai ? (
+        <div className="flex min-w-0 flex-col">
+          <span className={compact ? "text-xs font-semibold text-black sm:text-sm" : "text-sm font-semibold text-black"}>
+            Mulai dari {mulai.mulaiDari}
+          </span>
+          <span className={compact ? "text-[11px] text-[#7E7C7C] sm:text-xs" : "text-xs text-[#7E7C7C]"}>
+            per 1 sesi · paket {mulai.jumlahSesi} sesi{" "}
+            {hasDiskon ? <s className="decoration-[#DC2626]">{formatRupiah(item.harga)}</s> : null}{" "}
+            {hasDiskon ? <span className="font-semibold text-[#DC2626]">{mulai.hargaPaket}</span> : mulai.hargaPaket}
+          </span>
+        </div>
+      ) : hasDiskon ? (
         <div className="flex min-w-0 flex-col">
           <span className={compact ? "text-[11px] text-[#7E7C7C] line-through sm:text-xs" : "text-xs text-[#7E7C7C] line-through"}>
             {formatRupiah(item.harga)}

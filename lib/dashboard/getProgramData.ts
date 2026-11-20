@@ -16,7 +16,7 @@ import { hitungKetersediaanKelas } from "@/lib/jadwal/slotTerisi";
 
 // jadwal, jadwal_pilih_siswa, subtes_id: dasar kapasitas otomatis kelas private (lib/shared/kapasitasKelas.ts).
 export const KELAS_CARD_SELECT =
-  "id, nama, tipe_kelas, mode_pembelajaran, harga, diskon_persen, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, jadwal, jadwal_pilih_siswa, subtes_id, subtes:subtes_id(nama), mentor:mentor_id(nama)";
+  "id, nama, tipe_kelas, mode_pembelajaran, jumlah_sesi, harga, diskon_persen, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, jadwal, jadwal_pilih_siswa, subtes_id, subtes:subtes_id(nama), mentor:mentor_id(nama)";
 
 /**
  * Data layer halaman publik /program (PRD Bagian 4.3 poin 5, 7.5.4) — 5
@@ -46,6 +46,8 @@ export interface KelasCardPreview {
    * diskonPersen > 0 untuk memutuskan tampil harga coret atau tidak. */
   hargaSetelahDiskon: number;
   mentorNama: string | null;
+  /** kelas.jumlah_sesi — dasar "Mulai dari" kartu private online (lib/shared/kartuHargaMulai.ts). */
+  jumlahSesi?: number | null;
   /** Diskon kelas sendiri (null kalau diskonPersen = 0). Kode promo TIDAK pernah menghasilkan ribbon. */
   diskonAktif: DiskonAktif | null;
   /** SATU sumber kapasitas/penuh/hampir habis (lib/shared/kapasitasKelas.ts). */
@@ -79,6 +81,7 @@ export interface KelasCardRow {
   nama: string;
   tipe_kelas: string;
   mode_pembelajaran: string;
+  jumlah_sesi?: number | null;
   harga: number;
   diskon_persen: number | null;
   /** Opsional (boleh kosong) — lihat lib/shared/kapasitasKelas.ts. */
@@ -108,6 +111,7 @@ export function toCardPreview(row: KelasCardRow, kapasitasInfo: KapasitasKelas):
     diskonPersen,
     hargaSetelahDiskon: hitungHargaSetelahDiskon(harga, diskonPersen),
     mentorNama: firstNama(row.mentor),
+    jumlahSesi: typeof row.jumlah_sesi === "number" ? row.jumlah_sesi : null,
     // Ribbon "Diskon X%" HANYA untuk diskon yang ikut terlihat di harga kartu
     // (diskon_persen kelas). Kode promo (diketik di checkout) TIDAK pernah
     // menghasilkan ribbon/label apa pun di kartu.
