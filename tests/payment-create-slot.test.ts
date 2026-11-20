@@ -357,7 +357,7 @@ describe("cekKetersediaanCheckout (murni) dan susunan blok di route", () => {
     const src = readFileSync("app/api/payment/create/route.ts", "utf8");
     const iJadwal = src.indexOf("validateJadwalPilihan(body.jadwalPilihan");
     const iBlok = src.indexOf("cekKetersediaanCheckout(");
-    const iPromo = src.indexOf("validatePromoCode(kodePromo");
+    const iPromo = src.indexOf("hitungCheckout(");
     const iGateway = src.indexOf("provider.createPayment(");
     const iInsert = src.indexOf('.from("payments")\n      .insert') >= 0 ? src.indexOf('.from("payments")\n      .insert') : src.indexOf('.from("payments")\r\n      .insert');
     assert.ok(iJadwal > 0 && iBlok > iJadwal && iBlok < iPromo && iBlok < iGateway && iBlok < iInsert, `${iJadwal} ${iBlok} ${iPromo} ${iGateway} ${iInsert}`);

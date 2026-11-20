@@ -180,6 +180,7 @@ describe("file statis", () => {
       "FONNTE_TOKEN=",
       "WA_NOTIF_ENABLED=",
       "WA_NOTIF_BATAS_HARIAN=",
+      "SESI_PILIHAN_AKTIF=",
     ]);
   });
 });
@@ -732,11 +733,18 @@ describe("harga aktif = harga asli setelah diskon_persen kelas (tagihan sama den
   });
 
   it("jalur payment hanya memakai hargaAktif, tidak ada kelas.harga mentah untuk menagih", () => {
+    // create & validate-promo menagih lewat hitungCheckout (lib/payment/hitungCheckout.ts), bukan kelas.harga.
     for (const file of ["app/api/payment/create/route.ts", "app/api/payment/validate-promo/route.ts"]) {
       const isi = readFileSync(file, "utf8");
-      assert.ok(isi.includes("hargaAktif"), `${file} tidak memakai hargaAktif`);
+      assert.ok(isi.includes("hitungCheckout("), `${file} tidak memakai hitungCheckout`);
       assert.ok(!/kelas\.harga\b/.test(isi), `${file} masih memakai kelas.harga`);
     }
+    const hitung = readFileSync("lib/payment/hitungCheckout.ts", "utf8");
+    assert.ok(hitung.includes("kelas.hargaAktif"));
+    // kelas.harga mentah hanya sebagai masukan rumus (hargaNormal), tidak pernah sebagai nominal tagihan.
+    const mentah = hitung.match(/kelas\.harga\b(?!Aktif)/g) ?? [];
+    const sahMentah = hitung.match(/hargaNormal: kelas\.harga,/g) ?? [];
+    assert.equal(mentah.length, sahMentah.length);
   });
 
   it('teks urgensi "Buruan daftar sebelum promo berakhir!" sudah tidak ada di kode', () => {

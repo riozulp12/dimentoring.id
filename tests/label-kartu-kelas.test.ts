@@ -198,8 +198,10 @@ describe("tampilan kartu (statis)", () => {
   });
 
   it("checkout tetap menerima kode: create memakai validatePromoCode, validate-promo masih ada", () => {
-    assert.match(baca("app/api/payment/create/route.ts"), /validatePromoCode\(kodePromo, kelasId, kelas\.hargaAktif\)/);
-    assert.match(baca("app/api/payment/validate-promo/route.ts"), /validatePromoCode/);
+    // Sejak sesi pilihan: create & validate-promo lewat SATU fungsi hitungCheckout, yang memanggil validatePromoCode.
+    assert.match(baca("app/api/payment/create/route.ts"), /hitungCheckout\(/);
+    assert.match(baca("app/api/payment/validate-promo/route.ts"), /hitungCheckout\(/);
+    assert.match(baca("lib/payment/hitungCheckout.ts"), /validatePromoCode\(kode, kelas\.id, kelas\.hargaAktif\)/);
     assert.match(baca("components/siswa/CheckoutForm.tsx"), /kodePromo: appliedPromo\?\.kode/);
   });
 });
