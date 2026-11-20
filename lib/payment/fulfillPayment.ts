@@ -161,20 +161,43 @@ async function pastikanEnrollment(payment: PaymentRow): Promise<{
   if (enrollmentError || !enrollment) throw new PascaLunasError("upsert enrollments", enrollmentError);
   const enrollmentId = enrollment.id as string;
 
+  // Sesi pilihan siswa (kelas private online): kolom diisi saat checkout HANYA bila siswa memilih jumlah sesi.
+  // NULL = perilaku lama (sesi_kelas = kelas.jumlah_sesi). Upsert di bawah aman diulang (idempoten).
+  const { data: dibeliRow, error: dibeliError } = await supabaseServer
+    .from("payments")
+    .select("jumlah_sesi_dibeli, sesi_tambahan")
+    .eq("id", payment.id)
+    .maybeSingle();
+  if (dibeliError) throw new PascaLunasError("query payments sesi dibeli", dibeliError);
+  const sesiDibeli = typeof dibeliRow?.jumlah_sesi_dibeli === "number" ? (dibeliRow.jumlah_sesi_dibeli as number) : null;
+  if (sesiDibeli !== null) {
+    const { error: totalError } = await supabaseServer
+      .from("enrollments")
+      .update({ jumlah_sesi_total: sesiDibeli, sesi_tambahan: Number(dibeliRow?.sesi_tambahan ?? 0) })
+      .eq("id", enrollmentId);
+    if (totalError) throw new PascaLunasError("update enrollments jumlah_sesi_total", totalError);
+  }
+
   // Pilihan Subtes dari payment_subtes_pilihan (ditampung saat checkout) ->
   // enrollment_subtes — dasar filter Materi & notifikasi mentor.
   const { data: pilihan, error: pilihanError } = await supabaseServer
     .from("payment_subtes_pilihan")
-    .select("subtes_id")
+    .select("subtes_id, jumlah_sesi")
     .eq("payment_id", payment.id);
   if (pilihanError) throw new PascaLunasError("query payment_subtes_pilihan", pilihanError);
 
   const subtesIds = (pilihan ?? []).map((row) => row.subtes_id as string);
   if (subtesIds.length > 0) {
+    const kuotaPer = new Map(
+      (pilihan ?? []).map((row) => [row.subtes_id as string, typeof row.jumlah_sesi === "number" ? (row.jumlah_sesi as number) : null]),
+    );
     const { error: subtesError } = await supabaseServer
       .from("enrollment_subtes")
       .upsert(
-        subtesIds.map((subtesId) => ({ enrollment_id: enrollmentId, subtes_id: subtesId })),
+        subtesIds.map((subtesId) => {
+          const kuota = kuotaPer.get(subtesId) ?? null;
+          return { enrollment_id: enrollmentId, subtes_id: subtesId, ...(sesiDibeli !== null && kuota !== null ? { kuota_sesi: kuota } : {}) };
+        }),
         { onConflict: "enrollment_id,subtes_id", ignoreDuplicates: true },
       );
     if (subtesError) throw new PascaLunasError("upsert enrollment_subtes", subtesError);
@@ -187,10 +210,12 @@ async function pastikanEnrollment(payment: PaymentRow): Promise<{
     .maybeSingle();
   if (kelasError) throw new PascaLunasError("query kelas", kelasError);
 
-  // Absensi (PRD 7.5.5) — sesi_kelas 1..jumlah_sesi begitu enrollment 'lunas' ada.
+  // Absensi (PRD 7.5.5) — sesi_kelas 1..N begitu enrollment 'lunas' ada. N = sesi yang dibeli bila terisi,
+  // selain itu kelas.jumlah_sesi (perilaku lama).
   let sesi: GenerateSesiResult | "tanpa_sesi" = "tanpa_sesi";
-  if (kelas?.jumlah_sesi) {
-    sesi = await generateSesiKelasUntukEnrollment(enrollmentId, kelas.jumlah_sesi as number);
+  const jumlahSesiGenerate = sesiDibeli ?? (kelas?.jumlah_sesi as number | null | undefined);
+  if (jumlahSesiGenerate) {
+    sesi = await generateSesiKelasUntukEnrollment(enrollmentId, jumlahSesiGenerate);
     if (sesi === "gagal") throw new PascaLunasError("generate sesi_kelas", null);
   }
 

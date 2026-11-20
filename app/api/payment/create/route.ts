@@ -3,7 +3,8 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getKelasForCheckout, getKelasSubtesOptions, isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
 import { getOfflineMentorOptions } from "@/lib/payment/getOfflineMentorOptions";
-import { validatePromoCode } from "@/lib/payment/validatePromoCode";
+import { hitungCheckout } from "@/lib/payment/hitungCheckout";
+import { validasiSebaranSesi } from "@/lib/shared/sebaranSesiSubtes";
 import { generateOrderId } from "@/lib/payment/generateOrderId";
 import { getPaymentProvider } from "@/lib/payment/provider";
 import { MayarError } from "@/lib/payment/mayar";
@@ -45,6 +46,11 @@ interface CreatePaymentBody {
    * maks. 2. DIVALIDASI ULANG terhadap kelas.jadwal di server; diabaikan kalau
    * saklar kelas mati atau kelas offline. */
   jadwalPilihan?: unknown;
+  /** Sesi pilihan siswa (kelas private online; hanya dipakai bila SESI_PILIHAN_AKTIF=true, selain itu diabaikan).
+   * Total sesi + sebaran per subtes [{ subtesId, jumlahSesi }]. Harga TIDAK pernah diambil dari body —
+   * dihitung ulang di server lewat lib/payment/hitungCheckout.ts. */
+  jumlahSesiTotal?: unknown;
+  sesiPerSubtes?: unknown;
 }
 
 const MAX_SUBTES_PILIHAN = 3;
@@ -176,17 +182,28 @@ export async function POST(request: NextRequest) {
   const penolakan = cekKetersediaanCheckout(await getKetersediaanKelas(kelasId), jadwalPilihanResult.value);
   if (penolakan) return errorResponse(penolakan.error, penolakan.status);
 
-  let kodePromoId: string | null = null;
-  let total = kelas.hargaAktif;
+  const hitung = await hitungCheckout({
+    kelas,
+    jumlahSubtes: Math.max(1, resolvedSubtesIds.length),
+    kodePromo: typeof body.kodePromo === "string" ? body.kodePromo : undefined,
+    jumlahSesiTotal: body.jumlahSesiTotal,
+  });
+  if (!hitung.ok) {
+    return errorResponse(hitung.error, hitung.status);
+  }
+  const kodePromoId: string | null = hitung.data.promo?.promoId ?? null;
+  const total = hitung.data.total;
+  const sesiPilihan = hitung.data.sesiPilihan;
 
-  const kodePromo = body.kodePromo?.trim();
-  if (kodePromo) {
-    const promoResult = await validatePromoCode(kodePromo, kelasId, kelas.hargaAktif);
-    if (!promoResult.ok) {
-      return errorResponse(promoResult.error, 400);
-    }
-    kodePromoId = promoResult.data.promoId;
-    total = promoResult.data.total;
+  let sebaranSesi: { subtesId: string; jumlahSesi: number }[] = [];
+  if (sesiPilihan) {
+    const sebaran = validasiSebaranSesi({
+      subtesIds: resolvedSubtesIds,
+      sesiTotal: sesiPilihan.sesiTotal,
+      sesiPerSubtes: body.sesiPerSubtes,
+    });
+    if (!sebaran.ok) return errorResponse(sebaran.error, 400);
+    sebaranSesi = sebaran.perSubtes;
   }
 
   const { data: user, error: userError } = await supabaseServer
@@ -242,7 +259,7 @@ export async function POST(request: NextRequest) {
         user_id: session.userId,
         item_type: "kelas",
         item_id: kelasId,
-        jumlah_sebelum_diskon: kelas.hargaAktif,
+        jumlah_sebelum_diskon: hitung.data.hargaSebelumPromo,
         jumlah: tagihan,
         status: "menunggu",
         kode_promo_id: kodePromoId,
@@ -252,6 +269,15 @@ export async function POST(request: NextRequest) {
         lokasi_siswa_lat: lokasiSiswaLat,
         lokasi_siswa_lng: lokasiSiswaLng,
         jadwal_pilihan: jadwalPilihanResult.value,
+        // Kolom sesi pilihan HANYA ditulis bila siswa memilih jumlah sesi (saklar hidup); selain itu baris persis seperti dulu.
+        ...(sesiPilihan
+          ? {
+              jumlah_sesi_dibeli: sesiPilihan.sesiTotal,
+              sesi_tambahan: sesiPilihan.sesiTambahan,
+              harga_per_sesi_tambahan: sesiPilihan.hargaPerSesiTambahan,
+              biaya_sesi_tambahan: sesiPilihan.biayaSesiTambahan,
+            }
+          : {}),
       })
       .select("id, order_id")
       .single();
@@ -283,7 +309,12 @@ export async function POST(request: NextRequest) {
   if (resolvedSubtesIds.length > 0) {
     const { error: pilihanInsertError } = await supabaseServer
       .from("payment_subtes_pilihan")
-      .insert(resolvedSubtesIds.map((subtesId) => ({ payment_id: paymentId, subtes_id: subtesId })));
+      .insert(
+        resolvedSubtesIds.map((subtesId) => {
+          const jumlahSesi = sebaranSesi.find((s) => s.subtesId === subtesId)?.jumlahSesi;
+          return { payment_id: paymentId, subtes_id: subtesId, ...(sesiPilihan && jumlahSesi ? { jumlah_sesi: jumlahSesi } : {}) };
+        }),
+      );
     if (pilihanInsertError) {
       console.error("[payment/create] insert payment_subtes_pilihan failed:", pilihanInsertError);
       await supabaseServer.from("payments").update({ status: "gagal" }).eq("id", paymentId);

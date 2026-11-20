@@ -26,6 +26,9 @@ export interface KelasCheckoutData {
    * lib/shared/jadwalPilihan.ts untuk opsi & validasi checkout. */
   jadwalPilihSiswa: boolean;
   jadwal: unknown;
+  /** kelas.tipe_kelas / kelas.jumlah_sesi — dasar rumus sesi pilihan (lib/shared/hargaSesi.ts) dan pagar margin. */
+  tipeKelas: string | null;
+  jumlahSesi: number | null;
 }
 
 /** null juga untuk kelas yang disembunyikan dari katalog
@@ -35,7 +38,7 @@ export interface KelasCheckoutData {
 export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckoutData | null> {
   const { data, error } = await supabaseServer
     .from("kelas")
-    .select("id, nama, harga, diskon_persen, mode_pembelajaran, link_lynkid, jadwal, jadwal_pilih_siswa")
+    .select("id, nama, harga, diskon_persen, mode_pembelajaran, link_lynkid, jadwal, jadwal_pilih_siswa, tipe_kelas, jumlah_sesi")
     .eq("id", kelasId)
     .eq("tampil_di_katalog", true)
     .maybeSingle();
@@ -59,6 +62,8 @@ export async function getKelasForCheckout(kelasId: string): Promise<KelasCheckou
     linkPendaftaran: (data.link_lynkid as string | null) ?? null,
     jadwalPilihSiswa: data.jadwal_pilih_siswa === true,
     jadwal: data.jadwal,
+    tipeKelas: (data.tipe_kelas as string | null) ?? null,
+    jumlahSesi: data.jumlah_sesi === null || data.jumlah_sesi === undefined ? null : Number(data.jumlah_sesi),
   };
 }
 

@@ -7,6 +7,7 @@ import MaskotLoading from "@/components/ui/MaskotLoading";
 import { MAX_JADWAL_PILIHAN, formatSlot, slotKey } from "@/lib/shared/jadwalPilihan";
 import type { OpsiJadwalCheckout } from "@/lib/shared/slotTerisi";
 import Link from "next/link";
+import { batasSesi, bagiRataSesi, pilihanSesiSiap, rincianCheckoutUi } from "@/lib/shared/checkoutSesiUi";
 import { HREF_KEBIJAKAN_PRIVASI, HREF_KEBIJAKAN_REFUND, RINGKASAN_REFUND_CHECKOUT } from "@/lib/shared/kebijakan";
 
 /**
@@ -57,6 +58,7 @@ export default function CheckoutForm({
   jadwalOptions,
   semuaJadwalPenuh = false,
   kelasPenuh = false,
+  sesiPilihan = null,
 }: {
   kelasId: string;
   /** Harga yang DITAGIH (sudah setelah diskon kelas, dihitung server). */
@@ -78,6 +80,8 @@ export default function CheckoutForm({
   semuaJadwalPenuh?: boolean;
   /** Kelas penuh menurut kapasitas (otomatis/manual) → pesan + tombol Bayar nonaktif. */
   kelasPenuh?: boolean;
+  /** Diisi SERVER hanya bila saklar SESI_PILIHAN_AKTIF hidup dan kelas private online. null = tampilan lama persis. */
+  sesiPilihan?: { hargaNormal: number; jumlahSesiKelas: number } | null;
 }) {
   const isOffline = modePembelajaran === "offline";
   const isPaket = !isOffline && subtesOptions.length > 1;
@@ -167,6 +171,40 @@ export default function CheckoutForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOffline]);
 
+  // ---- Sesi pilihan (kelas private online, saklar hidup) ----
+  const [sesiTotal, setSesiTotal] = useState<number>(sesiPilihan?.jumlahSesiKelas ?? 0);
+  // null = pembagian otomatis (rata); diisi bila siswa mengubah sesi sebuah subtes.
+  const [sebaranManual, setSebaranManual] = useState<Record<string, number> | null>(null);
+  const subtesUntukSesi = isPaket ? selectedSubtesIds : subtesOptions.map((s) => s.id);
+  const jumlahSubtesSesi = Math.max(1, subtesUntukSesi.length);
+  const rincianSesi = sesiPilihan
+    ? rincianCheckoutUi({
+        hargaNormal: sesiPilihan.hargaNormal,
+        hargaAktif: harga,
+        jumlahSesiKelas: sesiPilihan.jumlahSesiKelas,
+        sesiTotal,
+        jumlahSubtes: jumlahSubtesSesi,
+      })
+    : null;
+  const batas = sesiPilihan ? batasSesi(sesiPilihan.jumlahSesiKelas, jumlahSubtesSesi) : null;
+  const sebaranSesi = sebaranManual ?? bagiRataSesi(subtesUntukSesi, sesiTotal);
+  const siapSesi = sesiPilihan && rincianSesi ? pilihanSesiSiap({ rincian: rincianSesi, subtesIds: subtesUntukSesi, sebaran: sebaranSesi }) : null;
+  const promoDiblokSesi = Boolean(rincianSesi && rincianSesi.valid && !rincianSesi.promoBerlaku);
+
+  function ubahSesiTotal(nilai: number) {
+    if (!sesiPilihan) return;
+    const { maks } = batasSesi(sesiPilihan.jumlahSesiKelas, jumlahSubtesSesi);
+    const baru = Math.min(maks, Math.max(1, nilai));
+    setSesiTotal(baru);
+    setSebaranManual(null);
+    setAppliedPromo(null); // promo yang sudah diterapkan dihitung untuk jumlah sesi sebelumnya
+    setApplyError(null);
+  }
+
+  function ubahSesiSubtes(subtesId: string, nilai: number) {
+    setSebaranManual({ ...sebaranSesi, [subtesId]: Math.max(1, nilai) });
+  }
+
   const [payError, setPayError] = useState<string | null>(null);
   const [isPaying, setIsPaying] = useState(false);
   // Persetujuan Kebijakan Refund & Privasi — wajib dicentang sebelum bayar.
@@ -174,16 +212,29 @@ export default function CheckoutForm({
   const [setujuKebijakan, setSetujuKebijakan] = useState(false);
   const [kebijakanError, setKebijakanError] = useState<string | null>(null);
 
-  const total = appliedPromo ? appliedPromo.total : harga;
+  const total =
+    rincianSesi && rincianSesi.valid
+      ? rincianSesi.totalSebelumPromo - (appliedPromo?.diskon ?? 0)
+      : appliedPromo
+        ? appliedPromo.total
+        : harga;
 
   function toggleSubtes(subtesId: string) {
     setSubtesError(null);
     if (tidakTersediaIds.has(subtesId)) return;
-    setSelectedSubtesIds((prev) => {
-      if (prev.includes(subtesId)) return prev.filter((id) => id !== subtesId);
-      if (prev.length >= MAX_SUBTES_PILIHAN) return prev;
-      return [...prev, subtesId];
-    });
+    setSebaranManual(null);
+    const prev = selectedSubtesIds;
+    const next = prev.includes(subtesId)
+      ? prev.filter((id) => id !== subtesId)
+      : prev.length >= MAX_SUBTES_PILIHAN
+        ? prev
+        : [...prev, subtesId];
+    setSelectedSubtesIds(next);
+    // Total sesi tidak boleh kurang dari jumlah subtes: naikkan otomatis (promo lama tidak berlaku lagi).
+    if (sesiPilihan && next.length > sesiTotal) {
+      setSesiTotal(next.length);
+      setAppliedPromo(null);
+    }
   }
 
   async function handleTerapkan() {
@@ -199,7 +250,11 @@ export default function CheckoutForm({
       const response = await fetch("/api/payment/validate-promo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kelasId, kode }),
+        body: JSON.stringify({
+          kelasId,
+          kode,
+          ...(sesiPilihan ? { jumlahSesi: sesiTotal, jumlahSubtes: jumlahSubtesSesi } : {}),
+        }),
       });
       const json = await response.json();
       if (!response.ok || !json.success) {
@@ -287,6 +342,7 @@ export default function CheckoutForm({
           lokasiSiswaLat: isOffline ? studentLat : undefined,
           lokasiSiswaLng: isOffline ? studentLng : undefined,
           jadwalPilihan: isPilihJadwal ? jadwalPilihan : undefined,
+          ...(sesiPilihan && siapSesi ? { jumlahSesiTotal: sesiTotal, sesiPerSubtes: siapSesi.perSubtes.length > 0 ? siapSesi.perSubtes : undefined } : {}),
         }),
       });
       const json = await response.json();
@@ -428,6 +484,77 @@ export default function CheckoutForm({
         </div>
       ) : null}
 
+      {sesiPilihan && rincianSesi && batas ? (
+        <div className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Jumlah Sesi</h2>
+            <p className="text-sm text-[#7E7C7C]">
+              Paket kelas ini {sesiPilihan.jumlahSesiKelas} sesi. Kamu bisa pilih {batas.min} sampai {batas.maks} sesi.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              aria-label="Kurangi sesi"
+              onClick={() => ubahSesiTotal(sesiTotal - 1)}
+              disabled={sesiTotal <= batas.min}
+              className="flex size-11 items-center justify-center rounded-[12px] border border-[#E3E3E3] text-xl font-medium text-black hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              &minus;
+            </button>
+            <span aria-live="polite" className="min-w-16 text-center text-lg font-semibold text-black">
+              {sesiTotal} sesi
+            </span>
+            <button
+              type="button"
+              aria-label="Tambah sesi"
+              onClick={() => ubahSesiTotal(sesiTotal + 1)}
+              disabled={sesiTotal >= batas.maks}
+              className="flex size-11 items-center justify-center rounded-[12px] border border-[#E3E3E3] text-xl font-medium text-black hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              +
+            </button>
+          </div>
+          {subtesUntukSesi.length > 1 ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium text-black">Pembagian sesi per subtes</p>
+              {subtesUntukSesi.map((id) => (
+                <div key={id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-black">{subtesOptions.find((s) => s.id === id)?.nama ?? "-"}</span>
+                  <span className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Kurangi sesi subtes"
+                      onClick={() => ubahSesiSubtes(id, (sebaranSesi[id] ?? 1) - 1)}
+                      disabled={(sebaranSesi[id] ?? 1) <= 1}
+                      className="flex size-9 items-center justify-center rounded-[10px] border border-[#E3E3E3] text-black hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      &minus;
+                    </button>
+                    <span className="min-w-6 text-center font-medium text-black">{sebaranSesi[id] ?? 0}</span>
+                    <button
+                      type="button"
+                      aria-label="Tambah sesi subtes"
+                      onClick={() => ubahSesiSubtes(id, (sebaranSesi[id] ?? 0) + 1)}
+                      className="flex size-9 items-center justify-center rounded-[10px] border border-[#E3E3E3] text-black hover:bg-gray-50"
+                    >
+                      +
+                    </button>
+                  </span>
+                </div>
+              ))}
+              <p className="text-xs text-[#7E7C7C]">Tiap subtes minimal 1 sesi, dan jumlahnya harus pas {sesiTotal} sesi.</p>
+            </div>
+          ) : null}
+          {siapSesi && !siapSesi.siap && siapSesi.pesan ? (
+            <p role="alert" className="text-sm text-[#E70A0A]">
+              {siapSesi.pesan}
+            </p>
+          ) : null}
+          <p className="text-xs text-[#7E7C7C]">Penambahan jumlah sesi tidak termasuk diskon.</p>
+        </div>
+      ) : null}
+
       {isPilihJadwal ? (
         <div className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
           <div className="flex flex-col gap-1">
@@ -530,29 +657,49 @@ export default function CheckoutForm({
               variant="secondary"
               size="lg"
               onClick={handleTerapkan}
-              disabled={isApplying}
+              disabled={isApplying || promoDiblokSesi}
               className="shrink-0"
             >
               {isApplying ? "Memeriksa..." : "Terapkan"}
             </Button>
           </div>
         )}
+        {promoDiblokSesi ? (
+          <p className="text-sm text-[#7E7C7C]">Kode promo hanya bisa dipakai untuk paket penuh atau lebih.</p>
+        ) : null}
         {applyError ? <p className="text-sm text-[#E70A0A]">{applyError}</p> : null}
       </div>
 
       <div className="flex flex-col gap-4 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
         <h2 className="text-lg font-medium tracking-[-0.02em] text-black sm:text-xl">Ringkasan Harga</h2>
         <div className="flex flex-col gap-2 text-sm sm:text-base">
-          {hargaAsli !== undefined && hargaAsli > harga ? (
+          {hargaAsli !== undefined && hargaAsli > harga && !(rincianSesi?.valid && !rincianSesi.paketPenuhAtauLebih) ? (
             <div className="flex items-center justify-between">
               <span className="text-[#7E7C7C]">Harga asli</span>
               <span className="text-[#7E7C7C] line-through decoration-[#DC2626]">{formatRupiah(hargaAsli)}</span>
             </div>
           ) : null}
-          <div className="flex items-center justify-between">
-            <span className="text-[#7E7C7C]">Subtotal</span>
-            <span className="text-black">{formatRupiah(harga)}</span>
-          </div>
+          {rincianSesi && rincianSesi.valid ? (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-[#7E7C7C]">
+                  Paket {rincianSesi.paketPenuhAtauLebih ? (sesiPilihan?.jumlahSesiKelas ?? sesiTotal) : sesiTotal} sesi
+                </span>
+                <span className="text-black">{formatRupiah(rincianSesi.hargaDasar)}</span>
+              </div>
+              {rincianSesi.sesiTambahan > 0 ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-[#7E7C7C]">Sesi tambahan ({rincianSesi.sesiTambahan} sesi)</span>
+                  <span className="text-black">{formatRupiah(rincianSesi.biayaSesiTambahan)}</span>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className="text-[#7E7C7C]">Subtotal</span>
+              <span className="text-black">{formatRupiah(harga)}</span>
+            </div>
+          )}
           {appliedPromo ? (
             <div className="flex items-center justify-between">
               <span className="text-[#7E7C7C]">Diskon</span>
@@ -641,6 +788,7 @@ export default function CheckoutForm({
             semuaJadwalPenuh ||
             kelasPenuh ||
             (isPaket && !adaSubtesTersedia) ||
+            (sesiPilihan !== null && !(siapSesi?.siap ?? false)) ||
             (isOffline && (!offlineMentors || offlineMentors.length === 0 || !selectedMentorId))
           }
           className="w-full"

@@ -10,6 +10,8 @@ import { parseJadwalSlots, perluPilihJadwal } from "@/lib/shared/jadwalPilihan";
 import { opsiJadwalCheckout, semuaSlotPenuh } from "@/lib/shared/slotTerisi";
 import { getKetersediaanKelas } from "@/lib/jadwal/slotTerisi";
 import BadgeKapasitas from "@/components/ui/BadgeKapasitas";
+import { sesiPilihanAktif } from "@/lib/shared/sesiPilihanFlag";
+import { kelasPrivateOnline } from "@/lib/shared/marginKelas";
 
 /**
  * Halaman Checkout — PRD Bagian 7.5/Bagian 13 (payments, kode_promo,
@@ -105,6 +107,12 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
           jadwalOptions={jadwalOptions}
           semuaJadwalPenuh={semuaJadwalPenuh}
           kelasPenuh={kelasPenuh}
+          sesiPilihan={
+            // Saklar dibaca DI SERVER lalu diteruskan lewat prop; null = tampilan lama persis.
+            sesiPilihanAktif() && kelasPrivateOnline(kelas.tipeKelas, kelas.modePembelajaran) && kelas.jumlahSesi
+              ? { hargaNormal: kelas.harga, jumlahSesiKelas: kelas.jumlahSesi }
+              : null
+          }
         />
       </div>
     </>

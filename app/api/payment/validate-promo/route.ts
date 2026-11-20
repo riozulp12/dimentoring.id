@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getKelasForCheckout } from "@/lib/payment/getKelasForCheckout";
-import { validatePromoCode } from "@/lib/payment/validatePromoCode";
+import { hitungCheckout } from "@/lib/payment/hitungCheckout";
 
 /**
  * Dipanggil tombol "Terapkan" di halaman Checkout — validasi Kode Promo
@@ -13,6 +13,9 @@ import { validatePromoCode } from "@/lib/payment/validatePromoCode";
 interface ValidatePromoBody {
   kelasId?: string;
   kode?: string;
+  /** Opsional (hanya berlaku bila SESI_PILIHAN_AKTIF=true): total sesi & banyak subtes yang dipilih. */
+  jumlahSesi?: unknown;
+  jumlahSubtes?: unknown;
 }
 
 function errorResponse(message: string, status: number) {
@@ -49,15 +52,19 @@ export async function POST(request: NextRequest) {
     return errorResponse("Kelas tidak ditemukan.", 404);
   }
 
-  const result = await validatePromoCode(kode, kelasId, kelas.hargaAktif);
+  if (!kode.trim()) {
+    return errorResponse("Kode promo wajib diisi.", 400);
+  }
+  const jumlahSubtes = typeof body.jumlahSubtes === "number" && Number.isInteger(body.jumlahSubtes) ? body.jumlahSubtes : 1;
+  const result = await hitungCheckout({ kelas, jumlahSubtes, kodePromo: kode, jumlahSesiTotal: body.jumlahSesi });
   if (!result.ok) {
-    return errorResponse(result.error, 400);
+    return errorResponse(result.error, result.status);
   }
 
   return NextResponse.json({
     success: true,
-    kode: result.data.kode,
-    subtotal: kelas.hargaAktif,
+    kode: result.data.promo?.kode ?? kode.trim().toUpperCase(),
+    subtotal: result.data.hargaSebelumPromo,
     diskon: result.data.diskon,
     total: result.data.total,
   });
