@@ -3,7 +3,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { getInfoBeasiswaEvent } from "@/lib/dashboard/getInfoBeasiswaEvent";
 import { formatJadwal } from "@/lib/shared/formatJadwal";
 import { formatDeadline } from "@/lib/shared/formatDeadline";
-import { getProgresSesiPerPendaftaran } from "@/lib/shared/progresSesiData";
+import { getProgresSesiPerPendaftaran, getSisaSesiPerSubtes } from "@/lib/shared/progresSesiData";
 import type {
   InfoBeasiswaItem,
   KelasTerdaftarItem,
@@ -189,10 +189,13 @@ async function getEnrollmentsWithKelas(userId: string): Promise<{
   const progresByEnrollment = await getProgresSesiPerPendaftaran(
     kelasLunas.map((r) => ({ id: r.id, jumlahSesi: r.kelas!.jumlah_sesi })),
   );
+  // Sisa sesi per subtes: HANYA untuk pendaftaran yang punya kuota per subtes (sesi pilihan); selain itu tidak ada kuncinya.
+  const sisaByEnrollment = await getSisaSesiPerSubtes(kelasLunas.map((r) => r.id));
   const progressBelajar: ProgressBelajarItem[] = kelasLunas.map((r) => ({
     kelasId: r.kelas_id,
     subtes: r.kelas!.nama,
     persen: progresByEnrollment.get(r.id)?.persen ?? 0,
+    ...(sisaByEnrollment.has(r.id) ? { sisaSubtes: sisaByEnrollment.get(r.id)!.map((s) => ({ nama: s.nama, sisa: s.sisa })) } : {}),
   }));
 
   const kelasTerdaftar: KelasTerdaftarItem[] = rows

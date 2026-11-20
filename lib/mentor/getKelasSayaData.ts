@@ -12,6 +12,7 @@ import { getPenerimaanSubtesSiswa, type SubtesSiswaDetail } from "@/lib/mentor/s
 import { getMentorBerhakLinkMeet } from "@/lib/mentor/linkMeetSiswa";
 import { isKelasPrivate, resolveLinkMeet } from "@/lib/shared/linkMeet";
 import { alasanDiblokirPenerimaan, type AlasanBlokirPenerimaan } from "@/lib/shared/penerimaanSiswa";
+import { kandidatSubtesMentor, kuotaSubtes } from "@/lib/shared/sesiEnrollment";
 
 /**
  * Data layer "Kelas Saya" (Mentor) — PRD Bagian 7.5 & Bagian 13 (kelas,
@@ -178,6 +179,13 @@ export interface SesiSiswaItem {
   /** Nomor sesi paling kecil yang BELUM ditandai mentor — null kalau semua
    * sesi (1..jumlahSesi) sudah ditandai (tombol "Tandai Selesai" disembunyikan). */
   sesiBerikutnya: number | null;
+  /** enrollments.jumlah_sesi_total — total sesi MILIK siswa ini; null (data lama) = pakai kelas.jumlah_sesi. */
+  totalSesi: number | null;
+  /**
+   * Subtes yang bisa dipilih mentor saat menandai sesi + sisa kuota (null = tanpa batas). KOSONG bila siswa tidak
+   * punya kuota per subtes (tampilan & perilaku lama). Mentor wajib memilih hanya bila isinya lebih dari satu.
+   */
+  subtesPilihan: { id: string; nama: string; sisa: number | null }[];
   /**
    * Penjaga penerimaan siswa: null = mentor boleh menandai sesi siswa ini; selain itu
    * alasan diblokir (menunggu diterima / sudah diterima mentor lain / data gagal dibaca
@@ -303,7 +311,7 @@ export async function getSesiKelasMentor(
     milikDaftar.length > 0
       ? supabaseServer
           .from("enrollments")
-          .select("id, link_meet, link_meet_oleh, users:user_id(id, nama, avatar_url)")
+          .select("id, link_meet, link_meet_oleh, jumlah_sesi_total, users:user_id(id, nama, avatar_url)")
           .in("id", milikDaftar)
       : Promise.resolve({ data: [] as unknown[], error: null }),
     menungguIds.length > 0
@@ -313,7 +321,7 @@ export async function getSesiKelasMentor(
       ? supabaseServer
           .from("sesi_kelas")
           .select(
-            "enrollment_id, nomor_sesi, tanggal_dilaksanakan, dikonfirmasi_mentor, dikonfirmasi_mentor_pada, status_siswa, dikonfirmasi_siswa_pada, mentor_id, nama_mapel, mentor:mentor_id(nama)",
+            "enrollment_id, nomor_sesi, tanggal_dilaksanakan, dikonfirmasi_mentor, dikonfirmasi_mentor_pada, status_siswa, dikonfirmasi_siswa_pada, mentor_id, nama_mapel, subtes_id, mentor:mentor_id(nama)",
           )
           .in("enrollment_id", milikDaftar)
           .order("nomor_sesi", { ascending: true })
@@ -326,7 +334,6 @@ export async function getSesiKelasMentor(
   if (sesiRes.error) {
     console.error("[getSesiKelasMentor] query sesi_kelas failed:", sesiRes.error);
   }
-
   type SesiRow = {
     enrollment_id: string;
     nomor_sesi: number;
@@ -337,6 +344,7 @@ export async function getSesiKelasMentor(
     tanggal_dilaksanakan?: string | null;
     mentor_id?: string | null;
     nama_mapel?: string | null;
+    subtes_id?: string | null;
     mentor?: { nama: string } | { nama: string }[] | null;
   };
   const sesiByEnrollment = new Map<string, SesiRow[]>();
@@ -353,7 +361,7 @@ export async function getSesiKelasMentor(
   const now = new Date();
   const hariIni = rentangHariWib(now);
 
-  const siswa = (milikRes.data as unknown as { id: string; link_meet?: string | null; link_meet_oleh?: string | null; users: UserJoin }[])
+  const siswa = (milikRes.data as unknown as { id: string; link_meet?: string | null; link_meet_oleh?: string | null; jumlah_sesi_total?: number | null; users: UserJoin }[])
     .map((row) => {
       const user = firstUser(row.users);
       if (!user) return null;
@@ -367,7 +375,22 @@ export async function getSesiKelasMentor(
           Date.parse(s.dikonfirmasi_mentor_pada) >= Date.parse(hariIni.mulai) &&
           Date.parse(s.dikonfirmasi_mentor_pada) < Date.parse(hariIni.akhir),
       );
-      const sesiBerikutnya = sesiList.find((s) => !s.dikonfirmasi_mentor)?.nomor_sesi ?? null;
+      const totalSesi = typeof row.jumlah_sesi_total === "number" ? row.jumlah_sesi_total : null;
+      const berikutnyaMentah = sesiList.find((s) => !s.dikonfirmasi_mentor)?.nomor_sesi ?? null;
+      // Sesi di atas total siswa tidak pernah bisa ditandai (total NULL = perilaku lama: tanpa batas ini).
+      const sesiBerikutnya = berikutnyaMentah !== null && (totalSesi === null || berikutnyaMentah <= totalSesi) ? berikutnyaMentah : null;
+      // Pilihan subtes saat menandai — hanya bila siswa punya kuota per subtes; selain itu kosong (tampilan lama).
+      const subtesSiswa = penerimaan.get(row.id) ?? [];
+      const subtesPilihan: SesiSiswaItem["subtesPilihan"] = [];
+      if (subtesSiswa.some((s) => kuotaSubtes({ kuota_sesi: s.kuotaSesi }) !== null)) {
+        const kandidat = new Set(kandidatSubtesMentor(mentorId, penerimaan.get(row.id) ?? []));
+        for (const sub of subtesSiswa) {
+          if (!kandidat.has(sub.subtesId)) continue;
+          const kuota = kuotaSubtes({ kuota_sesi: sub.kuotaSesi });
+          const terpakai = sesiList.filter((s) => s.dikonfirmasi_mentor && s.subtes_id === sub.subtesId).length;
+          subtesPilihan.push({ id: sub.subtesId, nama: sub.subtesNama || "Subtes", sisa: kuota === null ? null : Math.max(0, kuota - terpakai) });
+        }
+      }
       return {
         enrollmentId: row.id,
         userId: user.id,
@@ -392,6 +415,8 @@ export async function getSesiKelasMentor(
             };
           }),
         sesiBerikutnya,
+        totalSesi,
+        subtesPilihan,
         diblokirPenerimaan: alasanDiblokirPenerimaan({ mentorId, subtesSiswa: penerimaan.get(row.id) ?? [] }),
         linkMeetSiswa: kelasPrivate
           ? (() => {

@@ -55,10 +55,14 @@ export default function SesiKehadiranSection({
   riwayat: initialRiwayat,
   jumlahSesi,
   initialValidCount,
+  sisaSubtes = [],
 }: {
   riwayat: SesiRiwayat[];
+  /** Total sesi MILIK siswa (enrollments.jumlah_sesi_total ?? kelas.jumlah_sesi). */
   jumlahSesi: number;
   initialValidCount: number;
+  /** Sisa sesi per subtes — hanya diisi bila siswa punya kuota per subtes; kosong = tampilan lama. */
+  sisaSubtes?: { nama: string; sisa: number }[];
 }) {
   const [riwayat, setRiwayat] = useState(initialRiwayat);
   const [validCount, setValidCount] = useState(initialValidCount);
@@ -109,6 +113,10 @@ export default function SesiKehadiranSection({
           style={{ width: `${hitungProgresSesi(validCount, jumlahSesi).persen}%` }}
         />
       </div>
+
+      {sisaSubtes.length > 0 ? (
+        <p className="text-sm text-[#7E7C7C]">Sisa sesi: {sisaSubtes.map((s) => `${s.nama} ${s.sisa}`).join(" · ")}</p>
+      ) : null}
 
       {pending ? (
         <div className="flex flex-col gap-3 rounded-[16px] border border-[#FACC15] bg-[#FFFBEB] px-4 py-3">
