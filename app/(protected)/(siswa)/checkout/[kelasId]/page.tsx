@@ -5,6 +5,7 @@ import { getKelasForCheckout, getKelasSubtesOptions, isKelasSudahLunas } from "@
 import { getKetersediaanSubtes } from "@/lib/kelas/subtesTersedia";
 import PageTitle from "@/components/dashboard/PageTitle";
 import CheckoutForm from "@/components/siswa/CheckoutForm";
+import CheckoutHeaderHarga from "@/components/siswa/CheckoutHeaderHarga";
 import { getCheckoutBlockReason, isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 import { parseJadwalSlots, perluPilihJadwal } from "@/lib/shared/jadwalPilihan";
 import { opsiJadwalCheckout, semuaSlotPenuh } from "@/lib/shared/slotTerisi";
@@ -21,10 +22,6 @@ import { kelasPrivateOnline } from "@/lib/shared/marginKelas";
  */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function formatRupiah(value: number): string {
-  return `Rp${Math.round(value).toLocaleString("id-ID")}`;
-}
 
 export default async function CheckoutPage({ params }: { params: Promise<{ kelasId: string }> }) {
   const { kelasId } = await params;
@@ -86,16 +83,14 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
         <div className="flex flex-col gap-1 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white px-5 py-4 sm:px-8 sm:py-6">
           <h1 className="text-xl font-semibold tracking-[-0.02em] text-black sm:text-2xl">{kelas.nama}</h1>
           <BadgeKapasitas info={kapasitasInfo} />
-          {kelas.hargaAktif < kelas.harga ? (
-            <p className="flex flex-wrap items-baseline gap-x-2 text-base sm:text-lg">
-              <span className="font-semibold text-black">{formatRupiah(kelas.hargaAktif)}</span>
-              <span className="text-sm text-[#7E7C7C] line-through decoration-[#DC2626] sm:text-base">
-                {formatRupiah(kelas.harga)}
-              </span>
-            </p>
-          ) : (
-            <p className="text-base text-[#7E7C7C] sm:text-lg">{formatRupiah(kelas.hargaAktif)}</p>
-          )}
+          <CheckoutHeaderHarga
+            aktif={sesiPilihanAktif()}
+            tipeKelas={kelas.tipeKelas}
+            modePembelajaran={kelas.modePembelajaran}
+            jumlahSesi={kelas.jumlahSesi}
+            harga={kelas.harga}
+            hargaAktif={kelas.hargaAktif}
+          />
         </div>
 
         <CheckoutForm
