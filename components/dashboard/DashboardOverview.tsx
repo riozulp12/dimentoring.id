@@ -31,6 +31,8 @@ export interface ProgressBelajarItem {
   kelasId?: string | null;
   subtes: string;
   persen: number;
+  /** Sisa sesi per subtes — hanya ada bila siswa punya kuota per subtes; selain itu tampilan lama. */
+  sisaSubtes?: { nama: string; sisa: number }[];
 }
 
 export interface KelasTerdaftarItem {
@@ -302,6 +304,11 @@ export default function DashboardOverview({
                   <p className="text-base text-[#7E7C7C]">{item.persen}%</p>
                 </div>
                 <ProgressBar persen={item.persen} />
+                {item.sisaSubtes && item.sisaSubtes.length > 0 ? (
+                  <p className="text-sm text-[#7E7C7C]">
+                    Sisa sesi: {item.sisaSubtes.map((s) => `${s.nama} ${s.sisa}`).join(" · ")}
+                  </p>
+                ) : null}
               </BarisKlik>
             ))}
           </div>

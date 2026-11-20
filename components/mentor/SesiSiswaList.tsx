@@ -39,6 +39,8 @@ const PESAN_DIBLOKIR: Record<NonNullable<SesiSiswaItem["diblokirPenerimaan"]>, s
 };
 
 interface RowState extends SesiSiswaItem {
+  /** Subtes yang dipilih mentor untuk sesi berikutnya (hanya bila siswa punya kuota per subtes). */
+  subtesDipilih: string;
   busy: boolean;
   error: string | null;
   info: string | null;
@@ -53,6 +55,7 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
   const [rows, setRows] = useState<RowState[]>(
     items.map((item) => ({
       ...item,
+      subtesDipilih: item.subtesPilihan.length === 1 ? item.subtesPilihan[0].id : "",
       busy: false,
       error: null,
       info: null,
@@ -99,6 +102,11 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
   }
 
   async function handleTandai(enrollmentId: string) {
+    const baris = rows.find((r) => r.enrollmentId === enrollmentId);
+    if (baris && baris.subtesPilihan.length > 1 && !baris.subtesDipilih) {
+      setRows((prev) => prev.map((r) => (r.enrollmentId === enrollmentId ? { ...r, error: "Pilih dulu subtes yang kamu ajarkan di sesi ini." } : r)));
+      return;
+    }
     setRows((prev) =>
       prev.map((r) => (r.enrollmentId === enrollmentId ? { ...r, busy: true, error: null, info: null } : r)),
     );
@@ -107,7 +115,10 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
       const response = await fetch("/api/mentor/sesi", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enrollmentId }),
+        body: JSON.stringify({
+          enrollmentId,
+          ...(baris && baris.subtesPilihan.length > 0 && baris.subtesDipilih ? { subtesId: baris.subtesDipilih } : {}),
+        }),
       });
       const json = await response.json();
       if (!response.ok || !json.success) {
@@ -145,7 +156,10 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
                     status: "menunggu_siswa" as const,
                   },
                 ].sort((a, b) => a.nomorSesi - b.nomorSesi),
-                sesiBerikutnya: nomorBerikutnya <= jumlahSesi ? nomorBerikutnya : null,
+                sesiBerikutnya: nomorBerikutnya <= (r.totalSesi ?? jumlahSesi) ? nomorBerikutnya : null,
+                subtesPilihan: r.subtesPilihan.map((s) =>
+                  s.id === r.subtesDipilih && s.sisa !== null ? { ...s, sisa: Math.max(0, s.sisa - 1) } : s,
+                ),
               }
             : r,
         ),
@@ -180,7 +194,7 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
             <div className="flex flex-col">
               <p className="text-sm font-medium text-black sm:text-base">{row.nama}</p>
               <p className="text-xs text-[#7E7C7C] sm:text-sm">
-                Sesi {row.sesiValidCount} dari {jumlahSesi}
+                Sesi {row.sesiValidCount} dari {row.totalSesi ?? jumlahSesi}
                 {row.sesiDitandaiSaya > 0 ? ` · ${row.sesiDitandaiSaya} ditandai kamu` : ""}
               </p>
               {row.sesiMenungguSiswa > 0 || row.sesiDisangkal > 0 ? (
@@ -206,6 +220,34 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
                 Sudah ditandai hari ini
               </span>
             ) : row.sesiBerikutnya !== null ? (
+              <>
+              {row.subtesPilihan.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  {row.subtesPilihan.length > 1 ? (
+                    <select
+                      aria-label="Subtes yang diajarkan di sesi ini"
+                      value={row.subtesDipilih}
+                      onChange={(e) =>
+                        setRows((prev) => prev.map((r) => (r.enrollmentId === row.enrollmentId ? { ...r, subtesDipilih: e.target.value, error: null } : r)))
+                      }
+                      className="h-9 rounded-[10px] border border-[#E3E3E3] bg-white px-2 text-sm text-black"
+                    >
+                      <option value="">Pilih subtes</option>
+                      {row.subtesPilihan.map((s) => (
+                        <option key={s.id} value={s.id} disabled={s.sisa === 0}>
+                          {s.nama}
+                          {s.sisa !== null ? ` (sisa ${s.sisa})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-xs text-[#7E7C7C]">
+                      {row.subtesPilihan[0].nama}
+                      {row.subtesPilihan[0].sisa !== null ? ` · sisa ${row.subtesPilihan[0].sisa} sesi` : ""}
+                    </p>
+                  )}
+                </div>
+              ) : null}
               <Button
                 type="button"
                 variant="secondary"
@@ -215,6 +257,7 @@ export default function SesiSiswaList({ items, jumlahSesi }: { items: SesiSiswaI
               >
                 {row.busy ? "Menyimpan..." : "Tandai Sesi Hari Ini Selesai"}
               </Button>
+              </>
             ) : (
               <span className="inline-flex items-center rounded-full bg-[#F0FDF4] px-2.5 py-0.5 text-xs font-medium text-[#0CBA00]">
                 Semua sesi sudah ditandai

@@ -25,6 +25,8 @@ export interface SubtesSiswaDetail extends SubtesSiswaPenerimaan {
   subtesNama: string;
   /** Mentor AKTIF pemegang subtes ini di kelas ini (semua mentor, bukan hanya yang bertanya). */
   mentorAktifSubtes: string[];
+  /** enrollment_subtes.kuota_sesi (sesi pilihan siswa); null = tanpa batas per subtes. */
+  kuotaSesi?: number | null;
 }
 
 export async function getPenerimaanSubtesSiswa(
@@ -37,7 +39,7 @@ export async function getPenerimaanSubtesSiswa(
 
   const [enrollmentRes, subtesRes] = await Promise.all([
     supabaseServer.from("enrollments").select("id, kelas_id, tanggal_daftar").in("id", ids),
-    supabaseServer.from("enrollment_subtes").select("id, enrollment_id, subtes_id, mentor_id").in("enrollment_id", ids),
+    supabaseServer.from("enrollment_subtes").select("id, enrollment_id, subtes_id, mentor_id, kuota_sesi").in("enrollment_id", ids),
   ]);
   if (enrollmentRes.error || subtesRes.error) {
     console.error("[getPenerimaanSubtesSiswa] query enrollment/enrollment_subtes failed:", enrollmentRes.error ?? subtesRes.error);
@@ -97,6 +99,7 @@ export async function getPenerimaanSubtesSiswa(
       status: statusPenerimaanSubtes({ mentorIdPenerima, mentorAktifSubtes, tanggalDaftar: enrollment.tanggalDaftar }),
       mentorMemegang: mentorAktifSubtes.includes(mentorId),
       mentorIdPenerima,
+      kuotaSesi: typeof row.kuota_sesi === "number" ? (row.kuota_sesi as number) : null,
       mentorAktifSubtes,
     });
     hasil.set(row.enrollment_id as string, daftar);
