@@ -98,7 +98,7 @@ describe("form Kelola Kelas: kolom Kapasitas opsional", () => {
       /Kosongkan untuk mengikuti jumlah jadwal dan mentor \(kelas private online\) atau tanpa batas \(kelas lain\)\./,
     );
     const mulai = form.indexOf("Kapasitas (opsional)");
-    const potongan = form.slice(mulai, form.indexOf("Harga (Rp)", mulai));
+    const potongan = form.slice(mulai, form.indexOf("Harga paket penuh (Rp)", mulai));
     assert.ok(!/\brequired\b/.test(potongan), "input Kapasitas masih required");
   });
 

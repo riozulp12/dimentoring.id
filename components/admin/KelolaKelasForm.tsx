@@ -13,6 +13,7 @@ import {
 } from "@/lib/shared/kelasLabels";
 import { formatRupiah, hitungHargaSetelahDiskon } from "@/lib/shared/kelasDiskon";
 import { cekDiskonAman } from "@/lib/shared/marginKelas";
+import { teksPratinjauHargaKartu } from "@/lib/shared/pratinjauHargaKelas";
 import {
   petaMentorPerSubtes,
   subtesTanpaMentor,
@@ -274,6 +275,15 @@ export default function KelolaKelasForm({
     });
     return cek.berlaku && !cek.aman ? cek.pesan : null;
   })();
+
+  // Pratinjau kartu siswa (private online) — fungsi murni yang memakai lib/shared/hargaSesi.ts.
+  const pratinjauHargaKartu = teksPratinjauHargaKartu({
+    tipeKelas,
+    modeKelas: modePembelajaran,
+    harga,
+    diskonPersen,
+    jumlahSesi,
+  });
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -665,7 +675,7 @@ export default function KelolaKelasForm({
           </p>
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-black">Harga (Rp)</label>
+          <label className="text-sm font-medium text-black">Harga paket penuh (Rp)</label>
           <InputField
             type="text"
             size="md"
@@ -675,7 +685,10 @@ export default function KelolaKelasForm({
             onChange={(e) => setHarga(e.target.value.replace(/[^0-9]/g, ""))}
             placeholder="Mis. 500000"
           />
-          <p className="text-xs text-[#7E7C7C]">Isi harga yang tampil ke siswa, misalnya 899.000, bukan 900.000.</p>
+          <p className="text-xs text-[#7E7C7C]">
+            Harga paket penuh yang tampil ke siswa, misalnya 899.000, bukan 900.000.
+          </p>
+          {pratinjauHargaKartu ? <p className="text-xs text-[#7E7C7C]">{pratinjauHargaKartu}</p> : null}
         </div>
       </div>
 
