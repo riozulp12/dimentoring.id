@@ -94,17 +94,17 @@ describe("KelasCardMeta (kartu kelas)", () => {
     assert.ok(!h.includes("Mulai dari"));
     assert.ok(h.includes("Rp899.000"));
   });
-  it("saklar hidup: private online tampil 'Mulai dari Rp102.000' + 'per 1 sesi · paket 10 sesi Rp899.000'", () => {
+  it("saklar hidup: private online tampil 'Mulai dari' + Rp102.000 (susunan baru: lihat tests/kartu-detail-mulai-dari.test.ts)", () => {
     process.env.SESI_PILIHAN_AKTIF = "true";
     const h = html(kartu());
-    assert.ok(h.includes("Mulai dari Rp102.000"), h);
-    assert.ok(/per 1 sesi · paket 10 sesi\s*(<!-- -->)?\s*(<!-- -->)?\s*Rp899\.000/.test(h.replace(/<!-- -->/g, "")), h);
+    assert.ok(/Mulai dari<\/span><span[^>]*>Rp102\.000</.test(h), h);
+    assert.ok(!h.includes("per 1 sesi"), h);
   });
   it("saklar hidup + diskon: paket penuh tetap menampilkan harga coret dan harga setelah diskon", () => {
     process.env.SESI_PILIHAN_AKTIF = "true";
     const h = html(kartu({ diskonPersen: 5, hargaSetelahDiskon: 854050 }));
-    assert.ok(h.includes("<s"), h);
-    assert.ok(h.includes("Rp899.000") && h.includes("Rp854.050"), h);
+    assert.ok(/<s[ >]/.test(h), h);
+    assert.ok(h.includes("Paket 10 sesi:") && h.includes("Rp899.000") && h.includes("Rp854.050"), h);
   });
   it("saklar hidup: kelas offline dan non-private tidak berubah", () => {
     process.env.SESI_PILIHAN_AKTIF = "true";

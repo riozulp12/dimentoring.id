@@ -25,6 +25,9 @@ import Avatar from "@/components/ui/Avatar";
 import KelasCardVisual from "@/components/ui/KelasCardVisual";
 import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 import BadgeKapasitas from "@/components/ui/BadgeKapasitas";
+import HargaMulaiDari from "@/components/program/HargaMulaiDari";
+import { ringkasanHargaKartu } from "@/lib/shared/kartuHargaMulai";
+import { sesiPilihanAktif } from "@/lib/shared/sesiPilihanFlag";
 
 /** Detail publik 1 kelas (PRD 7.5.4) — TIGA card independen (masing-masing
  * border+shadow+padding sendiri, dipisah gap yang jelas, bukan satu card besar
@@ -135,6 +138,15 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
   // Siswa yang sudah lunas tidak ditawari membeli ulang: tombol diganti
   // "Buka Kelas" ke halaman kelas siswa.
   const sudahLunas = session?.role === "student" ? await isKelasSudahLunas(session.userId, kelas.id) : false;
+  // Harga "Mulai dari" (private online, saklar hidup) — helper & komponen yang SAMA dengan kartu kelas.
+  const mulaiDari = ringkasanHargaKartu({
+    aktif: sesiPilihanAktif(),
+    tipeKelas: kelas.tipeKelas,
+    modeKelas: kelas.modePembelajaran,
+    harga: kelas.harga,
+    hargaSetelahDiskon: kelas.hargaSetelahDiskon,
+    jumlahSesi: kelas.jumlahSesi,
+  });
 
   return (
     <div className="flex w-full flex-col">
@@ -173,7 +185,9 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
                 {/* Harga setelah diskon jadi fokus utama (bold, besar) kalau
                     kelas.diskon_persen > 0; harga asli dicoret di atasnya.
                     Tanpa diskon: tampilan lama, tidak berubah. */}
-                {kelas.diskonPersen > 0 ? (
+                {mulaiDari ? (
+                  <HargaMulaiDari ringkasan={mulaiDari} harga={kelas.harga} diskonAktif={kelas.diskonPersen > 0} varian="detail" />
+                ) : kelas.diskonPersen > 0 ? (
                   <div className="flex shrink-0 flex-col sm:items-end">
                     <span className="text-sm whitespace-nowrap text-[#7E7C7C] line-through">
                       {formatRupiah(kelas.harga)}

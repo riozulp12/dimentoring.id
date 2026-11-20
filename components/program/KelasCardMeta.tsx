@@ -3,6 +3,7 @@ import type { SessionRole } from "@/lib/auth/session";
 import KelasDaftarButton from "./KelasDaftarButton";
 import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 import { formatRupiah } from "@/lib/shared/kelasDiskon";
+import HargaMulaiDari from "./HargaMulaiDari";
 import { ringkasanHargaKartu } from "@/lib/shared/kartuHargaMulai";
 import { sesiPilihanAktif } from "@/lib/shared/sesiPilihanFlag";
 
@@ -69,16 +70,7 @@ export default function KelasCardMeta({ item, sessionRole, compact = false }: Ke
           utama (bold, lebih besar) dan harga asli dicoret di atasnya dengan
           font lebih kecil. Tanpa diskon: tampilan lama, tidak berubah. */}
       {mulai ? (
-        <div className="flex min-w-0 flex-col">
-          <span className={compact ? "text-xs font-semibold text-black sm:text-sm" : "text-sm font-semibold text-black"}>
-            Mulai dari {mulai.mulaiDari}
-          </span>
-          <span className={compact ? "text-[11px] text-[#7E7C7C] sm:text-xs" : "text-xs text-[#7E7C7C]"}>
-            per 1 sesi · paket {mulai.jumlahSesi} sesi{" "}
-            {hasDiskon ? <s className="decoration-[#DC2626]">{formatRupiah(item.harga)}</s> : null}{" "}
-            {hasDiskon ? <span className="font-semibold text-[#DC2626]">{mulai.hargaPaket}</span> : mulai.hargaPaket}
-          </span>
-        </div>
+        <HargaMulaiDari ringkasan={mulai} harga={item.harga} diskonAktif={hasDiskon} varian="kartu" compact={compact} />
       ) : hasDiskon ? (
         <div className="flex min-w-0 flex-col">
           <span className={compact ? "text-[11px] text-[#7E7C7C] line-through sm:text-xs" : "text-xs text-[#7E7C7C] line-through"}>

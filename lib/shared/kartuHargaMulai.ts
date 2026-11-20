@@ -26,3 +26,6 @@ export function ringkasanHargaKartu(input: {
   if (!paket.valid) return null;
   return { mulaiDari: formatRupiah(mulai.harga), jumlahSesi: input.jumlahSesi, hargaPaket: formatRupiah(paket.totalSebelumPromo) };
 }
+
+/** Kalimat ajakan di bawah harga "Mulai dari" (kartu & detail kelas) — maksimal 5 kata. */
+export const TEKS_AJAKAN_SESI = "Makin banyak sesi, makin hemat";
