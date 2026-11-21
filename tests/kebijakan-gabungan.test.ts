@@ -65,16 +65,16 @@ describe("halaman /kebijakan", () => {
     assert.match(halaman, /KEBIJAKAN_REFUND_VERSI/);
   });
 
-  it("tanggal & versi dipisah per bagian: Privasi 23 Oktober 2026 (v1), Refund 5 November 2026 (v1)", () => {
-    assert.equal(KEBIJAKAN_PRIVASI_TANGGAL_BERLAKU, "23 Oktober 2026");
-    assert.equal(KEBIJAKAN_PRIVASI_VERSI, "v1");
+  it("tanggal & versi dipisah per bagian: Privasi v2 (tanggal masih placeholder), Refund 5 November 2026 (v1)", () => {
+    assert.equal(KEBIJAKAN_PRIVASI_TANGGAL_BERLAKU, "[ISI TANGGAL PIXEL DINYALAKAN]");
+    assert.equal(KEBIJAKAN_PRIVASI_VERSI, "v2");
     assert.equal(KEBIJAKAN_REFUND_TANGGAL_BERLAKU, "5 November 2026");
     assert.equal(KEBIJAKAN_REFUND_VERSI, "v1");
     assert.notEqual(KEBIJAKAN_PRIVASI_TANGGAL_BERLAKU, KEBIJAKAN_REFUND_TANGGAL_BERLAKU);
     // Tiap bagian di halaman memakai konstanta bagiannya sendiri (bukan tertukar).
     assert.match(halaman, /Berlaku sejak: \{KEBIJAKAN_PRIVASI_TANGGAL_BERLAKU\} · Versi: \{KEBIJAKAN_PRIVASI_VERSI\}/);
     assert.match(halaman, /Berlaku sejak: \{KEBIJAKAN_REFUND_TANGGAL_BERLAKU\} · Versi: \{KEBIJAKAN_REFUND_VERSI\}/);
-    // Dokumen sumber ikut sama.
+    // Dokumen v1 tetap sebagai arsip (berlaku 23 Oktober 2026).
     assert.match(baca("docs/legal/kebijakan-privasi-v1.md"), /^Berlaku sejak: 23 Oktober 2026\s*$/m);
     assert.match(baca("docs/legal/kebijakan-privasi-v1.md"), /^Versi: v1\s*$/m);
     assert.match(baca("docs/legal/kebijakan-refund-v1.md"), /^Berlaku sejak: 5 November 2026\s*$/m);

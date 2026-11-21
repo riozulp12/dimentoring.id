@@ -78,7 +78,7 @@ describe("wiring statis", () => {
     assert.match(baca("app/beasiswa-event/[id]/page.tsx"), /<DaftarLeadLink/);
     assert.match(baca("components/beasiswa-event/DaftarLeadLink.tsx"), /trackLead/);
   });
-  it("kebijakan menyebut Meta Pixel", () => {
-    assert.match(baca("app/kebijakan/page.tsx"), /Meta Pixel/);
+  it("kebijakan menyebut Pixel Meta", () => {
+    assert.match(baca("app/kebijakan/page.tsx"), /Pixel Meta/);
   });
 });

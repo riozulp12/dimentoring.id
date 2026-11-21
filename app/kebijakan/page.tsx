@@ -141,6 +141,11 @@ export default async function KebijakanPage() {
                     tanpa login, dan cookie atribusi iklan (sumber/kampanye tautan yang kamu klik). Cookie ini tidak
                     berisi nama atau kontak.
                   </li>
+                  <li>
+                    <span className="font-semibold">Pixel Meta:</span> di halaman publik, browser kamu mengirim ke Meta
+                    halaman yang kamu buka, klik tombol daftar di Beasiswa &amp; Event, dan pengenal browser (cookie
+                    _fbp). Data ini tidak memuat nama, email, atau nomor WhatsApp kamu.
+                  </li>
                 </ul>
               </section>
 
@@ -156,6 +161,7 @@ export default async function KebijakanPage() {
                   <li>
                     Memahami iklan atau tautan mana yang membawa pengunjung, supaya kami bisa memperbaiki layanan.
                   </li>
+                  <li>Mengukur dan memperbaiki iklan kami di Facebook dan Instagram.</li>
                   <li>Menjaga keamanan dan mencegah penyalahgunaan.</li>
                 </ul>
                 <p className={pClass}>Kami tidak menjual data pribadi kamu.</p>
@@ -188,6 +194,11 @@ export default async function KebijakanPage() {
                     atau kontak kamu.
                   </li>
                   <li>
+                    <span className="font-semibold">Meta Platforms:</span> menerima data Pixel Meta yang dijelaskan di
+                    bagian 2. Meta dapat memprosesnya di server di luar Indonesia dan memakainya sesuai kebijakannya
+                    sendiri.
+                  </li>
+                  <li>
                     <span className="font-semibold">Mentor:</span> hanya melihat data siswa yang mereka bimbing,
                     sebatas yang diperlukan untuk kelas.
                   </li>
@@ -206,9 +217,12 @@ export default async function KebijakanPage() {
                 <p className={pClass}>
                   Kami memakai cookie untuk login, membatasi percobaan Assessment tanpa login, dan mencatat sumber
                   kunjungan. Cookie atribusi disimpan paling lama 30 hari. Kamu bisa menghapus cookie lewat pengaturan
-                  browser. Situs ini juga memakai Meta Pixel untuk mengukur performa iklan kami; Pixel tidak dipasang di
-                  halaman akun, dashboard, dan pembayaran, dan kami tidak mengirim nama, email, atau nomor teleponmu ke
-                  Pixel.
+                  browser.
+                </p>
+                <p className={pClass}>
+                  Pixel Meta memasang cookie <span className="font-semibold">_fbp</span> (sekitar 90 hari) untuk
+                  mengenali browser kamu di iklan Facebook dan Instagram. Kamu bisa menolaknya lewat pengaturan iklan
+                  Facebook/Instagram kamu, atau dengan memblokir cookie pihak ketiga di browser.
                 </p>
               </section>
 
