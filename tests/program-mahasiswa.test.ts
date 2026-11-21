@@ -182,7 +182,7 @@ describe("baris filter beasiswa/internship/event (render sungguhan)", () => {
     assert.equal(opsi[0], "Semua jenis");
     assert.deepEqual(
       [...opsi.slice(1)].sort(),
-      ["Beasiswa", "Event", "Internship", "Webinar", "Workshop"],
+      ["Beasiswa", "Event", "Internship", "Lainnya", "Webinar", "Workshop"],
     );
   });
 
@@ -234,9 +234,12 @@ describe("baris filter beasiswa/internship/event (render sungguhan)", () => {
 
   it("logika filter/pencarian/status tidak berubah (AND judul, tipe, status)", () => {
     const klien = baca("components/beasiswa-event/BeasiswaEventListClient.tsx");
-    assert.ok(klien.includes("if (q && !item.judul.toLowerCase().includes(q)) return false;"));
-    assert.ok(klien.includes('if (tipeFilter !== "semua" && item.tipe !== tipeFilter) return false;'));
-    assert.ok(klien.includes('if (statusFilter !== "semua" && item.status !== statusFilter) return false;'));
+    // Logika filter dipindah apa adanya ke lib/shared/kontenInfoFilter.ts (dipakai komponen ini).
+    const filter = baca("lib/shared/kontenInfoFilter.ts");
+    assert.ok(klien.includes("filterKontenInfo(items, { search, tipe: tipeFilter, status: statusFilter })"));
+    assert.ok(filter.includes("if (q && !item.judul.toLowerCase().includes(q)) return false;"));
+    assert.ok(filter.includes('if (opsi.tipe !== "semua" && item.tipe !== opsi.tipe) return false;'));
+    assert.ok(filter.includes('if (opsi.status !== "semua" && item.status !== opsi.status) return false;'));
     assert.ok(klien.includes('useState<StatusFilter>("semua")'));
     assert.ok(klien.includes('useState<TipeFilter>("semua")'));
   });

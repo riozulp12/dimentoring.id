@@ -1,6 +1,6 @@
 /**
  * Label & warna badge untuk enum konten_info_tipe
- * (beasiswa/internship/event/webinar/workshop) dan konten_info_status
+ * (beasiswa/internship/event/webinar/workshop/lainnya) dan konten_info_status
  * (aktif/ditutup) — dipakai section landing page "Info Beasiswa &
  * Internship", halaman publik /beasiswa-event, dan dropdown Tipe di form
  * Kelola Konten Admin (PRD Bagian 13). File tanpa "server-only" supaya aman
@@ -20,6 +20,7 @@ export const KONTEN_INFO_TIPE_LABEL: Record<string, string> = {
   webinar: "Webinar",
   workshop: "Workshop",
   event: "Event",
+  lainnya: "Lainnya",
 };
 
 export const KONTEN_INFO_TIPE_BADGE_CLASS: Record<string, string> = {
@@ -28,6 +29,7 @@ export const KONTEN_INFO_TIPE_BADGE_CLASS: Record<string, string> = {
   webinar: "bg-teal-50 text-teal-700",
   workshop: "bg-rose-50 text-rose-700",
   event: "bg-amber-50 text-amber-700",
+  lainnya: "bg-gray-100 text-gray-700",
 };
 
 export const KONTEN_INFO_STATUS_LABEL: Record<string, string> = {

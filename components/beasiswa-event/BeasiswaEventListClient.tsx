@@ -3,6 +3,7 @@
 import { useId, useMemo, useState } from "react";
 import InputField from "@/components/ui/InputField";
 import { KONTEN_INFO_TIPE_LABEL } from "@/lib/shared/kontenInfoLabels";
+import { filterKontenInfo } from "@/lib/shared/kontenInfoFilter";
 import KontenInfoCard from "@/components/beasiswa-event/KontenInfoCard";
 import type { KontenInfoListItem } from "@/lib/dashboard/getInfoBeasiswaEvent";
 
@@ -24,7 +25,7 @@ import type { KontenInfoListItem } from "@/lib/dashboard/getInfoBeasiswaEvent";
  * aria-pressed dan gaya terisi, hover hanya abu-abu supaya tidak terbaca "aktif".
  */
 
-type TipeFilter = "semua" | "beasiswa" | "internship" | "webinar" | "workshop" | "event";
+type TipeFilter = "semua" | "beasiswa" | "internship" | "webinar" | "workshop" | "event" | "lainnya";
 type StatusFilter = "semua" | "aktif" | "ditutup";
 
 const TIPE_OPTIONS = [
@@ -46,15 +47,10 @@ export default function BeasiswaEventListClient({ items }: { items: KontenInfoLi
   const [tipeFilter, setTipeFilter] = useState<TipeFilter>("semua");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("semua");
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return items.filter((item) => {
-      if (q && !item.judul.toLowerCase().includes(q)) return false;
-      if (tipeFilter !== "semua" && item.tipe !== tipeFilter) return false;
-      if (statusFilter !== "semua" && item.status !== statusFilter) return false;
-      return true;
-    });
-  }, [items, search, tipeFilter, statusFilter]);
+  const filtered = useMemo(
+    () => filterKontenInfo(items, { search, tipe: tipeFilter, status: statusFilter }),
+    [items, search, tipeFilter, statusFilter],
+  );
 
   const isFiltering = search.trim() !== "" || tipeFilter !== "semua" || statusFilter !== "semua";
 

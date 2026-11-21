@@ -21,7 +21,7 @@ import type { KontenInfoAdminItem } from "@/lib/admin/getKelolaKontenData";
  * hapus dengan konfirmasi dulu.
  */
 
-type TipeFilter = "semua" | "beasiswa" | "internship" | "webinar" | "workshop" | "event";
+type TipeFilter = "semua" | "beasiswa" | "internship" | "webinar" | "workshop" | "event" | "lainnya";
 type StatusFilter = "semua" | "aktif" | "ditutup";
 
 // Tab tipe REUSE KONTEN_INFO_TIPE_LABEL (satu-satunya sumber daftar tipe)
