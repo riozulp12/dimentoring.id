@@ -163,7 +163,7 @@ describe("file statis", () => {
     }
   });
 
-  it(".env.example cuma placeholder tanpa nilai (4 payment + bendera Lead Capture + email Resend + WhatsApp Fonnte), tanpa variabel Midtrans", () => {
+  it(".env.example cuma placeholder tanpa nilai (4 payment + bendera Lead Capture + saklar Jadi Mentor + email Resend + WhatsApp Fonnte), tanpa variabel Midtrans", () => {
     const lines = readFileSync(".env.example", "utf8")
       .split(/\r?\n/)
       .filter((line) => line.trim() && !line.trim().startsWith("#"));
@@ -173,6 +173,7 @@ describe("file statis", () => {
       "MAYAR_BASE_URL=",
       "APP_BASE_URL=",
       "NEXT_PUBLIC_LEAD_CAPTURE_ENABLED=",
+      "NEXT_PUBLIC_JADI_MENTOR_AKTIF=",
       "RESEND_API_KEY=",
       "EMAIL_FROM_ADDRESS=",
       "EMAIL_FROM_NAME=",

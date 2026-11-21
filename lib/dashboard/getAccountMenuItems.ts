@@ -24,7 +24,10 @@ export function getAccountMenuItems(
     { label: "Pengaturan", href: "/pengaturan", icon: "pengaturan" },
   ];
 
-  if (role === "student" && canApplyMentor) {
+  // Saklar: halaman /jadi-mentor belum dibangun (404) — item disembunyikan
+  // sampai NEXT_PUBLIC_JADI_MENTOR_AKTIF === "true". Dibaca saat dipanggil.
+  const jadiMentorAktif = process.env.NEXT_PUBLIC_JADI_MENTOR_AKTIF === "true";
+  if (role === "student" && canApplyMentor && jadiMentorAktif) {
     items.push({ label: "Jadi Mentor", href: "/jadi-mentor", icon: "jadi-mentor" });
   }
 
