@@ -174,6 +174,7 @@ describe("file statis", () => {
       "APP_BASE_URL=",
       "NEXT_PUBLIC_LEAD_CAPTURE_ENABLED=",
       "NEXT_PUBLIC_JADI_MENTOR_AKTIF=",
+      "NEXT_PUBLIC_META_PIXEL_ID=",
       "RESEND_API_KEY=",
       "EMAIL_FROM_ADDRESS=",
       "EMAIL_FROM_NAME=",
