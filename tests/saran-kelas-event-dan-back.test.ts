@@ -355,7 +355,10 @@ describe("struktur halaman", () => {
     // Event: tautan pendaftaran eksternal tetap, dan tetap dinonaktifkan untuk ditutup / tanpa link.
     assert.ok(eventPage.includes('let ctaLabel = "Daftar Sekarang";'));
     assert.ok(eventPage.includes('"Pendaftaran Sudah Ditutup"') && eventPage.includes('"Link Pendaftaran Belum Tersedia"'));
-    assert.match(eventPage, /<a\s+href=\{linkPendaftaran as string\}\s+target="_blank"\s+rel="noopener noreferrer"/);
+    // Tautan eksternal kini lewat DaftarLeadLink (Meta Pixel Lead); tetap target _blank + noopener.
+    assert.match(eventPage, /<DaftarLeadLink\s+href=\{linkPendaftaran as string\}/);
+    const daftarLead = readFileSync("components/beasiswa-event/DaftarLeadLink.tsx", "utf8");
+    assert.match(daftarLead, /target="_blank"\s+rel="noopener noreferrer"/);
     assert.ok(eventPage.includes("<DetailInteractionButtons kontenInfoId={konten.id as string} />"));
   });
 

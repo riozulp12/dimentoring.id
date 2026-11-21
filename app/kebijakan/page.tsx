@@ -206,7 +206,9 @@ export default async function KebijakanPage() {
                 <p className={pClass}>
                   Kami memakai cookie untuk login, membatasi percobaan Assessment tanpa login, dan mencatat sumber
                   kunjungan. Cookie atribusi disimpan paling lama 30 hari. Kamu bisa menghapus cookie lewat pengaturan
-                  browser.
+                  browser. Situs ini juga memakai Meta Pixel untuk mengukur performa iklan kami; Pixel tidak dipasang di
+                  halaman akun, dashboard, dan pembayaran, dan kami tidak mengirim nama, email, atau nomor teleponmu ke
+                  Pixel.
                 </p>
               </section>
 

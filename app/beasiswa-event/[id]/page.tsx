@@ -13,6 +13,7 @@ import {
 } from "@/lib/shared/kontenInfoLabels";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/sections/Footer";
+import DaftarLeadLink from "@/components/beasiswa-event/DaftarLeadLink";
 import DetailInteractionButtons from "@/components/beasiswa-event/DetailInteractionButtons";
 import ProgramLainnyaSection from "@/components/beasiswa-event/ProgramLainnyaSection";
 import BackLink from "@/components/ui/BackLink";
@@ -135,14 +136,13 @@ export default async function BeasiswaEventDetailPage({ params }: PageProps) {
                 {ctaLabel}
               </span>
             ) : (
-              <a
+              <DaftarLeadLink
                 href={linkPendaftaran as string}
-                target="_blank"
-                rel="noopener noreferrer"
+                kategori={konten.tipe as string | undefined}
                 className="inline-flex w-fit items-center justify-center rounded-[18px] bg-[#081EEA] px-6 py-2.5 text-sm font-medium text-white transition hover:opacity-90 sm:text-base"
               >
                 {ctaLabel}
-              </a>
+              </DaftarLeadLink>
             )}
 
             {session ? <DetailInteractionButtons kontenInfoId={konten.id as string} /> : null}
