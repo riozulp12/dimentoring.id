@@ -12,6 +12,8 @@
  */
 
 export const UNIVERSITAS_LAINNYA = "Lainnya";
+/** Label opsi cadangan di dropdown saat pencarian tidak cocok dengan universitas mana pun. */
+export const UNIVERSITAS_LAINNYA_TULIS_SENDIRI = "Lainnya (tulis sendiri)";
 export const NAMA_UNIVERSITAS_LAINNYA_MIN = 3;
 
 export function isUniversitasLainnya(value: string | null | undefined): boolean {

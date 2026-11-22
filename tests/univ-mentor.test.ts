@@ -7,7 +7,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { filterSearchableOptions } from "../lib/shared/searchableSelectFilter";
 import {
+  UNIVERSITAS_LAINNYA_TULIS_SENDIRI,
   buildOpsiUniversitas,
   formatAsalPtnAdmin,
   isNamaUniversitasLainnyaValid,
@@ -85,5 +87,36 @@ describe("tampilan admin approval-mentor", () => {
     ]) {
       assert.match(baca(p), /formatAsalPtnAdmin\(/, p);
     }
+  });
+});
+
+describe('opsi cadangan "Lainnya (tulis sendiri)" di pencarian', () => {
+  const opsi = buildOpsiUniversitas(["Universitas Indonesia", "Institut Teknologi Bandung"]).map((n) => ({ label: n, value: n }));
+  const fallback = { label: UNIVERSITAS_LAINNYA_TULIS_SENDIRI, value: "Lainnya" };
+
+  it("pencarian tanpa hasil memunculkan opsi cadangan", () => {
+    const r = filterSearchableOptions(opsi, "Universitas Antah Berantah", fallback);
+    assert.equal(r.filtered.length, 0);
+    assert.equal(r.showFallback, true);
+    assert.equal(fallback.label, "Lainnya (tulis sendiri)");
+  });
+
+  it("pencarian dengan hasil / kosong tidak memunculkannya", () => {
+    assert.equal(filterSearchableOptions(opsi, "bandung", fallback).showFallback, false);
+    assert.equal(filterSearchableOptions(opsi, "   ", fallback).showFallback, false);
+    assert.equal(filterSearchableOptions(opsi, "", fallback).showFallback, false);
+  });
+
+  it("tanpa fallbackOption (Assessment dkk.) perilaku lama tetap", () => {
+    assert.equal(filterSearchableOptions(opsi, "zzz").showFallback, false);
+  });
+
+  it("memilih opsi mengisi kolom nama dari teks pencarian (wiring)", () => {
+    const comp = baca("components/ui/SearchableSelect.tsx");
+    assert.match(comp, /onFallbackSelect\?\.\(typed\)/);
+    assert.match(comp, /const typed = query\.trim\(\)/);
+    const wizard = baca("app/(auth)/lengkapi-profil/LengkapiProfilClient.tsx");
+    assert.match(wizard, /onFallbackSelect=\{\(typed\) => updateForm\(\{ ptn: UNIVERSITAS_LAINNYA, ptnLainnya: typed \}\)\}/);
+    assert.match(wizard, /fallbackOption=\{\{ label: UNIVERSITAS_LAINNYA_TULIS_SENDIRI/);
   });
 });

@@ -8,6 +8,8 @@ import Mascot from "@/components/ui/Mascot";
 import ChecklistGrid from "@/components/ui/ChecklistGrid";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import {
+  UNIVERSITAS_LAINNYA,
+  UNIVERSITAS_LAINNYA_TULIS_SENDIRI,
   isNamaUniversitasLainnyaValid,
   isUniversitasLainnya,
 } from "@/lib/shared/universitasMentor";
@@ -360,6 +362,8 @@ export default function LengkapiProfilClient({ universitasOptions }: { universit
                   size="md"
                   placeholder="Pilih PTN kamu"
                   searchPlaceholder="Cari universitas..."
+                  fallbackOption={{ label: UNIVERSITAS_LAINNYA_TULIS_SENDIRI, value: UNIVERSITAS_LAINNYA }}
+                  onFallbackSelect={(typed) => updateForm({ ptn: UNIVERSITAS_LAINNYA, ptnLainnya: typed })}
                   options={universitasOptions.map((nama) => ({ label: nama, value: nama }))}
                   value={form.ptn}
                   onChange={(event) => updateForm({ ptn: event.target.value })}
