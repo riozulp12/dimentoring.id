@@ -1,5 +1,6 @@
 "use client";
 
+import { formatAsalPtnAdmin } from "@/lib/shared/universitasMentor";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MentorPengajuan } from "@/lib/admin/dashboardData";
@@ -57,7 +58,7 @@ export default function ApprovalMentorList({ items }: { items: MentorPengajuan[]
           <div className="flex min-w-0 flex-col gap-1">
             <p className="text-base font-medium text-black">{item.nama}</p>
             <p className="text-sm text-[#7E7C7C]">
-              {item.asalPtn ?? "-"} · {item.jurusan ?? "-"}
+              {formatAsalPtnAdmin(item.asalPtn)} · {item.jurusan ?? "-"}
             </p>
             <p className="text-sm text-[#7E7C7C]">Daftar {formatDate(item.tanggalDaftar)}</p>
             {errorId === item.userRoleId ? (

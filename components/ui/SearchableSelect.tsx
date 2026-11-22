@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type SelectHTMLAttributes } from "react";
 import Dropdown from "./Dropdown";
+import { filterSearchableOptions } from "@/lib/shared/searchableSelectFilter";
 import {
   FIELD_BASE,
   FIELD_SIZES,
@@ -24,6 +25,14 @@ export interface SearchableSelectProps
   searchPlaceholder?: string;
   /** Teks saat tidak ada opsi yang cocok dengan pencarian. Default: "Tidak ditemukan". */
   notFoundText?: string;
+  /**
+   * Opsi cadangan yang HANYA muncul saat teks pencarian tidak cocok dengan
+   * opsi mana pun (mis. "Lainnya (tulis sendiri)"). `value`-nya harus ada di
+   * `options` supaya select tersembunyi tetap valid.
+   */
+  fallbackOption?: { label: string; value: string };
+  /** Dipanggil saat fallbackOption dipilih, dengan teks pencarian yang sudah diketik (trim). */
+  onFallbackSelect?: (query: string) => void;
 }
 
 /**
@@ -53,6 +62,8 @@ export default function SearchableSelect({
   placeholder,
   searchPlaceholder = "Cari...",
   notFoundText = "Tidak ditemukan",
+  fallbackOption,
+  onFallbackSelect,
   ...rest
 }: SearchableSelectProps) {
   const autoId = useId();
@@ -67,11 +78,10 @@ export default function SearchableSelect({
   const selectedOption = options.find((option) => option.value === currentValue);
   const displayLabel = selectedOption?.label ?? (placeholder ? undefined : options[0]?.label);
 
-  const filteredOptions = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return options;
-    return options.filter((option) => option.label.toLowerCase().includes(needle));
-  }, [options, query]);
+  const { filtered: filteredOptions, showFallback } = useMemo(
+    () => filterSearchableOptions(options, query, fallbackOption),
+    [options, query, fallbackOption],
+  );
 
   useEffect(() => {
     // Fokus input pencarian tiap kali panel dibuka — sesuai perilaku
@@ -98,6 +108,13 @@ export default function SearchableSelect({
     onChange?.({ target: { value: optionValue, name } } as unknown as ChangeEvent<HTMLSelectElement>);
   }
 
+  function selectFallback() {
+    if (!fallbackOption) return;
+    const typed = query.trim();
+    onFallbackSelect?.(typed);
+    selectOption(fallbackOption.value);
+  }
+
   function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -109,6 +126,7 @@ export default function SearchableSelect({
       event.preventDefault();
       const target = filteredOptions[highlightedIndex];
       if (target) selectOption(target.value);
+      else if (showFallback) selectFallback();
     }
   }
 
@@ -182,7 +200,20 @@ export default function SearchableSelect({
         />
       </div>
       {filteredOptions.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-[#7E7C7C]">{notFoundText}</p>
+        <>
+          <p className="px-4 py-3 text-sm text-[#7E7C7C]">{notFoundText}</p>
+          {showFallback && fallbackOption ? (
+            <button
+              type="button"
+              role="option"
+              aria-selected={false}
+              onClick={selectFallback}
+              className="flex w-full items-center bg-gray-50 px-4 py-2.5 text-left text-sm font-medium text-[#081EEA] transition-colors"
+            >
+              <span className="block truncate">{fallbackOption.label}</span>
+            </button>
+          ) : null}
+        </>
       ) : (
         filteredOptions.map((option, index) => (
           <button
