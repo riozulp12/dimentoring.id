@@ -29,10 +29,9 @@ CREATE TYPE tryout_kategori AS ENUM ('tka', 'snbt', 'mandiri');
 CREATE TYPE tryout_akses AS ENUM ('free', 'premium');
 CREATE TYPE payment_item_type AS ENUM ('kelas', 'tryout', 'lainnya');
 CREATE TYPE payment_status AS ENUM ('menunggu', 'berhasil', 'gagal', 'refunded');
-CREATE TYPE konten_info_tipe AS ENUM ('beasiswa', 'internship', 'event', 'webinar', 'workshop');
--- 'event' tetap jadi kategori umum/"lainnya" (BR baru) — kalau Admin input 
--- sesuatu yang bukan Beasiswa/Internship/Webinar/Workshop spesifik, pakai 
--- 'event', tampil ke publik sebagai label "Event" generik.
+CREATE TYPE konten_info_tipe AS ENUM ('beasiswa', 'internship', 'event', 'webinar', 'workshop', 'lainnya');
+-- 'lainnya' ditambah lewat db/add_jenis_lainnya.sql — untuk info di luar jenis spesifik di atas;
+-- tampil ke siswa dengan label "Lainnya" (badge abu-abu). 'event' tetap jenis "Event" biasa.
 CREATE TYPE konten_info_status AS ENUM ('aktif', 'ditutup');
 CREATE TYPE interaksi_konten_jenis AS ENUM ('disimpan', 'tertarik');
 CREATE TYPE soal_ai_kesulitan AS ENUM ('mudah', 'sedang', 'hots');

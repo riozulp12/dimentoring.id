@@ -38,6 +38,9 @@ export async function getInfoBeasiswaEvent(limit?: number): Promise<BeasiswaEven
   return data ?? [];
 }
 
+/** Semua jenis konten_info yang tampil ke siswa (urutan = urutan KONTEN_INFO_TIPE_LABEL). */
+const SEMUA_TIPE_KONTEN = ["beasiswa", "internship", "webinar", "workshop", "event", "lainnya"];
+
 export interface KontenInfoListItem extends BeasiswaEventItem {
   status: string;
 }
@@ -54,7 +57,7 @@ export async function getKontenInfoList(): Promise<KontenInfoListItem[]> {
   const { data, error } = await supabaseServer
     .from("konten_info")
     .select("id, tipe, judul, deskripsi, deadline, status")
-    .in("tipe", ["beasiswa", "internship", "webinar", "workshop", "event"])
+    .in("tipe", SEMUA_TIPE_KONTEN)
     .order("status", { ascending: true })
     .order("deadline", { ascending: true, nullsFirst: false });
 
@@ -65,8 +68,6 @@ export async function getKontenInfoList(): Promise<KontenInfoListItem[]> {
 
   return data ?? [];
 }
-
-const SEMUA_TIPE_KONTEN = ["beasiswa", "internship", "webinar", "workshop", "event"];
 
 /**
  * Konten yang MASIH BUKA (status 'aktif' dan deadline belum lewat, lihat lib/shared/kontenInfoTerbuka.ts) —
