@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
+import { getDaftarUniversitas } from "@/lib/landing/getDaftarUniversitas";
 import LengkapiProfilClient from "./LengkapiProfilClient";
 
 /**
@@ -26,5 +27,8 @@ export default async function LengkapiProfilPage() {
     redirect(ROLE_DASHBOARD_PATH[session.role]);
   }
 
-  return <LengkapiProfilClient />;
+  // Sumber sama dengan Assessment (ptn_jurusan) — lihat lib/shared/universitasMentor.ts.
+  const universitasOptions = await getDaftarUniversitas();
+
+  return <LengkapiProfilClient universitasOptions={universitasOptions} />;
 }

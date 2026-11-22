@@ -1,3 +1,4 @@
+import { formatAsalPtnAdmin } from "@/lib/shared/universitasMentor";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
@@ -75,7 +76,7 @@ export default async function MentorDetailPage({
           <div className="grid grid-cols-2 gap-4 text-sm sm:gap-6">
             <div>
               <p className="text-[#7E7C7C]">Asal PTN</p>
-              <p className="text-black">{mentor.asalPtn ?? "-"}</p>
+              <p className="text-black">{formatAsalPtnAdmin(mentor.asalPtn)}</p>
             </div>
             <div>
               <p className="text-[#7E7C7C]">Semester</p>

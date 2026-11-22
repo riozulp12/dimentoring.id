@@ -1,5 +1,6 @@
 "use client";
 
+import { formatAsalPtnAdmin } from "@/lib/shared/universitasMentor";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import InputField from "@/components/ui/InputField";
@@ -198,7 +199,7 @@ export default function ApprovalMentorClient({
                 <p className="text-base font-medium text-black">{item.nama}</p>
                 <p className="text-sm text-[#7E7C7C]">{item.email}</p>
                 <p className="text-sm text-[#7E7C7C]">
-                  {item.asalPtn ?? "-"} · {item.jurusan ?? "-"} · Semester {item.semester ?? "-"}
+                  {formatAsalPtnAdmin(item.asalPtn)} · {item.jurusan ?? "-"} · Semester {item.semester ?? "-"}
                 </p>
                 <p className="text-sm text-[#7E7C7C]">Daftar {formatDate(item.tanggalDaftar)}</p>
                 {tab !== "pending" ? (

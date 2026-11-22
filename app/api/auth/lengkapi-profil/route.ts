@@ -7,6 +7,7 @@ import {
   createSessionToken,
   verifySessionToken,
 } from "@/lib/auth/session";
+import { isUniversitasLainnya, resolveAsalPtn } from "@/lib/shared/universitasMentor";
 import { subtesNamaCandidates } from "@/lib/shared/mapelSubtesOptions";
 import { clearReturnToCookie, readReturnToCookie } from "@/lib/auth/returnToCookie";
 
@@ -52,6 +53,7 @@ interface LengkapiProfilBody {
   mapelSulit?: string[];
   // khusus Mentor
   ptn?: string;
+  ptnLainnya?: string;
   semester?: string | number;
   jurusan?: string;
   subtesDiampu?: string[];
@@ -103,7 +105,13 @@ export async function POST(request: NextRequest) {
       return errorResponse("Pilih minimal satu mapel tersulit.", 400);
     }
   } else {
-    asalPtn = body.ptn?.trim() ?? "";
+    const ptnPilihan = body.ptn?.trim() ?? "";
+    // "Lainnya" wajib disertai nama universitas sebenarnya (min 3 karakter);
+    // yang disimpan ke asal_ptn adalah nama yang diketik, bukan literal "Lainnya".
+    if (isUniversitasLainnya(ptnPilihan) && resolveAsalPtn(ptnPilihan, body.ptnLainnya) === null) {
+      return errorResponse("Nama universitas wajib diisi (minimal 3 karakter).", 400);
+    }
+    asalPtn = resolveAsalPtn(ptnPilihan, body.ptnLainnya) ?? "";
     jurusan = body.jurusan?.trim() ?? "";
     semester = Number(body.semester);
     if (!asalPtn) {

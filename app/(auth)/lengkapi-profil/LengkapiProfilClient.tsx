@@ -6,6 +6,11 @@ import Button from "@/components/ui/Button";
 import InputField from "@/components/ui/InputField";
 import Mascot from "@/components/ui/Mascot";
 import ChecklistGrid from "@/components/ui/ChecklistGrid";
+import SearchableSelect from "@/components/ui/SearchableSelect";
+import {
+  isNamaUniversitasLainnyaValid,
+  isUniversitasLainnya,
+} from "@/lib/shared/universitasMentor";
 import { MAPEL_SUBTES_GROUPS } from "@/lib/shared/mapelSubtesOptions";
 
 /**
@@ -32,6 +37,7 @@ interface FormState {
   mapelSulit: string[];
   mapelLainnya: string;
   ptn: string;
+  ptnLainnya: string;
   semester: string;
   jurusan: string;
   subtesDiampu: string[];
@@ -45,6 +51,7 @@ const INITIAL_FORM: FormState = {
   mapelSulit: [],
   mapelLainnya: "",
   ptn: "",
+  ptnLainnya: "",
   semester: "",
   jurusan: "",
   subtesDiampu: [],
@@ -65,34 +72,6 @@ const KELAS_OPTIONS = [
 ];
 
 
-const PTN_OPTIONS = [
-  "Universitas Indonesia",
-  "Institut Teknologi Bandung",
-  "Universitas Gadjah Mada",
-  "Institut Pertanian Bogor",
-  "Universitas Airlangga",
-  "Institut Teknologi Sepuluh Nopember",
-  "Universitas Padjadjaran",
-  "Universitas Diponegoro",
-  "Universitas Brawijaya",
-  "Universitas Sebelas Maret",
-  "Universitas Hasanuddin",
-  "Universitas Sumatera Utara",
-  "Universitas Andalas",
-  "Universitas Sriwijaya",
-  "Universitas Negeri Yogyakarta",
-  "Universitas Negeri Malang",
-  "Universitas Negeri Semarang",
-  "Universitas Negeri Jakarta",
-  "Universitas Pendidikan Indonesia",
-  "Universitas Jenderal Soedirman",
-  "Universitas Lampung",
-  "Universitas Riau",
-  "Universitas Jember",
-  "Universitas Udayana",
-  "Universitas Mataram",
-  "Lainnya",
-].map((label) => ({ label, value: label }));
 
 const STEP_COPY: Record<StepKey, { title: string; subtitle?: string }> = {
   role: { title: "Kamu mau daftar sebagai apa?" },
@@ -129,7 +108,10 @@ function isStepValid(key: StepKey, form: FormState): boolean {
         (!form.mapelSulit.includes("Lainnya") || form.mapelLainnya.trim() !== "")
       );
     case "ptn":
-      return form.ptn !== "";
+      return (
+        form.ptn !== "" &&
+        (!isUniversitasLainnya(form.ptn) || isNamaUniversitasLainnyaValid(form.ptnLainnya))
+      );
     case "semester_jurusan":
       return form.semester.trim() !== "" && form.jurusan.trim() !== "";
     case "subtes":
@@ -186,7 +168,7 @@ function SingleSelectGrid({
   );
 }
 
-export default function LengkapiProfilClient() {
+export default function LengkapiProfilClient({ universitasOptions }: { universitasOptions: string[] }) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [stepIndex, setStepIndex] = useState(0);
@@ -238,6 +220,7 @@ export default function LengkapiProfilClient() {
       payload.mapelSulit = form.mapelSulit;
     } else {
       payload.ptn = form.ptn;
+      if (isUniversitasLainnya(form.ptn)) payload.ptnLainnya = form.ptnLainnya.trim();
       payload.semester = form.semester;
       payload.jurusan = form.jurusan;
       payload.subtesDiampu = form.subtesDiampu;
@@ -372,15 +355,26 @@ export default function LengkapiProfilClient() {
             ) : null}
 
             {stepKey === "ptn" ? (
-              <InputField
-                type="dropdown"
-                size="md"
-                className="w-full"
-                placeholder="Pilih PTN kamu"
-                options={PTN_OPTIONS}
-                value={form.ptn}
-                onChange={(event) => updateForm({ ptn: event.target.value })}
-              />
+              <>
+                <SearchableSelect
+                  size="md"
+                  placeholder="Pilih PTN kamu"
+                  searchPlaceholder="Cari universitas..."
+                  options={universitasOptions.map((nama) => ({ label: nama, value: nama }))}
+                  value={form.ptn}
+                  onChange={(event) => updateForm({ ptn: event.target.value })}
+                />
+                {isUniversitasLainnya(form.ptn) ? (
+                  <InputField
+                    type="text"
+                    size="md"
+                    placeholder="Nama universitas"
+                    maxLength={150}
+                    value={form.ptnLainnya}
+                    onChange={(event) => updateForm({ ptnLainnya: event.target.value })}
+                  />
+                ) : null}
+              </>
             ) : null}
 
             {stepKey === "semester_jurusan" ? (
