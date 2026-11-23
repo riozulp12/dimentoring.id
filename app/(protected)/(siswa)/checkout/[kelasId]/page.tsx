@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
+import PendaftaranDitutupNotice from "@/components/siswa/PendaftaranDitutupNotice";
 import { getKelasForCheckout, getKelasSubtesOptions, isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
 import { getKetersediaanSubtes } from "@/lib/kelas/subtesTersedia";
 import PageTitle from "@/components/dashboard/PageTitle";
@@ -51,6 +52,17 @@ export default async function CheckoutPage({ params }: { params: Promise<{ kelas
 
   if (await isKelasSudahLunas(session.userId, kelasId)) {
     redirect(`/kelas/${kelasId}`);
+  }
+
+  // Pendaftaran ditutup Admin: tampilkan pesan, form TIDAK dirender (dicek setelah cek "sudah lunas" di atas supaya siswa
+  // yang sudah terdaftar tetap diarahkan ke kelasnya). Server (payment/create) tetap penjaga utamanya (409).
+  if (kelas.pendaftaranDitutup) {
+    return (
+      <>
+        <PageTitle value="Checkout" />
+        <PendaftaranDitutupNotice namaKelas={kelas.nama} />
+      </>
+    );
   }
 
   const subtesPool = await getKelasSubtesOptions(kelasId);

@@ -12,7 +12,7 @@ import { computeExpiredAt, computeTagihan, parseFeeBorneByCustomer, resolveAppBa
 import { validateJadwalPilihan } from "@/lib/shared/jadwalPilihan";
 import { cekKetersediaanCheckout } from "@/lib/shared/slotTerisi";
 import { getKetersediaanKelas } from "@/lib/jadwal/slotTerisi";
-import { CHECKOUT_BLOCK_MESSAGE, getCheckoutBlockReason, isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
+import { CHECKOUT_BLOCK_MESSAGE, PESAN_PENDAFTARAN_DITUTUP, getCheckoutBlockReason, isCheckoutInternalReady } from "@/lib/shared/checkoutGuard";
 import { cekSubtesDipilihTersedia, getKetersediaanSubtes } from "@/lib/kelas/subtesTersedia";
 
 /**
@@ -85,6 +85,12 @@ export async function POST(request: NextRequest) {
   const kelas = await getKelasForCheckout(kelasId);
   if (!kelas) {
     return errorResponse("Kelas tidak ditemukan.", 404);
+  }
+
+  // Pendaftaran ditutup Admin (kelas.pendaftaran_ditutup): tolak pembayaran BARU. Tidak menyentuh webhook/fulfillPayment —
+  // pembayaran yang sudah terlanjur dibuat tetap diproses seperti biasa.
+  if (kelas.pendaftaranDitutup) {
+    return errorResponse(`${PESAN_PENDAFTARAN_DITUTUP}.`, 409);
   }
 
   // Guard checkout internal (fail-closed) — sama dengan halaman /checkout,

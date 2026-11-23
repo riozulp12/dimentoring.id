@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { getKelasForCheckout } from "@/lib/payment/getKelasForCheckout";
 import { hitungCheckout } from "@/lib/payment/hitungCheckout";
+import { PESAN_PENDAFTARAN_DITUTUP } from "@/lib/shared/checkoutGuard";
 
 /**
  * Dipanggil tombol "Terapkan" di halaman Checkout — validasi Kode Promo
@@ -50,6 +51,9 @@ export async function POST(request: NextRequest) {
   const kelas = await getKelasForCheckout(kelasId);
   if (!kelas) {
     return errorResponse("Kelas tidak ditemukan.", 404);
+  }
+  if (kelas.pendaftaranDitutup) {
+    return errorResponse(`${PESAN_PENDAFTARAN_DITUTUP}.`, 409);
   }
 
   if (!kode.trim()) {

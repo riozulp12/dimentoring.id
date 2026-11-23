@@ -76,6 +76,8 @@ export interface KelasInputBody {
   /** Saklar "Tampilkan di katalog" — PRD Bagian 13 (kelas.tampil_di_katalog).
    * Tidak dikirim = menyala (default); kalau dikirim WAJIB boolean. */
   tampilDiKatalog?: boolean;
+  /** Saklar "Tutup pendaftaran" (kelas.pendaftaran_ditutup). Tidak dikirim = kolom TIDAK diubah; kalau dikirim WAJIB boolean. */
+  pendaftaranDitutup?: boolean;
   linkMeet?: string;
   linkLynkid?: string;
   deskripsi?: string;
@@ -118,6 +120,8 @@ export interface ValidatedKelasInput {
   /** false = disembunyikan dari katalog, rekomendasi & checkout (kelas yang
    * sudah diikuti tidak terpengaruh). */
   tampil_di_katalog: boolean;
+  /** Hanya ada bila dikirim; tidak ada = tidak mengubah kolom (PATCH tidak menimpa, INSERT memakai default false). */
+  pendaftaran_ditutup?: boolean;
   link_meet: string | null;
   /** SEMENTARA (PRD 7.5) — link pendaftaran/checkout eksternal (TIDAK harus
    * lynk.id; label UI-nya sekarang "Input Link Pendaftaran"). Nama kolom tetap
@@ -387,6 +391,10 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
   }
   const tampilDiKatalog = body.tampilDiKatalog ?? true;
 
+  if (body.pendaftaranDitutup !== undefined && typeof body.pendaftaranDitutup !== "boolean") {
+    return { ok: false, error: "Nilai 'Tutup pendaftaran' tidak valid." };
+  }
+
   let linkMeet: string | null = null;
   if (typeof body.linkMeet === "string" && body.linkMeet.trim()) {
     const trimmed = body.linkMeet.trim();
@@ -427,6 +435,7 @@ export async function validateKelasInput(body: KelasInputBody): Promise<Validate
       jadwal,
       jadwal_pilih_siswa: jadwalPilihSiswa,
       tampil_di_katalog: tampilDiKatalog,
+      ...(body.pendaftaranDitutup !== undefined ? { pendaftaran_ditutup: body.pendaftaranDitutup } : {}),
       link_meet: linkMeet,
       link_lynkid: linkLynkid,
       deskripsi,

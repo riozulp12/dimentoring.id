@@ -225,6 +225,7 @@ async function PreviewSection({ kelasId }: { kelasId: string }) {
             <KelasDaftarButton
               kelasId={kelasId}
               penuh={kelasPublic.kapasitasInfo.penuh}
+              ditutup={kelasPublic.kapasitasInfo.ditutup === true}
               sessionRole="student"
               linkLynkid={kelasPublic.linkLynkid}
               variant="detail"
