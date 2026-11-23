@@ -28,6 +28,7 @@ import BadgeKapasitas from "@/components/ui/BadgeKapasitas";
 import HargaMulaiDari from "@/components/program/HargaMulaiDari";
 import { ringkasanHargaKartu } from "@/lib/shared/kartuHargaMulai";
 import { sesiPilihanAktif } from "@/lib/shared/sesiPilihanFlag";
+import PetaMateri from "@/components/program/PetaMateri";
 
 /** Detail publik 1 kelas (PRD 7.5.4) — TIGA card independen (masing-masing
  * border+shadow+padding sendiri, dipisah gap yang jelas, bukan satu card besar
@@ -187,6 +188,13 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
                   <p className="whitespace-pre-wrap text-base text-black">{kelas.deskripsi}</p>
                 </div>
               ) : null}
+
+              <PetaMateri
+                subtesNama={[kelas.subtesNama]}
+                programKategori={kelas.programKategori}
+                tipeKelas={kelas.tipeKelas}
+                modePembelajaran={kelas.modePembelajaran}
+              />
 
               {kelas.mentors.length > 0 ? (
                 <div className="flex flex-col gap-3 border-t border-[#E3E3E3] pt-5">
