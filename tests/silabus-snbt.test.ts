@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { after, describe, it } from "node:test";
 import "./helpers/envSupabaseUji";
-import { ALUR_SESI, SILABUS_SNBT, cariSilabusSnbt, strategiHook } from "@/lib/silabus/silabusSnbt";
+import { ALUR_SESI, SILABUS_SNBT, WAKTU_RESMI, cariSilabusSnbt, strategiHook } from "@/lib/silabus/silabusSnbt";
 import { silabusSnbtAktif } from "@/lib/shared/silabusSnbtFlag";
 import { namaSubtesPetaMateri } from "@/lib/silabus/subtesPaket";
 
@@ -75,6 +75,33 @@ describe("data silabus", () => {
     assert.equal(cariSilabusSnbt("Literasi Bahasa Indonesia", "snbt")?.kunci, "lbi");
     assert.equal(cariSilabusSnbt("Literasi Bahasa Inggris", "snbt")?.kunci, "lbing");
   });
+  it("jumlah tipe soal per subtes sesuai data v2", () => {
+    const jumlah = Object.fromEntries(SILABUS_SNBT.map((s) => [s.kunci, s.tipeSoal.length]));
+    assert.deepEqual(jumlah, { pu: 9, ppu: 5, pbm: 6, pk: 5, lbi: 7, lbing: 5, pm: 5 });
+  });
+  it("Literasi (lbi, lbing) dikelompokkan Proses lalu Konteks; subtes lain tanpa bagian kecuali PU", () => {
+    for (const k of ["lbi", "lbing"]) {
+      const s = SILABUS_SNBT.find((x) => x.kunci === k)!;
+      assert.deepEqual([...new Set(s.tipeSoal.map((x) => x.bagian))], ["Proses", "Konteks"], k);
+    }
+    assert.deepEqual(SILABUS_SNBT.find((x) => x.kunci === "lbi")!.tipeSoal.map((x) => x.bagian), ["Proses", "Proses", "Proses", "Proses", "Konteks", "Konteks", "Konteks"]);
+    for (const k of ["ppu", "pbm", "pk", "pm"]) {
+      assert.ok(SILABUS_SNBT.find((x) => x.kunci === k)!.tipeSoal.every((x) => x.bagian === undefined), k);
+    }
+  });
+  it("WAKTU_RESMI berisi nilai resmi dan tidak ikut tampil di UI", () => {
+    assert.deepEqual(WAKTU_RESMI, {
+      pu: { soal: 30, menit: 30 },
+      ppu: { soal: 20, menit: 15 },
+      pbm: { soal: 20, menit: 25 },
+      pk: { soal: 20, menit: 20 },
+      lbi: { soal: 30, menit: 42.5 },
+      lbing: { soal: 20, menit: 20 },
+      pm: { soal: 20, menit: 42.5 },
+    });
+    assert.deepEqual(Object.keys(WAKTU_RESMI), SILABUS_SNBT.map((s) => s.kunci));
+    assert.ok(!readFileSync("components/program/PetaMateri.tsx", "utf8").includes("WAKTU_RESMI"));
+  });
   it("Penalaran Umum dikelompokkan Induktif, Deduktif, Kuantitatif", () => {
     const pu = SILABUS_SNBT.find((s) => s.kunci === "pu")!;
     assert.deepEqual([...new Set(pu.tipeSoal.map((x) => x.bagian))], ["Induktif", "Deduktif", "Kuantitatif"]);
@@ -118,11 +145,19 @@ describe("render PetaMateri", () => {
     assert.ok(html.includes("Peta Materi"));
     assert.ok(html.includes("<details") && !html.includes("<details open"));
     assert.ok(html.includes("Penalaran Umum"));
-    assert.ok(html.includes("Menarik pola, menyimpulkan dari premis"));
+    assert.ok(html.includes("Memecahkan masalah baru dengan berpikir logis"));
     for (const bagian of ["Induktif", "Deduktif", "Kuantitatif"]) assert.ok(html.includes(bagian), bagian);
     assert.ok(html.includes("Pola bilangan dan deret"));
     assert.ok(html.includes("Cari aturannya dari 2-3 contoh dulu."));
     assert.ok(html.includes("Alur 10 sesi") && html.includes(ALUR_SESI));
+  });
+  it("Literasi dalam Bahasa Indonesia merender dua kelompok Proses dan Konteks dengan hook per tipe", () => {
+    const html = render({ ...propsPu, subtesNama: ["Literasi dalam Bahasa Indonesia"], dalamKotakMateri: true }, NYALA);
+    assert.ok(html.indexOf(">Proses<") > 0 && html.indexOf(">Proses<") < html.indexOf(">Konteks<"));
+    assert.ok(html.includes("Konteks sains (kimia, fisika, biologi)"));
+    assert.ok(html.includes("Pindai kata kunci dari pertanyaan ke teks."));
+    assert.ok(!html.includes("Informasi yang ditanyakan langsung"));
+    assert.ok(!html.includes("menit") && !html.includes("42.5"));
   });
   it("tidak memuat kalimat kedua strategi untuk semua subtes dan tidak memuat kata jadwal", () => {
     for (const s of SILABUS_SNBT) {

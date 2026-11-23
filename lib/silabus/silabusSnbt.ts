@@ -1,6 +1,6 @@
 /**
  * Silabus SNBT statis ("Peta Materi") untuk tampilan baca-saja di detail kelas. Murni & client-safe (tanpa server-only).
- * DRAF: isi belum diverifikasi ke kisi-kisi resmi SNPMB — tampilannya di belakang saklar SILABUS_SNBT_AKTIF
+ * v2: mengikuti kerangka resmi SNPMB. Tampilannya di belakang saklar SILABUS_SNBT_AKTIF
  * (lib/shared/silabusSnbtFlag.ts). Tiap `strategi` = dua kalimat: kalimat pertama (hook) saja yang ditampilkan.
  */
 
@@ -31,7 +31,7 @@ export const SILABUS_SNBT: Subtes[] = [
     kunci: "pu",
     nama: "Penalaran Umum",
     aliasNama: ["penalaran umum"],
-    kemampuanInti: "Menarik pola, menyimpulkan dari premis, dan bernalar kuantitatif sederhana.",
+    kemampuanInti: "Memecahkan masalah baru dengan berpikir logis dan sistematis.",
     tipeSoal: [
       b("Induktif", "Pola bilangan dan deret", "Cari aturannya dari 2-3 contoh dulu. Uji ke contoh lain sebelum memilih jawaban."),
       b("Induktif", "Analogi dan hubungan", "Tentukan hubungan pasangan pertama dengan satu kalimat. Terapkan hubungan yang sama ke pasangan kedua."),
@@ -48,13 +48,13 @@ export const SILABUS_SNBT: Subtes[] = [
     kunci: "ppu",
     nama: "Pengetahuan dan Pemahaman Umum",
     aliasNama: ["ppu", "pengetahuan dan pemahaman umum"],
-    kemampuanInti: "Memahami, menganalisis, dan menyimpulkan informasi dari bacaan umum.",
+    kemampuanInti: "Menguasai kosakata, wawasan umum sosiobudaya Indonesia, dan perkembangan bahasa.",
     tipeSoal: [
-      t("Gagasan utama dan pendukung", "Baca kalimat pertama dan terakhir tiap paragraf lebih dulu. Tandai kata kunci yang berulang."),
-      t("Makna kata dalam konteks", "Ganti kata itu dengan tiap opsi. Pilih yang membuat kalimat tetap wajar."),
-      t("Inferensi dan simpulan", "Bedakan yang tertulis, yang tersirat, dan opini penulis. Jawaban inferensi harus punya pegangan di teks."),
-      t("Hubungan antargagasan dan tujuan penulis", "Buat peta alur argumen singkat. Tanyakan mengapa penulis menulis bagian ini."),
-      t("Kesesuaian pernyataan dengan teks", "Cocokkan tiap pernyataan ke satu kalimat sumber. Waspada kata mutlak seperti selalu dan semua."),
+      t("Kosakata dan makna kata", "Pelajari kata lewat konteks, bukan hafalan daftar. Latih sinonim, antonim, dan padanan di dalam kalimat."),
+      t("Penggunaan kata dalam konteks", "Uji kata dengan menggantinya ke kalimat. Pilih yang paling wajar dan tepat maknanya."),
+      t("Wawasan umum sosiobudaya Indonesia", "Baca topik umum secara rutin, bukan menghafal fakta. Kaitkan kejadian dengan sebab dan konteksnya."),
+      t("Perkembangan bahasa", "Kenali kata serapan, istilah baru, dan perubahan makna. Bedakan bentuk baku dan bentuk yang populer."),
+      t("Bacaan pendek dan panjang", "Baca pertanyaan dulu agar tahu apa yang dicari. Tandai kata kunci sebelum membaca ulang bagian yang relevan."),
     ],
   },
   {
@@ -63,68 +63,84 @@ export const SILABUS_SNBT: Subtes[] = [
     aliasNama: ["pbm", "pemahaman bacaan dan menulis"],
     kemampuanInti: "Memilih, menata, dan memperbaiki gagasan dalam tulisan.",
     tipeSoal: [
-      t("Kalimat efektif", "Cek subjek dan predikat lebih dulu. Hapus kata yang tidak menambah makna."),
-      t("Ejaan dan tanda baca", "Kuasai aturan yang paling sering diujikan. Latih per aturan, bukan soal acak."),
-      t("Pilihan kata dan keformalan", "Bedakan baku dan tidak baku lewat contoh. Pilih kata yang sesuai ragam tulisannya."),
-      t("Kohesi dan koherensi", "Perhatikan kata hubung dan kata rujukan. Cek apakah tiap kalimat nyambung dengan sebelumnya."),
-      t("Penyusunan kalimat dan paragraf", "Cari kalimat utama dan kalimat penutup lebih dulu. Susun bagian tengah mengikuti alur sebab dan urutan."),
-      t("Perbaikan kalimat atau paragraf rumpang", "Masukkan tiap opsi lalu baca ulang. Pilih yang paling logis dan hemat."),
+      t("Memilih gagasan: judul, diksi, dan kalimat rumpang", "Pilih judul dari inti seluruh teks, bukan satu bagian. Uji diksi dan kalimat rumpang dengan membaca ulang paragrafnya."),
+      t("Menata gagasan: kalimat utama dan penggabungan kalimat", "Cari kalimat utama lebih dulu. Gabungkan kalimat dengan konjungsi yang menjaga hubungan maknanya."),
+      t("Menata gagasan: tanda baca dan variasi kalimat", "Kuasai aturan tanda baca yang paling sering diujikan. Variasikan struktur kalimat tanpa mengubah makna."),
+      t("Menata gagasan: urutan dan penempatan kalimat", "Cari kalimat pembuka dan penutup lebih dulu. Susun bagian tengah mengikuti alur sebab-akibat atau kronologi."),
+      t("Memperbaiki gagasan: ejaan, kata, dan konjungsi", "Latih ejaan per aturan, bukan soal acak. Cek ketepatan kata hubung dengan makna antarkalimat."),
+      t("Memperbaiki gagasan: redundansi, kehematan, dan revisi", "Hapus kata yang mengulang makna. Pilih revisi yang paling hemat dan jelas."),
     ],
   },
   {
     kunci: "pk",
     nama: "Pengetahuan Kuantitatif",
     aliasNama: ["pk", "pengetahuan kuantitatif"],
-    kemampuanInti: "Menganalisis pola dan data lalu mengambil keputusan kuantitatif.",
+    kemampuanInti: "Berpikir logis, sistematis, dan analitis pada masalah kuantitatif setara kurikulum SMA.",
     tipeSoal: [
-      t("Aritmetika dan aljabar dasar", "Sederhanakan dulu sebelum menghitung. Latih hitung cepat tanpa kalkulator."),
-      t("Geometri dasar", "Gambar ulang dan tandai semua informasi. Cari bangun yang dikenal di dalam gambar."),
-      t("Statistika dan peluang", "Hafal rumus inti saja. Ubah soal cerita menjadi langkah hitung."),
-      t("Analisis data tabel dan grafik", "Baca judul, sumbu, dan satuan sebelum angka. Cari tren dulu, hitung belakangan."),
-      t("Perbandingan kuantitas dan kecukupan data", "Tentukan apa yang perlu diketahui untuk memutuskan. Cek apakah data yang ada sudah cukup."),
+      t("Bilangan", "Sederhanakan dulu sebelum menghitung. Latih hitung cepat tanpa kalkulator."),
+      t("Aljabar", "Ubah soal cerita menjadi persamaan. Cek jawaban dengan substitusi cepat."),
+      t("Geometri dan pengukuran", "Gambar ulang dan tandai semua informasi. Cek satuan sebelum menghitung."),
+      t("Analisis data", "Baca judul, sumbu, dan satuan sebelum angka. Cari tren dulu, hitung belakangan."),
+      t("Peluang", "Tentukan ruang sampel dengan rapi. Bedakan kejadian bebas dan bersyarat."),
     ],
   },
   {
     kunci: "lbi",
     nama: "Literasi dalam Bahasa Indonesia",
-    // "literasi dalam bahasa indonesia" = nama resmi di tabel subtes (db/seed_subtes.sql, rename_subtes_nama_resmi.sql).
+    // "literasi dalam bahasa ..." = nama resmi di tabel subtes (db/seed_subtes.sql); alias lama tetap agar pencocokan tidak putus.
     aliasNama: ["literasi bahasa indonesia", "lbi", "literasi dalam bahasa indonesia"],
-    kemampuanInti: "Menemukan informasi, menafsirkan, dan mengevaluasi teks sastra dan nonsastra.",
+    kemampuanInti: "Menemukan, memahami, menilai, dan merefleksikan informasi dalam teks berbahasa Indonesia, dengan penekanan literasi sains.",
     tipeSoal: [
-      t("Menemukan informasi tersurat", "Pindai kata kunci dari pertanyaan ke teks. Jawaban tersurat selalu bisa ditunjuk di teks."),
-      t("Menafsirkan makna dan gagasan tersirat", "Kaitkan antarparagraf, bukan satu kalimat. Tanyakan apa yang ingin disampaikan penulis."),
-      t("Mengevaluasi isi, argumen, dan kebahasaan", "Cek bukti yang dipakai penulis. Nilai apakah penalaran dari bukti ke simpulan cukup kuat."),
-      t("Teks sastra", "Kenali unsur pembangun dan sudut pandang. Hubungkan nilai cerita dengan konteks sosialnya."),
-      t("Teks nonsastra", "Pisahkan fakta dari opini. Tentukan sudut pandang penulis dari pilihan katanya."),
+      b("Proses", "Menemukan informasi dalam teks", "Pindai kata kunci dari pertanyaan ke teks. Informasi yang ditanyakan langsung selalu bisa ditunjuk di teks."),
+      b("Proses", "Memahami isi dan makna teks", "Kaitkan antarparagraf, bukan satu kalimat. Rangkum tiap paragraf dengan satu frasa."),
+      b("Proses", "Menilai isi dan cara penyajian teks", "Periksa bukti yang dipakai penulis. Nilai apakah data mendukung simpulan."),
+      b("Proses", "Merefleksikan teks ke pengalaman dan konteks", "Hubungkan isi teks dengan situasi nyata. Tentukan implikasinya bagi pembaca."),
+      b("Konteks", "Konteks sains (kimia, fisika, biologi)", "Pahami istilah kunci di awal teks. Fokus pada sebab-akibat dan data, bukan hafalan rumus."),
+      b("Konteks", "Konteks sosial humaniora (ekonomi, sejarah, sosiogeografi)", "Bedakan fakta, penafsiran, dan opini. Perhatikan sudut pandang penulis."),
+      b("Konteks", "Konteks personal dan apresiasi sastra", "Kenali tokoh, sudut pandang, dan nilai cerita. Hubungkan nilai itu dengan konteks sosialnya."),
     ],
   },
   {
     kunci: "lbing",
     nama: "Literasi dalam Bahasa Inggris",
+    // "literasi dalam bahasa ..." = nama resmi di tabel subtes (db/seed_subtes.sql); alias lama tetap agar pencocokan tidak putus.
     aliasNama: ["literasi bahasa inggris", "lbing", "literasi dalam bahasa inggris"],
-    kemampuanInti: "Memahami teks bahasa Inggris akademik dan populer.",
+    kemampuanInti: "Menemukan, memahami, menilai, dan merefleksikan informasi dalam teks berbahasa Inggris (literasi sains, bukan tes kemampuan bahasa Inggris umum).",
     tipeSoal: [
-      t("Main idea dan detail", "Skim paragraf pertama dan kalimat topik tiap paragraf. Scan detail hanya setelah paham pertanyaan."),
-      t("Inference", "Cari petunjuk di teks sebelum menebak. Hindari opsi yang terlalu ekstrem."),
-      t("Vocabulary in context", "Tebak dari kalimat sekitar, bukan terjemahan harfiah. Uji dengan mengganti kata itu ke kalimat."),
-      t("Reference dan author's purpose/tone", "Telusuri kata ganti ke kata benda terdekat. Kenali nada penulis dari pilihan katanya."),
-      t("Organisasi paragraf dan teks", "Perhatikan transition words. Susun urutan dari umum ke khusus atau secara kronologis."),
+      b("Proses", "Menemukan informasi: main idea dan detail", "Skim kalimat topik tiap paragraf. Scan detail hanya setelah paham pertanyaan."),
+      b("Proses", "Memahami makna: inference dan vocabulary in context", "Cari petunjuk di teks sebelum menebak. Tebak kata dari kalimat sekitar, bukan terjemahan harfiah."),
+      b("Proses", "Menilai teks: tujuan, nada, dan argumen", "Kenali tujuan dan nada dari pilihan kata penulis. Periksa apakah bukti mendukung klaim."),
+      b("Proses", "Merefleksikan teks ke konteks", "Hubungkan isi teks dengan situasi nyata. Hindari opsi yang melampaui isi teks."),
+      b("Konteks", "Konteks sains, sosial humaniora, dan personal", "Kenali istilah umum sains dan sosial dalam bahasa Inggris. Fokus pada ide teks, bukan tata bahasa."),
     ],
   },
   {
     kunci: "pm",
     nama: "Penalaran Matematika",
     aliasNama: ["penalaran matematika", "pm"],
-    kemampuanInti: "Memodelkan dan menyelesaikan masalah kontekstual dengan matematika.",
+    kemampuanInti: "Bernalar secara matematis: merumuskan, menerapkan, dan menafsirkan matematika dalam konteks nyata.",
     tipeSoal: [
-      t("Aljabar dan fungsi dalam konteks", "Terjemahkan cerita ke satu persamaan dulu. Beri nama variabel sebelum menghitung."),
-      t("Geometri dan pengukuran kontekstual", "Gambar situasinya lebih dulu. Cek satuan sebelum dan sesudah menghitung."),
-      t("Data dan peluang kontekstual", "Tentukan data apa yang dibutuhkan. Hitung ruang sampel dengan rapi."),
-      t("Bilangan, proporsi, dan perbandingan", "Cari hubungan skala dan laju. Bedakan perbandingan senilai dan berbalik nilai."),
-      t("Interpretasi grafik dan model", "Baca sumbu dan tren lebih dulu. Cocokkan model dengan titik data yang diketahui."),
+      t("Merumuskan masalah nyata secara matematis", "Terjemahkan cerita ke model matematika satu kalimat dulu. Beri nama variabel sebelum menghitung."),
+      t("Menerapkan konsep dan prosedur", "Pilih konsep paling sederhana untuk masalah itu. Hitung dengan rapi dan cek satuan."),
+      t("Menafsirkan dan mengevaluasi hasil", "Cek apakah hasil masuk akal dalam konteks. Tuliskan kesimpulan dalam kalimat, bukan hanya angka."),
+      t("Menganalisis argumen matematis", "Cari langkah yang tidak didukung data. Uji argumen dengan contoh penyangkal."),
+      t("Konteks personal, pekerjaan, sosial, dan saintifik", "Baca konteks dulu untuk tahu besaran yang penting. Abaikan informasi yang tidak dipakai."),
     ],
   },
 ];
+
+/**
+ * Waktu resmi per subtes (jumlah soal, menit). HANYA data — tidak ditampilkan di UI.
+ */
+export const WAKTU_RESMI: Record<string, { soal: number; menit: number }> = {
+  pu: { soal: 30, menit: 30 },
+  ppu: { soal: 20, menit: 15 },
+  pbm: { soal: 20, menit: 25 },
+  pk: { soal: 20, menit: 20 },
+  lbi: { soal: 30, menit: 42.5 },
+  lbing: { soal: 20, menit: 20 },
+  pm: { soal: 20, menit: 42.5 },
+};
 
 /** Kalimat pertama strategi (potong di ". " pertama atau akhir teks), di-trim, selalu berakhiran titik. */
 export function strategiHook(strategi: string): string {
