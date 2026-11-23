@@ -42,3 +42,6 @@ export const CHECKOUT_BLOCK_MESSAGE: Record<CheckoutBlockReason, string> = {
   belum_siap: "Pendaftaran kelas ini segera dibuka. Coba lagi nanti.",
   link_eksternal: "Pendaftaran kelas ini lewat link pendaftaran di halaman kelas.",
 };
+
+/** Pesan pendaftaran kelas ditutup Admin (kelas.pendaftaran_ditutup) — halaman checkout & API (409). */
+export const PESAN_PENDAFTARAN_DITUTUP = "Pendaftaran kelas ini sudah ditutup";

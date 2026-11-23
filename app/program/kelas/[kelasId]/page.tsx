@@ -260,6 +260,7 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
                 <KelasDaftarButton
                   kelasId={kelas.id}
                   penuh={kelas.kapasitasInfo.penuh}
+                  ditutup={kelas.kapasitasInfo.ditutup === true}
                   sessionRole={session?.role ?? null}
                   linkLynkid={kelas.linkLynkid}
                   variant="detail"

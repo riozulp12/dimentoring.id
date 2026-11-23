@@ -350,7 +350,7 @@ describe("struktur halaman", () => {
 
   it("tombol Daftar Sekarang dan alur pendaftaran tidak berubah", () => {
     // Kelas: komponen & prop yang sama; bagian saran ada SESUDAH blok tombol.
-    assert.match(kelasPage, /<KelasDaftarButton\s+kelasId=\{kelas\.id\}\s+penuh=\{kelas\.kapasitasInfo\.penuh\}\s+sessionRole=\{session\?\.role \?\? null\}\s+linkLynkid=\{kelas\.linkLynkid\}\s+variant="detail"\s*\/>/);
+    assert.match(kelasPage, /<KelasDaftarButton\s+kelasId=\{kelas\.id\}\s+penuh=\{kelas\.kapasitasInfo\.penuh\}\s+ditutup=\{kelas\.kapasitasInfo\.ditutup === true\}\s+sessionRole=\{session\?\.role \?\? null\}\s+linkLynkid=\{kelas\.linkLynkid\}\s+variant="detail"\s*\/>/);
     assert.ok(kelasPage.indexOf("<KelasDaftarButton") < kelasPage.indexOf("<SaranKelasSection"));
     // Event: tautan pendaftaran eksternal tetap, dan tetap dinonaktifkan untuk ditutup / tanpa link.
     assert.ok(eventPage.includes('let ctaLabel = "Daftar Sekarang";'));

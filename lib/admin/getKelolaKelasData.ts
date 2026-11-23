@@ -70,6 +70,8 @@ export interface KelasListItem {
   /** `kelas.tampil_di_katalog` — false = badge "Tersembunyi" (kelas tetap
    * tampil di Kelola Kelas, cuma hilang dari katalog/rekomendasi/checkout). */
   tampilDiKatalog: boolean;
+  /** `kelas.pendaftaran_ditutup` — true = kartu tetap tampil, tombol daftar dimatikan (saklar "Tutup pendaftaran"). */
+  pendaftaranDitutup: boolean;
   linkMeet: string | null;
   /** SEMENTARA (PRD 7.5) — link pendaftaran/checkout eksternal (TIDAK harus
    * lynk.id; label UI-nya "Input Link Pendaftaran"). Nama kolom DB tetap
@@ -136,6 +138,7 @@ interface KelasRow {
   jadwal: unknown;
   jadwal_pilih_siswa: boolean | null;
   tampil_di_katalog: boolean | null;
+  pendaftaran_ditutup: boolean | null;
   link_meet: string | null;
   link_lynkid: string | null;
   deskripsi: string | null;
@@ -160,7 +163,7 @@ export async function getKelasList(): Promise<KelasListItem[]> {
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, mode_pembelajaran, jumlah_sesi, subtes_id, kapasitas, harga, diskon_persen, jadwal, jadwal_pilih_siswa, tampil_di_katalog, link_meet, link_lynkid, deskripsi,
+      `id, nama, program_kategori, tingkat_kelas, tipe_kelas, mode_pembelajaran, jumlah_sesi, subtes_id, kapasitas, harga, diskon_persen, jadwal, jadwal_pilih_siswa, tampil_di_katalog, pendaftaran_ditutup, link_meet, link_lynkid, deskripsi,
        subtes:subtes_id(nama),
        kelas_subtes(subtes_id, subtes:subtes_id(nama)),
        kelas_mentor(mentor_id, users:mentor_id(nama)),
@@ -233,6 +236,7 @@ export async function getKelasList(): Promise<KelasListItem[]> {
       jadwalDisplay: formatJadwal(row.jadwal),
       jadwalPilihSiswa: row.jadwal_pilih_siswa === true,
       tampilDiKatalog: row.tampil_di_katalog !== false,
+      pendaftaranDitutup: row.pendaftaran_ditutup === true,
       linkMeet: row.link_meet,
       linkLynkid: row.link_lynkid,
       deskripsi: row.deskripsi,

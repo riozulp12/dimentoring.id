@@ -44,6 +44,12 @@ export interface KapasitasKelas {
   penuh: boolean;
   /** terbatas && 0 < sisa <= BATAS_HAMPIR_HABIS. */
   hampirHabis: boolean;
+  /**
+   * Overlay status (BUKAN hasil hitungan kapasitas): Admin menutup pendaftaran kelas (kelas.pendaftaran_ditutup).
+   * Hanya diset (true) oleh lapisan data kartu/detail lewat `tandaiPendaftaranDitutup`; tidak ada = terbuka.
+   * Dipakai badge & tombol daftar; server memeriksa kolomnya sendiri (payment/create, validate-promo).
+   */
+  ditutup?: boolean;
 }
 
 function angkaValid(value: number | null | undefined): value is number {
@@ -80,8 +86,17 @@ export function hitungKapasitasKelas(input: InputKapasitasKelas): KapasitasKelas
   };
 }
 
+/** Lencana kartu/detail kelas yang pendaftarannya ditutup Admin (menggantikan "Hampir habis"). */
+export const TEKS_BADGE_DITUTUP = "Pendaftaran ditutup";
+
+/** Tandai hasil kapasitas bila pendaftaran kelas ditutup (kelas.pendaftaran_ditutup); selain itu dikembalikan apa adanya. */
+export function tandaiPendaftaranDitutup(info: KapasitasKelas, ditutup: boolean | null | undefined): KapasitasKelas {
+  return ditutup === true ? { ...info, ditutup: true } : info;
+}
+
 /** Teks badge dari hasil di atas (null = tidak ada badge). Semua angka dari hasil fungsi. */
 export function teksBadgeKapasitas(info: KapasitasKelas): string | null {
+  if (info.ditutup) return TEKS_BADGE_DITUTUP;
   if (!info.terbatas) return null;
   if (info.penuh) return "Penuh";
   if (info.hampirHabis && info.sisa !== null) return `Hampir habis · sisa ${info.sisa}`;

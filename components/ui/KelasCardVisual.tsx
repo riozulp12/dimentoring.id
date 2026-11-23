@@ -155,9 +155,10 @@ export default function KelasCardVisual({
   const namaDisplay = truncateAtWord(namaKelas, 42);
 
   const isJual = variant === "jual";
-  const isPenuh = isJual && kapasitasInfo?.penuh === true;
+  // Lencana abu-abu: penuh ATAU pendaftaran ditutup Admin.
+  const isPenuh = isJual && (kapasitasInfo?.penuh === true || kapasitasInfo?.ditutup === true);
   // "Menipis" = hampir habis menurut aturan tunggal (BATAS_HAMPIR_HABIS), bukan persentase kapasitas.
-  const isMenipis = isJual && kapasitasInfo?.hampirHabis === true;
+  const isMenipis = isJual && kapasitasInfo?.hampirHabis === true && kapasitasInfo?.ditutup !== true;
   const teksBadge = kapasitasInfo ? teksBadgeKapasitas(kapasitasInfo) : null;
   const hasDiskon = isJual && Boolean(diskonAktif);
 
