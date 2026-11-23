@@ -12,6 +12,7 @@ import { after, describe, it } from "node:test";
 import "./helpers/envSupabaseUji";
 import { ALUR_SESI, SILABUS_SNBT, cariSilabusSnbt, strategiHook } from "@/lib/silabus/silabusSnbt";
 import { silabusSnbtAktif } from "@/lib/shared/silabusSnbtFlag";
+import { namaSubtesPetaMateri } from "@/lib/silabus/subtesPaket";
 
 function render(props: unknown, env: Record<string, string | undefined>): string {
   const kode = `
@@ -67,6 +68,12 @@ describe("data silabus", () => {
         assert.ok(x.strategi.endsWith("."), `${s.nama} / ${x.nama}`);
       }
     }
+  });
+  it("judul dua subtes literasi sama dengan nama resmi di tabel subtes; alias lama tetap cocok", () => {
+    assert.equal(SILABUS_SNBT.find((s) => s.kunci === "lbi")!.nama, "Literasi dalam Bahasa Indonesia");
+    assert.equal(SILABUS_SNBT.find((s) => s.kunci === "lbing")!.nama, "Literasi dalam Bahasa Inggris");
+    assert.equal(cariSilabusSnbt("Literasi Bahasa Indonesia", "snbt")?.kunci, "lbi");
+    assert.equal(cariSilabusSnbt("Literasi Bahasa Inggris", "snbt")?.kunci, "lbing");
   });
   it("Penalaran Umum dikelompokkan Induktif, Deduktif, Kuantitatif", () => {
     const pu = SILABUS_SNBT.find((s) => s.kunci === "pu")!;
@@ -172,7 +179,7 @@ describe("PetaMateri di dalam kotak Materi", () => {
   });
   it("teks 'akan segera tersedia' hanya disembunyikan bila ada silabus cocok (tetap ada bila saklar mati / tak cocok)", () => {
     assert.match(blokMateri, /adaPetaMateri \? null : <p[^>]*>Materi untuk kelas ini akan segera tersedia\./);
-    assert.match(src, /const adaPetaMateri = silabusCocok\(\[kelas\.subtesNama\], kelas\.programKategori\)\.length > 0;/);
+    assert.match(src, /const adaPetaMateri = silabusCocok\(namaSubtesPeta, kelas\.programKategori\)\.length > 0;/);
   });
   it("silabusCocok kosong bila saklar mati, subtes tak cocok, atau bukan snbt", () => {
     const kode = `
@@ -194,5 +201,48 @@ describe("PetaMateri di dalam kotak Materi", () => {
     assert.deepEqual(jalan({ SILABUS_SNBT_AKTIF: "true" }), [1, 0, 0]);
     assert.deepEqual(jalan({}), [0, 0, 0]);
     assert.deepEqual(jalan({ SILABUS_SNBT_AKTIF: "TRUE" }), [0, 0, 0]);
+  });
+});
+
+describe("Peta Materi kelas paket (semua subtes paket)", () => {
+  const pool = [{ nama: "Literasi dalam Bahasa Inggris" }, { nama: "Penalaran Umum" }, { nama: "Penalaran Matematika" }];
+
+  it("paket (non-offline, pool > 1): semua subtes pool dengan urutan pool; non-paket tetap satu subtes", () => {
+    assert.deepEqual(
+      namaSubtesPetaMateri({ modePembelajaran: "online", subtesNama: "Literasi dalam Bahasa Inggris", pool }),
+      pool.map((p) => p.nama),
+    );
+    assert.deepEqual(namaSubtesPetaMateri({ modePembelajaran: "online", subtesNama: "Penalaran Umum", pool: pool.slice(0, 1) }), ["Penalaran Umum"]);
+    assert.deepEqual(namaSubtesPetaMateri({ modePembelajaran: "online", subtesNama: "Penalaran Umum", pool: null }), ["Penalaran Umum"]);
+    assert.deepEqual(namaSubtesPetaMateri({ modePembelajaran: "offline", subtesNama: "Penalaran Umum", pool }), ["Penalaran Umum"]);
+    assert.deepEqual(namaSubtesPetaMateri({ modePembelajaran: "online", subtesNama: null, pool: [] }), []);
+  });
+
+  it("paket 3 subtes cocok merender 3 daftar lipat berurutan; subtes tak dikenal dilewati", () => {
+    const urut = ["Literasi dalam Bahasa Inggris", "Penalaran Umum", "Penalaran Matematika"];
+    const html = render({ ...propsPu, subtesNama: urut, dalamKotakMateri: true }, NYALA);
+    assert.equal(html.match(/<details/g)?.length, 3);
+    // Judul sama persis dengan nama di tabel subtes (yang tampil di "Pilih Subtes" checkout).
+    const pos = urut.map((n) => html.indexOf(`>${n}</summary>`));
+    assert.ok(pos.every((x) => x > 0) && pos[0]! < pos[1]! && pos[1]! < pos[2]!, JSON.stringify(pos));
+
+    const campur = render({ ...propsPu, subtesNama: ["Matematika", "Penalaran Umum", "Fisika", "Penalaran Matematika"], dalamKotakMateri: true }, NYALA);
+    assert.equal(campur.match(/<details/g)?.length, 2);
+    assert.ok(campur.indexOf(">Penalaran Umum</summary>") < campur.indexOf(">Penalaran Matematika</summary>"));
+  });
+
+  it("satu subtes (non-paket) tetap satu daftar lipat; saklar mati tidak merender apa pun", () => {
+    assert.equal(render({ ...propsPu, dalamKotakMateri: true }, NYALA).match(/<details/g)?.length, 1);
+    assert.equal(render({ ...propsPu, subtesNama: pool.map((p) => p.nama), dalamKotakMateri: true }, {}), "");
+  });
+
+  it("halaman detail dan checkout memakai helper pool subtes yang SAMA (getKelasSubtesOptions)", () => {
+    const detail = readFileSync("app/program/kelas/[kelasId]/page.tsx", "utf8");
+    const checkout = readFileSync("app/(protected)/(siswa)/checkout/[kelasId]/page.tsx", "utf8");
+    assert.ok(checkout.includes("getKelasSubtesOptions(kelasId)"));
+    assert.ok(detail.includes("getKelasSubtesOptions(kelas.id)"));
+    assert.equal(detail.match(/getKelasSubtesOptions\(/g)?.length, 1);
+    assert.match(detail, /pool: perluPoolSubtes \? await getKelasSubtesOptions/);
+    assert.match(detail, /subtesNama=\{namaSubtesPeta\}/);
   });
 });

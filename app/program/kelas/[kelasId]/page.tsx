@@ -18,7 +18,7 @@ import KelasDaftarButton from "@/components/program/KelasDaftarButton";
 import SaranKelasSection from "@/components/program/SaranKelasSection";
 import BackLink from "@/components/ui/BackLink";
 import { buttonClassName } from "@/components/ui/buttonClassName";
-import { isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
+import { getKelasSubtesOptions, isKelasSudahLunas } from "@/lib/payment/getKelasForCheckout";
 import { hrefKelasDimiliki } from "@/lib/shared/kelasHref";
 import { hrefLoginKembali } from "@/lib/shared/saranProdukAssessment";
 import Avatar from "@/components/ui/Avatar";
@@ -29,6 +29,8 @@ import HargaMulaiDari from "@/components/program/HargaMulaiDari";
 import { ringkasanHargaKartu } from "@/lib/shared/kartuHargaMulai";
 import { sesiPilihanAktif } from "@/lib/shared/sesiPilihanFlag";
 import PetaMateri, { silabusCocok } from "@/components/program/PetaMateri";
+import { silabusSnbtAktif } from "@/lib/shared/silabusSnbtFlag";
+import { namaSubtesPetaMateri } from "@/lib/silabus/subtesPaket";
 
 /** Detail publik 1 kelas (PRD 7.5.4) — TIGA card independen (masing-masing
  * border+shadow+padding sendiri, dipisah gap yang jelas, bukan satu card besar
@@ -131,7 +133,15 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
   });
 
   // Peta Materi (silabus SNBT, saklar SILABUS_SNBT_AKTIF) mengisi kotak "Materi" bila ada subtes yang cocok.
-  const adaPetaMateri = silabusCocok([kelas.subtesNama], kelas.programKategori).length > 0;
+  // Kelas paket: semua subtes paket (sumber & urutan SAMA dengan "Pilih Subtes" di checkout); kueri hanya bila
+  // saklar aktif, program SNBT, dan bukan offline. Selain itu satu subtes (kelas.subtesNama).
+  const perluPoolSubtes = silabusSnbtAktif() && kelas.programKategori === "snbt" && kelas.modePembelajaran !== "offline";
+  const namaSubtesPeta = namaSubtesPetaMateri({
+    modePembelajaran: kelas.modePembelajaran,
+    subtesNama: kelas.subtesNama,
+    pool: perluPoolSubtes ? await getKelasSubtesOptions(kelas.id) : null,
+  });
+  const adaPetaMateri = silabusCocok(namaSubtesPeta, kelas.programKategori).length > 0;
 
   return (
     <div className="flex w-full flex-col">
@@ -211,7 +221,7 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
               <p className="text-sm text-[#7E7C7C]">Materi</p>
               {adaPetaMateri ? (
                 <PetaMateri
-                  subtesNama={[kelas.subtesNama]}
+                  subtesNama={namaSubtesPeta}
                   programKategori={kelas.programKategori}
                   tipeKelas={kelas.tipeKelas}
                   modePembelajaran={kelas.modePembelajaran}

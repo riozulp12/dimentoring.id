@@ -86,7 +86,7 @@ export const SILABUS_SNBT: Subtes[] = [
   },
   {
     kunci: "lbi",
-    nama: "Literasi Bahasa Indonesia",
+    nama: "Literasi dalam Bahasa Indonesia",
     // "literasi dalam bahasa indonesia" = nama resmi di tabel subtes (db/seed_subtes.sql, rename_subtes_nama_resmi.sql).
     aliasNama: ["literasi bahasa indonesia", "lbi", "literasi dalam bahasa indonesia"],
     kemampuanInti: "Menemukan informasi, menafsirkan, dan mengevaluasi teks sastra dan nonsastra.",
@@ -100,7 +100,7 @@ export const SILABUS_SNBT: Subtes[] = [
   },
   {
     kunci: "lbing",
-    nama: "Literasi Bahasa Inggris",
+    nama: "Literasi dalam Bahasa Inggris",
     aliasNama: ["literasi bahasa inggris", "lbing", "literasi dalam bahasa inggris"],
     kemampuanInti: "Memahami teks bahasa Inggris akademik dan populer.",
     tipeSoal: [
