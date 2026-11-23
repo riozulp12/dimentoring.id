@@ -69,6 +69,12 @@ describe("data silabus", () => {
       }
     }
   });
+  it("judul dua subtes literasi sama dengan nama resmi di tabel subtes; alias lama tetap cocok", () => {
+    assert.equal(SILABUS_SNBT.find((s) => s.kunci === "lbi")!.nama, "Literasi dalam Bahasa Indonesia");
+    assert.equal(SILABUS_SNBT.find((s) => s.kunci === "lbing")!.nama, "Literasi dalam Bahasa Inggris");
+    assert.equal(cariSilabusSnbt("Literasi Bahasa Indonesia", "snbt")?.kunci, "lbi");
+    assert.equal(cariSilabusSnbt("Literasi Bahasa Inggris", "snbt")?.kunci, "lbing");
+  });
   it("Penalaran Umum dikelompokkan Induktif, Deduktif, Kuantitatif", () => {
     const pu = SILABUS_SNBT.find((s) => s.kunci === "pu")!;
     assert.deepEqual([...new Set(pu.tipeSoal.map((x) => x.bagian))], ["Induktif", "Deduktif", "Kuantitatif"]);
@@ -216,8 +222,8 @@ describe("Peta Materi kelas paket (semua subtes paket)", () => {
     const urut = ["Literasi dalam Bahasa Inggris", "Penalaran Umum", "Penalaran Matematika"];
     const html = render({ ...propsPu, subtesNama: urut, dalamKotakMateri: true }, NYALA);
     assert.equal(html.match(/<details/g)?.length, 3);
-    // Judul = nama di data silabus (bisa beda tulisan dari nama di tabel subtes, mis. tanpa kata "dalam").
-    const pos = urut.map((n) => html.indexOf(`>${cariSilabusSnbt(n, "snbt")!.nama}</summary>`));
+    // Judul sama persis dengan nama di tabel subtes (yang tampil di "Pilih Subtes" checkout).
+    const pos = urut.map((n) => html.indexOf(`>${n}</summary>`));
     assert.ok(pos.every((x) => x > 0) && pos[0]! < pos[1]! && pos[1]! < pos[2]!, JSON.stringify(pos));
 
     const campur = render({ ...propsPu, subtesNama: ["Matematika", "Penalaran Umum", "Fisika", "Penalaran Matematika"], dalamKotakMateri: true }, NYALA);
