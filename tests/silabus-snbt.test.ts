@@ -7,6 +7,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { after, describe, it } from "node:test";
 import "./helpers/envSupabaseUji";
 import { ALUR_SESI, SILABUS_SNBT, cariSilabusSnbt, strategiHook } from "@/lib/silabus/silabusSnbt";
@@ -145,5 +146,53 @@ describe("render PetaMateri", () => {
     assert.ok(!render(privOnline, NYALA).includes(baris));
     assert.ok(!render({ ...privOnline, modePembelajaran: "offline" }, { ...NYALA, SESI_PILIHAN_AKTIF: "true" }).includes(baris));
     assert.ok(!render({ ...privOnline, tipeKelas: "group" }, { ...NYALA, SESI_PILIHAN_AKTIF: "true" }).includes(baris));
+  });
+});
+
+describe("PetaMateri di dalam kotak Materi", () => {
+  it("varian dalamKotakMateri: tanpa judul ganda 'Peta Materi', daftar tetap tertutup", () => {
+    const html = render({ ...propsPu, dalamKotakMateri: true }, NYALA);
+    assert.ok(!html.includes("Peta Materi"));
+    assert.ok(html.includes("<details") && !html.includes("<details open"));
+    assert.ok(html.includes("Pola bilangan dan deret"));
+    assert.equal(render({ ...propsPu, dalamKotakMateri: true }, {}), "");
+  });
+
+  const src = readFileSync("app/program/kelas/[kelasId]/page.tsx", "utf8");
+  const mulaiDeskripsi = src.indexOf(">Deskripsi<");
+  const mulaiMateri = src.indexOf("CARD 3");
+  const blokDeskripsiSampaiMateri = src.slice(mulaiDeskripsi, mulaiMateri);
+  const blokMateri = src.slice(mulaiMateri);
+
+  it("PetaMateri TIDAK ada di blok Deskripsi/Info Kelas, ada di kotak Materi", () => {
+    assert.ok(mulaiDeskripsi > 0 && mulaiMateri > mulaiDeskripsi);
+    assert.ok(!blokDeskripsiSampaiMateri.includes("<PetaMateri"));
+    assert.equal(blokMateri.match(/<PetaMateri/g)?.length, 1);
+    assert.ok(blokMateri.includes("dalamKotakMateri"));
+  });
+  it("teks 'akan segera tersedia' hanya disembunyikan bila ada silabus cocok (tetap ada bila saklar mati / tak cocok)", () => {
+    assert.match(blokMateri, /adaPetaMateri \? null : <p[^>]*>Materi untuk kelas ini akan segera tersedia\./);
+    assert.match(src, /const adaPetaMateri = silabusCocok\(\[kelas\.subtesNama\], kelas\.programKategori\)\.length > 0;/);
+  });
+  it("silabusCocok kosong bila saklar mati, subtes tak cocok, atau bukan snbt", () => {
+    const kode = `
+      const { silabusCocok } = await import("@/components/program/PetaMateri");
+      process.stdout.write(JSON.stringify([
+        silabusCocok(["Penalaran Umum"], "snbt").length,
+        silabusCocok(["Matematika"], "snbt").length,
+        silabusCocok(["Penalaran Umum"], "tka").length,
+      ]));
+    `;
+    const jalan = (env: Record<string, string>) =>
+      JSON.parse(
+        execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", kode], {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          env: { ...process.env, NODE_OPTIONS: "", SILABUS_SNBT_AKTIF: "", ...env },
+        }),
+      );
+    assert.deepEqual(jalan({ SILABUS_SNBT_AKTIF: "true" }), [1, 0, 0]);
+    assert.deepEqual(jalan({}), [0, 0, 0]);
+    assert.deepEqual(jalan({ SILABUS_SNBT_AKTIF: "TRUE" }), [0, 0, 0]);
   });
 });

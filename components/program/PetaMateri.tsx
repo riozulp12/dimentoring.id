@@ -19,29 +19,38 @@ function kelompokkan(subtes: Subtes): { bagian: string | null; item: Subtes["tip
   return hasil;
 }
 
-export default function PetaMateri({
-  subtesNama,
-  programKategori,
-  tipeKelas,
-  modePembelajaran,
-}: {
-  subtesNama: (string | null | undefined)[];
-  programKategori: string;
-  tipeKelas: string | null | undefined;
-  modePembelajaran: string | null | undefined;
-}) {
-  if (!silabusSnbtAktif()) return null;
+/** Subtes silabus yang cocok untuk kelas ini; kosong bila saklar mati atau tidak ada kecocokan. */
+export function silabusCocok(subtesNama: (string | null | undefined)[], programKategori: string): Subtes[] {
+  if (!silabusSnbtAktif()) return [];
   const cocok: Subtes[] = [];
   for (const nama of subtesNama) {
     const s = cariSilabusSnbt(nama, programKategori);
     if (s && !cocok.includes(s)) cocok.push(s);
   }
+  return cocok;
+}
+
+export default function PetaMateri({
+  subtesNama,
+  programKategori,
+  tipeKelas,
+  modePembelajaran,
+  dalamKotakMateri = false,
+}: {
+  subtesNama: (string | null | undefined)[];
+  programKategori: string;
+  tipeKelas: string | null | undefined;
+  modePembelajaran: string | null | undefined;
+  /** true = dipasang di dalam kotak "Materi" (judul kotak sudah ada: tanpa pembatas atas & judul "Peta Materi"). */
+  dalamKotakMateri?: boolean;
+}) {
+  const cocok = silabusCocok(subtesNama, programKategori);
   if (cocok.length === 0) return null;
   const ajakTambahSesi = sesiPilihanAktif() && kelasPrivateOnline(tipeKelas, modePembelajaran);
 
   return (
-    <div className="flex flex-col gap-3 border-t border-[#E3E3E3] pt-5">
-      <h2 className="text-sm font-normal text-[#7E7C7C]">Peta Materi</h2>
+    <div className={dalamKotakMateri ? "flex flex-col gap-3" : "flex flex-col gap-3 border-t border-[#E3E3E3] pt-5"}>
+      {dalamKotakMateri ? null : <h2 className="text-sm font-normal text-[#7E7C7C]">Peta Materi</h2>}
       <div className="flex flex-col gap-2">
         {cocok.map((s) => (
           <details key={s.kunci} className="rounded-[12px] border border-[#E3E3E3] bg-white px-4 py-3">
