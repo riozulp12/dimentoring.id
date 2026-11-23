@@ -28,7 +28,7 @@ import BadgeKapasitas from "@/components/ui/BadgeKapasitas";
 import HargaMulaiDari from "@/components/program/HargaMulaiDari";
 import { ringkasanHargaKartu } from "@/lib/shared/kartuHargaMulai";
 import { sesiPilihanAktif } from "@/lib/shared/sesiPilihanFlag";
-import PetaMateri from "@/components/program/PetaMateri";
+import PetaMateri, { silabusCocok } from "@/components/program/PetaMateri";
 
 /** Detail publik 1 kelas (PRD 7.5.4) — TIGA card independen (masing-masing
  * border+shadow+padding sendiri, dipisah gap yang jelas, bukan satu card besar
@@ -130,6 +130,9 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
     jumlahSesi: kelas.jumlahSesi,
   });
 
+  // Peta Materi (silabus SNBT, saklar SILABUS_SNBT_AKTIF) mengisi kotak "Materi" bila ada subtes yang cocok.
+  const adaPetaMateri = silabusCocok([kelas.subtesNama], kelas.programKategori).length > 0;
+
   return (
     <div className="flex w-full flex-col">
       <Navbar {...navbarProps} activeItem="program" />
@@ -189,13 +192,6 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
                 </div>
               ) : null}
 
-              <PetaMateri
-                subtesNama={[kelas.subtesNama]}
-                programKategori={kelas.programKategori}
-                tipeKelas={kelas.tipeKelas}
-                modePembelajaran={kelas.modePembelajaran}
-              />
-
               {kelas.mentors.length > 0 ? (
                 <div className="flex flex-col gap-3 border-t border-[#E3E3E3] pt-5">
                   <p className="text-sm text-[#7E7C7C]">Mentor Kelas Ini</p>
@@ -213,8 +209,17 @@ export default async function KelasDetailPublicPage({ params }: { params: Promis
             {/* CARD 3 — Materi */}
             <div className="flex flex-col gap-3 rounded-[20px] border-[0.8px] border-[#E3E3E3] bg-white p-5 shadow-[1px_2px_8px_0px_rgba(0,0,0,0.1)] sm:p-8">
               <p className="text-sm text-[#7E7C7C]">Materi</p>
+              {adaPetaMateri ? (
+                <PetaMateri
+                  subtesNama={[kelas.subtesNama]}
+                  programKategori={kelas.programKategori}
+                  tipeKelas={kelas.tipeKelas}
+                  modePembelajaran={kelas.modePembelajaran}
+                  dalamKotakMateri
+                />
+              ) : null}
               {materi.length === 0 ? (
-                <p className="text-sm text-[#7E7C7C]">Materi untuk kelas ini akan segera tersedia.</p>
+                adaPetaMateri ? null : <p className="text-sm text-[#7E7C7C]">Materi untuk kelas ini akan segera tersedia.</p>
               ) : (
                 <GatedTeaser isGated={!isLoggedIn} loginHref={loginHref}>
                   <div className="flex flex-col gap-2">
