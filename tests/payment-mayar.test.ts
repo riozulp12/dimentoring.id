@@ -183,6 +183,7 @@ describe("file statis", () => {
       "WA_NOTIF_ENABLED=",
       "WA_NOTIF_BATAS_HARIAN=",
       "SESI_PILIHAN_AKTIF=",
+      "SILABUS_SNBT_AKTIF=",
     ]);
   });
 });
