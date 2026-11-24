@@ -81,7 +81,7 @@ export default function KelasCardFrame({
         compact={compact}
       />
 
-      <div className={`flex min-w-0 flex-col ${compact ? "gap-1 p-3 sm:gap-1.5 sm:p-4" : "gap-1.5 p-4"}`}>
+      <div className={`flex min-w-0 flex-1 flex-col ${compact ? "gap-1 p-3 sm:gap-1.5 sm:p-4" : "gap-1.5 p-4"}`}>
         {children}
       </div>
     </div>

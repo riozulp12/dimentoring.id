@@ -129,6 +129,7 @@ export default function KelolaKelasForm({
   const [jadwalEntries, setJadwalEntries] = useState<JadwalEntry[]>(initialKelas?.jadwalEntries ?? []);
   const [jadwalPilihSiswa, setJadwalPilihSiswa] = useState(initialKelas?.jadwalPilihSiswa ?? false);
   const [tampilDiKatalog, setTampilDiKatalog] = useState(initialKelas?.tampilDiKatalog ?? true);
+  const [pendaftaranDitutup, setPendaftaranDitutup] = useState(initialKelas?.pendaftaranDitutup ?? false);
   const [linkMeet, setLinkMeet] = useState(initialKelas?.linkMeet ?? "");
   const [linkMeetError, setLinkMeetError] = useState<string | null>(null);
   const [linkLynkid, setLinkLynkid] = useState(initialKelas?.linkLynkid ?? "");
@@ -360,6 +361,7 @@ export default function KelolaKelasForm({
       jadwalEntries: completeJadwalEntries,
       jadwalPilihSiswa,
       tampilDiKatalog,
+      pendaftaranDitutup,
       linkMeet: trimmedLinkMeet || undefined,
       linkLynkid: trimmedLinkLynkid || undefined,
       deskripsi: deskripsi.trim() || undefined,
@@ -428,6 +430,7 @@ export default function KelolaKelasForm({
         jadwalDisplay,
         jadwalPilihSiswa,
         tampilDiKatalog,
+        pendaftaranDitutup,
         linkMeet: trimmedLinkMeet || null,
         linkLynkid: trimmedLinkLynkid || null,
         deskripsi: deskripsi.trim() || null,
@@ -858,6 +861,21 @@ export default function KelolaKelasForm({
           {tampilDiKatalog
             ? "Menyala: kelas tampil di halaman Program, rekomendasi, dan bisa di-checkout."
             : "Mati: kelas disembunyikan dari halaman Program, rekomendasi, dan checkout. Siswa & mentor yang sudah terdaftar di kelas ini tetap bisa mengaksesnya seperti biasa."}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-start gap-2 text-sm text-black">
+          <input
+            type="checkbox"
+            checked={pendaftaranDitutup}
+            onChange={(e) => setPendaftaranDitutup(e.target.checked)}
+            className="mt-0.5 size-4 accent-[#081EEA]"
+          />
+          Tutup pendaftaran
+        </label>
+        <p className="text-xs text-[#7E7C7C]">
+          Kartu kelas tetap tampil, tombol daftar dimatikan. Siswa yang sudah terdaftar tidak terpengaruh.
         </p>
       </div>
 

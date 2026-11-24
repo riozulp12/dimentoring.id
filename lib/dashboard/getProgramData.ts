@@ -11,12 +11,12 @@ import {
 } from "@/lib/shared/kelasLabels";
 import { formatJadwalRingkas } from "@/lib/shared/formatJadwal";
 import { hitungHargaSetelahDiskon, normalizeDiskonPersen } from "@/lib/shared/kelasDiskon";
-import { hitungKapasitasKelas, type KapasitasKelas } from "@/lib/shared/kapasitasKelas";
+import { hitungKapasitasKelas, tandaiPendaftaranDitutup, type KapasitasKelas } from "@/lib/shared/kapasitasKelas";
 import { hitungKetersediaanKelas } from "@/lib/jadwal/slotTerisi";
 
 // jadwal, jadwal_pilih_siswa, subtes_id: dasar kapasitas otomatis kelas private (lib/shared/kapasitasKelas.ts).
 export const KELAS_CARD_SELECT =
-  "id, nama, tipe_kelas, mode_pembelajaran, jumlah_sesi, harga, diskon_persen, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, jadwal, jadwal_pilih_siswa, subtes_id, subtes:subtes_id(nama), mentor:mentor_id(nama)";
+  "id, nama, tipe_kelas, mode_pembelajaran, jumlah_sesi, harga, diskon_persen, kapasitas, deskripsi, program_kategori, tingkat_kelas, link_lynkid, jadwal, jadwal_pilih_siswa, subtes_id, pendaftaran_ditutup, subtes:subtes_id(nama), mentor:mentor_id(nama)";
 
 /**
  * Data layer halaman publik /program (PRD Bagian 4.3 poin 5, 7.5.4) — 5
@@ -86,6 +86,8 @@ export interface KelasCardRow {
   diskon_persen: number | null;
   /** Opsional (boleh kosong) — lihat lib/shared/kapasitasKelas.ts. */
   kapasitas: number | null;
+  /** kelas.pendaftaran_ditutup (db/add_pendaftaran_ditutup.sql) — true = tombol daftar dimatikan. */
+  pendaftaran_ditutup?: boolean | null;
   deskripsi: string | null;
   program_kategori: string;
   tingkat_kelas: string;
@@ -116,7 +118,7 @@ export function toCardPreview(row: KelasCardRow, kapasitasInfo: KapasitasKelas):
     // (diskon_persen kelas). Kode promo (diketik di checkout) TIDAK pernah
     // menghasilkan ribbon/label apa pun di kartu.
     diskonAktif: diskonPersen > 0 ? { label: `Diskon ${diskonPersen}%` } : null,
-    kapasitasInfo,
+    kapasitasInfo: tandaiPendaftaranDitutup(kapasitasInfo, row.pendaftaran_ditutup),
     deskripsi: row.deskripsi,
     programKategori: row.program_kategori,
     tingkatKelas: row.tingkat_kelas,
@@ -343,7 +345,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
   const { data, error } = await supabaseServer
     .from("kelas")
     .select(
-      `id, nama, program_kategori, tipe_kelas, mode_pembelajaran, jumlah_sesi, tingkat_kelas, deskripsi, harga, diskon_persen, jadwal, jadwal_pilih_siswa, kapasitas, link_lynkid, tampil_di_katalog, subtes_id,
+      `id, nama, program_kategori, tipe_kelas, mode_pembelajaran, jumlah_sesi, tingkat_kelas, deskripsi, harga, diskon_persen, jadwal, jadwal_pilih_siswa, kapasitas, link_lynkid, tampil_di_katalog, subtes_id, pendaftaran_ditutup,
        subtes:subtes_id(nama)`,
     )
     .eq("id", kelasId)
@@ -371,6 +373,7 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
     kapasitas: number | null;
     link_lynkid: string | null;
     tampil_di_katalog: boolean | null;
+    pendaftaran_ditutup: boolean | null;
     subtes_id: string | null;
     subtes: NamaJoin;
   };
@@ -399,9 +402,11 @@ export async function getKelasDetailPublic(kelasId: string): Promise<KelasDetail
   ]);
 
   // Galat baca → aturan kapasitas manual dengan 0 siswa (sama dengan perilaku lama saat count gagal).
-  const kapasitasInfo =
+  const kapasitasInfo = tandaiPendaftaranDitutup(
     ketersediaan?.get(row.id)?.kapasitas ??
-    hitungKapasitasKelas({ kapasitasManual: typeof row.kapasitas === "number" ? row.kapasitas : null, lunas: 0, otomatis: null });
+      hitungKapasitasKelas({ kapasitasManual: typeof row.kapasitas === "number" ? row.kapasitas : null, lunas: 0, otomatis: null }),
+    row.pendaftaran_ditutup,
+  );
   if (mentorRelResult.error) {
     console.error("[getKelasDetailPublic] query kelas_mentor failed:", mentorRelResult.error);
   }

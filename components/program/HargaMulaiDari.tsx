@@ -46,3 +46,36 @@ export default function HargaMulaiDari({
     </div>
   );
 }
+
+/**
+ * Harga satu angka untuk kartu kelas NON-private-online (mis. offline, grup): tipografi IDENTIK dengan HargaMulaiDari
+ * (label kecil abu-abu, harga tebal primary lebih besar), label "Harga paket" menggantikan "Mulai dari", tanpa kalimat
+ * ajakan sesi. Nilai TIDAK berubah: `hargaSetelahDiskon` (sama dengan yang ditagih; = harga bila tanpa diskon).
+ * Bila diskon aktif: satu baris kecil dengan harga asli dicoret di bawahnya.
+ */
+export function HargaPaket({
+  harga,
+  hargaSetelahDiskon,
+  diskonAktif,
+  compact = false,
+}: {
+  harga: number;
+  hargaSetelahDiskon: number;
+  diskonAktif: boolean;
+  compact?: boolean;
+}) {
+  const kecil = compact ? "text-[11px] sm:text-xs" : "text-xs";
+  return (
+    <div className="flex min-w-0 flex-col">
+      <span className={`font-normal text-[#7E7C7C] ${kecil}`}>Harga paket</span>
+      <span className={["font-bold whitespace-nowrap text-[#081EEA]", compact ? "text-lg sm:text-xl" : "text-xl"].join(" ")}>
+        {formatRupiah(diskonAktif ? hargaSetelahDiskon : harga)}
+      </span>
+      {diskonAktif ? (
+        <span className={`mt-1 text-[#7E7C7C] ${kecil}`}>
+          <s className="decoration-[#DC2626]">{formatRupiah(harga)}</s>
+        </span>
+      ) : null}
+    </div>
+  );
+}

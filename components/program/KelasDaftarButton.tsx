@@ -21,6 +21,8 @@ export interface KelasDaftarButtonProps {
   kelasId: string;
   /** Kelas penuh menurut SATU aturan kapasitas (lib/shared/kapasitasKelas.ts). */
   penuh: boolean;
+  /** kelas.pendaftaran_ditutup (lewat kapasitasInfo.ditutup) — tombol disabled "Pendaftaran Ditutup", bukan link. */
+  ditutup?: boolean;
   sessionRole: SessionRole | null;
   /** Kolom kelas.link_lynkid ("Input Link Pendaftaran" di Kelola Kelas). */
   linkLynkid: string | null;
@@ -37,6 +39,7 @@ export interface KelasDaftarButtonProps {
 export default function KelasDaftarButton({
   kelasId,
   penuh,
+  ditutup = false,
   sessionRole,
   linkLynkid,
   variant = "card",
@@ -45,6 +48,7 @@ export default function KelasDaftarButton({
   const action = resolveKelasDaftarAction({
     kelasId,
     penuh,
+    ditutup,
     linkPendaftaran: linkLynkid,
     sessionRole,
     isCheckoutInternalReady: isCheckoutInternalReady(),

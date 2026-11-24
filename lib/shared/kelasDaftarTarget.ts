@@ -7,6 +7,7 @@ import type { SessionRole } from "@/lib/auth/session";
  * (tanpa React/env) supaya bisa dites langsung.
  *
  * Urutan aturan:
+ * 0. Pendaftaran ditutup Admin (kelas.pendaftaran_ditutup) -> disabled "Pendaftaran Ditutup".
  * 1. Kelas penuh -> disabled.
  * 2. `link_lynkid` ("Input Link Pendaftaran" di Kelola Kelas) terisi & valid
  *    (HANYA http/https) -> ke link itu, semua pengunjung/role, TANPA wajib
@@ -51,6 +52,8 @@ export interface ResolveKelasDaftarParams {
   kelasId: string;
   /** Kelas penuh? SATU aturan: lib/shared/kapasitasKelas.ts (KapasitasKelas.penuh). */
   penuh: boolean;
+  /** kelas.pendaftaran_ditutup — menang atas semua aturan lain (termasuk link pendaftaran eksternal). */
+  ditutup?: boolean;
   linkPendaftaran: string | null;
   sessionRole: SessionRole | null;
   isCheckoutInternalReady: boolean;
@@ -59,10 +62,19 @@ export interface ResolveKelasDaftarParams {
 export function resolveKelasDaftarAction({
   kelasId,
   penuh,
+  ditutup = false,
   linkPendaftaran,
   sessionRole,
   isCheckoutInternalReady,
 }: ResolveKelasDaftarParams): KelasDaftarAction {
+  if (ditutup) {
+    return {
+      kind: "disabled",
+      label: "Pendaftaran Ditutup",
+      labelCompact: "Ditutup",
+      keterangan: "Pendaftaran kelas ini sudah ditutup.",
+    };
+  }
   if (penuh) {
     return {
       kind: "disabled",

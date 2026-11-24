@@ -159,6 +159,11 @@ export default function KelolaKelasClient({
                         Tersembunyi
                       </span>
                     )}
+                    {kelas.pendaftaranDitutup ? (
+                      <span className="ml-2 inline-flex items-center rounded-full bg-[#F0F0F0] px-2 py-0.5 align-middle text-xs font-medium whitespace-nowrap text-[#7E7C7C]">
+                        Pendaftaran ditutup
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-[#7E7C7C]">
                     {PROGRAM_KATEGORI_LABEL[kelas.programKategori as ProgramKategori] ?? kelas.programKategori}

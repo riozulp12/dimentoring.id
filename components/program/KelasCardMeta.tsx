@@ -3,9 +3,10 @@ import type { SessionRole } from "@/lib/auth/session";
 import KelasDaftarButton from "./KelasDaftarButton";
 import ModePembelajaranBadge from "@/components/ui/ModePembelajaranBadge";
 import { formatRupiah } from "@/lib/shared/kelasDiskon";
-import HargaMulaiDari from "./HargaMulaiDari";
+import HargaMulaiDari, { HargaPaket } from "./HargaMulaiDari";
 import { ringkasanHargaKartu } from "@/lib/shared/kartuHargaMulai";
 import { sesiPilihanAktif } from "@/lib/shared/sesiPilihanFlag";
+import { kelasPrivateOnline } from "@/lib/shared/marginKelas";
 
 /**
  * Konten card Kelas publik di BAWAH KelasCardVisual (PRD 7.5 poin 10) — badge
@@ -69,8 +70,12 @@ export default function KelasCardMeta({ item, sessionRole, compact = false }: Ke
       {/* Harga — kalau kelas sedang diskon, harga setelah diskon jadi fokus
           utama (bold, lebih besar) dan harga asli dicoret di atasnya dengan
           font lebih kecil. Tanpa diskon: tampilan lama, tidak berubah. */}
+      {/* Private online + saklar hidup: "Mulai dari". Kelas NON-private-online (offline, grup, dst.): "Harga paket" dengan
+          tipografi yang sama (nilai tidak berubah). Private online dengan saklar mati: harga lama (tidak diubah). */}
       {mulai ? (
         <HargaMulaiDari ringkasan={mulai} harga={item.harga} diskonAktif={hasDiskon} varian="kartu" compact={compact} />
+      ) : !kelasPrivateOnline(item.tipeKelas, item.modePembelajaran) ? (
+        <HargaPaket harga={item.harga} hargaSetelahDiskon={item.hargaSetelahDiskon} diskonAktif={hasDiskon} compact={compact} />
       ) : hasDiskon ? (
         <div className="flex min-w-0 flex-col">
           <span className={compact ? "text-[11px] text-[#7E7C7C] line-through sm:text-xs" : "text-xs text-[#7E7C7C] line-through"}>
@@ -104,10 +109,11 @@ export default function KelasCardMeta({ item, sessionRole, compact = false }: Ke
 
       {/* relative + z-40 = ditumpuk DI ATAS stretched link kartu (z-30, lihat
           KelasCardFrame.tsx) — area tombol tidak ikut navigasi ke detail. */}
-      <div className="relative z-40 mt-1">
+      <div className="relative z-40 mt-auto pt-1">
         <KelasDaftarButton
           kelasId={item.id}
           penuh={item.kapasitasInfo.penuh}
+          ditutup={item.kapasitasInfo.ditutup === true}
           sessionRole={sessionRole}
           linkLynkid={item.linkLynkid}
           compact={compact}
