@@ -24,7 +24,7 @@ const PREFIX_PRIVAT = [
   "honor", "kelas-saya", "review-konten", "siswa-binaan", "studio-soal",
   // admin
   "analytics", "approval-mentor", "kelola-assessment", "kelola-kelas", "kelola-konten",
-  "kode-promo", "leads", "manajemen-siswa", "penugasan-studio-soal", "riwayat-transaksi",
+  "impor-soal", "kode-promo", "leads", "manajemen-siswa", "penugasan-studio-soal", "riwayat-transaksi",
   "sesi-review", "undang-admin",
   // auth & API
   "login", "daftar", "daftar-admin", "forgot-password", "lengkapi-profil", "reset-password",
