@@ -48,6 +48,12 @@ BEGIN
     END IF;
 END $$;
 
+-- Setiap RPC studio_soal_* menyalakan penanda transaksi 'studio_soal.rpc' sampai transaksi selesai;
+-- matikan sebelum menguji bahwa UPDATE status langsung (tanpa RPC) ditolak trigger.
+CREATE FUNCTION pg_temp.ib_rpc_mati() RETURNS VOID LANGUAGE sql AS $$
+    SELECT set_config('studio_soal.rpc', 'off', true);
+$$;
+
 CREATE FUNCTION pg_temp.ib_buat_user(p_kode TEXT) RETURNS UUID LANGUAGE plpgsql AS $$
 DECLARE
     v_id UUID;
@@ -93,7 +99,7 @@ BEGIN
     SELECT id INTO pu FROM subtes WHERE nama = 'Penalaran Umum' AND kategori = 'tps';
     SELECT id INTO pk FROM subtes WHERE nama = 'Pengetahuan Kuantitatif' AND kategori = 'tps';
     SELECT id INTO mtk FROM subtes WHERE nama = 'Matematika' AND kategori = 'tka_wajib';
-    PERFORM pg_temp.ib_cek(format('PU=%s PK=%s MTK=%s', pu IS NOT NULL, pk IS NOT NULL, mtk IS NOT NULL),
+    PERFORM pg_temp.ib_cek(format('PU=%s PK=%s MTK=%s', (pu IS NOT NULL)::text, (pk IS NOT NULL)::text, (mtk IS NOT NULL)::text),
         'PU=true PK=true MTK=true', 'subtes referensi ada');
 
     PERFORM pg_temp.ib_cek((SELECT rowsecurity::text FROM pg_tables
@@ -147,7 +153,7 @@ BEGIN
     PERFORM pg_temp.ib_status(r, 'disimpan', 'impor valid oleh admin tanpa penugasan');
     batch := (r->>'batch_id')::uuid;
     PERFORM pg_temp.ib_cek(format('%s/%s', r->>'jumlah_soal', r->>'jumlah_stimulus'), '4/1', 'jumlah dilaporkan');
-    PERFORM pg_temp.ib_cek((SELECT format('%s/%s/%s/%s/%s', jumlah_baris, jumlah_ok, jumlah_gagal, nama_berkas, admin_id = adm)
+    PERFORM pg_temp.ib_cek((SELECT format('%s/%s/%s/%s/%s', jumlah_baris, jumlah_ok, jumlah_gagal, nama_berkas, (admin_id = adm)::text)
                             FROM soal_impor_batch WHERE id = batch),
         '6/4/1/uji.csv/true', 'baris batch');
     PERFORM pg_temp.ib_cek((SELECT format('%s/%s/%s/%s', count(*), count(*) FILTER (WHERE status = 'draf'),
@@ -215,8 +221,9 @@ BEGIN
     PERFORM pg_temp.ib_harus_gagal(format(
         'INSERT INTO soal_bank (subtes_id, tipe, redaksi, penulis_id, sumber) VALUES (%L, ''pilihan_ganda'', ''x'', %L, ''buatan_sendiri'')',
         pu, siswa), 'INSERT sumber buatan_sendiri oleh non-admin');
+    PERFORM pg_temp.ib_rpc_mati();
     PERFORM pg_temp.ib_harus_gagal(format(
-        'UPDATE soal_bank SET status = ''terpublikasi'' WHERE impor_batch_id = %L', batch), 'UPDATE status langsung');
+        'UPDATE soal_bank SET status = ''terpublikasi'' WHERE impor_batch_id = %L', batch), 'UPDATE status langsung (tanpa RPC)');
 
     -- ---- 6. Terbit: aturan akses & batas ----
     PERFORM pg_temp.ib_status(studio_soal_terbitkan_admin(siswa, ARRAY[gen_random_uuid()], 'x'), 'bukan_admin', 'siswa tidak boleh terbit');
@@ -243,7 +250,7 @@ BEGIN
     PERFORM pg_temp.ib_cek(jsonb_array_length(r->'stimulus_diterbitkan')::text, '1', 'bacaan ikut terbit');
     PERFORM pg_temp.ib_cek((SELECT string_agg(x->>'alasan', ',' ORDER BY x->>'alasan') FROM jsonb_array_elements(r->'dilewati') x),
         'bukan_buatan_sendiri,tidak_ditemukan', 'alasan yang dilewati');
-    PERFORM pg_temp.ib_cek((SELECT format('%s/%s/%s', status, peninjau_id = adm, ditinjau_pada IS NOT NULL)
+    PERFORM pg_temp.ib_cek((SELECT format('%s/%s/%s', status, (peninjau_id = adm)::text, (ditinjau_pada IS NOT NULL)::text)
                             FROM soal_bank WHERE id = s1), 'terpublikasi/true/true', 'soal mandiri terbit, peninjau admin');
     PERFORM pg_temp.ib_cek((SELECT status FROM soal_bank WHERE id = s2), 'terpublikasi', 'soal dalam bacaan terbit');
     PERFORM pg_temp.ib_cek((SELECT status FROM soal_bank WHERE id = s3), 'draf', 'soal lain di bacaan itu tetap draf');
@@ -266,7 +273,11 @@ BEGIN
     -- Soal kedua dalam bacaan yang sudah terbit boleh menyusul.
     r := studio_soal_terbitkan_admin(adm, ARRAY[s3], NULL);
     PERFORM pg_temp.ib_cek(jsonb_array_length(r->'diterbitkan')::text, '1', 'soal susulan di bacaan terbit');
-    PERFORM pg_temp.ib_cek(jsonb_array_length(r->'stimulus_diterbitkan')::text, '0', 'bacaan tidak diterbitkan dua kali');
+    -- (stimulus_diterbitkan tidak dipakai: now() sama di satu transaksi dry-run; yang diukur = log bacaan tetap 1)
+    PERFORM pg_temp.ib_cek((SELECT count(*)::text FROM soal_tinjauan_log
+                            WHERE aksi = 'terbit_admin_buatan_sendiri' AND objek_jenis = 'stimulus'
+                              AND objek_id = (SELECT id FROM soal_stimulus WHERE impor_batch_id = batch)),
+        '1', 'bacaan tidak diterbitkan dua kali');
 
     -- Isi terbit terkunci (aturan lama tetap berlaku untuk soal impor).
     PERFORM pg_temp.ib_harus_gagal(format('UPDATE soal_bank SET redaksi = ''diubah'' WHERE id = %L', s1),
