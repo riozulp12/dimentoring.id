@@ -3,13 +3,30 @@
  * fitur (Import CSV Kelola Assessment). Dukung field ber-quote (","), quote
  * ter-escape (""), dan newline di dalam field yang di-quote.
  */
-export function parseCsv(text: string): string[][] {
+export type PemisahCsv = "," | ";";
+
+/** Pilih pemisah dari baris judul: ";" hanya bila lebih banyak daripada ",". */
+export function deteksiPemisahCsv(text: string): PemisahCsv {
+  const tanpaBom = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const baris = tanpaBom.split(/\r\n|\n|\r/, 1)[0] ?? "";
+  const koma = (baris.match(/,/g) ?? []).length;
+  const titikKoma = (baris.match(/;/g) ?? []).length;
+  return titikKoma > koma ? ";" : ",";
+}
+
+/**
+ * `pemisah` bawaan "," (perilaku lama tidak berubah). BOM UTF-8 di awal berkas
+ * dibuang. Impor Studio Soal memakai deteksiPemisahCsv() karena Excel berlokal
+ * Indonesia menyimpan CSV dengan ";".
+ */
+export function parseCsv(text: string, pemisah: PemisahCsv = ","): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
   let inQuotes = false;
   let i = 0;
-  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const tanpaBom = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const normalized = tanpaBom.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
   while (i < normalized.length) {
     const char = normalized[i];
@@ -35,7 +52,7 @@ export function parseCsv(text: string): string[][] {
       i += 1;
       continue;
     }
-    if (char === ",") {
+    if (char === pemisah) {
       row.push(field);
       field = "";
       i += 1;
