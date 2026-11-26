@@ -13,7 +13,7 @@ import { izinSoal, teksDilewati, type SoalDilewati } from "@/lib/shared/studio-s
 import type { MediaTampil } from "@/lib/shared/studio-soal/gambar";
 import type { BlokStimulus } from "@/lib/shared/studio-soal/tipe";
 
-type Sibuk = "terbit" | "versi" | "arsip" | "hapus";
+type Sibuk = "terbit" | "arsip" | "hapus";
 type Konfirmasi = "terbit" | "arsip" | "hapus" | null;
 
 /** Pratinjau satu soal di Bank Soal + aksi Admin sesuai sumber & status. */
@@ -69,16 +69,6 @@ export default function DetailSoalAdmin({
     router.refresh();
   }
 
-  async function editVersiBaru() {
-    const r = await kirim("versi", `/api/admin/studio-soal/bank/${id}/versi-baru`, "POST");
-    // Berhasil membuat, atau sudah ada versi terbuka: lanjutkan menyunting draf itu.
-    if (typeof r.json.soalId === "string") {
-      const tujuan = r.json.soalId;
-      return pindah("versi", (x) => x.push(`/bank-soal/${tujuan}/edit`));
-    }
-    gagal(r);
-  }
-
   async function arsipkan() {
     const r = await kirim("arsip", `/api/admin/studio-soal/bank/${id}/arsipkan`, "POST");
     if (!r.ok) return gagal(r);
@@ -100,9 +90,9 @@ export default function DetailSoalAdmin({
       jalankan: terbitkan,
     },
     arsip: {
-      judul: "Arsipkan soal ini?",
-      isi: "Soal tidak ikut latihan lagi, tetapi tetap tersimpan di Bank Soal.",
-      tombol: "Ya, arsipkan",
+      judul: "Hapus soal terbit ini?",
+      isi: "Soal hilang dari siswa dan dipindahkan ke arsip, tidak dihapus permanen. Arsip bisa dilihat lewat filter status “Diarsipkan” di Bank Soal, tetapi soal belum bisa dipulihkan.",
+      tombol: "Ya, hapus",
       jalankan: arsipkan,
     },
     hapus: {
@@ -129,7 +119,7 @@ export default function DetailSoalAdmin({
       ) : null}
       {sumber === "buatan_sendiri" && versiTerbuka ? (
         <p className="text-sm text-black">
-          Ada draf versi lain dari soal ini.{" "}
+          Ada draf versi lain dari soal ini; terbitkan atau hapus draf itu dulu.{" "}
           <Link href={`/bank-soal/${versiTerbuka}`} className="text-primary hover:underline">
             Buka draf itu
           </Link>
@@ -149,7 +139,7 @@ export default function DetailSoalAdmin({
           ) : null}
           {izin.arsip ? (
             <Button variant="secondary" size="sm" onClick={() => setKonfirmasi("arsip")} disabled={sibuk !== null}>
-              Arsipkan
+              Hapus
             </Button>
           ) : null}
           {izin.edit ? (
@@ -162,10 +152,10 @@ export default function DetailSoalAdmin({
               Terbitkan
             </Button>
           ) : null}
-          {izin.versiBaru ? (
-            <Button size="sm" onClick={editVersiBaru} disabled={sibuk !== null}>
-              {sibuk === "versi" ? "Membuka…" : "Edit"}
-            </Button>
+          {izin.versiBaru && !versiTerbuka ? (
+            <Link href={`/bank-soal/${id}/edit`} className={buttonClassName({ size: "sm" })}>
+              Edit &amp; terbitkan ulang
+            </Link>
           ) : null}
         </div>
       ) : null}
