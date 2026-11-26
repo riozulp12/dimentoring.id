@@ -4,7 +4,8 @@
  * Masukan: CSV v1.1 (soal.csv wajib + bacaan.csv opsional, dihubungkan lewat
  * kode_bacaan) ATAU baris perantara yang sama bentuknya dengan hasil parseCsv
  * (dipakai jalur DOCX, lihat imporDocx.ts) — validasinya satu: susunImpor(). Jenis soal: pilihan_ganda, majemuk_kompleks,
- * isian. Hanya teks + rumus LaTeX; gambar dan XLSX BELUM didukung. Setiap baris divalidasi dengan validator Studio Soal
+ * isian. Teks + rumus LaTeX; gambar hanya lewat Word (imporDocx.ts), tidak lewat
+ * CSV. XLSX BELUM didukung. Setiap baris divalidasi dengan validator Studio Soal
  * yang sama dengan form mentor (validasiSoal/validasiStimulus mode "ajukan" +
  * cek rumus KaTeX), karena soal impor langsung diterbitkan Admin tanpa tinjau
  * sejawat. Server WAJIB memanggil susunImpor() ulang; hasil klien tidak dipercaya.
@@ -12,6 +13,7 @@
 import { deteksiPemisahCsv, parseCsv } from "@/lib/admin/parseCsv";
 import { buatCsv } from "@/lib/shared/csv";
 import { parseAngka } from "./angka";
+import { POLA_KODE_GAMBAR, type GambarEntri } from "./gambar";
 import { validasiRumusSoal, validasiRumusStimulus } from "./rumus";
 import { normalisasiTeks, panjangTrim } from "./teks";
 import { BATAS, LABEL_OPSI, TINGKAT_KESULITAN, isSubtesSnbt, type BlokStimulus } from "./tipe";
@@ -121,6 +123,7 @@ export interface BarisPratinjau {
   /** Kunci jawaban — hanya untuk layar Admin unggah soal. */
   kunci: string;
   kodeBacaan: string;
+  jumlahGambar: number;
   status: StatusBaris;
 }
 
@@ -139,7 +142,11 @@ export interface HasilImpor {
     jumlahBacaan: number;
     /** Bacaan di berkas yang TIDAK disimpan karena tidak ada soalnya yang lolos. */
     jumlahBacaanDilewati: number;
+    /** Gambar di seluruh berkas (soal + bacaan). */
+    jumlahGambar: number;
   };
+  /** Bacaan yang memuat gambar (jalur DOCX). */
+  gambarBacaan: { baris: number; kode: string; jumlah: number }[];
 }
 
 export interface MasukanImpor {
@@ -150,6 +157,8 @@ export interface MasukanImpor {
   bacaanBaris?: string[][] | null;
   /** Blok teks & tabel (jalur DOCX) per nomor baris bacaan; menggantikan kolom teks pada baris itu. */
   bacaanBlok?: ReadonlyMap<number, BlokStimulus[]>;
+  /** Daftar gambar (jalur DOCX) per nomor baris soal; penanda {{gN}} sudah ada di teksnya. */
+  soalGambar?: ReadonlyMap<number, GambarEntri[]>;
   /** Catatan struktur dari pengurai sebelumnya (mis. DOCX); baris yang memuat galat tidak ikut disimpan. */
   galatTambahan?: GalatImpor[];
   subtes: SubtesImpor[];
@@ -197,6 +206,7 @@ function kolomDariField(field: string, tipe: string): string {
   if (field === "" || field === "redaksi") return "redaksi";
   const opsi = field.match(/^konten\.opsi\.(\d)/);
   if (opsi) return `opsi_${"abcde"[Number(opsi[1])] ?? "a"}`;
+  if (field.startsWith("konten.gambar")) return "redaksi";
   if (tipe === "majemuk_kompleks" && field.startsWith("konten")) {
     const bagian = field.match(/^konten\.(label_kolom|pernyataan)(?:\.(\d))?/);
     return `${bagian?.[1] ?? "pernyataan"}_${Number(bagian?.[2] ?? 0) + 1}`;
@@ -333,6 +343,7 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
   const petaBacaan = new Map<string, { subtesId: string }>();
   const barisBacaan = new Map<string, number>();
   let jumlahBarisBacaan = 0;
+  const gambarBacaan: HasilImpor["gambarBacaan"] = [];
   const adaBacaanCsv =
     (masukan.bacaanBaris?.length ?? 0) > 0 || (typeof masukan.bacaanCsv === "string" && masukan.bacaanCsv.trim() !== "");
 
@@ -371,7 +382,11 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
 
         const teks = sel[idx.teks] ?? "";
         const blok: BlokStimulus[] = masukan.bacaanBlok?.get(baris) ?? [{ jenis: "teks", teks }];
-        const semuaTeks = blok.flatMap((b) => (b.jenis === "teks" ? [b.teks] : [...b.kepala, ...b.baris.flat()]));
+        const semuaTeks = blok.flatMap((b) =>
+          b.jenis === "teks" ? [b.teks] : b.jenis === "tabel" ? [...b.kepala, ...b.baris.flat()] : [],
+        );
+        const jumlahGambarBacaan = blok.filter((b) => b.jenis === "gambar").length;
+        if (jumlahGambarBacaan > 0) gambarBacaan.push({ baris, kode: kodeAsli, jumlah: jumlahGambarBacaan });
         const sumber = bersih(sel[idx.sumber_rujukan]) || SUMBER_BAWAAN;
         if (semuaTeks.some(adaGambar) || KOLOM_GAMBAR.some((g) => tabel.judul.includes(g) && bersih(sel[tabel.judul.indexOf(g)]) !== "")) {
           tambah("bacaan", baris, "teks", "Gambar belum didukung. Hapus gambarnya atau tulis ulang sebagai teks/tabel.");
@@ -503,7 +518,7 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
           .map((x) => x.trim())
           .filter((x) => x !== "");
         if (diterima.length === 0) g("kunci", "Jawaban belum diisi (pisahkan beberapa jawaban dengan |).");
-        const penanda = [...redaksiAsli.matchAll(/\{\{([^{}]*)\}\}/g)].map((m) => m[1]);
+        const penanda = [...redaksiAsli.matchAll(/\{\{([^{}]*)\}\}/g)].map((m) => m[1]).filter((id) => !POLA_KODE_GAMBAR.test(id));
         if (penanda.length === 0 && redaksiAsli.trim() !== "") redaksi = `${redaksiAsli.trimEnd()} {{r1}}`;
         else if (penanda.length > 1 || penanda[0] !== "r1") {
           g("redaksi", "Isian lewat unggahan hanya satu kotak jawaban: pakai {{r1}} sekali, atau kosongkan agar ditambahkan di akhir soal.");
@@ -512,6 +527,9 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
         konten = { v: 1, rumpang: [{ id: "r1", jenis }] };
         kunci = { v: 1, rumpang: { r1: { diterima } } };
       }
+
+      const gambar = masukan.soalGambar?.get(baris) ?? [];
+      if (gambar.length > 0) konten = { ...konten, gambar };
 
       const kesulitanAsli = bersih(kol(sel, "kesulitan"));
       const kesulitanBaku = kesulitanAsli === "" ? "sedang" : normalKesulitan(kesulitanAsli);
@@ -607,6 +625,7 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
         redaksi: cuplik(redaksiAsli),
         kunci: tipe === "pilihan_ganda" ? kunciMentah.toUpperCase() : kunciMentah,
         kodeBacaan: kodeAsli,
+        jumlahGambar: gambar.length,
         status,
       });
 
@@ -654,7 +673,9 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
       jumlahPeringatan: pratinjau.filter((p) => p.status === "peringatan").length,
       jumlahBacaan: stimulusDipakai.length,
       jumlahBacaanDilewati: Math.max(0, jumlahBarisBacaan - stimulusDipakai.length),
+      jumlahGambar: [...pratinjau.map((p) => p.jumlahGambar), ...gambarBacaan.map((b) => b.jumlah)].reduce((a, c) => a + c, 0),
     },
+    gambarBacaan,
   };
 }
 

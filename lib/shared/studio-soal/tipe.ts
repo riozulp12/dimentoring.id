@@ -145,8 +145,13 @@ export interface BlokTabel {
   kepala: string[];
   baris: string[][];
 }
-/** Blok "gambar" belum didukung sampai PR 7 (keputusan K6) — validator menolaknya. */
-export type BlokStimulus = BlokTeks | BlokTabel;
+/** Hanya dibuat lewat unggah Word Admin; berkasnya dirujuk lewat tabel soal_media. */
+export interface BlokGambar {
+  jenis: "gambar";
+  media_id: string;
+  alt: string;
+}
+export type BlokStimulus = BlokTeks | BlokTabel | BlokGambar;
 
 export interface KontenStimulus {
   v: 1;

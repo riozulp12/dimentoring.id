@@ -21,6 +21,7 @@ import {
   terjemahkanHasilRpc,
   type ObjekStudio,
 } from "@/lib/shared/studio-soal/formSoal";
+import { mediaDariKonten } from "@/lib/shared/studio-soal/gambar";
 import { pesanBacaanMasihDipakai } from "@/lib/shared/studio-soal/hapusDraf";
 import { cekBacaanLengkap, cekSoalLengkap } from "@/lib/shared/studio-soal/kelengkapan";
 import { validasiSoal, validasiStimulus, type ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
@@ -72,6 +73,7 @@ function balasRpc(objek: ObjekStudio, hasil: HasilRpc, extra: Record<string, unk
 
 const TIDAK_DITUGASKAN = "Anda tidak ditugaskan ke subtes ini. Minta Admin menugaskan Anda dulu.";
 const GAGAL_SERVER = "Ada gangguan di server. Coba lagi sebentar lagi.";
+const GAMBAR_MENTOR = "Gambar belum bisa dipakai di Studio Soal.";
 
 // ============================================================================
 // PUT simpan draf (buat atau ubah, idempoten per id)
@@ -87,6 +89,7 @@ export async function simpanSoal(request: NextRequest, id: string) {
   const parsed = parseBodySimpanSoal(json.body);
   if (!parsed.ok) return gagal(400, parsed.error);
   const data = parsed.data;
+  if (mediaDariKonten(data.konten).length > 0) return gagal(400, GAMBAR_MENTOR);
 
   const subtes = await isDitugaskan(auth.mentorId, data.subtes_id);
   if (subtes === "gagal") return gagal(500, GAGAL_SERVER);
@@ -115,6 +118,7 @@ export async function simpanStimulus(request: NextRequest, id: string) {
   const parsed = parseBodySimpanStimulus(json.body);
   if (!parsed.ok) return gagal(400, parsed.error);
   const data = parsed.data;
+  if (mediaDariKonten(data.konten).length > 0) return gagal(400, GAMBAR_MENTOR);
 
   const subtes = await isDitugaskan(auth.mentorId, data.subtes_id);
   if (subtes === "gagal") return gagal(500, GAGAL_SERVER);

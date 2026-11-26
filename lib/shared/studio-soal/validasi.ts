@@ -16,6 +16,7 @@
  */
 import { parseAngka, samaPecahan, isNonNegatif, type Pecahan } from "./angka";
 import { cekPembatasRumus, normalisasiTeks, panjangKarakter, panjangTrim } from "./teks";
+import { BATAS_GAMBAR, POLA_KODE_GAMBAR, isMediaId, penandaGambar } from "./gambar";
 import {
   BATAS,
   JENIS_RUMPANG,
@@ -198,6 +199,7 @@ export function validasiSoal(input: unknown, mode: ModeValidasi = "ajukan"): Err
   if (!isObjek(kunci)) e.bentuk("kunci", "Kunci jawaban tidak valid.");
   if (!isObjek(konten) || !isObjek(kunci)) return e.hasil(mode);
 
+  validasiGambar(e, redaksi ?? "", typeof input.pembahasan === "string" ? input.pembahasan : "", konten);
   if (tipe === "pilihan_ganda") validasiPilihanGanda(e, konten, kunci);
   else if (tipe === "majemuk_kompleks") validasiMajemuk(e, konten, kunci);
   else validasiIsian(e, redaksi ?? "", konten, kunci);
@@ -298,6 +300,66 @@ function validasiMajemuk(e: Pengumpul, konten: Record<string, unknown>, kunci: R
   });
 }
 
+/**
+ * Penanda {{gN}} di redaksi & pembahasan <-> konten.gambar: tiap penanda punya
+ * entri, tiap entri dipakai tepat sekali. Semuanya galat "bentuk" supaya draf
+ * pun tidak bisa disimpan dengan gambar yang terlepas. Rumpang isian yang
+ * kebetulan bernama gN tetap dianggap kotak jawaban.
+ */
+function validasiGambar(e: Pengumpul, redaksi: string, pembahasan: string, konten: Record<string, unknown>) {
+  const isi = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  const rumpang = new Set(isi(konten.rumpang).map((r) => (isObjek(r) ? r.id : null)));
+  const penanda = (teks: string) => penandaGambar(teks).filter((kode) => !rumpang.has(kode));
+
+  for (const [bagian, nama] of [["opsi", "pilihan jawaban"], ["pernyataan", "pernyataan"]] as const) {
+    isi(konten[bagian]).forEach((x, i) => {
+      if (isObjek(x) && typeof x.teks === "string" && penanda(x.teks).length > 0) {
+        e.bentuk(`konten.${bagian}.${i}.teks`, `Gambar di ${nama} belum didukung.`);
+      }
+    });
+  }
+
+  const dipakai = new Map<string, { jumlah: number; field: string }>();
+  for (const [field, teks] of [["redaksi", redaksi], ["pembahasan", pembahasan]] as const) {
+    for (const kode of penanda(teks)) dipakai.set(kode, { jumlah: (dipakai.get(kode)?.jumlah ?? 0) + 1, field });
+  }
+  if (konten.gambar !== undefined && !Array.isArray(konten.gambar)) {
+    e.bentuk("konten.gambar", "Daftar gambar soal tidak valid.");
+    return;
+  }
+  const entri = isi(konten.gambar);
+  if (entri.length > BATAS_GAMBAR.perSoal) e.bentuk("konten.gambar", `Gambar per soal maksimal ${BATAS_GAMBAR.perSoal}.`);
+
+  const kodeAda = new Set<string>();
+  entri.forEach((g, i) => {
+    const field = `konten.gambar.${i}`;
+    if (!isObjek(g)) {
+      e.bentuk(field, "Gambar soal tidak valid.");
+      return;
+    }
+    if (!isMediaId(g.media_id)) e.bentuk(`${field}.media_id`, "Gambar soal tidak dikenal.");
+    if (typeof g.alt !== "string" || g.alt.trim() === "" || panjangKarakter(g.alt) > BATAS_GAMBAR.altMaks) {
+      e.bentuk(`${field}.alt`, `Teks alternatif gambar wajib diisi (maks. ${BATAS_GAMBAR.altMaks} karakter).`);
+    }
+    if (typeof g.kode !== "string" || !POLA_KODE_GAMBAR.test(g.kode)) {
+      e.bentuk(`${field}.kode`, "Kode gambar harus g1, g2, dan seterusnya.");
+      return;
+    }
+    if (kodeAda.has(g.kode)) {
+      e.bentuk(`${field}.kode`, `Kode gambar "${g.kode}" dipakai lebih dari sekali.`);
+      return;
+    }
+    kodeAda.add(g.kode);
+    if (!dipakai.has(g.kode)) {
+      e.bentuk("redaksi", `Gambar ${g.kode} hilang: tulis lagi tanda {{${g.kode}}} di teks soal atau pembahasan.`);
+    }
+  });
+  for (const [kode, { jumlah, field }] of dipakai) {
+    if (!kodeAda.has(kode)) e.bentuk(field, `Tanda {{${kode}}} tidak punya gambar.`);
+    else if (jumlah > 1) e.bentuk(field, `Tanda {{${kode}}} muncul ${jumlah} kali, harusnya sekali.`);
+  }
+}
+
 /** Penanda rumpang di redaksi: {{id}}. */
 const POLA_PENANDA = /\{\{([^{}]*)\}\}/g;
 
@@ -334,6 +396,8 @@ function validasiIsian(
   const hitungPenanda = new Map<string, number>();
   for (const cocok of redaksi.matchAll(POLA_PENANDA)) {
     const id = cocok[1];
+    // Penanda gambar diperiksa validasiGambar.
+    if (POLA_KODE_GAMBAR.test(id) && !jenisPerId.has(id)) continue;
     if (!POLA_ID_BAGIAN.test(id)) {
       e.lengkap("redaksi", `Tanda kotak jawaban "{{${id}}}" tidak valid.`);
       continue;
@@ -481,11 +545,13 @@ function validasiBlok(e: Pengumpul, field: string, blok: unknown) {
     return;
   }
   if (blok.jenis === "gambar") {
-    e.bentuk(`${field}.jenis`, "Gambar di bacaan belum bisa dipakai.");
+    // Keberadaan media_id diperiksa database (trigger studio_soal_jaga_media).
+    if (!isMediaId(blok.media_id)) e.bentuk(`${field}.media_id`, "Gambar bacaan tidak dikenal.");
+    cekTeks(e, `${field}.alt`, blok.alt, { label: "Teks alternatif gambar", maks: BATAS_GAMBAR.altMaks });
     return;
   }
   if (blok.jenis !== "tabel") {
-    e.bentuk(`${field}.jenis`, "Jenis blok harus teks atau tabel.");
+    e.bentuk(`${field}.jenis`, "Jenis blok harus teks, tabel, atau gambar.");
     return;
   }
 

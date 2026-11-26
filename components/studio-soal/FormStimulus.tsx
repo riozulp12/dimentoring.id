@@ -815,7 +815,7 @@ export function IsianStimulus({
           <div key={i} className="flex flex-col gap-3 rounded-[16px] border border-line p-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium text-black">
-                {i + 1}. {b.jenis === "teks" ? "Teks" : "Tabel"}
+                {i + 1}. {b.jenis === "teks" ? "Teks" : b.jenis === "tabel" ? "Tabel" : "Gambar"}
               </span>
               {bolehEdit ? (
                 <div className="ml-auto flex gap-0.5">
@@ -841,7 +841,7 @@ export function IsianStimulus({
                   </button>
                   <button
                     type="button"
-                    aria-label={`Hapus bagian ${i + 1} (${b.jenis === "teks" ? "teks" : "tabel"})`}
+                    aria-label={`Hapus bagian ${i + 1} (${b.jenis})`}
                     title="Hapus bagian ini"
                     onClick={() => ubahBlok((l) => l.filter((_, j) => j !== i))}
                     className={tombolIkon(true)}
@@ -862,6 +862,8 @@ export function IsianStimulus({
                 disabled={!bolehEdit}
                 error={errorDi(peta, `konten.blok.${i}`, true)}
               />
+            ) : b.jenis === "gambar" ? (
+              <p className="text-sm italic text-subtle">[gambar: {b.alt}] Gambar tidak bisa disunting di sini.</p>
             ) : (
               <EditorTabel
                 blok={b}

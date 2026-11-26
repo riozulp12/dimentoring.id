@@ -11,6 +11,8 @@ export default function StimulusPratinjau({ blok }: { blok: BlokStimulus[] }) {
       {blok.map((b, i) =>
         b.jenis === "teks" ? (
           <TeksKaya key={i} teks={b.teks} kosong="(bagian teks masih kosong)" />
+        ) : b.jenis === "gambar" ? (
+          <p key={i} className="text-sm italic text-subtle">[gambar: {b.alt}]</p>
         ) : (
           <figure key={i} className="flex min-w-0 flex-col gap-2">
             {b.judul ? (

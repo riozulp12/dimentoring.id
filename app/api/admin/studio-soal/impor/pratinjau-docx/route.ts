@@ -6,14 +6,15 @@ export const runtime = "nodejs";
 
 /**
  * Pratinjau unggah soal Buatan Sendiri dari Word (.docx) — TANPA menyimpan apa pun.
- * POST multipart: berkas = satu .docx (maks. 5 MB). Teks diurai jadi baris perantara lalu
- * divalidasi susunImpor() yang sama dengan jalur CSV. Persamaan Word dan gambar ditolak.
+ * POST { path } = berkas di bucket impor-staging (lihat siapkan-unggah). Teks diurai jadi baris
+ * perantara lalu divalidasi susunImpor() yang sama dengan jalur CSV. Gambar hanya diperiksa dan
+ * dihitung, tidak disimpan. Persamaan Word dan gambar yang tidak didukung ditolak.
  */
 export async function POST(request: NextRequest) {
   const auth = await requireAdminAktif(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   if (!auth.ok) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
 
-  const docx = await siapkanMasukanDocx(request);
+  const docx = await siapkanMasukanDocx(request, auth.adminId);
   if (!docx.ok) return docx.respons;
 
   const susun = await susunImporDariDb(docx.data.masukan);

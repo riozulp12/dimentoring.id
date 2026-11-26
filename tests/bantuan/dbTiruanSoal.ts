@@ -93,7 +93,50 @@ class Kueri implements PromiseLike<Hasil> {
   }
 }
 
+/** Supabase Storage tiruan: kunci "bucket/path". */
+export const penyimpanan = {
+  berkas: new Map<string, Buffer>(),
+  diminta: [] as string[],
+  diunduh: [] as string[],
+  gagalUnggah: false,
+  /** Path yang gagal dihapus. */
+  gagalHapus: new Set<string>(),
+};
+
+const storageTiruan = {
+  from: (bucket: string) => ({
+    createSignedUploadUrl: async (path: string) => {
+      penyimpanan.diminta.push(`${bucket}/${path}`);
+      return { data: { path, token: "token-uji", signedUrl: `http://storage.test/${bucket}/${path}?token=token-uji` }, error: null };
+    },
+    download: async (path: string) => {
+      penyimpanan.diunduh.push(`${bucket}/${path}`);
+      const isi = penyimpanan.berkas.get(`${bucket}/${path}`);
+      return isi ? { data: new Blob([new Uint8Array(isi)]), error: null } : { data: null, error: { message: "Object not found" } };
+    },
+    upload: async (path: string, isi: Buffer) => {
+      if (penyimpanan.gagalUnggah) return { data: null, error: { message: "gagal" } };
+      penyimpanan.berkas.set(`${bucket}/${path}`, isi);
+      return { data: { path }, error: null };
+    },
+    remove: async (paths: string[]) => {
+      if (paths.some((p) => penyimpanan.gagalHapus.has(p))) return { data: null, error: { message: "gagal hapus" } };
+      for (const p of paths) penyimpanan.berkas.delete(`${bucket}/${p}`);
+      return { data: paths.map((name) => ({ name })), error: null };
+    },
+    createSignedUrls: async (paths: string[], detik: number) => ({
+      data: paths.map((path) => ({ path, signedUrl: `http://storage.test/${bucket}/${path}?berlaku=${detik}`, error: null })),
+      error: null,
+    }),
+  }),
+};
+
 export function resetDbTiruan() {
+  penyimpanan.berkas.clear();
+  penyimpanan.diminta = [];
+  penyimpanan.diunduh = [];
+  penyimpanan.gagalUnggah = false;
+  penyimpanan.gagalHapus.clear();
   for (const k of Object.keys(db)) delete db[k];
   db.user_roles = [
     { user_id: ADMIN, role_type: "admin", status: "active" },
@@ -114,6 +157,7 @@ export async function pasangDbTiruan() {
   process.env.SESSION_SECRET = "test-session-secret";
   const { supabaseServer } = await import("@/lib/supabase/server");
   const sesi = await import("@/lib/auth/session");
+  Object.defineProperty(supabaseServer, "storage", { value: storageTiruan, configurable: true });
   Object.assign(supabaseServer, {
     from: (tabel: string) => {
       db[tabel] ??= [];

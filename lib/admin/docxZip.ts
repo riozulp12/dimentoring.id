@@ -4,7 +4,8 @@ import type { ItemDocx } from "@/lib/shared/studio-soal/imporDocx";
 /**
  * Pembaca/penulis ZIP minimal untuk berkas .docx (tanpa dependensi tambahan).
  * Pembaca hanya dipakai untuk memeriksa word/document.xml (persamaan Word,
- * gambar, sel gabungan); teks dan tabel dibaca mammoth (docxIsi.ts). Penulis membuat contoh template Word.
+ * sel gabungan, gambar) dan mengambil byte gambar; teks & tabel dibaca mammoth
+ * (docxIsi.ts). Penulis membuat contoh template Word.
  *
  * Pembaca tahan terhadap berkas berbahaya: ukuran hasil ekstraksi dibatasi,
  * jumlah entri dibatasi, ZIP64 ditolak.
@@ -18,8 +19,17 @@ export function berawalanZip(buf: Buffer): boolean {
   return buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04;
 }
 
-/** Isi satu entri ZIP sebagai teks UTF-8; null bila tidak ada atau berkas ZIP rusak/tidak didukung. */
-export function bacaEntriZip(buf: Buffer, nama: string): string | null {
+interface EntriZip {
+  nama: string;
+  metode: number;
+  crc: number;
+  ukuranAsli: number;
+  /** Data seperti tersimpan di ZIP (terkompres bila metode 8). */
+  data: Buffer;
+}
+
+/** Entri dari direktori pusat; null bila ZIP rusak atau tidak didukung. */
+function daftarEntri(buf: Buffer): EntriZip[] | null {
   try {
     const mulai = Math.max(0, buf.length - 22 - 65535);
     let eocd = -1;
@@ -33,29 +43,55 @@ export function bacaEntriZip(buf: Buffer, nama: string): string | null {
     const jumlah = buf.readUInt16LE(eocd + 10);
     let p = buf.readUInt32LE(eocd + 16);
     if (jumlah === 0xffff || p === 0xffffffff || jumlah > BATAS_ENTRI) return null;
+    const hasil: EntriZip[] = [];
     for (let n = 0; n < jumlah; n++) {
       if (buf.readUInt32LE(p) !== 0x02014b50) return null;
-      const metode = buf.readUInt16LE(p + 10);
       const ukuranKompres = buf.readUInt32LE(p + 20);
-      const ukuranAsli = buf.readUInt32LE(p + 24);
       const panjangNama = buf.readUInt16LE(p + 28);
-      const panjangExtra = buf.readUInt16LE(p + 30);
-      const panjangKomentar = buf.readUInt16LE(p + 32);
       const offsetLokal = buf.readUInt32LE(p + 42);
-      const namaEntri = buf.toString("utf8", p + 46, p + 46 + panjangNama);
-      p += 46 + panjangNama + panjangExtra + panjangKomentar;
-      if (namaEntri !== nama) continue;
-      if (ukuranAsli > BATAS_BYTE_XML || buf.readUInt32LE(offsetLokal) !== 0x04034b50) return null;
+      if (buf.readUInt32LE(offsetLokal) !== 0x04034b50) return null;
       const awal = offsetLokal + 30 + buf.readUInt16LE(offsetLokal + 26) + buf.readUInt16LE(offsetLokal + 28);
-      const data = buf.subarray(awal, awal + ukuranKompres);
-      if (metode === 0) return data.toString("utf8");
-      if (metode === 8) return inflateRawSync(data, { maxOutputLength: BATAS_BYTE_XML }).toString("utf8");
-      return null;
+      hasil.push({
+        nama: buf.toString("utf8", p + 46, p + 46 + panjangNama),
+        metode: buf.readUInt16LE(p + 10),
+        crc: buf.readUInt32LE(p + 16),
+        ukuranAsli: buf.readUInt32LE(p + 24),
+        data: buf.subarray(awal, awal + ukuranKompres),
+      });
+      p += 46 + panjangNama + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
     }
-    return null;
+    return hasil;
   } catch {
     return null;
   }
+}
+
+/** Isi biner satu entri; hasil ekstraksi dibatasi `batas` byte. null = tidak ada / rusak. */
+export function bacaEntriBinerZip(buf: Buffer, nama: string, batas: number): Buffer | "terlalu_besar" | null {
+  const e = daftarEntri(buf)?.find((x) => x.nama === nama);
+  if (!e) return null;
+  if (e.ukuranAsli > batas) return "terlalu_besar";
+  try {
+    if (e.metode === 0) return e.data.length > batas ? "terlalu_besar" : e.data;
+    if (e.metode === 8) return inflateRawSync(e.data, { maxOutputLength: batas });
+    return null;
+  } catch (err) {
+    // Ukuran yang diklaim berbohong: ekstraksi dihentikan di batas.
+    return err instanceof RangeError ? "terlalu_besar" : null;
+  }
+}
+
+/** Isi satu entri ZIP sebagai teks UTF-8; null bila tidak ada, terlalu besar, atau berkas ZIP rusak/tidak didukung. */
+export function bacaEntriZip(buf: Buffer, nama: string): string | null {
+  const isi = bacaEntriBinerZip(buf, nama, BATAS_BYTE_XML);
+  return Buffer.isBuffer(isi) ? isi.toString("utf8") : null;
+}
+
+/** Salin ZIP dengan satu entri diganti; entri lain disalin apa adanya (tanpa diekstrak). */
+export function gantiEntriZip(buf: Buffer, nama: string, isi: Buffer): Buffer | null {
+  const entri = daftarEntri(buf);
+  if (!entri) return null;
+  return buatZip(entri.map((e) => (e.nama === nama ? { nama, isi } : e)));
 }
 
 // ---- Penulis ----
@@ -76,38 +112,38 @@ function crc32(buf: Buffer): number {
   return (c ^ 0xffffffff) >>> 0;
 }
 
-function buatZip(entri: { nama: string; isi: Buffer }[]): Buffer {
+export function buatZip(entri: ({ nama: string; isi: Buffer } | EntriZip)[]): Buffer {
   const lokal: Buffer[] = [];
   const pusat: Buffer[] = [];
   let offset = 0;
   for (const e of entri) {
     const nama = Buffer.from(e.nama, "utf8");
-    const kompres = deflateRawSync(e.isi);
-    const crc = crc32(e.isi);
+    const { metode, crc, ukuranAsli, data } =
+      "isi" in e ? { metode: 8, crc: crc32(e.isi), ukuranAsli: e.isi.length, data: deflateRawSync(e.isi) } : e;
     const h = Buffer.alloc(30);
     h.writeUInt32LE(0x04034b50, 0);
     h.writeUInt16LE(20, 4);
     h.writeUInt16LE(0x0800, 6);
-    h.writeUInt16LE(8, 8);
+    h.writeUInt16LE(metode, 8);
     h.writeUInt32LE(crc, 14);
-    h.writeUInt32LE(kompres.length, 18);
-    h.writeUInt32LE(e.isi.length, 22);
+    h.writeUInt32LE(data.length, 18);
+    h.writeUInt32LE(ukuranAsli, 22);
     h.writeUInt16LE(nama.length, 26);
-    lokal.push(h, nama, kompres);
+    lokal.push(h, nama, data);
 
     const c = Buffer.alloc(46);
     c.writeUInt32LE(0x02014b50, 0);
     c.writeUInt16LE(20, 4);
     c.writeUInt16LE(20, 6);
     c.writeUInt16LE(0x0800, 8);
-    c.writeUInt16LE(8, 10);
+    c.writeUInt16LE(metode, 10);
     c.writeUInt32LE(crc, 16);
-    c.writeUInt32LE(kompres.length, 20);
-    c.writeUInt32LE(e.isi.length, 24);
+    c.writeUInt32LE(data.length, 20);
+    c.writeUInt32LE(ukuranAsli, 24);
     c.writeUInt16LE(nama.length, 28);
     c.writeUInt32LE(offset, 42);
     pusat.push(c, nama);
-    offset += 30 + nama.length + kompres.length;
+    offset += 30 + nama.length + data.length;
   }
   const ukuranPusat = pusat.reduce((n, b) => n + b.length, 0);
   const akhir = Buffer.alloc(22);
