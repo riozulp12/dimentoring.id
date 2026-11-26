@@ -160,6 +160,7 @@ const FORMAT_WORD = `#BACAAN kode=B1
 Subtes: Penalaran Umum
 Sumber: Buatan Sendiri   (boleh dikosongkan)
 Teks bacaan, boleh banyak paragraf.
+[tabel Word]              (opsional, hanya di bacaan; baris pertama = judul kolom)
 #SOAL
 Subtes: Penalaran Umum
 Topik: ...                (opsional)
@@ -289,6 +290,12 @@ export default function ImporSoalClient() {
           diawali <code>#BACAAN kode=...</code>. Tulis rumus sebagai teks <code>{"\\( … \\)"}</code> — bukan objek Persamaan Word. Gambar,
           persamaan Word, soal majemuk kompleks, dan PDF belum didukung; berkas yang memuatnya ditolak. Maksimal 300 soal dan 5 MB per
           unggahan. Semua soal tercatat sebagai Buatan Sendiri.
+        </p>
+        <p className="text-sm text-muted">
+          Tabel hanya boleh di dalam bacaan (tabel di soal, pilihan, kunci, atau pembahasan membuat berkas ditolak): taruh tabel di{" "}
+          <code>#BACAAN</code>, lalu hubungkan soalnya dengan <code>Bacaan: kode</code>. Baris pertama menjadi judul kolom dan tidak boleh
+          kosong. Maksimal 8 kolom, 20 baris isi, 500 karakter per sel; tanpa sel gabungan, tabel di dalam tabel, gambar, atau persamaan
+          Word.
         </p>
         <pre className="overflow-x-auto rounded-[12px] bg-surface-muted p-3 text-xs text-black">{FORMAT_WORD}</pre>
         <div>

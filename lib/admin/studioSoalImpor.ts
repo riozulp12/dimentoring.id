@@ -1,8 +1,8 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { extractRawText } from "mammoth";
 import { supabaseServer } from "@/lib/supabase/server";
-import { BATAS_BYTE_XML, bacaEntriZip, berawalanZip } from "@/lib/admin/docxZip";
+import { olahDocx, type HasilOlahDocx } from "@/lib/admin/docxIsi";
+import { berawalanZip } from "@/lib/admin/docxZip";
 import {
   bisaSimpan,
   susunImpor,
@@ -11,13 +11,7 @@ import {
   type SubtesImpor,
   type TopikImpor,
 } from "@/lib/shared/studio-soal/impor";
-import {
-  BATAS_BYTE_DOCX,
-  cariObjekTerlarangDocx,
-  paragrafDariTeksMentah,
-  pesanObjekTerlarang,
-  uraiParagrafDocx,
-} from "@/lib/shared/studio-soal/imporDocx";
+import { BATAS_BYTE_DOCX } from "@/lib/shared/studio-soal/imporDocx";
 
 /**
  * Sisi server unggah soal massal "Buatan Sendiri" (Admin), jalur CSV dan DOCX.
@@ -55,7 +49,7 @@ export function parseBodyImpor(body: unknown): { ok: true; data: BodyImpor } | {
   return { ok: true, data: { soalCsv: b.soalCsv, bacaanCsv, namaBerkas: namaBerkas || "soal.csv", lewatiGalat: b.lewatiGalat === true } };
 }
 
-type MasukanBerkas = Pick<MasukanImpor, "soalCsv" | "bacaanCsv" | "soalBaris" | "bacaanBaris" | "galatTambahan">;
+type MasukanBerkas = Pick<MasukanImpor, "soalCsv" | "bacaanCsv" | "soalBaris" | "bacaanBaris" | "bacaanBlok" | "galatTambahan">;
 
 /** Susun ulang dari berkas yang diunggah memakai data referensi terbaru dari database. */
 export async function susunImporDariDb(masukan: Partial<MasukanBerkas>): Promise<{ ok: true; hasil: HasilImpor } | { ok: false }> {
@@ -73,6 +67,7 @@ export async function susunImporDariDb(masukan: Partial<MasukanBerkas>): Promise
     bacaanCsv: masukan.bacaanCsv,
     soalBaris: masukan.soalBaris,
     bacaanBaris: masukan.bacaanBaris,
+    bacaanBlok: masukan.bacaanBlok,
     galatTambahan: masukan.galatTambahan,
     subtes: (subtesRes.data ?? []) as SubtesImpor[],
     topik: (topikRes.data ?? []) as TopikImpor[],
@@ -154,13 +149,13 @@ export async function simpanBatch(adminId: string, hasil: HasilImpor, namaBerkas
 export interface MasukanDocx {
   namaBerkas: string;
   lewatiGalat: boolean;
-  masukan: Pick<MasukanImpor, "soalBaris" | "bacaanBaris" | "galatTambahan">;
+  masukan: Extract<HasilOlahDocx, { ok: true }>["masukan"];
 }
 
 /**
  * Baca multipart (field "berkas" = satu .docx, maks. 5 MB), periksa tanda ZIP
- * "PK", tolak persamaan Word & gambar, lalu uraikan teksnya jadi baris
- * perantara untuk susunImpor(). Mengembalikan NextResponse bila ditolak.
+ * "PK", lalu olahDocx() menolak isi yang tidak didukung dan menguraikannya jadi
+ * baris perantara untuk susunImpor(). Mengembalikan NextResponse bila ditolak.
  */
 export async function siapkanMasukanDocx(request: Request): Promise<{ ok: true; data: MasukanDocx } | { ok: false; respons: NextResponse }> {
   const tolak = (error: string, status: number) => ({ ok: false as const, respons: NextResponse.json({ success: false, error }, { status }) });
@@ -180,30 +175,14 @@ export async function siapkanMasukanDocx(request: Request): Promise<{ ok: true; 
   const buffer = Buffer.from(await berkas.arrayBuffer());
   if (!berawalanZip(buffer)) return tolak("Berkas bukan dokumen Word (.docx) yang valid.", 400);
 
-  const xml = bacaEntriZip(buffer, "word/document.xml");
-  if (xml === null) return tolak("Isi dokumen Word tidak bisa dibaca. Simpan ulang sebagai .docx lalu coba lagi.", 422);
-  if (xml.length > BATAS_BYTE_XML) return tolak("Dokumen terlalu besar.", 413);
-
-  const terlarang = cariObjekTerlarangDocx(xml);
-  if (terlarang.length > 0) {
-    const pesan = pesanObjekTerlarang(terlarang);
-    return tolak(`Berkas ditolak. ${pesan.slice(0, 5).join(" ")}${pesan.length > 5 ? ` (+${pesan.length - 5} lagi)` : ""}`, 422);
-  }
-
-  let teks: string;
-  try {
-    teks = (await extractRawText({ buffer })).value;
-  } catch {
-    return tolak("Dokumen Word tidak bisa dibaca. Pastikan berkasnya tidak rusak atau dikunci.", 422);
-  }
-
-  const urai = uraiParagrafDocx(paragrafDariTeksMentah(teks));
+  const olah = await olahDocx(buffer);
+  if (!olah.ok) return tolak(olah.error, olah.status);
   return {
     ok: true,
     data: {
       namaBerkas: berkas.name.slice(0, 200),
       lewatiGalat: form.get("lewatiGalat") === "true",
-      masukan: { soalBaris: urai.soalBaris, bacaanBaris: urai.bacaanBaris, galatTambahan: urai.catatan },
+      masukan: olah.masukan,
     },
   };
 }
