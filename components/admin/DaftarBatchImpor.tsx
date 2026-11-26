@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
@@ -64,6 +65,9 @@ export default function DaftarBatchImpor({ batch }: { batch: BatchRingkas[] }) {
                   <td className="py-2 pr-3">{b.terbit}</td>
                   <td className="py-2 pr-3">{b.arsip}</td>
                   <td className="py-2 pr-3">
+                    <Link href={`/bank-soal?batch=${b.id}`} className="mr-3 whitespace-nowrap text-primary hover:underline">
+                      Lihat soal batch ini
+                    </Link>
                     {b.draf + b.bacaanAkanDihapus > 0 ? (
                       <Button variant="secondary" size="sm" onClick={() => setDipilih(b)} disabled={sibuk}>
                         Hapus draf

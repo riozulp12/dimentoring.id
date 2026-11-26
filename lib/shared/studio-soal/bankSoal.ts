@@ -3,6 +3,70 @@
  * dan layar. Aturan yang sebenarnya ditegakkan RPC di
  * db/add_impor_perawatan.sql; modul ini hanya menampilkan & menerjemahkan.
  */
+import { isUuid } from "./formSoal";
+import { TINGKAT_KESULITAN, TIPE_SOAL } from "./tipe";
+
+// ---------------------------------------------------------------------------
+// Filter daftar soal & izin aksi
+// ---------------------------------------------------------------------------
+
+export const PER_HALAMAN = 50;
+export const STATUS_FILTER = ["draf", "terpublikasi", "digantikan", "diarsipkan"] as const;
+const PANJANG_CARI_MAKS = 200;
+
+export interface FilterBank {
+  subtes: string;
+  topik: string;
+  jenis: string;
+  kesulitan: string;
+  status: string;
+  batch: string;
+  q: string;
+  hal: number;
+}
+
+/** searchParams -> filter. Nilai yang tidak dikenal dianggap "semua". */
+export function parseFilterBank(sp: Record<string, string | string[] | undefined>): FilterBank {
+  const teks = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string).trim() : "");
+  const uuid = (k: string) => (isUuid(teks(k)) ? teks(k) : "");
+  const dari = (k: string, daftar: readonly string[]) => (daftar.includes(teks(k)) ? teks(k) : "");
+  const hal = /^\d{1,6}$/.test(teks("hal")) ? Math.max(1, Number(teks("hal"))) : 1;
+  return {
+    subtes: uuid("subtes"),
+    topik: uuid("topik"),
+    jenis: dari("jenis", TIPE_SOAL),
+    kesulitan: dari("kesulitan", TINGKAT_KESULITAN),
+    status: dari("status", STATUS_FILTER),
+    batch: uuid("batch"),
+    q: teks("q").slice(0, PANJANG_CARI_MAKS),
+    hal,
+  };
+}
+
+/** "?status=draf&hal=2" — hanya isian yang terisi; halaman 1 tidak ditulis. */
+export function queryFilter(filter: FilterBank, ubah: Partial<FilterBank> = {}): string {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries({ ...filter, ...ubah })) {
+    if (v !== "" && !(k === "hal" && v === 1)) p.set(k, String(v));
+  }
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+export interface IzinSoal {
+  edit: boolean;
+  versiBaru: boolean;
+  arsip: boolean;
+  hapus: boolean;
+}
+
+/** Hanya soal Buatan Sendiri yang bisa diubah Admin; buatan mentor hanya-lihat. */
+export function izinSoal(soal: { sumber: string; status: string }): IzinSoal {
+  const sendiri = soal.sumber === "buatan_sendiri";
+  const draf = sendiri && soal.status === "draf";
+  const terbit = sendiri && soal.status === "terpublikasi";
+  return { edit: draf, versiBaru: terbit, arsip: terbit, hapus: draf };
+}
 
 // ---------------------------------------------------------------------------
 // Batch impor
@@ -87,6 +151,38 @@ export function terjemahkanRpcAdmin(hasil: Record<string, unknown>): TerjemahanA
       return no(403, "Cuma Admin yang bisa melakukan ini.");
     case "tidak_ditemukan":
       return no(404, "Data tidak ditemukan. Mungkin sudah dihapus.");
+    case "disimpan":
+      return ok("Draf tersimpan.");
+    case "versi_dibuat":
+      return ok("Versi baru dibuat sebagai draf. Versi lama tetap terbit sampai versi baru diterbitkan.");
+    case "versi_terbit":
+      return ok("Versi baru diterbitkan. Versi lama ditandai digantikan.");
+    case "diarsipkan":
+      return ok("Soal diarsipkan. Soal tidak ikut latihan, tetapi tetap tersimpan.");
+    case "bukan_buatan_sendiri":
+      return no(403, "Soal buatan mentor hanya bisa dilihat.");
+    case "sudah_berubah":
+      return no(409, "Soal sudah diubah di tempat lain, muat ulang halaman.");
+    case "terkunci":
+      return no(409, "Soal ini bukan draf lagi, jadi isinya dikunci. Muat ulang halaman.");
+    case "status_tidak_valid":
+      return no(409, "Aksi ini tidak berlaku untuk status soal sekarang. Muat ulang halaman.");
+    case "identitas_berubah":
+      return no(409, "Subtes, tipe soal, dan bacaan tidak bisa diganti.");
+    case "data_tidak_valid":
+      return no(400, "Ada isian yang belum sesuai aturan. Periksa lalu coba lagi.");
+    case "ada_versi_terbuka":
+      return no(409, "Sudah ada versi baru yang belum terbit untuk soal ini. Lanjutkan, terbitkan, atau hapus draf itu dulu.");
+    case "bukan_versi_baru":
+      return no(409, "Draf ini bukan versi baru dari soal terbit.");
+    case "versi_lama_tidak_aktif":
+      return no(409, "Versi lama soal ini sudah tidak terbit, jadi versi baru tidak bisa diterbitkan.");
+    case "stimulus_tidak_aktif":
+      return no(409, "Bacaan soal ini sudah tidak aktif.");
+    case "pernah_diajukan":
+      return no(409, "Soal ini pernah dikirim untuk dicek, jadi tidak bisa dihapus.");
+    case "dipakai_paket":
+      return no(409, "Soal ini masih dipakai di paket soal.");
     default:
       return no(500, "Ada gangguan. Coba lagi sebentar lagi.");
   }
