@@ -1,9 +1,10 @@
 import { deflateRawSync, inflateRawSync } from "node:zlib";
+import type { ItemDocx } from "@/lib/shared/studio-soal/imporDocx";
 
 /**
  * Pembaca/penulis ZIP minimal untuk berkas .docx (tanpa dependensi tambahan).
  * Pembaca hanya dipakai untuk memeriksa word/document.xml (persamaan Word,
- * gambar); teks soal dibaca mammoth. Penulis membuat contoh template Word.
+ * gambar, sel gabungan); teks dan tabel dibaca mammoth (docxIsi.ts). Penulis membuat contoh template Word.
  *
  * Pembaca tahan terhadap berkas berbahaya: ukuran hasil ekstraksi dibatasi,
  * jumlah entri dibatasi, ZIP64 ditolak.
@@ -120,14 +121,31 @@ function buatZip(entri: { nama: string; isi: Buffer }[]): Buffer {
 
 const escapeXml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** Berkas .docx minimal (satu paragraf per elemen) yang bisa dibuka Word dan dibaca mammoth. */
-export function buatDocx(paragraf: string[]): Buffer {
-  const isi = paragraf
-    .map((p) => `<w:p><w:r><w:t xml:space="preserve">${escapeXml(p)}</w:t></w:r></w:p>`)
+const paragrafXml = (p: string) => `<w:p><w:r><w:t xml:space="preserve">${escapeXml(p)}</w:t></w:r></w:p>`;
+
+function tabelXml(baris: string[][]): string {
+  const kolom = Math.max(1, ...baris.map((r) => r.length));
+  const garis = ["top", "left", "bottom", "right", "insideH", "insideV"]
+    .map((sisi) => `<w:${sisi} w:val="single" w:sz="4" w:space="0" w:color="auto"/>`)
     .join("");
+  const sel = (t: string) => `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr>${paragrafXml(t)}</w:tc>`;
+  return (
+    `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders>${garis}</w:tblBorders></w:tblPr>` +
+    `<w:tblGrid>${'<w:gridCol w:w="3000"/>'.repeat(kolom)}</w:tblGrid>` +
+    `${baris.map((r) => `<w:tr>${r.map(sel).join("")}</w:tr>`).join("")}</w:tbl>`
+  );
+}
+
+/** Berkas .docx minimal (paragraf dan tabel polos) yang bisa dibuka Word dan dibaca mammoth. */
+export function buatDocx(isi: ItemDocx[]): Buffer {
+  return bungkusDocx(isi.map((x) => (typeof x === "string" ? paragrafXml(x) : tabelXml(x.tabel))).join(""));
+}
+
+/** Bungkus isi <w:body> (XML) jadi berkas .docx. */
+export function bungkusDocx(isiBody: string): Buffer {
   const dokumen =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${isi}</w:body></w:document>`;
+    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${isiBody}</w:body></w:document>`;
   const tipe =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
     `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +

@@ -14,7 +14,7 @@ import { buatCsv } from "@/lib/shared/csv";
 import { parseAngka } from "./angka";
 import { validasiRumusSoal, validasiRumusStimulus } from "./rumus";
 import { normalisasiTeks, panjangTrim } from "./teks";
-import { BATAS, LABEL_OPSI, TINGKAT_KESULITAN, isSubtesSnbt } from "./tipe";
+import { BATAS, LABEL_OPSI, TINGKAT_KESULITAN, isSubtesSnbt, type BlokStimulus } from "./tipe";
 import { validasiSoal, validasiStimulus, type ErrorValidasi } from "./validasi";
 
 export const VERSI_TEMPLATE_IMPOR = 1;
@@ -74,7 +74,7 @@ export interface StimulusSiap {
   kode: string;
   subtes_id: string;
   judul_internal: string;
-  konten: { v: 1; blok: { jenis: "teks"; teks: string }[] };
+  konten: { v: 1; blok: BlokStimulus[] };
   sumber_rujukan: string;
 }
 export interface SoalSiap {
@@ -128,6 +128,8 @@ export interface MasukanImpor {
   /** Baris perantara (baris pertama = judul kolom, seperti hasil parseCsv). Bila ada, menggantikan soalCsv/bacaanCsv. */
   soalBaris?: string[][];
   bacaanBaris?: string[][] | null;
+  /** Blok teks & tabel (jalur DOCX) per nomor baris bacaan; menggantikan kolom teks pada baris itu. */
+  bacaanBlok?: ReadonlyMap<number, BlokStimulus[]>;
   /** Catatan struktur dari pengurai sebelumnya (mis. DOCX); baris yang memuat galat tidak ikut disimpan. */
   galatTambahan?: GalatImpor[];
   subtes: SubtesImpor[];
@@ -197,6 +199,13 @@ function kolomDariFieldBacaan(field: string): string {
   if (field === "sumber_rujukan") return "sumber_rujukan";
   if (field === "subtes_id") return "subtes";
   return field || "teks";
+}
+
+/** "Tabel ke-N: " untuk galat yang berasal dari blok tabel, supaya Admin tahu tabel mana. */
+function awalanTabel(blok: BlokStimulus[], field: string): string {
+  const i = Number(field.match(/^konten\.blok\.(\d+)/)?.[1] ?? -1);
+  if (blok[i]?.jenis !== "tabel") return "";
+  return `Tabel ke-${blok.slice(0, i + 1).filter((b) => b.jenis === "tabel").length}: `;
 }
 
 function bulat(teks: string, min: number, maks: number): number | null {
@@ -270,21 +279,23 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
         else if (!isSubtesSnbt(subtes.kategori)) tambah("bacaan", baris, "subtes", `Subtes "${subtes.nama}" bukan subtes SNBT.`);
 
         const teks = sel[idx.teks] ?? "";
+        const blok: BlokStimulus[] = masukan.bacaanBlok?.get(baris) ?? [{ jenis: "teks", teks }];
+        const semuaTeks = blok.flatMap((b) => (b.jenis === "teks" ? [b.teks] : [...b.kepala, ...b.baris.flat()]));
         const sumber = bersih(sel[idx.sumber_rujukan]) || SUMBER_BAWAAN;
-        if (adaGambar(teks) || KOLOM_GAMBAR.some((g) => tabel.judul.includes(g) && bersih(sel[tabel.judul.indexOf(g)]) !== "")) {
+        if (semuaTeks.some(adaGambar) || KOLOM_GAMBAR.some((g) => tabel.judul.includes(g) && bersih(sel[tabel.judul.indexOf(g)]) !== "")) {
           tambah("bacaan", baris, "teks", "Gambar belum didukung. Hapus gambarnya atau tulis ulang sebagai teks/tabel.");
         }
 
         const input = {
           subtes_kategori: subtes?.kategori,
-          judul_internal: kode ? cuplik(`${kodeAsli} — ${teks}`, 100) : "",
-          konten: { v: 1, blok: [{ jenis: "teks", teks }] },
+          judul_internal: kode ? cuplik(`${kodeAsli} — ${teks || semuaTeks.join(" ")}`, 100) : "",
+          konten: { v: 1 as const, blok },
           sumber_rujukan: sumber,
         };
         const errors: ErrorValidasi[] = [...validasiStimulus(input, "ajukan"), ...validasiRumusStimulus(input)];
         for (const er of errors) {
           if (er.field === "judul_internal" && !kode) continue;
-          tambah("bacaan", baris, kolomDariFieldBacaan(er.field), er.pesan);
+          tambah("bacaan", baris, kolomDariFieldBacaan(er.field), `${awalanTabel(blok, er.field)}${er.pesan}`);
         }
 
         if (semua.some((g) => g.berkas === "bacaan" && g.baris === baris && g.tingkat === "galat")) {
@@ -295,7 +306,7 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
             kode,
             subtes_id: subtes.id,
             judul_internal: input.judul_internal,
-            konten: { v: 1, blok: [{ jenis: "teks", teks }] },
+            konten: input.konten,
             sumber_rujukan: sumber,
           });
         }

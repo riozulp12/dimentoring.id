@@ -8,16 +8,17 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { extractRawText } from "mammoth";
-import { bacaEntriZip, berawalanZip, buatDocx } from "@/lib/admin/docxZip";
+import { olahDocx } from "@/lib/admin/docxIsi";
+import { bacaEntriZip, berawalanZip, bungkusDocx, buatDocx } from "@/lib/admin/docxZip";
 import { KOLOM_BACAAN, KOLOM_SOAL, susunImpor, type SubtesImpor, type TopikImpor } from "@/lib/shared/studio-soal/impor";
 import {
   cariObjekTerlarangDocx,
-  paragrafDariTeksMentah,
-  paragrafTemplateDocx,
+  isiTemplateDocx,
   pesanObjekTerlarang,
   uraiParagrafDocx,
+  type ItemDocx,
 } from "@/lib/shared/studio-soal/imporDocx";
+import { validasiStimulus } from "@/lib/shared/studio-soal/validasi";
 
 const PU: SubtesImpor = { id: "11111111-1111-4111-8111-111111111111", nama: "Penalaran Umum", kategori: "tps" };
 const SUBTES = [PU];
@@ -66,7 +67,7 @@ describe("DOCX — pengurai blok", () => {
     assert.equal(h.soal.length, 2);
     assert.equal(h.stimulus.length, 1);
     assert.equal(h.stimulus[0].sumber_rujukan, "Koran Hari Ini");
-    assert.equal(h.stimulus[0].konten.blok[0].teks, "Paragraf satu bacaan.\n\nParagraf dua bacaan.");
+    assert.deepEqual(h.stimulus[0].konten.blok, [{ jenis: "teks", teks: "Paragraf satu bacaan.\n\nParagraf dua bacaan." }]);
     assert.deepEqual([h.soal[0].stimulus_kode, h.soal[0].urutan_dalam_stimulus], ["b1", 1]);
     assert.equal(h.soal[0].tingkat_kesulitan, "hots");
     assert.equal(h.soal[0].level_kognitif, 2);
@@ -221,7 +222,7 @@ describe("DOCX — persamaan Word dan gambar ditolak, bukan dibuang diam-diam", 
 
 describe("DOCX — berkas nyata (ZIP + mammoth)", () => {
   it("template Word: ZIP valid, bersih dari objek terlarang, lolos validasi, 1 bacaan + 2 soal", async () => {
-    const buffer = buatDocx(paragrafTemplateDocx());
+    const buffer = buatDocx(isiTemplateDocx());
     assert.equal(berawalanZip(buffer), true);
     assert.equal(berawalanZip(Buffer.from("%PDF-1.7")), false);
     const xml = bacaEntriZip(buffer, "word/document.xml");
@@ -229,20 +230,156 @@ describe("DOCX — berkas nyata (ZIP + mammoth)", () => {
     assert.equal(bacaEntriZip(buffer, "tidak/ada.xml"), null);
     assert.deepEqual(cariObjekTerlarangDocx(xml ?? ""), []);
 
-    const mentah = (await extractRawText({ buffer })).value;
-    const paragraf = paragrafDariTeksMentah(mentah);
-    assert.equal(paragraf[0], "#BACAAN kode=B1");
-    const h = dariParagraf(paragraf);
+    const h = await dariBerkas(buffer);
     assert.equal(h.galat.length, 0, JSON.stringify(h.galat));
     assert.equal(h.soal.length, 2);
     assert.equal(h.stimulus.length, 1);
     assert.equal(h.soal.some((s) => s.stimulus_kode === "b1"), true);
+    assert.deepEqual(h.stimulus[0].konten.blok.map((x) => x.jenis), ["teks", "tabel"]);
+    assert.deepEqual(validasiStimulus(h.stimulus[0], "ajukan"), []);
   });
 
   it("berkas ZIP rusak atau terpotong tidak melempar error", () => {
     const buffer = buatDocx(["#SOAL"]);
     assert.equal(bacaEntriZip(buffer.subarray(0, 20), "word/document.xml"), null);
     assert.equal(bacaEntriZip(Buffer.from("PK\x03\x04bukan zip sungguhan"), "word/document.xml"), null);
+  });
+});
+
+/** Jalur lengkap dari berkas .docx nyata, sama seperti yang dipakai route unggah. */
+async function dariBerkas(buffer: Buffer) {
+  const olah = await olahDocx(buffer);
+  if (!olah.ok) assert.fail(olah.error);
+  return susunImpor({ soalCsv: "", ...olah.masukan, subtes: SUBTES, topik: TOPIK });
+}
+
+async function ditolak(buffer: Buffer): Promise<string> {
+  const olah = await olahDocx(buffer);
+  if (olah.ok) assert.fail("berkas seharusnya ditolak");
+  return olah.error;
+}
+
+const par = (t: string) => `<w:p><w:r><w:t>${t}</w:t></w:r></w:p>`;
+const bacaanB1 = (...isi: ItemDocx[]): ItemDocx[] => ["#BACAAN kode=B1", "Subtes: Penalaran Umum", ...isi, ...soalPg(1, ["Bacaan: B1"])];
+const tabelKecil = { tabel: [["Kota", "Jumlah"], ["Bogor", "10"]] };
+
+describe("DOCX — tabel di luar #BACAAN menolak seluruh berkas", () => {
+  const letakTabel: [string, string | null][] = [
+    ["redaksi", "A. 1"],
+    ["pilihan", "C. 3"],
+    ["kunci", "Kunci: C"],
+    ["setelah kunci", "Pembahasan:"],
+    ["pembahasan", null],
+  ];
+  for (const [letak, sebelum] of letakTabel) {
+    it(`tabel di ${letak} soal ke-2 ditolak dengan petunjuk memindahkan ke #BACAAN`, async () => {
+      const kedua: ItemDocx[] = soalPg(2);
+      const i = sebelum === null ? kedua.length : kedua.findIndex((l) => typeof l === "string" && l.startsWith(sebelum));
+      kedua.splice(i, 0, { tabel: [["Kunci: A", "A. 99"], ["x", "y"]] });
+      const pesan = await ditolak(buatDocx([...soalPg(1), ...kedua]));
+      assert.match(pesan, /Soal ke-2 berisi tabel; pindahkan tabel ke #BACAAN lalu hubungkan dengan 'Bacaan: kode'/);
+      assert.doesNotMatch(pesan, /Soal ke-1 /);
+    });
+  }
+
+  it("tabel sebelum penanda pertama ditolak; tabel di soal tetap disebut 'berisi tabel' walau selnya gabungan", async () => {
+    assert.match(await ditolak(buatDocx([tabelKecil, ...soalPg(1)])), /tabel sebelum soal pertama/i);
+    const gabung = `${par("#SOAL")}<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr>${par("x")}</w:tc></w:tr></w:tbl>`;
+    assert.match(await ditolak(bungkusDocx(gabung)), /Soal ke-1 berisi tabel/);
+  });
+});
+
+describe("DOCX — tabel di dalam #BACAAN", () => {
+  it("menjadi blok tabel, urutan teks dan tabel sama dengan dokumen, lolos validasiStimulus", async () => {
+    const rumus = { tabel: [["Kota", "Luas \\(m^2\\)"], ["Bogor", "\\(10\\)"], ["Depok", ""]] };
+    const h = await dariBerkas(buatDocx(bacaanB1("Pengantar.", rumus, "Tengah satu.", "Tengah dua.", tabelKecil, "Sumber: Koran", "Penutup.")));
+    assert.equal(h.galat.length, 0, JSON.stringify(h.galat));
+    assert.deepEqual(h.stimulus[0].konten.blok, [
+      { jenis: "teks", teks: "Pengantar." },
+      { jenis: "tabel", kepala: ["Kota", "Luas \\(m^2\\)"], baris: [["Bogor", "\\(10\\)"], ["Depok", ""]] },
+      { jenis: "teks", teks: "Tengah satu.\n\nTengah dua." },
+      { jenis: "tabel", kepala: ["Kota", "Jumlah"], baris: [["Bogor", "10"]] },
+      { jenis: "teks", teks: "Penutup." },
+    ]);
+    assert.equal(h.stimulus[0].sumber_rujukan, "Koran");
+    assert.deepEqual(validasiStimulus(h.stimulus[0], "ajukan"), []);
+    assert.equal(h.soal.length, 1);
+    assert.equal(h.soal[0].redaksi, "Berapakah \\(1+1\\)?");
+  });
+
+  it("bacaan berisi tabel saja diterima; paragraf dalam satu sel digabung baris baru; tiap bacaan punya blok sendiri", async () => {
+    const body =
+      ["#BACAAN kode=B1", "Subtes: Penalaran Umum"].map(par).join("") +
+      `<w:tbl><w:tr><w:tc>${par("Nama")}</w:tc></w:tr><w:tr><w:tc><w:tcPr><w:gridSpan w:val="1"/></w:tcPr>${par("satu")}<w:p/>${par("dua")}</w:tc></w:tr></w:tbl>` +
+      ["#BACAAN kode=B2", "Subtes: Penalaran Umum", "Teks B2.", ...soalPg(1, ["Bacaan: B1"]), ...soalPg(2, ["Bacaan: B2"])].map(par).join("");
+    const h = await dariBerkas(bungkusDocx(body));
+    assert.equal(h.galat.length, 0, JSON.stringify(h.galat));
+    assert.deepEqual(
+      h.stimulus.map((s) => s.konten.blok),
+      [[{ jenis: "tabel", kepala: ["Nama"], baris: [["satu\ndua"]] }], [{ jenis: "teks", teks: "Teks B2." }]],
+    );
+    assert.match(h.stimulus[0].judul_internal, /Nama/);
+  });
+
+  const dalamSel = (isiSel: string, prSel = "") =>
+    bungkusDocx(
+      `${par("#BACAAN kode=B1")}<w:tbl><w:tr><w:tc><w:tcPr>${prSel}</w:tcPr>${isiSel}</w:tc></w:tr><w:tr><w:tc>${par("1")}</w:tc></w:tr></w:tbl>${par("#SOAL")}`,
+    );
+
+  const gabungan: [string, string][] = [
+    ["melebar (gridSpan)", '<w:gridSpan w:val="2"/>'],
+    ["vertikal (vMerge)", '<w:vMerge w:val="restart"/>'],
+    ["vertikal lanjutan", "<w:vMerge/>"],
+    ["lama (hMerge)", '<w:hMerge w:val="restart"/>'],
+  ];
+  for (const [nama, pr] of gabungan) {
+    it(`sel gabungan ${nama} ditolak`, async () => {
+      assert.match(await ditolak(dalamSel(par("a"), pr)), /sel gabungan.*bacaan ke-1/i);
+    });
+  }
+
+  it("gambar, persamaan Word, dan tabel bersarang di dalam sel ditolak dengan pesan yang menyebut tabel", async () => {
+    assert.match(await ditolak(dalamSel("<w:p><w:r><w:drawing/></w:r></w:p>")), /gambar di sel tabel bacaan ke-1/);
+    assert.match(await ditolak(dalamSel("<w:p><m:oMath/></w:p>")), /persamaan Word.*di sel tabel bacaan ke-1/);
+    assert.match(await ditolak(dalamSel(`<w:tbl><w:tr><w:tc>${par("x")}</w:tc></w:tr></w:tbl><w:p/>`)), /tabel di dalam tabel.*bacaan ke-1/i);
+  });
+
+  it("penanda #SOAL di dalam sel tabel ditolak (soal tidak boleh hilang ke dalam tabel)", async () => {
+    assert.match(await ditolak(buatDocx(bacaanB1({ tabel: [["#SOAL", "b"], ["c", "d"]] }))), /bacaan ke-1.*penanda #SOAL/i);
+  });
+
+  const kisi = (jumlah: number, kolom = 2) => Array.from({ length: jumlah }, (_, r) => Array.from({ length: kolom }, (_, k) => `r${r}k${k}`));
+  const langgar: [string, string[][], RegExp][] = [
+    ["9 kolom", kisi(2, 9), /maks\. 8/],
+    ["21 baris isi", kisi(22), /maks\. 20/],
+    ["sel 501 karakter", [["a"], ["x".repeat(501)]], /maks\. 500/],
+    ["hanya baris judul", kisi(1), /minimal 1/],
+    ["judul kolom kosong", [["", "b"], ["1", "2"]], /Judul kolom 1 belum diisi/],
+    ["baris tidak sama panjang", [["a", "b"], ["1"]], /harus punya 2 sel/],
+    ["rumus rusak di sel", [["a"], ["\\(\\frac{1}{\\)"]], /Rumus/],
+  ];
+  for (const [nama, tabel, pola] of langgar) {
+    it(`melanggar batas validator (${nama}) = galat bacaan, tidak tersimpan`, async () => {
+      const h = await dariBerkas(buatDocx(bacaanB1("Data:", { tabel })));
+      assert.equal(h.stimulus.length, 0);
+      assert.equal(h.soal.length, 0);
+      const g = h.galat.filter((x) => x.berkas === "bacaan");
+      assert.equal(g.some((x) => x.kolom === "teks" && x.baris === 2 && /^Tabel ke-1: /.test(x.pesan) && pola.test(x.pesan)), true, JSON.stringify(g));
+    });
+  }
+
+  it("tepat di batas (8 kolom, 20 baris isi, sel 500) diterima", async () => {
+    const t = kisi(21, 8);
+    t[1][0] = "x".repeat(500);
+    const h = await dariBerkas(buatDocx(bacaanB1({ tabel: t })));
+    assert.equal(h.galat.length, 0, JSON.stringify(h.galat));
+    assert.deepEqual(validasiStimulus(h.stimulus[0], "ajukan"), []);
+  });
+
+  it("gambar yang ditulis sebagai teks di sel ditolak seperti di paragraf bacaan", async () => {
+    const h = await dariBerkas(buatDocx(bacaanB1({ tabel: [["a"], ["![x](y.png)"]] })));
+    assert.equal(h.galat.some((g) => g.berkas === "bacaan" && /Gambar belum didukung/.test(g.pesan)), true);
+    assert.equal(h.stimulus.length, 0);
   });
 });
 
