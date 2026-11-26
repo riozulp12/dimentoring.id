@@ -51,7 +51,7 @@ export async function getBatchImpor(): Promise<BatchRingkas[] | "gagal"> {
   if (batch.length === 0) return [];
   const ids = batch.map((b) => b.id);
   const [soal, bacaan] = await Promise.all([
-    semuaBarisBatch<SoalBatchBaris>("soal_bank", "id, impor_batch_id, status, stimulus_id", ids),
+    semuaBarisBatch<SoalBatchBaris>("soal_bank", "id, impor_batch_id, status, stimulus_id, menggantikan_id", ids),
     semuaBarisBatch<BacaanBatchBaris>("soal_stimulus", "id, impor_batch_id, status", ids),
   ]);
   if (soal === "gagal" || bacaan === "gagal") return "gagal";

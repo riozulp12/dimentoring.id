@@ -9,11 +9,11 @@ import TampilanSoal, { type MetadataSoal, type SoalAdminTampil } from "@/compone
 import { KARTU, pesanKelas } from "@/components/studio-soal/gaya";
 import { panggilApi } from "@/components/studio-soal/klien";
 import { useNavigasiSibuk } from "@/components/studio-soal/useNavigasiSibuk";
-import { izinSoal } from "@/lib/shared/studio-soal/bankSoal";
+import { izinSoal, teksDilewati, type SoalDilewati } from "@/lib/shared/studio-soal/bankSoal";
 import type { BlokStimulus } from "@/lib/shared/studio-soal/tipe";
 
-type Sibuk = "versi" | "arsip" | "hapus";
-type Konfirmasi = "arsip" | "hapus" | null;
+type Sibuk = "terbit" | "versi" | "arsip" | "hapus";
+type Konfirmasi = "terbit" | "arsip" | "hapus" | null;
 
 /** Pratinjau satu soal di Bank Soal + aksi Admin sesuai sumber & status. */
 export default function DetailSoalAdmin({
@@ -23,9 +23,15 @@ export default function DetailSoalAdmin({
   metadata,
   bacaan,
   versiTerbuka,
+  updatedAt,
+  versiBaru,
 }: {
   id: string;
   sumber: string;
+  /** Versi yang sedang dilihat: terbit ditolak bila soal sudah berubah. */
+  updatedAt: string;
+  /** Draf versi baru dari soal terbit. */
+  versiBaru: boolean;
   soal: SoalAdminTampil;
   metadata: MetadataSoal;
   bacaan: BlokStimulus[] | null;
@@ -39,16 +45,25 @@ export default function DetailSoalAdmin({
   const sibuk = jenisPindah ?? sedang;
   const izin = izinSoal({ sumber, status: metadata.status });
 
-  async function kirim(jenis: Sibuk, url: string, method: "POST" | "DELETE") {
+  async function kirim(jenis: Sibuk, url: string, method: "POST" | "DELETE", body?: unknown) {
     setSedang(jenis);
     setPesan(null);
-    const r = await panggilApi(url, method);
+    const r = await panggilApi(url, method, body);
     setSedang(null);
     setKonfirmasi(null);
     return r;
   }
   const gagal = (r: { json: Record<string, unknown> }) =>
     setPesan({ jenis: "gagal", teks: String(r.json.error ?? "Belum berhasil. Coba lagi.") });
+
+  async function terbitkan() {
+    const r = await kirim("terbit", "/api/admin/studio-soal/impor/terbitkan", "POST", { soalId: id, updatedAt });
+    if (!r.ok) return gagal(r);
+    const lewat = (r.json.dilewati as SoalDilewati[] | undefined)?.[0];
+    if (lewat) return setPesan({ jenis: "gagal", teks: `Soal belum diterbitkan, ${teksDilewati(lewat)}` });
+    setPesan({ jenis: "ok", teks: String(r.json.pesan ?? "Soal diterbitkan.") });
+    router.refresh();
+  }
 
   async function editVersiBaru() {
     const r = await kirim("versi", `/api/admin/studio-soal/bank/${id}/versi-baru`, "POST");
@@ -72,6 +87,27 @@ export default function DetailSoalAdmin({
     if (!r.ok) return gagal(r);
     pindah("hapus", (x) => x.push("/bank-soal"));
   }
+
+  const dialog = {
+    terbit: {
+      judul: "Terbitkan soal ini?",
+      isi: `Soal terkunci setelah terbit: perubahan berikutnya membuat versi baru.${versiBaru ? " Versi lama ditandai digantikan." : ""}`,
+      tombol: "Ya, terbitkan",
+      jalankan: terbitkan,
+    },
+    arsip: {
+      judul: "Arsipkan soal ini?",
+      isi: "Soal tidak ikut latihan lagi, tetapi tetap tersimpan di Bank Soal.",
+      tombol: "Ya, arsipkan",
+      jalankan: arsipkan,
+    },
+    hapus: {
+      judul: "Hapus draf soal ini?",
+      isi: "Draf dihapus permanen dan tidak bisa dikembalikan. Bila bacaan drafnya tidak dipakai soal lain, bacaan itu ikut dihapus.",
+      tombol: "Ya, hapus",
+      jalankan: hapus,
+    },
+  }[konfirmasi ?? "hapus"];
 
   return (
     <div className="flex flex-col gap-4">
@@ -100,7 +136,7 @@ export default function DetailSoalAdmin({
         <TampilanSoal key={id} mode="admin" soal={soal} metadata={metadata} stimulus={bacaan} />
       </section>
 
-      {izin.edit || izin.versiBaru || izin.arsip || izin.hapus ? (
+      {izin.terbit || izin.edit || izin.versiBaru || izin.arsip || izin.hapus ? (
         <div className="flex flex-wrap justify-end gap-2">
           {izin.hapus ? (
             <Button variant="secondary" size="sm" onClick={() => setKonfirmasi("hapus")} disabled={sibuk !== null}>
@@ -113,9 +149,14 @@ export default function DetailSoalAdmin({
             </Button>
           ) : null}
           {izin.edit ? (
-            <Link href={`/bank-soal/${id}/edit`} className={buttonClassName({ size: "sm" })}>
+            <Link href={`/bank-soal/${id}/edit`} className={buttonClassName({ variant: "secondary", size: "sm" })}>
               Edit
             </Link>
+          ) : null}
+          {izin.terbit ? (
+            <Button size="sm" onClick={() => setKonfirmasi("terbit")} disabled={sibuk !== null}>
+              Terbitkan
+            </Button>
           ) : null}
           {izin.versiBaru ? (
             <Button size="sm" onClick={editVersiBaru} disabled={sibuk !== null}>
@@ -128,19 +169,15 @@ export default function DetailSoalAdmin({
       <Modal open={konfirmasi !== null} onClose={() => (sibuk ? undefined : setKonfirmasi(null))} labelledBy={idJudul}>
         <div className="flex flex-col gap-4">
           <h2 id={idJudul} className="pr-8 text-lg font-medium text-black">
-            {konfirmasi === "arsip" ? "Arsipkan soal ini?" : "Hapus draf soal ini?"}
+            {dialog.judul}
           </h2>
-          <p className="text-sm text-black">
-            {konfirmasi === "arsip"
-              ? "Soal tidak ikut latihan lagi, tetapi tetap tersimpan di Bank Soal."
-              : "Draf dihapus permanen dan tidak bisa dikembalikan. Bila bacaan drafnya tidak dipakai soal lain, bacaan itu ikut dihapus."}
-          </p>
+          <p className="text-sm text-black">{dialog.isi}</p>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" size="sm" onClick={() => setKonfirmasi(null)} disabled={sibuk !== null}>
               Batal
             </Button>
-            <Button size="sm" onClick={konfirmasi === "arsip" ? arsipkan : hapus} disabled={sibuk !== null}>
-              {sibuk === "arsip" || sibuk === "hapus" ? "Memproses…" : konfirmasi === "arsip" ? "Ya, arsipkan" : "Ya, hapus"}
+            <Button size="sm" onClick={dialog.jalankan} disabled={sibuk !== null}>
+              {sibuk !== null ? "Memproses…" : dialog.tombol}
             </Button>
           </div>
         </div>

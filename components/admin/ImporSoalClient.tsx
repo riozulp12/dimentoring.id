@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import Toggle from "@/components/ui/Toggle";
 import { CHIP, KARTU, pesanKelas } from "@/components/studio-soal/gaya";
+import { teksDilewati, type SoalDilewati } from "@/lib/shared/studio-soal/bankSoal";
 import type { BarisPratinjau, GalatImpor, StatusBaris } from "@/lib/shared/studio-soal/impor";
 
 /**
@@ -47,7 +49,7 @@ interface HasilSimpan {
 interface HasilTerbit {
   diterbitkan: number;
   bacaanDiterbitkan: number;
-  dilewati: { id: string; alasan: string }[];
+  dilewati: SoalDilewati[];
   pesan?: string;
 }
 interface Pesan {
@@ -95,13 +97,6 @@ const WARNA_STATUS: Record<StatusBaris, string> = {
   ok: "bg-success-soft text-success",
   peringatan: "bg-chip text-black",
   galat: "bg-danger-soft text-danger",
-};
-const LABEL_ALASAN: Record<string, string> = {
-  tidak_ditemukan: "tidak ditemukan",
-  bukan_draf: "sudah bukan draf",
-  bukan_buatan_sendiri: "bukan soal Buatan Sendiri",
-  stimulus_tidak_valid: "bacaannya tidak bisa diterbitkan",
-  data_tidak_valid: "isi belum memenuhi syarat terbit",
 };
 
 async function kirim<T>(url: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
@@ -303,7 +298,8 @@ export default function ImporSoalClient() {
           Unduh contoh, ganti isinya dengan soal Anda, lalu simpan sebagai .docx. Tiap soal diawali baris <code>#SOAL</code>, tiap bacaan
           diawali <code>#BACAAN kode=...</code>. Tulis rumus sebagai teks <code>{"\\( … \\)"}</code> — bukan objek Persamaan Word. Gambar,
           persamaan Word, dan PDF belum didukung; berkas yang memuatnya ditolak. Maksimal 300 soal dan 5 MB per
-          unggahan. Semua soal tercatat sebagai Buatan Sendiri.
+          unggahan. Semua soal tercatat sebagai Buatan Sendiri. Draf juga bisa diterbitkan nanti dari{" "}
+          <Link href="/bank-soal" className="text-primary underline">Bank Soal</Link>.
         </p>
         <p className="text-sm text-muted">
           Tabel hanya boleh di dalam bacaan (tabel di soal, pilihan, kunci, atau pembahasan membuat berkas ditolak): taruh tabel di{" "}
@@ -510,7 +506,7 @@ export default function ImporSoalClient() {
             <ul className="flex flex-col gap-1 rounded-[12px] bg-danger-soft p-3 text-sm text-danger">
               {terbit.dilewati.map((d) => (
                 <li key={d.id}>
-                  Soal {d.id.slice(0, 8)}…: {LABEL_ALASAN[d.alasan] ?? d.alasan}
+                  Soal {d.id.slice(0, 8)}…: {teksDilewati(d)}
                 </li>
               ))}
             </ul>

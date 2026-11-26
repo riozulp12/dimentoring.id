@@ -63,13 +63,13 @@ describe("filter & izin", () => {
     assert.equal(queryFilter(parseFilterBank({}), { hal: 1 }), "");
   });
 
-  const kosong = { edit: false, versiBaru: false, arsip: false, hapus: false };
+  const kosong = { terbit: false, edit: false, versiBaru: false, arsip: false, hapus: false };
   it("soal buatan mentor (manual) hanya-lihat di semua status", () => {
     for (const status of ["draf", "terpublikasi", "ditolak", "diajukan"]) assert.deepEqual(izinSoal({ sumber: "manual", status }), kosong, status);
   });
   it("buatan sendiri: draf edit+hapus; terbit versi baru+arsip (tanpa hapus); digantikan/diarsipkan tidak ada aksi", () => {
     const sendiri = (status: string) => izinSoal({ sumber: "buatan_sendiri", status });
-    assert.deepEqual(sendiri("draf"), { ...kosong, edit: true, hapus: true });
+    assert.deepEqual(sendiri("draf"), { ...kosong, terbit: true, edit: true, hapus: true });
     assert.deepEqual(sendiri("terpublikasi"), { ...kosong, versiBaru: true, arsip: true });
     assert.deepEqual(sendiri("digantikan"), kosong);
     assert.deepEqual(sendiri("diarsipkan"), kosong);

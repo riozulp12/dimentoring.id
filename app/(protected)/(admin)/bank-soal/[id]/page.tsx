@@ -34,6 +34,8 @@ export default async function DetailSoalPage({ params }: { params: Promise<{ id:
           <DetailSoalAdmin
             id={detail.soal.id}
             sumber={detail.soal.sumber}
+            updatedAt={detail.soal.updated_at}
+            versiBaru={detail.soal.menggantikan_id !== null}
             soal={{
               tipe: detail.soal.tipe,
               redaksi: detail.soal.redaksi,

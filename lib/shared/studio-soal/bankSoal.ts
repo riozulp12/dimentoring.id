@@ -54,6 +54,7 @@ export function queryFilter(filter: FilterBank, ubah: Partial<FilterBank> = {}):
 }
 
 export interface IzinSoal {
+  terbit: boolean;
   edit: boolean;
   versiBaru: boolean;
   arsip: boolean;
@@ -65,8 +66,32 @@ export function izinSoal(soal: { sumber: string; status: string }): IzinSoal {
   const sendiri = soal.sumber === "buatan_sendiri";
   const draf = sendiri && soal.status === "draf";
   const terbit = sendiri && soal.status === "terpublikasi";
-  return { edit: draf, versiBaru: terbit, arsip: terbit, hapus: draf };
+  return { terbit: draf, edit: draf, versiBaru: terbit, arsip: terbit, hapus: draf };
 }
+
+// ---------------------------------------------------------------------------
+// Hasil terbit draf
+// ---------------------------------------------------------------------------
+
+export interface SoalDilewati {
+  id: string;
+  alasan: string;
+  /** Kekurangan isi (alasan 'belum_lengkap'). */
+  rincian?: string[];
+}
+
+export const LABEL_ALASAN_TERBIT: Record<string, string> = {
+  tidak_ditemukan: "tidak ditemukan",
+  bukan_draf: "sudah bukan draf",
+  bukan_buatan_sendiri: "bukan soal Buatan Sendiri",
+  stimulus_tidak_valid: "bacaannya tidak bisa diterbitkan",
+  data_tidak_valid: "isi belum memenuhi syarat terbit",
+  belum_lengkap: "belum lengkap",
+  versi_baru: "draf versi baru, terbitkan dari halaman soalnya",
+};
+
+export const teksDilewati = (d: SoalDilewati) =>
+  `${LABEL_ALASAN_TERBIT[d.alasan] ?? d.alasan}${d.rincian?.length ? `: ${d.rincian.join(" ")}` : ""}`;
 
 // ---------------------------------------------------------------------------
 // Batch impor
@@ -81,6 +106,7 @@ export interface SoalBatchBaris {
   impor_batch_id: string | null;
   status: string;
   stimulus_id: string | null;
+  menggantikan_id?: string | null;
 }
 export interface BacaanBatchBaris {
   id: string;
@@ -92,6 +118,8 @@ export interface BatchRingkas {
   namaBerkas: string;
   dibuatPada: string;
   draf: number;
+  /** Draf pertama (bukan versi baru): yang ikut tombol terbit batch. */
+  drafBaru: number;
   terbit: number;
   arsip: number;
   /** Versi lama ('digantikan') dan status lain. */
@@ -114,6 +142,7 @@ export function ringkasBatch(batch: BatchBaris[], soal: SoalBatchBaris[], bacaan
       namaBerkas: b.nama_berkas,
       dibuatPada: b.dibuat_pada,
       draf,
+      drafBaru: milik.filter((s) => s.status === "draf" && !s.menggantikan_id).length,
       terbit,
       arsip,
       lainnya: milik.length - draf - terbit - arsip,

@@ -107,6 +107,7 @@ describe("ringkasBatch", () => {
       namaBerkas: "satu.docx",
       dibuatPada: "2026-11-01T00:00:00Z",
       draf: 3,
+      drafBaru: 3,
       terbit: 1,
       arsip: 1,
       lainnya: 1,
