@@ -37,15 +37,20 @@ function petunjukAngka(teks: string): string | null {
 export default function SoalPratinjau({
   soal,
   stimulus,
+  teksKunci = "kunci & pembahasan",
+  awalTampilKunci = false,
 }: {
   soal: SoalUntukPratinjau;
   stimulus?: BlokStimulus[] | null;
+  /** Sebutan pada tombol buka/tutup kunci. */
+  teksKunci?: string;
+  awalTampilKunci?: boolean;
 }) {
   const [opsi, setOpsi] = useState<string | null>(null);
   const [perBaris, setPerBaris] = useState<Record<string, number>>({});
   const [isian, setIsian] = useState<Record<string, string>>({});
   const [hasil, setHasil] = useState<{ nilai: HasilNilai; jejak: string } | null>(null);
-  const [tampilKunci, setTampilKunci] = useState(false);
+  const [tampilKunci, setTampilKunci] = useState(awalTampilKunci);
 
   // Hasil uji hanya berlaku untuk isi soal saat diperiksa.
   const jejak = JSON.stringify([soal.tipe, soal.konten, soal.kunci, soal.redaksi]);
@@ -213,7 +218,7 @@ export default function SoalPratinjau({
             Ulangi
           </Button>
           <Button size="sm" variant="secondary" aria-pressed={tampilKunci} onClick={() => setTampilKunci((v) => !v)}>
-            {tampilKunci ? "Sembunyikan kunci & pembahasan" : "Tampilkan kunci & pembahasan"}
+            {tampilKunci ? `Sembunyikan ${teksKunci}` : `Tampilkan ${teksKunci}`}
           </Button>
         </div>
         {hasil && !hasilBerlaku ? (

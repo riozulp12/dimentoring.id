@@ -23,7 +23,7 @@ const PREFIX_PRIVAT = [
   // mentor
   "honor", "kelas-saya", "review-konten", "siswa-binaan", "studio-soal",
   // admin
-  "analytics", "approval-mentor", "kelola-assessment", "kelola-kelas", "kelola-konten",
+  "analytics", "approval-mentor", "bank-soal", "kelola-assessment", "kelola-kelas", "kelola-konten",
   "impor-soal", "kode-promo", "leads", "manajemen-siswa", "penugasan-studio-soal", "riwayat-transaksi",
   "sesi-review", "undang-admin",
   // auth & API

@@ -23,6 +23,16 @@ export const SUMBER_BAWAAN = "Buatan Sendiri";
 export const BATAS_SOAL_IMPOR = 300;
 export const BATAS_TERBIT_IMPOR = 200;
 export const TIPE_IMPOR = ["pilihan_ganda", "majemuk_kompleks", "isian"] as const;
+/** Alias tingkat kesulitan yang diterima unggahan (tanpa peka huruf besar/kecil & spasi). */
+export const ALIAS_KESULITAN: Record<(typeof TINGKAT_KESULITAN)[number], readonly string[]> = {
+  mudah: ["mudah", "easy"],
+  sedang: ["sedang", "menengah", "medium"],
+  hots: ["hots", "sulit", "susah", "hard"],
+};
+export function normalKesulitan(teks: string): (typeof TINGKAT_KESULITAN)[number] | null {
+  const kata = rapikanNama(teks).replace(/\s+/gu, "");
+  return TINGKAT_KESULITAN.find((t) => ALIAS_KESULITAN[t].includes(kata)) ?? null;
+}
 /** Label kolom jawaban majemuk bila keduanya dikosongkan. */
 export const LABEL_KOLOM_BAWAAN = ["Benar", "Salah"] as const;
 const KOLOM_LABEL = ["label_kolom_1", "label_kolom_2"] as const;
@@ -127,6 +137,8 @@ export interface HasilImpor {
     jumlahGalat: number;
     jumlahPeringatan: number;
     jumlahBacaan: number;
+    /** Bacaan di berkas yang TIDAK disimpan karena tidak ada soalnya yang lolos. */
+    jumlahBacaanDilewati: number;
   };
 }
 
@@ -320,6 +332,7 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
   const bacaanBermasalah = new Set<string>();
   const petaBacaan = new Map<string, { subtesId: string }>();
   const barisBacaan = new Map<string, number>();
+  let jumlahBarisBacaan = 0;
   const adaBacaanCsv =
     (masukan.bacaanBaris?.length ?? 0) > 0 || (typeof masukan.bacaanCsv === "string" && masukan.bacaanCsv.trim() !== "");
 
@@ -338,6 +351,7 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
       if (tabel.data.length > BATAS_SOAL_IMPOR) {
         tambah("bacaan", 0, "", `Bacaan terlalu banyak (maks. ${BATAS_SOAL_IMPOR} per unggahan).`);
       }
+      jumlahBarisBacaan = tabel.data.length;
       for (const { baris, sel } of tabel.data) {
         const kodeAsli = bersih(sel[idx.kode_bacaan]);
         const kode = kodeAsli.toLocaleLowerCase("id-ID");
@@ -499,9 +513,12 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
         kunci = { v: 1, rumpang: { r1: { diterima } } };
       }
 
-      const kesulitan = (bersih(kol(sel, "kesulitan")) || "sedang").toLowerCase();
-      if (!(TINGKAT_KESULITAN as readonly string[]).includes(kesulitan)) {
-        g("kesulitan", `Kesulitan "${bersih(kol(sel, "kesulitan"))}" tidak dikenal (mudah, sedang, atau hots).`);
+      const kesulitanAsli = bersih(kol(sel, "kesulitan"));
+      const kesulitanBaku = kesulitanAsli === "" ? "sedang" : normalKesulitan(kesulitanAsli);
+      const kesulitan = kesulitanBaku ?? kesulitanAsli.toLowerCase();
+      if (!kesulitanBaku) {
+        const pilihan = TINGKAT_KESULITAN.map((t) => ALIAS_KESULITAN[t].join("/")).join(", ");
+        g("kesulitan", `Kesulitan "${kesulitanAsli}" tidak dikenal. Yang diterima: ${pilihan}.`);
       }
       const levelMentah = bersih(kol(sel, "level_kognitif"));
       const level = levelMentah === "" ? null : bulat(levelMentah, BATAS.levelKognitifMin, BATAS.levelKognitifMaks);
@@ -636,6 +653,7 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
       jumlahGalat: pratinjau.filter((p) => p.status === "galat").length,
       jumlahPeringatan: pratinjau.filter((p) => p.status === "peringatan").length,
       jumlahBacaan: stimulusDipakai.length,
+      jumlahBacaanDilewati: Math.max(0, jumlahBarisBacaan - stimulusDipakai.length),
     },
   };
 }
