@@ -14,12 +14,17 @@
  *   Sumber: ...                 (opsional; bawaan "Buatan Sendiri")
  *   <paragraf bacaan, boleh banyak; boleh diselingi tabel Word (baris pertama = judul kolom)>
  *   #SOAL
- *   Subtes: ...  Topik: ...  Jenis: PG | Isian
+ *   Subtes: ...  Topik: ...  Jenis: PG | Majemuk | Isian
  *   Kesulitan: mudah|sedang|hots   Level: 1-3   Waktu: detik   Bacaan: B1   (opsional)
  *   Soal: <redaksi, boleh banyak paragraf sampai baris A.>
  *   A. ...  B. ...  C. ...  D. ...  E. ...
  *   Kunci: C                    (Isian: jawaban dipisah |)
  *   Pembahasan: <boleh banyak paragraf sampai #SOAL berikutnya>
+ *
+ * Jenis "Majemuk" (alias "Majemuk Kompleks") tanpa A–E:
+ *   Kolom: Benar | Salah        (opsional; tepat 2 label)
+ *   P1. <pernyataan>  P2. ...   (2–6, berurutan; satu paragraf per pernyataan)
+ *   Kunci: P1=Benar, P2=Salah
  *
  * Tabel hanya diterima di dalam #BACAAN dan menjadi blok tabel pada bacaan, urut
  * sesuai dokumen; tabel di tempat lain menolak seluruh berkas (penolakan).
@@ -30,7 +35,7 @@
  * susunImpor.
  */
 import { KOLOM_BACAAN, KOLOM_SOAL, SUMBER_BAWAAN, type GalatImpor } from "./impor";
-import type { BlokStimulus } from "./tipe";
+import { BATAS, type BlokStimulus } from "./tipe";
 
 export const BATAS_BYTE_DOCX = 5 * 1024 * 1024;
 
@@ -58,7 +63,7 @@ export interface HasilUraiDocx {
 // Label
 // ---------------------------------------------------------------------------
 
-type KunciLabel = "subtes" | "topik" | "jenis" | "kesulitan" | "level" | "waktu" | "bacaan" | "soal" | "kunci" | "pembahasan" | "sumber";
+type KunciLabel = "subtes" | "topik" | "jenis" | "kesulitan" | "level" | "waktu" | "bacaan" | "soal" | "kolom" | "kunci" | "pembahasan" | "sumber";
 
 const LABEL: Record<string, KunciLabel> = {
   subtes: "subtes",
@@ -74,6 +79,7 @@ const LABEL: Record<string, KunciLabel> = {
   "estimasi waktu": "waktu",
   bacaan: "bacaan",
   soal: "soal",
+  kolom: "kolom",
   kunci: "kunci",
   "kunci jawaban": "kunci",
   pembahasan: "pembahasan",
@@ -88,6 +94,7 @@ const NAMA_LABEL: Record<KunciLabel, string> = {
   waktu: "Waktu",
   bacaan: "Bacaan",
   soal: "Soal",
+  kolom: "Kolom",
   kunci: "Kunci",
   pembahasan: "Pembahasan",
   sumber: "Sumber",
@@ -101,6 +108,7 @@ const KOLOM_DARI_LABEL: Record<KunciLabel, string> = {
   waktu: "estimasi_detik",
   bacaan: "kode_bacaan",
   soal: "redaksi",
+  kolom: "label_kolom_1",
   kunci: "kunci",
   pembahasan: "pembahasan",
   sumber: "sumber_rujukan",
@@ -119,11 +127,15 @@ const POLA_PENANDA = /^\s*#\s*(bacaan|soal)\b\s*([\s\S]*)$/i;
 const POLA_NOMOR = /^\s*\d+\s*[.)]\s+/;
 const POLA_OPSI = /^\s*\(?([A-Ea-e])\s*[.)]\s*([\s\S]*)$/;
 
+/** "P1." / "p2)" — bukan "P1.5". */
+const POLA_PERNYATAAN = /^\s*p\s*(\d{1,2})\s*[.)](?!\d)\s*([\s\S]*)$/i;
+const MAKS_P = BATAS.pernyataanMaks;
+
 /** Buang nomor di depan hanya bila sisanya penanda atau label ("1. Soal: ..."). */
 function tanpaNomor(baris: string): string {
   const sisa = baris.replace(POLA_NOMOR, "");
   if (sisa === baris) return baris;
-  return POLA_PENANDA.test(sisa) || cocokLabel(sisa) ? sisa : baris;
+  return POLA_PENANDA.test(sisa) || POLA_PERNYATAAN.test(sisa) || cocokLabel(sisa) ? sisa : baris;
 }
 
 export function paragrafDariTeksMentah(teks: string): string[] {
@@ -150,16 +162,20 @@ interface BlokSoal {
   meta: Partial<Record<KunciLabel, string>>;
   redaksi: string[];
   opsi: (string | null)[];
+  /** Nomor P -> teks, hanya 1..6. */
+  pernyataan: Map<number, string>;
   kunci: string;
   pembahasan: string[];
-  aktif: "soal" | "opsi" | "kunci" | "pembahasan" | "lain" | null;
+  aktif: "soal" | "opsi" | "pernyataan" | "kunci" | "pembahasan" | "lain" | null;
   opsiTerakhir: number;
+  pernyataanTerakhir: number;
   sudah: Set<KunciLabel>;
 }
 
 const normalJenis = (v: string) => {
   const k = rapikan(v).toLocaleLowerCase("id-ID");
   if (["pg", "pilihan ganda", "pilihan_ganda"].includes(k)) return "pilihan_ganda";
+  if (["majemuk", "majemuk kompleks", "majemuk_kompleks"].includes(k)) return "majemuk_kompleks";
   if (k === "isian") return "isian";
   return k;
 };
@@ -167,6 +183,26 @@ const normalKunciPg = (v: string) => {
   const m = v.trim().match(/^\(?([A-Ea-e])\s*[.)]?$/);
   return m ? m[1].toUpperCase() : v.trim();
 };
+/** "P1=Benar, P2=Salah" -> "Benar|Salah" (posisi = nomor P; yang tak disebut kosong). */
+function uraiKunciMajemuk(teks: string, galat: (pesan: string) => void): string {
+  const nilai = new Map<number, string>();
+  const bagian = teks
+    .split(/(?<![\p{L}\p{N}])(?=p\s*\d+\s*=)/iu)
+    .map((x) => x.trim())
+    .filter((x) => x !== "");
+  for (const b of bagian) {
+    const m = b.match(/^p\s*(\d+)\s*=\s*([^=|]*?)\s*[,;]?$/i);
+    if (!m) galat(`Kunci majemuk "${b.slice(0, 40)}" tidak terbaca. Tulis seperti P1=Benar, P2=Salah.`);
+    else {
+      const n = Number(m[1]);
+      if (n < 1 || n > MAKS_P) galat(`Kunci P${n}: nomor pernyataan hanya P1 sampai P${MAKS_P}.`);
+      else if (nilai.has(n)) galat(`Kunci P${n} ditulis lebih dari sekali.`);
+      else nilai.set(n, m[2]);
+    }
+  }
+  return Array.from({ length: Math.max(0, ...nilai.keys()) }, (_, i) => nilai.get(i + 1) ?? "").join("|");
+}
+
 const angkaDepan = (v: string) => v.trim().replace(/\s*(detik|dtk|s)\.?$/i, "");
 
 const memuatPenanda = (t: TabelDocx) =>
@@ -194,7 +230,9 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
         const [kepala = [], ...barisIsi] = mentah.tabel;
         aktifBacaan.blok.push({ jenis: "tabel", kepala, baris: barisIsi });
       } else if (aktifSoal) {
-        penolakan.add(`Soal ke-${aktifSoal.nomor} berisi tabel; ${pindahkan}`);
+        penolakan.add(
+          `Soal ke-${aktifSoal.nomor} berisi tabel; ${pindahkan} Atau, untuk soal benar/salah per pernyataan, tulis sebagai Jenis: Majemuk dengan baris P1., P2., ...`,
+        );
       } else {
         penolakan.add(`Ada tabel sebelum soal pertama; ${pindahkan}`);
       }
@@ -215,10 +253,12 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
           meta: {},
           redaksi: [],
           opsi: [null, null, null, null, null],
+          pernyataan: new Map(),
           kunci: "",
           pembahasan: [],
           aktif: null,
           opsiTerakhir: -1,
+          pernyataanTerakhir: 0,
           sudah: new Set(),
         };
         soal.push(aktifSoal);
@@ -288,7 +328,29 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
       continue;
     }
 
-    const opsi = s.aktif === "soal" || s.aktif === "opsi" ? mentah.match(POLA_OPSI) : null;
+    const p = baris.match(POLA_PERNYATAAN);
+    if (p) {
+      const n = Number(p[1]);
+      const sebelumnya = Math.max(0, ...s.pernyataan.keys());
+      s.aktif = "pernyataan";
+      s.pernyataanTerakhir = 0;
+      if (n < 1) catat("soal", noSoal, "pernyataan_1", "Nomor pernyataan mulai dari P1.");
+      else if (n > MAKS_P) catat("soal", noSoal, `pernyataan_${n}`, `Maksimal ${MAKS_P} pernyataan (P1 sampai P${MAKS_P}).`);
+      else if (s.pernyataan.has(n)) catat("soal", noSoal, `pernyataan_${n}`, `Pernyataan P${n} muncul lebih dari sekali.`);
+      else {
+        if (n < sebelumnya) {
+          catat("soal", noSoal, `pernyataan_${n}`, `Nomor pernyataan harus berurutan P1, P2, ...: P${n} ditulis setelah P${sebelumnya}.`);
+        }
+        s.pernyataan.set(n, p[2].trim());
+        s.pernyataanTerakhir = n;
+      }
+      continue;
+    }
+
+    // Di soal berpernyataan, baris A–E tetap dikenali supaya ditolak, bukan menempel ke teks lain.
+    const bisaOpsi =
+      s.aktif === "soal" || s.aktif === "opsi" || (s.aktif !== "kunci" && (s.pernyataan.size > 0 || s.sudah.has("kolom")));
+    const opsi = bisaOpsi || (s.aktif !== "kunci" && normalJenis(s.meta.jenis ?? "") === "majemuk_kompleks") ? mentah.match(POLA_OPSI) : null;
     if (opsi) {
       const i = "ABCDE".indexOf(opsi[1].toUpperCase());
       if (s.opsi[i] !== null) {
@@ -303,24 +365,49 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
 
     if (s.aktif === "soal") s.redaksi.push(s.redaksi.length === 0 ? mentah.trim().replace(POLA_NOMOR, "") : mentah.trim());
     else if (s.aktif === "opsi" && s.opsiTerakhir >= 0) s.opsi[s.opsiTerakhir] = `${s.opsi[s.opsiTerakhir] ?? ""} ${mentah.trim()}`.trim();
-    else if (s.aktif === "kunci") s.kunci = `${s.kunci} ${mentah.trim()}`.trim();
+    else if (s.aktif === "pernyataan") {
+      const n = s.pernyataanTerakhir;
+      if (n > 0) s.pernyataan.set(n, `${s.pernyataan.get(n) ?? ""} ${mentah.trim()}`.trim());
+    } else if (s.aktif === "kunci") s.kunci = `${s.kunci} ${mentah.trim()}`.trim();
     else catat("soal", noSoal, "", `Baris "${mentah.trim().slice(0, 40)}" tidak dikenali dan diabaikan.`, "peringatan");
   }
 
   const soalBaris: string[][] = [[...KOLOM_SOAL]];
   for (const s of soal) {
     const jenis = normalJenis(s.meta.jenis ?? "");
+    const galat = (kolom: string, pesan: string) => catat("soal", s.nomor + 1, kolom, pesan);
+    for (const [n, teks] of s.pernyataan) {
+      if (teks === "") galat(`pernyataan_${n}`, `Pernyataan P${n} kosong.`);
+    }
+    let label = ["", ""];
+    if (s.sudah.has("kolom")) {
+      const isiKolom = (s.meta.kolom ?? "").split("|").map((x) => x.trim());
+      if (isiKolom.length === 2 && isiKolom.every((x) => x !== "")) label = isiKolom;
+      else {
+        galat("label_kolom_1", "Kolom harus berisi tepat 2 label dipisah |, mis. Kolom: Benar | Salah.");
+        // Tetap ditandai terisi supaya soal non-majemuk juga diberi tahu.
+        if (jenis !== "majemuk_kompleks") label = [s.meta.kolom || "-", ""];
+      }
+    }
+    // Baris "A." kosong di soal majemuk tetap harus terlihat oleh pemeriksa.
+    const opsiKe = (i: number) => (jenis === "majemuk_kompleks" && s.opsi[i] === "" ? "-" : (s.opsi[i] ?? ""));
+    const kunci =
+      jenis === "majemuk_kompleks"
+        ? uraiKunciMajemuk(s.kunci, (pesan) => galat("kunci", pesan))
+        : jenis === "isian"
+          ? s.kunci.trim()
+          : normalKunciPg(s.kunci);
     const nilai: Record<(typeof KOLOM_SOAL)[number], string> = {
       subtes: s.meta.subtes ?? "",
       topik: s.meta.topik ?? "",
       tipe: jenis,
       redaksi: s.redaksi.join("\n\n"),
-      opsi_a: s.opsi[0] ?? "",
-      opsi_b: s.opsi[1] ?? "",
-      opsi_c: s.opsi[2] ?? "",
-      opsi_d: s.opsi[3] ?? "",
-      opsi_e: s.opsi[4] ?? "",
-      kunci: jenis === "isian" ? s.kunci.trim() : normalKunciPg(s.kunci),
+      opsi_a: opsiKe(0),
+      opsi_b: opsiKe(1),
+      opsi_c: opsiKe(2),
+      opsi_d: opsiKe(3),
+      opsi_e: opsiKe(4),
+      kunci,
       pembahasan: s.pembahasan.join("\n\n"),
       kesulitan: s.meta.kesulitan ?? "",
       level_kognitif: (s.meta.level ?? "").trim(),
@@ -328,6 +415,14 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
       sumber_rujukan: s.meta.sumber ?? "",
       kode_bacaan: (s.meta.bacaan ?? "").trim(),
       urutan_dalam_bacaan: "",
+      label_kolom_1: label[0],
+      label_kolom_2: label[1],
+      pernyataan_1: s.pernyataan.get(1) ?? "",
+      pernyataan_2: s.pernyataan.get(2) ?? "",
+      pernyataan_3: s.pernyataan.get(3) ?? "",
+      pernyataan_4: s.pernyataan.get(4) ?? "",
+      pernyataan_5: s.pernyataan.get(5) ?? "",
+      pernyataan_6: s.pernyataan.get(6) ?? "",
     };
     soalBaris.push(KOLOM_SOAL.map((k) => nilai[k]));
   }
@@ -447,7 +542,7 @@ export function pesanObjekTerlarang(temuan: TemuanObjekDocx[]): string[] {
 // Template
 // ---------------------------------------------------------------------------
 
-/** Isi template Word: 1 bacaan (dengan tabel kecil) + 2 soal contoh (dipakai pembuat berkas di server dan tes). */
+/** Isi template Word: 1 bacaan (dengan tabel kecil) + 3 soal contoh (PG berbacaan, PG rumus, majemuk) (dipakai pembuat berkas di server dan tes). */
 export function isiTemplateDocx(): ItemDocx[] {
   return [
     "#BACAAN kode=B1",
@@ -489,5 +584,16 @@ export function isiTemplateDocx(): ItemDocx[] {
     "E. 6",
     "Kunci: C",
     "Pembahasan: Dari \\(x^2 = 9\\) dan \\(x > 0\\) diperoleh \\(x = 3\\), sehingga \\(x + 1 = 4\\).",
+    "#SOAL",
+    "Subtes: Penalaran Umum",
+    "Jenis: Majemuk",
+    "Kesulitan: sedang",
+    "Soal: Diketahui \\(x = 3\\). Tentukan benar atau salah setiap pernyataan berikut.",
+    "Kolom: Benar | Salah",
+    "P1. \\(x\\) adalah bilangan ganjil.",
+    "P2. \\(x\\) adalah bilangan genap.",
+    "P3. \\(x^2 = 9\\).",
+    "Kunci: P1=Benar, P2=Salah, P3=Benar",
+    "Pembahasan: Karena \\(x = 3\\), maka \\(x\\) ganjil, bukan genap, dan \\(x^2 = 9\\).",
   ];
 }

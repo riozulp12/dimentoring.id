@@ -14,8 +14,8 @@ import type { BarisPratinjau, GalatImpor, StatusBaris } from "@/lib/shared/studi
  *
  * Semua pemeriksaan dilakukan server (rute /api/admin/studio-soal/impor/*);
  * layar ini hanya menampilkan hasilnya. Kunci jawaban hanya muncul di layar
- * Admin ini. Hanya soal teks + rumus \( \): gambar, persamaan Word,
- * majemuk kompleks, XLSX, dan PDF belum didukung.
+ * Admin ini. Jenis soal: pilihan ganda, majemuk kompleks, isian. Hanya teks +
+ * rumus \( \): gambar, persamaan Word, XLSX, dan PDF belum didukung.
  */
 
 interface BerkasCsv {
@@ -77,8 +77,11 @@ const LABEL_KOLOM_DOCX: Record<string, string> = {
   kode_bacaan: "Bacaan",
   urutan_dalam_bacaan: "Urutan",
   teks: "Teks bacaan",
+  label_kolom_1: "Kolom",
+  label_kolom_2: "Kolom",
 };
-const namaKolom = (format: Format, kolom: string) => (format === "docx" ? (LABEL_KOLOM_DOCX[kolom] ?? kolom) : kolom);
+const namaPernyataan = (kolom: string) => kolom.replace(/^pernyataan_(\d+)$/, "P$1.");
+const namaKolom = (format: Format, kolom: string) => (format === "docx" ? (LABEL_KOLOM_DOCX[kolom] ?? namaPernyataan(kolom)) : kolom);
 /** Letak galat: Word = "soal ke-N" (baris data + judul = N+1), CSV = nomor baris berkas. */
 function letak(format: Format, berkas: "soal" | "bacaan", baris: number): string {
   if (baris <= 0) return "";
@@ -164,11 +167,21 @@ Teks bacaan, boleh banyak paragraf.
 #SOAL
 Subtes: Penalaran Umum
 Topik: ...                (opsional)
-Jenis: PG                 (PG atau Isian)
+Jenis: PG                 (PG, Majemuk, atau Isian)
 Kesulitan: sedang         (opsional)  ·  Level: 1  ·  Waktu: 90  ·  Bacaan: B1
 Soal: Teks soal, boleh banyak paragraf.
 A. ...  (sampai E.)
 Kunci: B                  (Isian: jawaban dipisah |)
+Pembahasan: ...
+
+#SOAL                     (majemuk: tanpa A–E)
+Subtes: Penalaran Umum
+Jenis: Majemuk            (boleh "Majemuk Kompleks")
+Soal: Petunjuk soal.
+Kolom: Benar | Salah      (opsional; tepat 2 label)
+P1. Pernyataan pertama
+P2. Pernyataan kedua      (2 sampai 6, berurutan)
+Kunci: P1=Benar, P2=Salah
 Pembahasan: ...`;
 
 const TOMBOL_UNDUH =
@@ -288,7 +301,7 @@ export default function ImporSoalClient() {
         <p className="text-sm text-muted">
           Unduh contoh, ganti isinya dengan soal Anda, lalu simpan sebagai .docx. Tiap soal diawali baris <code>#SOAL</code>, tiap bacaan
           diawali <code>#BACAAN kode=...</code>. Tulis rumus sebagai teks <code>{"\\( … \\)"}</code> — bukan objek Persamaan Word. Gambar,
-          persamaan Word, soal majemuk kompleks, dan PDF belum didukung; berkas yang memuatnya ditolak. Maksimal 300 soal dan 5 MB per
+          persamaan Word, dan PDF belum didukung; berkas yang memuatnya ditolak. Maksimal 300 soal dan 5 MB per
           unggahan. Semua soal tercatat sebagai Buatan Sendiri.
         </p>
         <p className="text-sm text-muted">
@@ -327,6 +340,9 @@ export default function ImporSoalClient() {
           <div className="mt-3 flex flex-col gap-4">
             <p className="text-sm text-muted">
               Pemisah koma atau titik koma sama-sama diterima; simpan sebagai CSV UTF-8. Isi bacaan.csv hanya bila ada soal berbacaan.
+              Soal majemuk: tipe <code>majemuk_kompleks</code>, isi <code>pernyataan_1</code> sampai <code>pernyataan_6</code> (minimal 2,
+              berurutan), label di <code>label_kolom_1</code> dan <code>label_kolom_2</code> (kosongkan keduanya untuk Benar/Salah), dan{" "}
+              <code>kunci</code> berurutan seperti <code>Benar|Salah|Benar</code>. Kolom pilihan A–E dikosongkan.
             </p>
             <div className="flex flex-wrap gap-2">
               <a href="/api/admin/studio-soal/impor/template?berkas=soal" className={TOMBOL_UNDUH}>
