@@ -64,7 +64,7 @@ describe("header gambar (magic bytes & dimensi)", () => {
       [Buffer.from('<?xml version="1.0"?><svg/>'), "SVG"],
     ] as const) {
       const i = bacaInfoGambar(data);
-      assert.deepEqual(!i.ok && [i.alasan, i.format], ["format", nama]);
+      assert.deepEqual(!i.ok && i.alasan === "format" && [i.alasan, i.format], ["format", nama]);
     }
     for (const data of [png().subarray(0, 14), Buffer.from([0xff, 0xd8, 0xff, 0xd9]), png(0, 5)]) {
       const i = bacaInfoGambar(data);

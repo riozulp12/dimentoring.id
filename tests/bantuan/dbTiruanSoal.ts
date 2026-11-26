@@ -16,7 +16,7 @@ const MAKS_BARIS = 1000;
 
 export const db: Record<string, Row[]> = {};
 export const tulisLangsung: string[] = [];
-export const rpc: { panggilan: { nama: string; args: Row }[]; jawab: Row | ((args: Row) => Row); gagal: boolean } = {
+export const rpc: { panggilan: { nama: string; args: Row }[]; jawab: Row | ((args: Row, nama: string) => Row); gagal: boolean } = {
   panggilan: [],
   jawab: {},
   gagal: false,
@@ -169,7 +169,8 @@ export async function pasangDbTiruan() {
     },
     rpc: (nama: string, args: Row) => {
       rpc.panggilan.push({ nama, args });
-      return Promise.resolve(rpc.gagal ? { data: null, error: { message: "boom" } } : { data: typeof rpc.jawab === "function" ? rpc.jawab(args) : rpc.jawab, error: null });
+      const data = typeof rpc.jawab === "function" ? rpc.jawab(args, nama) : rpc.jawab;
+      return Promise.resolve(rpc.gagal ? { data: null, error: { message: "boom" } } : { data, error: null });
     },
   });
   return (userId: string | null, role: "admin" | "student", method: string, body?: unknown) => {

@@ -1,10 +1,19 @@
 "use client";
 
+import GambarSoal from "@/components/studio-soal/GambarSoal";
 import TeksKaya from "@/components/studio-soal/TeksKaya";
+import type { MediaTampil } from "@/lib/shared/studio-soal/gambar";
 import type { BlokStimulus } from "@/lib/shared/studio-soal/tipe";
 
 /** Pratinjau stimulus (bacaan + tabel) seperti yang akan dilihat siswa. */
-export default function StimulusPratinjau({ blok }: { blok: BlokStimulus[] }) {
+export default function StimulusPratinjau({
+  blok,
+  media,
+}: {
+  blok: BlokStimulus[];
+  /** Gambar yang alamatnya sudah diselesaikan server, per media_id. */
+  media?: Record<string, MediaTampil>;
+}) {
   if (blok.length === 0) return <p className="text-sm italic text-subtle">Bacaan masih kosong.</p>;
   return (
     <div className="flex flex-col gap-4 text-sm text-black sm:text-base">
@@ -12,7 +21,7 @@ export default function StimulusPratinjau({ blok }: { blok: BlokStimulus[] }) {
         b.jenis === "teks" ? (
           <TeksKaya key={i} teks={b.teks} kosong="(bagian teks masih kosong)" />
         ) : b.jenis === "gambar" ? (
-          <p key={i} className="text-sm italic text-subtle">[gambar: {b.alt}]</p>
+          <GambarSoal key={i} gambar={{ ...(media?.[b.media_id] ?? { url: null, lebar: 0, tinggi: 0 }), alt: b.alt }} />
         ) : (
           <figure key={i} className="flex min-w-0 flex-col gap-2">
             {b.judul ? (

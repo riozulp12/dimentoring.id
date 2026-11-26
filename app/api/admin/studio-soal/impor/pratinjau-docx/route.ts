@@ -3,6 +3,8 @@ import { SESSION_COOKIE_NAME, requireAdminAktif } from "@/lib/admin/enrollmentMa
 import { gagalReferensi, responsPratinjau, siapkanMasukanDocx, susunImporDariDb } from "@/lib/admin/studioSoalImpor";
 
 export const runtime = "nodejs";
+// Unduh Word dari Storage + unggah sampai 60 gambar bisa melebihi batas waktu bawaan fungsi.
+export const maxDuration = 60;
 
 /**
  * Pratinjau unggah soal Buatan Sendiri dari Word (.docx) — TANPA menyimpan apa pun.

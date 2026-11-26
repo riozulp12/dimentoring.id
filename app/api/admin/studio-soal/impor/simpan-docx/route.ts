@@ -4,6 +4,8 @@ import { BUCKET_STAGING, hapusBerkas } from "@/lib/admin/mediaSoal";
 import { gagalReferensi, simpanBatch, siapkanMasukanDocx, susunImporDariDb } from "@/lib/admin/studioSoalImpor";
 
 export const runtime = "nodejs";
+// Unduh Word dari Storage + unggah sampai 60 gambar bisa melebihi batas waktu bawaan fungsi.
+export const maxDuration = 60;
 
 /**
  * Simpan soal Buatan Sendiri dari Word (.docx) sebagai DRAF (Admin).

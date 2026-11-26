@@ -10,6 +10,7 @@ import { KARTU, pesanKelas } from "@/components/studio-soal/gaya";
 import { panggilApi } from "@/components/studio-soal/klien";
 import { useNavigasiSibuk } from "@/components/studio-soal/useNavigasiSibuk";
 import { izinSoal, teksDilewati, type SoalDilewati } from "@/lib/shared/studio-soal/bankSoal";
+import type { MediaTampil } from "@/lib/shared/studio-soal/gambar";
 import type { BlokStimulus } from "@/lib/shared/studio-soal/tipe";
 
 type Sibuk = "terbit" | "versi" | "arsip" | "hapus";
@@ -25,7 +26,10 @@ export default function DetailSoalAdmin({
   versiTerbuka,
   updatedAt,
   versiBaru,
+  media,
 }: {
+  /** Gambar soal & bacaan (alamat dari server). */
+  media: Record<string, MediaTampil>;
   id: string;
   sumber: string;
   /** Versi yang sedang dilihat: terbit ditolak bila soal sudah berubah. */
@@ -133,7 +137,7 @@ export default function DetailSoalAdmin({
       ) : null}
 
       <section className={KARTU}>
-        <TampilanSoal key={id} mode="admin" soal={soal} metadata={metadata} stimulus={bacaan} />
+        <TampilanSoal key={id} mode="admin" soal={soal} metadata={metadata} stimulus={bacaan} media={media} />
       </section>
 
       {izin.terbit || izin.edit || izin.versiBaru || izin.arsip || izin.hapus ? (

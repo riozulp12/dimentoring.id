@@ -67,6 +67,11 @@ export function petaGambarSoal(konten: unknown, media: Record<string, MediaTampi
   );
 }
 
+/** Galat validator tentang penanda gambar yang hilang, ganda, atau tanpa gambar. */
+export const masalahPenandaGambar = (errors: { pesan: string }[]): string[] => [
+  ...new Set(errors.map((e) => e.pesan).filter((p) => /\{\{g\d+\}\}|^Gambar g\d+ hilang/.test(p))),
+];
+
 // ---------------------------------------------------------------------------
 // Header berkas gambar (magic bytes + dimensi, tanpa mendekode piksel)
 // ---------------------------------------------------------------------------
