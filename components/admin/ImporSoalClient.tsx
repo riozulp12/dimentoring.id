@@ -27,7 +27,7 @@ interface BerkasWord {
   file: File;
 }
 interface Pratinjau {
-  ringkasan: { jumlahBaris: number; jumlahOk: number; jumlahGalat: number; jumlahPeringatan: number; jumlahBacaan: number };
+  ringkasan: { jumlahBaris: number; jumlahOk: number; jumlahGalat: number; jumlahPeringatan: number; jumlahBacaan: number; jumlahBacaanDilewati: number };
   pratinjau: BarisPratinjau[];
   galat: GalatImpor[];
   peringatan: GalatImpor[];
@@ -41,6 +41,7 @@ interface HasilSimpan {
   jumlahSoal: number;
   jumlahBacaan: number;
   jumlahDilewati: number;
+  jumlahBacaanDilewati: number;
   namaBerkas: string;
 }
 interface HasilTerbit {
@@ -168,7 +169,7 @@ Teks bacaan, boleh banyak paragraf.
 Subtes: Penalaran Umum
 Topik: ...                (opsional)
 Jenis: PG                 (PG, Majemuk, atau Isian)
-Kesulitan: sedang         (opsional)  ·  Level: 1  ·  Waktu: 90  ·  Bacaan: B1
+Kesulitan: sedang         (opsional; juga easy, medium, hard)  ·  Level: 1  ·  Waktu: 90  ·  Bacaan: B1
 Soal: Teks soal, boleh banyak paragraf.
 A. ...  (sampai E.)
 Kunci: B                  (Isian: jawaban dipisah |)
@@ -395,6 +396,11 @@ export default function ImporSoalClient() {
             <span className={`${CHIP} !bg-danger-soft !text-danger`}>{pratinjau.ringkasan.jumlahGalat} galat</span>
             <span className={CHIP}>{pratinjau.ringkasan.jumlahPeringatan} peringatan</span>
             <span className={CHIP}>{pratinjau.ringkasan.jumlahBacaan} bacaan</span>
+            {pratinjau.ringkasan.jumlahBacaanDilewati > 0 ? (
+              <span className={CHIP}>
+                {pratinjau.ringkasan.jumlahBacaanDilewati} bacaan tidak disimpan (tidak ada soalnya yang lolos)
+              </span>
+            ) : null}
           </div>
 
           {pesanBerkas.length > 0 ? (
@@ -496,7 +502,9 @@ export default function ImporSoalClient() {
           <p className="text-sm text-black">
             Batch <strong>{tersimpan.namaBerkas}</strong> (Buatan Sendiri): {tersimpan.jumlahSoal} soal draf
             {tersimpan.jumlahBacaan > 0 ? ` dan ${tersimpan.jumlahBacaan} bacaan` : ""}
-            {tersimpan.jumlahDilewati > 0 ? ` (${tersimpan.jumlahDilewati} soal galat dilewati)` : ""}. Draf belum terlihat siswa.
+            {tersimpan.jumlahDilewati > 0 ? ` (${tersimpan.jumlahDilewati} soal galat dilewati)` : ""}
+            {tersimpan.jumlahBacaanDilewati > 0 ? ` (${tersimpan.jumlahBacaanDilewati} bacaan tanpa soal lolos tidak disimpan)` : ""}. Draf belum
+            terlihat siswa.
           </p>
           {terbit && terbit.dilewati.length > 0 ? (
             <ul className="flex flex-col gap-1 rounded-[12px] bg-danger-soft p-3 text-sm text-danger">

@@ -125,6 +125,7 @@ export async function simpanBatch(adminId: string, hasil: HasilImpor, namaBerkas
         jumlahSoal: r.jumlah_soal,
         jumlahBacaan: r.jumlah_stimulus,
         jumlahDilewati: hasil.ringkasan.jumlahGalat,
+        jumlahBacaanDilewati: hasil.ringkasan.jumlahBacaanDilewati,
         namaBerkas,
       });
     case "bukan_admin":

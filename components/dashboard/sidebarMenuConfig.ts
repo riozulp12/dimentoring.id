@@ -90,6 +90,7 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
         { icon: "assessment", label: "Kelola Assessment", href: "/kelola-assessment" },
         { icon: "tryout", label: "Penugasan Studio Soal", href: "/penugasan-studio-soal" },
         { icon: "tryout", label: "Unggah Soal", href: "/impor-soal" },
+        { icon: "tryout", label: "Bank Soal", href: "/bank-soal" },
         { icon: "setting", label: "Undang Admin", href: "/undang-admin" },
       ],
     },
