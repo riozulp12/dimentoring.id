@@ -5,6 +5,7 @@ import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/
 import PageTitle from "@/components/dashboard/PageTitle";
 import Button from "@/components/ui/Button";
 import DaftarBatchImpor from "@/components/admin/DaftarBatchImpor";
+import TabStudioSoal from "@/components/admin/TabStudioSoal";
 import { CHIP, KARTU, pesanKelas } from "@/components/studio-soal/gaya";
 import { requireAdminAktif } from "@/lib/admin/enrollmentManual";
 import { getBankSoal, getBatchImpor, getOpsiFilter } from "@/lib/admin/bankSoal";
@@ -56,6 +57,7 @@ export default async function BankSoalPage({ searchParams }: { searchParams: Pro
     <>
       <PageTitle value="Bank Soal" />
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-10">
+        <TabStudioSoal aktif="/bank-soal" />
         {!auth.ok ? (
           galat(auth.error)
         ) : (

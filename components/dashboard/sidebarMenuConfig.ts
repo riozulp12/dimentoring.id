@@ -29,12 +29,28 @@ export interface SidebarMenuItem {
   lockedForPendingMentor?: boolean;
   /** Menu ini menuju fitur yang bisa digembok (lib/shared/fiturSegera.ts): kalau belum dibuka, tampil lencana "Segera hadir". Tetap bisa diklik. */
   fiturId?: FiturSegeraId;
+  /** Alamat lain yang juga menandai item ini aktif (halaman yang digabung dalam satu menu). */
+  aktifJuga?: string[];
 }
 
 export interface SidebarMenuGroup {
   group: string;
   items: SidebarMenuItem[];
 }
+
+/** Item aktif bila path = href (atau salah satu aktifJuga) maupun turunannya. */
+export function itemAktif(pathname: string, item: Pick<SidebarMenuItem, "href" | "aktifJuga">): boolean {
+  return [item.href, ...(item.aktifJuga ?? [])].some((h) => pathname === h || pathname.startsWith(`${h}/`));
+}
+
+/** Halaman Admin di bawah menu "Studio Soal"; yang pertama tab bawaan. */
+export const TAB_STUDIO_SOAL = [
+  { label: "Bank Soal", href: "/bank-soal" },
+  { label: "Unggah Soal", href: "/impor-soal" },
+  { label: "Penugasan", href: "/penugasan-studio-soal" },
+] as const;
+
+export type RuteStudioSoal = (typeof TAB_STUDIO_SOAL)[number]["href"];
 
 export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
   siswa: [
@@ -88,9 +104,7 @@ export const sidebarMenus: Record<SidebarRole, SidebarMenuGroup[]> = {
         { icon: "kelas", label: "Kelola Kelas", href: "/kelola-kelas" },
         { icon: "kelas", label: "Sesi Perlu Ditinjau", href: "/sesi-review" },
         { icon: "assessment", label: "Kelola Assessment", href: "/kelola-assessment" },
-        { icon: "tryout", label: "Penugasan Studio Soal", href: "/penugasan-studio-soal" },
-        { icon: "tryout", label: "Unggah Soal", href: "/impor-soal" },
-        { icon: "tryout", label: "Bank Soal", href: "/bank-soal" },
+        { icon: "tryout", label: "Studio Soal", href: TAB_STUDIO_SOAL[0].href, aktifJuga: TAB_STUDIO_SOAL.map((t) => t.href) },
         { icon: "setting", label: "Undang Admin", href: "/undang-admin" },
       ],
     },

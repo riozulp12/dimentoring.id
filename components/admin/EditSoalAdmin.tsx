@@ -20,12 +20,14 @@ import type { BlokStimulus } from "@/lib/shared/studio-soal/tipe";
 import type { ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
 
 type Sibuk = "simpan" | "terbit";
-type Pesan = { jenis: "ok" | "gagal"; teks: string; daftar?: string[]; muatUlang?: boolean };
+type Pesan = { jenis: "ok" | "gagal"; teks: string; daftar?: string[]; muatUlang?: boolean; draf?: string };
 
 /**
- * Sunting draf soal Buatan Sendiri (Admin). Isian, pratinjau, validasi, dan
+ * Sunting soal Buatan Sendiri (Admin). Isian, pratinjau, validasi, dan
  * peringatan keluar sama dengan form mentor; yang berbeda jalur simpannya.
  * `updatedAt` = versi yang dibaca layar: server menolak bila soal sudah berubah.
+ * `terbitUlang`: soal sedang terbit, jadi satu-satunya aksi membuat versi baru
+ * yang langsung terbit (tanpa tombol simpan draf).
  */
 export default function EditSoalAdmin({
   id,
@@ -33,6 +35,7 @@ export default function EditSoalAdmin({
   updatedAt: updatedAtAwal,
   versi,
   versiBaru,
+  terbitUlang,
   subtes,
   bacaan,
   media,
@@ -45,6 +48,8 @@ export default function EditSoalAdmin({
   versi: number;
   /** Draf versi baru dari soal terbit: bisa langsung diterbitkan. */
   versiBaru: boolean;
+  /** Soal terbit: simpan = terbit sebagai versi baru. */
+  terbitUlang: boolean;
   subtes: SubtesPilihan;
   bacaan: { judul: string; blok: BlokStimulus[] } | null;
 }) {
@@ -75,9 +80,9 @@ export default function EditSoalAdmin({
     if (p) requestAnimationFrame(() => pesanRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
   };
 
-  /** true = berhasil. */
-  async function kirim(jenis: Sibuk): Promise<boolean> {
-    if (sibukRef.current) return false;
+  /** Berhasil = id soal yang sekarang berisi isian ini; gagal = null. */
+  async function kirim(jenis: Sibuk): Promise<string | null> {
+    if (sibukRef.current) return null;
     sibukRef.current = true;
     setSedang(jenis);
     setPesan(null);
@@ -85,7 +90,10 @@ export default function EditSoalAdmin({
     const r =
       jenis === "simpan"
         ? await panggilApi(`/api/admin/studio-soal/bank/${id}`, "PUT", { ...form, updated_at: updatedAt })
-        : await panggilApi(`/api/admin/studio-soal/bank/${id}/terbitkan-versi`, "POST", { ...form, updated_at: updatedAt });
+        : await panggilApi(`/api/admin/studio-soal/bank/${id}/${terbitUlang ? "terbit-ulang" : "terbitkan-versi"}`, "POST", {
+            ...form,
+            updated_at: updatedAt,
+          });
     sibukRef.current = false;
     setSedang(null);
     setKonfirmasi(false);
@@ -96,14 +104,16 @@ export default function EditSoalAdmin({
         jenis: "gagal",
         teks: String(r.json.error ?? "Belum tersimpan. Coba lagi."),
         daftar: pesanUnik(errors),
-        muatUlang: r.status === 409,
+        // Ada draf: arahkan ke sana, jangan muat ulang (isian di layar akan hilang).
+        draf: typeof r.json.soalId === "string" ? r.json.soalId : undefined,
+        muatUlang: r.status === 409 && typeof r.json.soalId !== "string",
       });
-      return false;
+      return null;
     }
     setJejakTersimpan(jejak);
     if (typeof r.json.updatedAt === "string") setUpdatedAt(r.json.updatedAt);
     setPesan({ jenis: "ok", teks: String(r.json.pesan ?? "Tersimpan.") });
-    return true;
+    return typeof r.json.soalId === "string" ? r.json.soalId : id;
   }
 
   function simpan() {
@@ -124,7 +134,8 @@ export default function EditSoalAdmin({
   }
 
   async function terbitkan() {
-    if (await kirim("terbit")) pindah("terbit", (r) => r.push(`/bank-soal/${id}`));
+    const tujuan = await kirim("terbit");
+    if (tujuan) pindah("terbit", (r) => r.push(`/bank-soal/${tujuan}`));
   }
 
   return (
@@ -137,8 +148,14 @@ export default function EditSoalAdmin({
               ← Pratinjau soal
             </Link>
             <h1 className="text-xl font-medium text-black sm:text-2xl">
-              Edit soal {versi > 1 ? <span className="text-sm text-muted">versi {versi}</span> : null}
+              {terbitUlang ? "Edit soal terbit" : "Edit soal"}{" "}
+              {versi > 1 ? <span className="text-sm text-muted">versi {versi}</span> : null}
             </h1>
+            {terbitUlang ? (
+              <p className="text-sm text-muted">
+                Perubahan terbit sebagai versi baru saat Anda menekan tombol terbitkan ulang. Sebelum itu siswa tetap melihat versi sekarang.
+              </p>
+            ) : null}
             {bacaan ? (
               <p className="text-sm text-muted">
                 Soal ini memakai bacaan <strong>{bacaan.judul || "tanpa judul"}</strong>. Bacaan hanya bisa dilihat di pratinjau.
@@ -155,6 +172,14 @@ export default function EditSoalAdmin({
                     <li key={d}>{d}</li>
                   ))}
                 </ul>
+              ) : null}
+              {pesan.draf ? (
+                <>
+                  {" "}
+                  <Link href={`/bank-soal/${pesan.draf}`} className="font-medium underline">
+                    Buka draf itu
+                  </Link>
+                </>
               ) : null}
               {pesan.muatUlang ? (
                 <>
@@ -209,20 +234,26 @@ export default function EditSoalAdmin({
 
       <BilahAksi
         keterangan={
-          <span className={kotor ? "text-amber-700" : undefined}>{kotor ? "Ada perubahan belum disimpan" : "Semua perubahan tersimpan"}</span>
+          <span className={kotor ? "text-amber-700" : undefined}>
+            {kotor
+              ? terbitUlang ? "Ada perubahan belum diterbitkan" : "Ada perubahan belum disimpan"
+              : terbitUlang ? "Belum ada perubahan" : "Semua perubahan tersimpan"}
+          </span>
         }
       >
-        <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={simpan} disabled={sibuk !== null}
-          aria-busy={sibuk === "simpan"}>
-          <TeksSibuk sibuk={sibuk === "simpan"} teks="Menyimpan…">
-            Simpan
-          </TeksSibuk>
-        </Button>
-        {versiBaru ? (
+        {terbitUlang ? null : (
+          <Button variant="secondary" size="sm" className={KELAS_TOMBOL_BILAH} onClick={simpan} disabled={sibuk !== null}
+            aria-busy={sibuk === "simpan"}>
+            <TeksSibuk sibuk={sibuk === "simpan"} teks="Menyimpan…">
+              Simpan
+            </TeksSibuk>
+          </Button>
+        )}
+        {versiBaru || terbitUlang ? (
           <Button size="sm" className={KELAS_TOMBOL_BILAH} onClick={mintaTerbit} disabled={sibuk !== null}
             aria-busy={sibuk === "terbit"}>
             <TeksSibuk sibuk={sibuk === "terbit"} teks="Menerbitkan…">
-              Simpan dan terbitkan versi baru
+              {terbitUlang ? "Simpan dan terbitkan ulang" : "Simpan dan terbitkan versi baru"}
             </TeksSibuk>
           </Button>
         ) : null}
@@ -231,7 +262,7 @@ export default function EditSoalAdmin({
       <Modal open={konfirmasi} onClose={() => (sibuk ? undefined : setKonfirmasi(false))} labelledBy={idJudul}>
         <div className="flex flex-col gap-4">
           <h2 id={idJudul} className="pr-8 text-lg font-medium text-black">
-            Terbitkan versi {versi}?
+            Terbitkan versi {terbitUlang ? versi + 1 : versi}?
           </h2>
           <p className="text-sm text-black">
             Versi baru langsung terbit dan versi lama ditandai digantikan. Isi soal terbit terkunci. Penerbitan dicatat atas nama Anda.

@@ -24,6 +24,7 @@ import {
 import {
   sidebarMenus,
   sidebarBottomMenus,
+  itemAktif,
   type SidebarIconKey,
   type SidebarRole,
 } from "./sidebarMenuConfig";
@@ -43,10 +44,6 @@ const ICONS: Record<SidebarIconKey, ComponentType<{ className?: string }>> = {
   promo: PromoIcon,
   logout: LogoutIcon,
 };
-
-function isActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
 
 function NavRow({
   icon,
@@ -203,7 +200,7 @@ export default function Sidebar({
                       icon={item.icon}
                       label={item.label}
                       href={item.href}
-                      active={isActive(pathname, item.href)}
+                      active={itemAktif(pathname, item)}
                       locked={mentorPending && item.lockedForPendingMentor}
                       segera={item.fiturId ? !fiturTerbuka(item.fiturId) : false}
                       collapsed={collapsed}
@@ -224,7 +221,7 @@ export default function Sidebar({
                   icon={item.icon}
                   label={item.label}
                   href={item.href}
-                  active={item.icon === "logout" ? false : isActive(pathname, item.href)}
+                  active={item.icon === "logout" ? false : itemAktif(pathname, item)}
                   collapsed={collapsed}
                   onNavigate={onClose}
                   onClick={

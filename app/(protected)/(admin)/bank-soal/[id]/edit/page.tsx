@@ -11,7 +11,7 @@ import { mediaDariKonten } from "@/lib/shared/studio-soal/gambar";
 import { izinSoal } from "@/lib/shared/studio-soal/bankSoal";
 import { isUuid } from "@/lib/shared/studio-soal/formSoal";
 
-/** Sunting draf soal Buatan Sendiri (Admin). Soal lain diarahkan ke pratinjau. */
+/** Sunting soal Buatan Sendiri berstatus draf atau terbit (Admin). Soal lain diarahkan ke pratinjau. */
 export default async function EditSoalPage({ params }: { params: Promise<{ id: string }> }) {
   const cookie = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const session = verifySessionToken(cookie);
@@ -24,7 +24,10 @@ export default async function EditSoalPage({ params }: { params: Promise<{ id: s
   if (!isUuid(id)) notFound();
   const detail = auth.ok ? await getDetailSoalAdmin(id) : "gagal";
   if (detail === null) notFound();
-  if (detail !== "gagal" && !izinSoal(detail.soal).edit) redirect(`/bank-soal/${id}`);
+  // Draf disunting biasa; soal terbit disunting lalu langsung diterbitkan ulang.
+  const izin = detail === "gagal" ? null : izinSoal(detail.soal);
+  if (izin && !izin.edit && !izin.versiBaru) redirect(`/bank-soal/${id}`);
+  if (detail !== "gagal" && izin?.versiBaru && detail.versiTerbuka) redirect(`/bank-soal/${detail.versiTerbuka}/edit`);
   // Alamat gambar dibuat di server, sesudah guard Admin.
   const media =
     detail === "gagal"
@@ -35,7 +38,7 @@ export default async function EditSoalPage({ params }: { params: Promise<{ id: s
     <>
       <PageTitle value="Bank Soal" />
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 p-4 sm:p-6 lg:p-10">
-        {detail === "gagal" ? (
+        {detail === "gagal" || !izin ? (
           <p role="alert" className={pesanKelas("gagal")}>
             {auth.ok ? "Soal belum bisa dimuat. Muat ulang halaman sebentar lagi." : auth.error}
           </p>
@@ -48,6 +51,7 @@ export default async function EditSoalPage({ params }: { params: Promise<{ id: s
             updatedAt={detail.soal.updated_at}
             versi={detail.soal.versi}
             versiBaru={detail.soal.menggantikan_id !== null}
+            terbitUlang={izin.versiBaru}
             subtes={detail.subtes}
             bacaan={detail.bacaan ? { judul: detail.bacaan.judul, blok: detail.bacaan.blok } : null}
             awal={{

@@ -4,6 +4,7 @@ import { ROLE_DASHBOARD_PATH, SESSION_COOKIE_NAME, verifySessionToken } from "@/
 import { getPenugasanStudioSoalData } from "@/lib/admin/getPenugasanStudioSoalData";
 import PageTitle from "@/components/dashboard/PageTitle";
 import PenugasanStudioSoalClient from "@/components/admin/PenugasanStudioSoalClient";
+import TabStudioSoal from "@/components/admin/TabStudioSoal";
 
 /** "Penugasan Studio Soal" (Admin) — PR 3a, revisi K2 (docs/design/studio-soal-snbt-tahap1.md), BR-37. */
 export default async function PenugasanStudioSoalPage() {
@@ -20,6 +21,7 @@ export default async function PenugasanStudioSoalPage() {
     <>
       <PageTitle value="Penugasan Studio Soal" />
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 p-4 sm:gap-8 sm:p-6 lg:p-10">
+        <TabStudioSoal aktif="/penugasan-studio-soal" />
         {data === "gagal" ? (
           <div className="rounded-[20px] border-[0.8px] border-line bg-white px-5 py-12 text-center">
             <p className="text-base text-muted">Data penugasan gagal dimuat. Coba muat ulang halaman.</p>
