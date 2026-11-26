@@ -14,6 +14,7 @@ import { KARTU, KOLOM_PRATINJAU, pesanKelas } from "@/components/studio-soal/gay
 import { panggilApi, petaError } from "@/components/studio-soal/klien";
 import { useNavigasiSibuk } from "@/components/studio-soal/useNavigasiSibuk";
 import type { FormSoal } from "@/lib/shared/studio-soal/formSoal";
+import { daftarGambar, masalahPenandaGambar, type MediaTampil } from "@/lib/shared/studio-soal/gambar";
 import { cekSoalLengkap, pesanUnik } from "@/lib/shared/studio-soal/kelengkapan";
 import type { BlokStimulus } from "@/lib/shared/studio-soal/tipe";
 import type { ErrorValidasi } from "@/lib/shared/studio-soal/validasi";
@@ -34,8 +35,11 @@ export default function EditSoalAdmin({
   versiBaru,
   subtes,
   bacaan,
+  media,
 }: {
   id: string;
+  /** Gambar soal & bacaan (alamat dari server). */
+  media: Record<string, MediaTampil>;
   awal: FormSoal;
   updatedAt: string;
   versi: number;
@@ -63,6 +67,8 @@ export default function EditSoalAdmin({
   const errorsLengkap = useMemo(() => cekSoalLengkap(form, subtes.kategori), [form, subtes.kategori]);
   const errorsBentuk = errorsLengkap.filter((e) => e.jenis === "bentuk");
   const peta = petaError([...(tampilSemua ? errorsLengkap : errorsBentuk), ...errorServer]);
+  const jumlahGambar = daftarGambar(form.konten).length;
+  const gambarBermasalah = masalahPenandaGambar(errorsBentuk);
 
   const setPesan = (p: Pesan | null) => {
     setPesanState(p);
@@ -161,6 +167,23 @@ export default function EditSoalAdmin({
             </div>
           ) : null}
 
+          {jumlahGambar > 0 ? (
+            <p className="text-sm text-muted">
+              Soal ini memuat {jumlahGambar} gambar. Tanda seperti <code>{"{{g1}}"}</code> menentukan letaknya: boleh dipindah, jangan
+              dihapus atau digandakan. Gambar baru belum bisa ditambah di sini.
+            </p>
+          ) : null}
+          {gambarBermasalah.length > 0 ? (
+            <div role="alert" className={pesanKelas("gagal")}>
+              Tanda gambar bermasalah, jadi soal belum bisa disimpan:
+              <ul className="mt-1 list-disc pl-5">
+                {gambarBermasalah.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           <TabTulisPratinjau tab={tab} setTab={setTab} label={{ tulis: "Tulis", pratinjau: "Pratinjau & uji kunci" }} />
           <div className={["flex min-w-0 flex-col gap-4", tab === "tulis" ? "" : "hidden lg:flex"].join(" ")}>
             <IsianSoal
@@ -179,7 +202,7 @@ export default function EditSoalAdmin({
         <aside className={["min-w-0", KOLOM_PRATINJAU, tab === "pratinjau" ? "" : "hidden lg:block"].join(" ")}>
           <div className={KARTU}>
             <h2 className="text-base font-medium text-black">Pratinjau</h2>
-            <SoalPratinjau soal={form} stimulus={bacaan?.blok ?? null} />
+            <SoalPratinjau soal={form} stimulus={bacaan?.blok ?? null} media={media} />
           </div>
         </aside>
       </div>

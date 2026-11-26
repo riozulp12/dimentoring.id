@@ -6,6 +6,8 @@ import DetailSoalAdmin from "@/components/admin/DetailSoalAdmin";
 import { pesanKelas } from "@/components/studio-soal/gaya";
 import { requireAdminAktif } from "@/lib/admin/enrollmentManual";
 import { getDetailSoalAdmin } from "@/lib/admin/bankSoal";
+import { urlGambarSoal } from "@/lib/admin/mediaSoal";
+import { mediaDariKonten } from "@/lib/shared/studio-soal/gambar";
 import { isUuid } from "@/lib/shared/studio-soal/formSoal";
 
 /** Pratinjau satu soal di Bank Soal (Admin). Kunci jawaban hanya sampai ke Admin aktif. */
@@ -21,6 +23,11 @@ export default async function DetailSoalPage({ params }: { params: Promise<{ id:
   if (!isUuid(id)) notFound();
   const detail = auth.ok ? await getDetailSoalAdmin(id) : "gagal";
   if (detail === null) notFound();
+  // Alamat gambar dibuat di server, sesudah guard Admin.
+  const media =
+    detail === "gagal"
+      ? {}
+      : await urlGambarSoal([...mediaDariKonten(detail.soal.konten), ...mediaDariKonten({ blok: detail.bacaan?.blok })]);
 
   return (
     <>
@@ -53,6 +60,7 @@ export default async function DetailSoalPage({ params }: { params: Promise<{ id:
               status: detail.soal.status,
             }}
             bacaan={detail.bacaan?.blok ?? null}
+            media={media}
             versiTerbuka={detail.versiTerbuka}
           />
         )}

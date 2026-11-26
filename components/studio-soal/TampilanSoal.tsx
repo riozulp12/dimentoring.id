@@ -6,6 +6,7 @@ import StimulusPratinjau from "@/components/studio-soal/StimulusPratinjau";
 import SoalPratinjau from "@/components/studio-soal/SoalPratinjau";
 import { LABEL_KESULITAN, LABEL_TIPE } from "@/lib/shared/studio-soal/formSoal";
 import { LABEL_STATUS_SOAL, type StatusSoal } from "@/lib/shared/studio-soal/studioMentor";
+import { penandaGambar, petaGambarSoal, type MediaTampil } from "@/lib/shared/studio-soal/gambar";
 import type { BlokStimulus, TipeSoal } from "@/lib/shared/studio-soal/tipe";
 
 /**
@@ -47,16 +48,21 @@ export interface MetadataSoal {
   status: string;
 }
 
+interface PropsBersama {
+  stimulus?: BlokStimulus[] | null;
+  /** Gambar yang alamatnya sudah diselesaikan server, per media_id. Komponen tidak memanggil Storage. */
+  media?: Record<string, MediaTampil>;
+}
 export type PropsTampilanSoal =
-  | { mode: "siswa"; soal: SoalSiswa; stimulus?: BlokStimulus[] | null; metadata?: never }
-  | { mode: "admin"; soal: SoalAdminTampil; stimulus?: BlokStimulus[] | null; metadata: MetadataSoal; awalTampilKunci?: boolean };
+  | (PropsBersama & { mode: "siswa"; soal: SoalSiswa; metadata?: never })
+  | (PropsBersama & { mode: "admin"; soal: SoalAdminTampil; metadata: MetadataSoal; awalTampilKunci?: boolean });
 
 const daftar = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 
 export default function TampilanSoal(props: PropsTampilanSoal) {
   if (props.mode === "siswa") {
     const { tipe, redaksi, konten } = props.soal;
-    return <LembarSiswa tipe={tipe} redaksi={redaksi} konten={konten} stimulus={props.stimulus ?? null} />;
+    return <LembarSiswa tipe={tipe} redaksi={redaksi} konten={konten} stimulus={props.stimulus ?? null} media={props.media} />;
   }
   const m = props.metadata;
   const baris: [string, string][] = [
@@ -79,12 +85,34 @@ export default function TampilanSoal(props: PropsTampilanSoal) {
           </div>
         ))}
       </dl>
-      <SoalPratinjau soal={props.soal} stimulus={props.stimulus} teksKunci="kunci dan pembahasan" awalTampilKunci={props.awalTampilKunci} />
+      <SoalPratinjau
+        soal={props.soal}
+        stimulus={props.stimulus}
+        media={props.media}
+        teksKunci="kunci dan pembahasan"
+        awalTampilKunci={props.awalTampilKunci}
+      />
     </div>
   );
 }
 
-function LembarSiswa({ tipe, redaksi, konten, stimulus }: { tipe: string; redaksi: string; konten: Obj; stimulus: BlokStimulus[] | null }) {
+function LembarSiswa({
+  tipe,
+  redaksi,
+  konten,
+  stimulus,
+  media,
+}: {
+  tipe: string;
+  redaksi: string;
+  konten: Obj;
+  stimulus: BlokStimulus[] | null;
+  media?: Record<string, MediaTampil>;
+}) {
+  // Hanya gambar yang penandanya ada di teks soal; gambar pembahasan tidak diteruskan.
+  const diSoal = new Set(penandaGambar(redaksi));
+  const semua = petaGambarSoal(konten, media);
+  const gambar = semua && Object.fromEntries(Object.entries(semua).filter(([kode]) => diSoal.has(kode)));
   const [opsi, setOpsi] = useState<string | null>(null);
   const [perBaris, setPerBaris] = useState<Record<string, number>>({});
   const [isian, setIsian] = useState<Record<string, string>>({});
@@ -96,13 +124,14 @@ function LembarSiswa({ tipe, redaksi, konten, stimulus }: { tipe: string; redaks
     <div className="flex flex-col gap-4">
       {stimulus && stimulus.length > 0 ? (
         <div className="rounded-[16px] border border-line bg-surface p-4">
-          <StimulusPratinjau blok={stimulus} />
+          <StimulusPratinjau blok={stimulus} media={media} />
         </div>
       ) : null}
 
       <div className="text-sm text-black sm:text-base">
         <TeksKaya
           teks={redaksi}
+          gambar={gambar}
           rumpang={
             tipe === "isian"
               ? (id) =>

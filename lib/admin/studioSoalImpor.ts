@@ -1,8 +1,10 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { olahDocx, type HasilOlahDocx } from "@/lib/admin/docxIsi";
+import { olahDocx, type GambarSiap, type HasilOlahDocx } from "@/lib/admin/docxIsi";
 import { berawalanZip } from "@/lib/admin/docxZip";
+import { BUCKET_MEDIA, BUCKET_STAGING, hapusBerkas, unggahGambar, type BarisMedia } from "@/lib/admin/mediaSoal";
+import { mediaDariKonten } from "@/lib/shared/studio-soal/gambar";
 import {
   bisaSimpan,
   susunImpor,
@@ -22,6 +24,7 @@ import { BATAS_BYTE_DOCX } from "@/lib/shared/studio-soal/imporDocx";
 export const BATAS_BYTE_CSV = 2 * 1024 * 1024;
 const BATAS_REDAKSI_BANK = 20000;
 const MAKS_PESAN = 500;
+const POLA_NAMA_STAGING = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.docx$/;
 
 export interface BodyImpor {
   soalCsv: string;
@@ -49,7 +52,10 @@ export function parseBodyImpor(body: unknown): { ok: true; data: BodyImpor } | {
   return { ok: true, data: { soalCsv: b.soalCsv, bacaanCsv, namaBerkas: namaBerkas || "soal.csv", lewatiGalat: b.lewatiGalat === true } };
 }
 
-type MasukanBerkas = Pick<MasukanImpor, "soalCsv" | "bacaanCsv" | "soalBaris" | "bacaanBaris" | "bacaanBlok" | "galatTambahan">;
+type MasukanBerkas = Pick<
+  MasukanImpor,
+  "soalCsv" | "bacaanCsv" | "soalBaris" | "bacaanBaris" | "bacaanBlok" | "soalGambar" | "galatTambahan"
+>;
 
 /** Susun ulang dari berkas yang diunggah memakai data referensi terbaru dari database. */
 export async function susunImporDariDb(masukan: Partial<MasukanBerkas>): Promise<{ ok: true; hasil: HasilImpor } | { ok: false }> {
@@ -68,6 +74,7 @@ export async function susunImporDariDb(masukan: Partial<MasukanBerkas>): Promise
     soalBaris: masukan.soalBaris,
     bacaanBaris: masukan.bacaanBaris,
     bacaanBlok: masukan.bacaanBlok,
+    soalGambar: masukan.soalGambar,
     galatTambahan: masukan.galatTambahan,
     subtes: (subtesRes.data ?? []) as SubtesImpor[],
     topik: (topikRes.data ?? []) as TopikImpor[],
@@ -86,6 +93,7 @@ export function responsPratinjau(hasil: HasilImpor) {
   return NextResponse.json({
     success: true,
     ringkasan: hasil.ringkasan,
+    gambarBacaan: hasil.gambarBacaan,
     pratinjau: hasil.pratinjau,
     galat: hasil.galat.slice(0, MAKS_PESAN),
     peringatan: hasil.peringatan.slice(0, MAKS_PESAN),
@@ -96,10 +104,30 @@ export function responsPratinjau(hasil: HasilImpor) {
   });
 }
 
-/** Simpan hasil susunImpor sebagai DRAF lewat RPC studio_soal_impor_admin (satu transaksi). */
-export async function simpanBatch(adminId: string, hasil: HasilImpor, namaBerkas: string, lewatiGalat: boolean) {
+/**
+ * Simpan hasil susunImpor sebagai DRAF lewat RPC studio_soal_impor_admin (satu
+ * transaksi). Gambar yang dipakai soal/bacaan yang disimpan diunggah ke Storage
+ * dulu; bila RPC gagal, unggahannya dihapus lagi (best-effort).
+ */
+export async function simpanBatch(
+  adminId: string,
+  hasil: HasilImpor,
+  namaBerkas: string,
+  lewatiGalat: boolean,
+  gambar: GambarSiap[] = [],
+) {
   const cek = bisaSimpan(hasil, lewatiGalat);
   if (!cek.ok) return NextResponse.json({ success: false, error: cek.alasan }, { status: 422 });
+
+  const dipakai = new Set([...hasil.soal, ...hasil.stimulus].flatMap((x) => mediaDariKonten(x.konten)));
+  let media: BarisMedia[] = [];
+  if (dipakai.size > 0) {
+    const unggahan = await unggahGambar(gambar.filter((g) => dipakai.has(g.media_id)));
+    if (!unggahan) {
+      return NextResponse.json({ success: false, error: "Gambar belum bisa disimpan. Coba lagi sebentar lagi." }, { status: 500 });
+    }
+    media = unggahan;
+  }
 
   const { data, error } = await supabaseServer.rpc("studio_soal_impor_admin", {
     p_admin_id: adminId,
@@ -109,8 +137,11 @@ export async function simpanBatch(adminId: string, hasil: HasilImpor, namaBerkas
       jumlah_gagal: hasil.ringkasan.jumlahGalat,
       stimulus: hasil.stimulus,
       soal: hasil.soal,
+      ...(media.length > 0 ? { media } : {}),
     },
   });
+  const tersimpan = !error && (data as { status?: unknown } | null)?.status === "disimpan";
+  if (!tersimpan) await hapusBerkas(BUCKET_MEDIA, media.map((m) => m.path));
   if (error) {
     console.error("[admin/studio-soal/impor/simpan] studio_soal_impor_admin failed:", error);
     return NextResponse.json({ success: false, error: "Soal belum tersimpan. Coba lagi sebentar lagi." }, { status: 500 });
@@ -126,6 +157,7 @@ export async function simpanBatch(adminId: string, hasil: HasilImpor, namaBerkas
         jumlahBacaan: r.jumlah_stimulus,
         jumlahDilewati: hasil.ringkasan.jumlahGalat,
         jumlahBacaanDilewati: hasil.ringkasan.jumlahBacaanDilewati,
+        jumlahGambar: media.length,
         namaBerkas,
       });
     case "bukan_admin":
@@ -144,46 +176,68 @@ export async function simpanBatch(adminId: string, hasil: HasilImpor, namaBerkas
 }
 
 // ---------------------------------------------------------------------------
-// DOCX
+// DOCX (berkas diambil dari bucket impor-staging, bukan dari body permintaan)
 // ---------------------------------------------------------------------------
 
 export interface MasukanDocx {
+  /** Lokasi berkas di bucket impor-staging. */
+  path: string;
   namaBerkas: string;
   lewatiGalat: boolean;
   masukan: Extract<HasilOlahDocx, { ok: true }>["masukan"];
+  gambar: GambarSiap[];
+}
+
+/** Berkas staging hanya milik admin pembuatnya: "<adminId>/<uuid>.docx". */
+export function pathStagingMilik(path: unknown, adminId: string): path is string {
+  if (typeof path !== "string") return false;
+  const [pemilik, nama, ...sisa] = path.split("/");
+  return pemilik === adminId && sisa.length === 0 && POLA_NAMA_STAGING.test(nama ?? "");
 }
 
 /**
- * Baca multipart (field "berkas" = satu .docx, maks. 5 MB), periksa tanda ZIP
- * "PK", lalu olahDocx() menolak isi yang tidak didukung dan menguraikannya jadi
- * baris perantara untuk susunImpor(). Mengembalikan NextResponse bila ditolak.
+ * Body JSON { path, namaBerkas?, lewatiGalat? }: pastikan path milik admin ini,
+ * unduh dari Storage, periksa ukuran & tanda ZIP "PK", lalu olahDocx() menolak isi
+ * yang tidak didukung dan menguraikannya jadi baris perantara untuk susunImpor().
+ * Mengembalikan NextResponse bila ditolak.
  */
-export async function siapkanMasukanDocx(request: Request): Promise<{ ok: true; data: MasukanDocx } | { ok: false; respons: NextResponse }> {
+export async function siapkanMasukanDocx(
+  request: Request,
+  adminId: string,
+): Promise<{ ok: true; data: MasukanDocx } | { ok: false; respons: NextResponse }> {
   const tolak = (error: string, status: number) => ({ ok: false as const, respons: NextResponse.json({ success: false, error }, { status }) });
 
-  let form: FormData;
+  let body: unknown;
   try {
-    form = await request.formData();
+    body = await request.json();
   } catch {
-    return tolak("Permintaan harus berupa unggahan berkas (multipart).", 400);
+    return tolak("Permintaan tidak valid.", 400);
   }
-  const berkas = form.get("berkas");
-  if (!(berkas instanceof File)) return tolak("Berkas Word (.docx) belum dipilih.", 400);
-  if (!berkas.name.toLowerCase().endsWith(".docx")) return tolak("Hanya berkas .docx yang diterima (bukan .doc atau PDF).", 400);
-  if (berkas.size === 0) return tolak("Berkas kosong.", 400);
-  if (berkas.size > BATAS_BYTE_DOCX) return tolak("Berkas terlalu besar (maks. 5 MB).", 413);
+  const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+  if (!pathStagingMilik(b.path, adminId)) return tolak("Berkas unggahan ini bukan milik Anda. Pilih berkasnya lagi.", 403);
 
-  const buffer = Buffer.from(await berkas.arrayBuffer());
+  const unduh = await supabaseServer.storage.from(BUCKET_STAGING).download(b.path);
+  if (unduh.error || !unduh.data) {
+    console.error("[admin/studio-soal/impor] gagal mengunduh berkas staging:", unduh.error);
+    return tolak("Berkas unggahan tidak ditemukan. Pilih berkasnya lalu periksa lagi.", 404);
+  }
+  if (unduh.data.size === 0) return tolak("Berkas kosong.", 400);
+  if (unduh.data.size > BATAS_BYTE_DOCX) return tolak("Berkas terlalu besar (maks. 25 MB).", 413);
+
+  const buffer = Buffer.from(await unduh.data.arrayBuffer());
   if (!berawalanZip(buffer)) return tolak("Berkas bukan dokumen Word (.docx) yang valid.", 400);
 
   const olah = await olahDocx(buffer);
   if (!olah.ok) return tolak(olah.error, olah.status);
+  const namaBerkas = typeof b.namaBerkas === "string" ? b.namaBerkas.trim().slice(0, 200) : "";
   return {
     ok: true,
     data: {
-      namaBerkas: berkas.name.slice(0, 200),
-      lewatiGalat: form.get("lewatiGalat") === "true",
+      path: b.path,
+      namaBerkas: namaBerkas || "soal.docx",
+      lewatiGalat: b.lewatiGalat === true,
       masukan: olah.masukan,
+      gambar: olah.media,
     },
   };
 }

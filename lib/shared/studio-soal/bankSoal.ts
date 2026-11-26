@@ -190,6 +190,8 @@ export function terjemahkanRpcAdmin(hasil: Record<string, unknown>): TerjemahanA
       return ok("Soal diarsipkan. Soal tidak ikut latihan, tetapi tetap tersimpan.");
     case "bukan_buatan_sendiri":
       return no(403, "Soal buatan mentor hanya bisa dilihat.");
+    case "media_asing":
+      return no(400, "Soal hanya boleh memakai gambar yang sudah ada di soal itu. Muat ulang halaman.");
     case "sudah_berubah":
       return no(409, "Soal sudah diubah di tempat lain, muat ulang halaman.");
     case "terkunci":

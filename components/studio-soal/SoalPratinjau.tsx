@@ -6,6 +6,7 @@ import TeksKaya from "@/components/studio-soal/TeksKaya";
 import StimulusPratinjau from "@/components/studio-soal/StimulusPratinjau";
 import { nilaiJawaban, type HasilNilai } from "@/lib/shared/studio-soal/nilaiJawaban";
 import { parseAngka } from "@/lib/shared/studio-soal/angka";
+import { petaGambarSoal, type MediaTampil } from "@/lib/shared/studio-soal/gambar";
 import type { BlokStimulus } from "@/lib/shared/studio-soal/tipe";
 
 /**
@@ -39,9 +40,12 @@ export default function SoalPratinjau({
   stimulus,
   teksKunci = "kunci & pembahasan",
   awalTampilKunci = false,
+  media,
 }: {
   soal: SoalUntukPratinjau;
   stimulus?: BlokStimulus[] | null;
+  /** Gambar soal & bacaan yang alamatnya sudah diselesaikan server, per media_id. */
+  media?: Record<string, MediaTampil>;
   /** Sebutan pada tombol buka/tutup kunci. */
   teksKunci?: string;
   awalTampilKunci?: boolean;
@@ -59,6 +63,7 @@ export default function SoalPratinjau({
 
   const konten = objek(soal.konten);
   const kunci = objek(soal.kunci);
+  const gambar = petaGambarSoal(konten, media);
 
   function periksa() {
     const jawaban =
@@ -99,7 +104,7 @@ export default function SoalPratinjau({
     <div className="flex flex-col gap-4">
       {stimulus && stimulus.length > 0 ? (
         <div className="rounded-[16px] border border-line bg-surface p-4">
-          <StimulusPratinjau blok={stimulus} />
+          <StimulusPratinjau blok={stimulus} media={media} />
         </div>
       ) : null}
 
@@ -107,6 +112,7 @@ export default function SoalPratinjau({
         {soal.tipe === "isian" ? (
           <TeksKaya
             teks={soal.redaksi}
+            gambar={gambar}
             kosong="(teks soal masih kosong)"
             rumpang={(id) =>
               jenisRumpang.has(id) ? (
@@ -126,7 +132,7 @@ export default function SoalPratinjau({
             }
           />
         ) : (
-          <TeksKaya teks={soal.redaksi} kosong="(teks soal masih kosong)" />
+          <TeksKaya teks={soal.redaksi} gambar={gambar} kosong="(teks soal masih kosong)" />
         )}
       </div>
 
@@ -268,7 +274,7 @@ export default function SoalPratinjau({
             : null}
           <div>
             <p className="font-medium">Pembahasan</p>
-            <TeksKaya teks={soal.pembahasan} kosong="(pembahasan kosong)" />
+            <TeksKaya teks={soal.pembahasan} gambar={gambar} kosong="(pembahasan kosong)" />
           </div>
         </div>
       ) : null}

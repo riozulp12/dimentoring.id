@@ -9,6 +9,7 @@
  *   - terjemahan kode hasil RPC studio_soal_* -> HTTP status + pesan
  */
 import type { SoalInput, StimulusInput } from "./tipe";
+import { POLA_KODE_GAMBAR } from "./gambar";
 import { BATAS, LABEL_OPSI, POLA_ID_BAGIAN, TINGKAT_KESULITAN, TIPE_SOAL, type BlokStimulus, type TipeSoal } from "./tipe";
 
 export const POLA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -168,9 +169,17 @@ export function parseBodySimpanSoal(body: unknown): { ok: true; data: PayloadSoa
  * supaya JSONB yang tersimpan tidak memuat field asing dari klien.
  */
 export function rapikanKontenKunci(tipe: TipeSoal, konten: Obj, kunci: Obj): { konten: Obj; kunci: Obj } {
+  const rapi = rapikanPerTipe(tipe, konten, kunci);
+  const gambar = Array.isArray(konten.gambar) ? konten.gambar : [];
+  if (gambar.length === 0) return rapi;
+  return { ...rapi, konten: { ...rapi.konten, gambar: gambar.map((g) => ambil(g, ["kode", "media_id", "alt"])) } };
+}
+
+const ambil = (o: unknown, keys: string[]) =>
+  isObjek(o) ? Object.fromEntries(keys.filter((k) => k in o).map((k) => [k, o[k]])) : o;
+
+function rapikanPerTipe(tipe: TipeSoal, konten: Obj, kunci: Obj): { konten: Obj; kunci: Obj } {
   const arr = (v: unknown) => (Array.isArray(v) ? v : undefined);
-  const ambil = (o: unknown, keys: string[]) =>
-    isObjek(o) ? Object.fromEntries(keys.filter((k) => k in o).map((k) => [k, o[k]])) : o;
 
   if (tipe === "pilihan_ganda") {
     const opsi = arr(konten.opsi);
@@ -210,7 +219,9 @@ export function rapikanKontenKunci(tipe: TipeSoal, konten: Obj, kunci: Obj): { k
 
 /** Id rumpang yang muncul sebagai {{id}} di redaksi, berurutan. */
 export function penandaDiRedaksi(redaksi: string): string[] {
-  return [...redaksi.matchAll(/\{\{([^{}]*)\}\}/g)].map((m) => m[1]).filter((id) => POLA_ID_BAGIAN.test(id));
+  return [...redaksi.matchAll(/\{\{([^{}]*)\}\}/g)]
+    .map((m) => m[1])
+    .filter((id) => POLA_ID_BAGIAN.test(id) && !POLA_KODE_GAMBAR.test(id));
 }
 
 /** Rumpang baru di posisi kursor: menyisipkan {{rN}} ke redaksi + entri konten & kunci. */
@@ -300,7 +311,9 @@ export function rapikanKontenStimulus(konten: FormStimulus["konten"]): FormStimu
     blok: konten.blok.map((b) =>
       b.jenis === "tabel"
         ? { jenis: "tabel", judul: b.judul ?? null, kepala: b.kepala, baris: b.baris }
-        : { jenis: "teks", teks: (b as { teks: string }).teks },
+        : b.jenis === "gambar"
+          ? { jenis: "gambar", media_id: b.media_id, alt: b.alt }
+          : { jenis: "teks", teks: (b as { teks: string }).teks },
     ),
   };
 }

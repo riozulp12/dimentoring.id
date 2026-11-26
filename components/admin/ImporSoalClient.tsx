@@ -7,6 +7,7 @@ import Modal from "@/components/ui/Modal";
 import Toggle from "@/components/ui/Toggle";
 import { CHIP, KARTU, pesanKelas } from "@/components/studio-soal/gaya";
 import { teksDilewati, type SoalDilewati } from "@/lib/shared/studio-soal/bankSoal";
+import { BATAS_BYTE_DOCX } from "@/lib/shared/studio-soal/imporDocx";
 import type { BarisPratinjau, GalatImpor, StatusBaris } from "@/lib/shared/studio-soal/impor";
 
 /**
@@ -29,7 +30,16 @@ interface BerkasWord {
   file: File;
 }
 interface Pratinjau {
-  ringkasan: { jumlahBaris: number; jumlahOk: number; jumlahGalat: number; jumlahPeringatan: number; jumlahBacaan: number; jumlahBacaanDilewati: number };
+  ringkasan: {
+    jumlahBaris: number;
+    jumlahOk: number;
+    jumlahGalat: number;
+    jumlahPeringatan: number;
+    jumlahBacaan: number;
+    jumlahBacaanDilewati: number;
+    jumlahGambar?: number;
+  };
+  gambarBacaan?: { baris: number; kode: string; jumlah: number }[];
   pratinjau: BarisPratinjau[];
   galat: GalatImpor[];
   peringatan: GalatImpor[];
@@ -99,14 +109,32 @@ const WARNA_STATUS: Record<StatusBaris, string> = {
   galat: "bg-danger-soft text-danger",
 };
 
+const MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/** Minta signed upload URL lalu kirim berkasnya LANGSUNG ke Storage (tidak lewat server aplikasi). */
+async function unggahWord(file: File): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+  if (file.size > BATAS_BYTE_DOCX) return { ok: false, error: "Berkas terlalu besar (maks. 25 MB)." };
+  const siap = await kirim<{ path: string; url: string }>("/api/admin/studio-soal/impor/siapkan-unggah", {
+    namaBerkas: file.name,
+    ukuran: file.size,
+  });
+  if (!siap.ok) return siap;
+  // Bentuk permintaan sama dengan uploadToSignedUrl milik supabase-js. Tipe dipaksa: bucket hanya menerima .docx.
+  const form = new FormData();
+  form.append("cacheControl", "3600");
+  form.append("", file.slice(0, file.size, MIME_DOCX));
+  try {
+    const res = await fetch(siap.data.url, { method: "PUT", headers: { "x-upsert": "false" }, body: form });
+    if (!res.ok) return { ok: false, error: "Berkas belum terunggah. Coba lagi sebentar lagi." };
+  } catch {
+    return { ok: false, error: "Tidak bisa mengunggah berkas. Periksa koneksi lalu coba lagi." };
+  }
+  return { ok: true, path: siap.data.path };
+}
+
 async function kirim<T>(url: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   try {
-    const res = await fetch(
-      url,
-      body instanceof FormData
-        ? { method: "POST", body }
-        : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
-    );
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const json = (await res.json().catch(() => null)) as ({ success?: boolean; error?: string } & T) | null;
     if (!res.ok || !json || json.success === false) return { ok: false, error: json?.error ?? "Permintaan gagal. Coba lagi sebentar lagi." };
     return { ok: true, data: json as T };
@@ -185,6 +213,8 @@ const TOMBOL_UNDUH =
 
 export default function ImporSoalClient() {
   const [word, setWord] = useState<BerkasWord | null>(null);
+  /** Lokasi berkas Word yang sudah terunggah ke Storage (milik berkas `word` saat ini). */
+  const [unggahan, setUnggahan] = useState<string | null>(null);
   const [soal, setSoal] = useState<BerkasCsv | null>(null);
   const [bacaan, setBacaan] = useState<BerkasCsv | null>(null);
   const [format, setFormat] = useState<Format | null>(null);
@@ -230,30 +260,33 @@ export default function ImporSoalClient() {
     return [...pratinjau.galat, ...pratinjau.peringatan].filter((g) => g.berkas === "bacaan" || g.baris <= 1);
   }, [pratinjau]);
 
-  /** Isi permintaan untuk format yang dipakai: Word = multipart, CSV = JSON. */
-  function isiPermintaan(f: Format, tambahan?: Record<string, string>): { url: string; body: unknown } | null {
-    if (f === "docx") {
-      if (!word) return null;
-      const form = new FormData();
-      form.append("berkas", word.file);
-      for (const [k, v] of Object.entries(tambahan ?? {})) form.append(k, v);
-      return { url: "docx", body: form };
-    }
-    if (!soal) return null;
-    return {
-      url: "csv",
-      body: { soalCsv: soal.teks, bacaanCsv: bacaan?.teks ?? null, namaBerkas: soal.nama, lewatiGalat: tambahan?.lewatiGalat === "true" },
-    };
+  /** Isi permintaan untuk format yang dipakai. Word dikirim sebagai lokasi berkas di Storage. */
+  function isiPermintaan(f: Format, lewati: boolean, path: string | null): unknown {
+    if (f === "docx") return word && path ? { path, namaBerkas: word.nama, lewatiGalat: lewati } : null;
+    return soal ? { soalCsv: soal.teks, bacaanCsv: bacaan?.teks ?? null, namaBerkas: soal.nama, lewatiGalat: lewati } : null;
   }
 
   async function periksa(f: Format) {
-    const req = isiPermintaan(f);
-    if (!req) return;
+    if (f === "docx" ? !word : !soal) return;
     setSibuk("periksa");
     reset();
-    const r = await kirim<Pratinjau>(`/api/admin/studio-soal/impor/pratinjau${f === "docx" ? "-docx" : ""}`, req.body);
+    let path = unggahan;
+    if (f === "docx" && word && !path) {
+      const u = await unggahWord(word.file);
+      if (!u.ok) {
+        setSibuk(null);
+        return setPesan({ jenis: "gagal", teks: u.error });
+      }
+      path = u.path;
+      setUnggahan(path);
+    }
+    const r = await kirim<Pratinjau>(`/api/admin/studio-soal/impor/pratinjau${f === "docx" ? "-docx" : ""}`, isiPermintaan(f, false, path));
     setSibuk(null);
-    if (!r.ok) return setPesan({ jenis: "gagal", teks: r.error });
+    if (!r.ok) {
+      // Berkas di Storage bisa sudah hilang: unggah ulang pada percobaan berikutnya.
+      if (f === "docx") setUnggahan(null);
+      return setPesan({ jenis: "gagal", teks: r.error });
+    }
     setFormat(f);
     setPratinjau(r.data);
     setSaring("semua");
@@ -261,13 +294,15 @@ export default function ImporSoalClient() {
 
   async function simpan() {
     if (!format || !pratinjau) return;
-    const req = isiPermintaan(format, { lewatiGalat: String(lewatiGalat) });
-    if (!req) return;
+    const body = isiPermintaan(format, lewatiGalat, unggahan);
+    if (!body) return;
     setSibuk("simpan");
     setPesan(null);
-    const r = await kirim<HasilSimpan>(`/api/admin/studio-soal/impor/simpan${format === "docx" ? "-docx" : ""}`, req.body);
+    const r = await kirim<HasilSimpan>(`/api/admin/studio-soal/impor/simpan${format === "docx" ? "-docx" : ""}`, body);
     setSibuk(null);
     if (!r.ok) return setPesan({ jenis: "gagal", teks: r.error });
+    // Berkas staging sudah dihapus server.
+    setUnggahan(null);
     setTersimpan(r.data);
     setPesan({ jenis: "ok", teks: `${r.data.jumlahSoal} soal tersimpan sebagai draf. Belum terlihat siswa sampai diterbitkan.` });
   }
@@ -296,8 +331,8 @@ export default function ImporSoalClient() {
         <h2 className="text-lg font-medium text-black">1. Siapkan soal di Word</h2>
         <p className="text-sm text-muted">
           Unduh contoh, ganti isinya dengan soal Anda, lalu simpan sebagai .docx. Tiap soal diawali baris <code>#SOAL</code>, tiap bacaan
-          diawali <code>#BACAAN kode=...</code>. Tulis rumus sebagai teks <code>{"\\( … \\)"}</code> — bukan objek Persamaan Word. Gambar,
-          persamaan Word, dan PDF belum didukung; berkas yang memuatnya ditolak. Maksimal 300 soal dan 5 MB per
+          diawali <code>#BACAAN kode=...</code>. Tulis rumus sebagai teks <code>{"\\( … \\)"}</code> — bukan objek Persamaan Word.
+          Persamaan Word dan PDF belum didukung; berkas yang memuatnya ditolak. Maksimal 300 soal dan 25 MB per
           unggahan. Semua soal tercatat sebagai Buatan Sendiri. Draf juga bisa diterbitkan nanti dari{" "}
           <Link href="/bank-soal" className="text-primary underline">Bank Soal</Link>.
         </p>
@@ -306,6 +341,12 @@ export default function ImporSoalClient() {
           <code>#BACAAN</code>, lalu hubungkan soalnya dengan <code>Bacaan: kode</code>. Baris pertama menjadi judul kolom dan tidak boleh
           kosong. Maksimal 8 kolom, 20 baris isi, 500 karakter per sel; tanpa sel gabungan, tabel di dalam tabel, gambar, atau persamaan
           Word.
+        </p>
+        <p className="text-sm text-muted">
+          Gambar boleh di teks soal (sesudah <code>Soal:</code>), di <code>Pembahasan</code>, dan di <code>#BACAAN</code>; belum bisa di
+          pilihan, pernyataan, kunci, atau tabel. Gambar harus <em>In line with text</em>, berformat PNG, JPEG, atau WebP, maksimal 2 MB
+          dan 2400 px per sisi, 5 per soal, 60 per berkas. Isi teks alternatif (klik kanan gambar → Edit Alt Text); bila kosong dipakai
+          &quot;Gambar soal&quot;. Gambar tidak bisa diunggah lewat CSV.
         </p>
         <pre className="overflow-x-auto rounded-[12px] bg-surface-muted p-3 text-xs text-black">{FORMAT_WORD}</pre>
         <div>
@@ -323,7 +364,10 @@ export default function ImporSoalClient() {
           wajib
           terima=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           baca={async (file) => ({ nama: file.name, file })}
-          onPilih={(b) => ubahBerkas(setWord, b)}
+          onPilih={(b) => {
+            setUnggahan(null);
+            ubahBerkas(setWord, b);
+          }}
           disabled={sibuk !== null}
         />
         <div>
@@ -392,6 +436,12 @@ export default function ImporSoalClient() {
             <span className={`${CHIP} !bg-danger-soft !text-danger`}>{pratinjau.ringkasan.jumlahGalat} galat</span>
             <span className={CHIP}>{pratinjau.ringkasan.jumlahPeringatan} peringatan</span>
             <span className={CHIP}>{pratinjau.ringkasan.jumlahBacaan} bacaan</span>
+            {pratinjau.ringkasan.jumlahGambar ? <span className={CHIP}>{pratinjau.ringkasan.jumlahGambar} gambar</span> : null}
+            {pratinjau.gambarBacaan?.map((b) => (
+              <span key={b.baris} className={CHIP}>
+                Bacaan {b.kode || `ke-${b.baris - 1}`}: {b.jumlah} gambar
+              </span>
+            ))}
             {pratinjau.ringkasan.jumlahBacaanDilewati > 0 ? (
               <span className={CHIP}>
                 {pratinjau.ringkasan.jumlahBacaanDilewati} bacaan tidak disimpan (tidak ada soalnya yang lolos)
@@ -449,6 +499,7 @@ export default function ImporSoalClient() {
                     <td className="py-2 pr-3">
                       <div className="text-black">{b.redaksi || "—"}</div>
                       {b.kodeBacaan ? <div className="text-xs text-muted">bacaan {b.kodeBacaan}</div> : null}
+                      {b.jumlahGambar ? <div className="text-xs text-muted">{b.jumlahGambar} gambar</div> : null}
                       {(pesanPerBaris.get(b.baris) ?? []).map((g, i) => (
                         <div key={i} className={`text-xs ${g.tingkat === "galat" ? "text-danger" : "text-muted"}`}>
                           {g.kolom ? `${namaKolom(fmt, g.kolom)}: ` : ""}

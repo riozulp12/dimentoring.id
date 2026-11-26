@@ -29,15 +29,33 @@
  * Tabel hanya diterima di dalam #BACAAN dan menjadi blok tabel pada bacaan, urut
  * sesuai dokumen; tabel di tempat lain menolak seluruh berkas (penolakan).
  *
- * Persamaan Word (m:oMath), gambar, sel gabungan, dan tabel bersarang TIDAK
- * diterima: cariObjekTerlarangDocx() menolak berkas, menyebut soal/bacaan
- * terdekat. Rumus ditulis sebagai teks \( ... \) lalu divalidasi cekRumus oleh
- * susunImpor.
+ * Gambar SEBARIS (PNG/JPEG/WebP) diterima di redaksi, pembahasan, dan bacaan:
+ * analisisObjekDocx() menggantinya dengan penanda sisipan di tempatnya, lalu di
+ * sini menjadi penanda {{gN}} (soal) atau blok gambar (bacaan). Gambar di pilihan,
+ * pernyataan, kunci, atau label menolak berkas.
+ *
+ * Persamaan Word (m:oMath), gambar mengambang/bentuk/tabel, sel gabungan, dan
+ * tabel bersarang TIDAK diterima: berkas ditolak, menyebut soal/bacaan terdekat.
+ * Rumus ditulis sebagai teks \( ... \) lalu divalidasi cekRumus oleh susunImpor.
  */
 import { KOLOM_BACAAN, KOLOM_SOAL, SUMBER_BAWAAN, type GalatImpor } from "./impor";
+import { ALT_BAWAAN, BATAS_GAMBAR, type GambarEntri } from "./gambar";
 import { BATAS, type BlokStimulus } from "./tipe";
 
-export const BATAS_BYTE_DOCX = 5 * 1024 * 1024;
+/** Berkas diunggah browser langsung ke Storage, jadi tidak dibatasi body fungsi. */
+export const BATAS_BYTE_DOCX = 25 * 1024 * 1024;
+
+/** Penanda sisipan gambar ke-n di teks dokumen (karakter Private Use Area). */
+export const sisipan = (n: number) => `\uE000${n}\uE001`;
+const POLA_SISIP = /\uE000(\d+)\uE001/g;
+
+/** Gambar yang sudah diperiksa & diberi id, sesuai urutan sisipan. */
+export interface GambarSumber {
+  media_id: string;
+  alt: string;
+  /** Teks alternatif kosong di Word: dipakai ALT_BAWAAN + peringatan. */
+  altBawaan: boolean;
+}
 
 /** Satu tabel Word: baris -> teks tiap sel (paragraf dalam sel dipisah baris baru). */
 export interface TabelDocx {
@@ -53,7 +71,9 @@ export interface HasilUraiDocx {
   bacaanBaris: string[][] | null;
   /** Blok teks & tabel untuk bacaan yang memuat tabel, per nomor baris bacaanBaris. */
   bacaanBlok: Map<number, BlokStimulus[]>;
-  /** Alasan menolak SELURUH berkas (tabel di luar #BACAAN). */
+  /** Daftar gambar per nomor baris soalBaris. */
+  soalGambar: Map<number, GambarEntri[]>;
+  /** Alasan menolak SELURUH berkas (tabel di luar #BACAAN, gambar di tempat terlarang). */
   penolakan: string[];
   /** Galat/peringatan struktur (label ganda, pilihan ganda dua kali, teks nyasar). baris = nomor soal ke-N + 1. */
   catatan: GalatImpor[];
@@ -208,7 +228,7 @@ const angkaDepan = (v: string) => v.trim().replace(/\s*(detik|dtk|s)\.?$/i, "");
 const memuatPenanda = (t: TabelDocx) =>
   t.tabel.some((baris) => baris.some((sel) => sel.split("\n").some((l) => POLA_PENANDA.test(tanpaNomor(l)))));
 
-export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
+export function uraiParagrafDocx(isi: ItemDocx[], gambar: GambarSumber[] = []): HasilUraiDocx {
   const catatan: GalatImpor[] = [];
   const penolakan = new Set<string>();
   const bacaan: BlokBacaan[] = [];
@@ -238,9 +258,12 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
       }
       continue;
     }
-    const baris = tanpaNomor(mentah);
+    // Label & penanda dikenali dari teks tanpa sisipan gambar; isinya tetap memakai `mentah`.
+    const adaGambar = mentah.includes("\uE000");
+    const baris = tanpaNomor(adaGambar ? mentah.replace(POLA_SISIP, "").trim() : mentah);
     const penanda = baris.match(POLA_PENANDA);
     if (penanda) {
+      if (adaGambar) penolakan.add("Ada gambar di baris penanda #SOAL/#BACAAN. Pindahkan gambarnya ke paragraf sendiri.");
       if (penanda[1].toLowerCase() === "bacaan") {
         const param = penanda[2].trim();
         const kode = (param.match(/kode\s*=\s*(\S+)/i)?.[1] ?? (param.includes("=") ? "" : param.split(/\s+/)[0] ?? "")).trim();
@@ -270,6 +293,9 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
     if (aktifBacaan) {
       const l = cocokLabel(baris);
       if (l && (l.kunci === "subtes" || l.kunci === "sumber")) {
+        if (adaGambar) {
+          penolakan.add(`Ada gambar di baris ${NAMA_LABEL[l.kunci]} bacaan ke-${aktifBacaan.nomor}. Pindahkan ke paragraf isi bacaan.`);
+        }
         if (aktifBacaan.sudah.has(l.kunci)) {
           catat("bacaan", aktifBacaan.nomor + 1, KOLOM_DARI_LABEL[l.kunci], `Label "${NAMA_LABEL[l.kunci]}" muncul lebih dari sekali.`);
         } else {
@@ -278,9 +304,22 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
           else aktifBacaan.sumber = l.nilai;
         }
       } else {
-        const akhir = aktifBacaan.blok.at(-1);
-        if (akhir?.jenis === "teks") akhir.teks += `\n\n${mentah.trim()}`;
-        else aktifBacaan.blok.push({ jenis: "teks", teks: mentah.trim() });
+        // [teks, nomor, teks, nomor, teks]: teks dan gambar berurutan seperti di dokumen.
+        mentah.split(POLA_SISIP).forEach((potong, i) => {
+          const b = aktifBacaan as BlokBacaan;
+          if (i % 2 === 1) {
+            const g = gambar[Number(potong)];
+            if (!g) return;
+            b.blok.push({ jenis: "gambar", media_id: g.media_id, alt: g.alt });
+            if (g.altBawaan) {
+              catat("bacaan", b.nomor + 1, "teks", `Gambar di bacaan ke-${b.nomor} tidak punya teks alternatif; dipakai "${ALT_BAWAAN}".`, "peringatan");
+            }
+          } else if (potong.trim() !== "") {
+            const akhir = b.blok.at(-1);
+            if (akhir?.jenis === "teks") akhir.teks += `\n\n${potong.trim()}`;
+            else b.blok.push({ jenis: "teks", teks: potong.trim() });
+          }
+        });
       }
       continue;
     }
@@ -302,7 +341,17 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
       continue;
     }
 
+    const tolakGambar = (letak: string) =>
+      penolakan.add(`Ada gambar di ${letak} soal ke-${s.nomor}; belum didukung. Pindahkan ke teks soal atau pembahasan.`);
     if (l) {
+      let nilai = l.nilai;
+      if (adaGambar) {
+        if (l.kunci === "soal" || l.kunci === "pembahasan") {
+          // Gambar sebelum label ikut ke isi, sesuai urutannya.
+          const titik = mentah.search(/[:：]/);
+          nilai = [...(mentah.slice(0, titik).match(POLA_SISIP) ?? []), mentah.slice(titik + 1).trim()].join(" ").trim();
+        } else tolakGambar(`baris ${NAMA_LABEL[l.kunci]}`);
+      }
       if (s.sudah.has(l.kunci)) {
         catat("soal", noSoal, KOLOM_DARI_LABEL[l.kunci], `Label "${NAMA_LABEL[l.kunci]}" muncul lebih dari sekali.`);
         continue;
@@ -311,7 +360,7 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
       switch (l.kunci) {
         case "soal":
           s.aktif = "soal";
-          if (l.nilai) s.redaksi.push(l.nilai.replace(POLA_NOMOR, ""));
+          if (nilai) s.redaksi.push(nilai.replace(POLA_NOMOR, ""));
           break;
         case "kunci":
           s.aktif = "kunci";
@@ -319,7 +368,7 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
           break;
         case "pembahasan":
           s.aktif = "pembahasan";
-          if (l.nilai) s.pembahasan.push(l.nilai);
+          if (nilai) s.pembahasan.push(nilai);
           break;
         default:
           s.meta[l.kunci] = l.nilai;
@@ -330,6 +379,7 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
 
     const p = baris.match(POLA_PERNYATAAN);
     if (p) {
+      if (adaGambar) tolakGambar("pernyataan");
       const n = Number(p[1]);
       const sebelumnya = Math.max(0, ...s.pernyataan.keys());
       s.aktif = "pernyataan";
@@ -350,8 +400,10 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
     // Di soal berpernyataan, baris A–E tetap dikenali supaya ditolak, bukan menempel ke teks lain.
     const bisaOpsi =
       s.aktif === "soal" || s.aktif === "opsi" || (s.aktif !== "kunci" && (s.pernyataan.size > 0 || s.sudah.has("kolom")));
-    const opsi = bisaOpsi || (s.aktif !== "kunci" && normalJenis(s.meta.jenis ?? "") === "majemuk_kompleks") ? mentah.match(POLA_OPSI) : null;
+    const opsiCocok = (adaGambar ? baris : mentah).match(POLA_OPSI);
+    const opsi = bisaOpsi || (s.aktif !== "kunci" && normalJenis(s.meta.jenis ?? "") === "majemuk_kompleks") ? opsiCocok : null;
     if (opsi) {
+      if (adaGambar) tolakGambar("pilihan jawaban");
       const i = "ABCDE".indexOf(opsi[1].toUpperCase());
       if (s.opsi[i] !== null) {
         catat("soal", noSoal, `opsi_${"abcde"[i]}`, `Pilihan ${"ABCDE"[i]} muncul lebih dari sekali.`);
@@ -363,6 +415,13 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
       continue;
     }
 
+    if (adaGambar && s.aktif !== "soal") {
+      if (s.aktif === "opsi") tolakGambar("pilihan jawaban");
+      else if (s.aktif === "pernyataan") tolakGambar("pernyataan");
+      else if (s.aktif === "kunci") tolakGambar("baris Kunci");
+      else penolakan.add(`Gambar di soal ke-${s.nomor} harus diletakkan sesudah baris Soal: atau di Pembahasan.`);
+      continue;
+    }
     if (s.aktif === "soal") s.redaksi.push(s.redaksi.length === 0 ? mentah.trim().replace(POLA_NOMOR, "") : mentah.trim());
     else if (s.aktif === "opsi" && s.opsiTerakhir >= 0) s.opsi[s.opsiTerakhir] = `${s.opsi[s.opsiTerakhir] ?? ""} ${mentah.trim()}`.trim();
     else if (s.aktif === "pernyataan") {
@@ -373,6 +432,7 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
   }
 
   const soalBaris: string[][] = [[...KOLOM_SOAL]];
+  const soalGambar = new Map<number, GambarEntri[]>();
   for (const s of soal) {
     const jenis = normalJenis(s.meta.jenis ?? "");
     const galat = (kolom: string, pesan: string) => catat("soal", s.nomor + 1, kolom, pesan);
@@ -397,18 +457,34 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
         : jenis === "isian"
           ? s.kunci.trim()
           : normalKunciPg(s.kunci);
+    // Sisipan -> {{g1}}, {{g2}}, ... berurutan: teks soal dulu, lalu pembahasan.
+    const entri: GambarEntri[] = [];
+    const pasang = (teks: string, kolom: string) =>
+      teks.replace(POLA_SISIP, (_, n: string) => {
+        const g = gambar[Number(n)];
+        if (!g) return "";
+        const kode = `g${entri.length + 1}`;
+        entri.push({ kode, media_id: g.media_id, alt: g.alt });
+        if (g.altBawaan) {
+          catat("soal", s.nomor + 1, kolom, `Gambar ${kode} di soal ke-${s.nomor} tidak punya teks alternatif; dipakai "${ALT_BAWAAN}".`, "peringatan");
+        }
+        return `{{${kode}}}`;
+      });
+    const redaksi = pasang(s.redaksi.join("\n\n"), "redaksi");
+    const pembahasan = pasang(s.pembahasan.join("\n\n"), "pembahasan");
+    if (entri.length > 0) soalGambar.set(s.nomor + 1, entri);
     const nilai: Record<(typeof KOLOM_SOAL)[number], string> = {
       subtes: s.meta.subtes ?? "",
       topik: s.meta.topik ?? "",
       tipe: jenis,
-      redaksi: s.redaksi.join("\n\n"),
+      redaksi,
       opsi_a: opsiKe(0),
       opsi_b: opsiKe(1),
       opsi_c: opsiKe(2),
       opsi_d: opsiKe(3),
       opsi_e: opsiKe(4),
       kunci,
-      pembahasan: s.pembahasan.join("\n\n"),
+      pembahasan,
       kesulitan: s.meta.kesulitan ?? "",
       level_kognitif: (s.meta.level ?? "").trim(),
       estimasi_detik: angkaDepan(s.meta.waktu ?? ""),
@@ -434,23 +510,41 @@ export function uraiParagrafDocx(isi: ItemDocx[]): HasilUraiDocx {
     for (const b of bacaan) {
       const teks = b.blok.flatMap((x) => (x.jenis === "teks" ? [x.teks] : [])).join("\n\n");
       bacaanBaris.push([b.kode, b.subtes, teks, b.sumber]);
-      // Bacaan tanpa tabel tetap lewat kolom teks, sama persis dengan jalur CSV.
-      if (b.blok.some((x) => x.jenis === "tabel")) bacaanBlok.set(bacaanBaris.length, b.blok);
+      // Bacaan tanpa tabel/gambar tetap lewat kolom teks, sama persis dengan jalur CSV.
+      if (b.blok.some((x) => x.jenis !== "teks")) bacaanBlok.set(bacaanBaris.length, b.blok);
     }
   }
-  return { soalBaris, bacaanBaris, bacaanBlok, penolakan: [...penolakan], catatan };
+  return { soalBaris, bacaanBaris, bacaanBlok, soalGambar, penolakan: [...penolakan], catatan };
 }
 
 // ---------------------------------------------------------------------------
-// Deteksi persamaan Word, gambar, sel gabungan & tabel bersarang dari XML dokumen
+// Pemeriksaan XML dokumen: persamaan Word, gambar, sel gabungan & tabel bersarang
 // ---------------------------------------------------------------------------
 
 export interface TemuanObjekDocx {
-  jenis: "persamaan" | "gambar" | "sel_gabungan" | "tabel_bersarang";
+  jenis:
+    | "persamaan"
+    | "gambar"
+    | "gambar_mengambang"
+    | "gambar_svg"
+    | "gambar_tautan"
+    | "bentuk"
+    | "terlalu_banyak"
+    | "sel_gabungan"
+    | "tabel_bersarang";
   /** true bila persamaan/gambar berada di dalam sel tabel. */
   diSel?: true;
   /** Bagian terdekat: soal ke-N, bacaan ke-N, atau sebelum penanda pertama. */
   konteks: "soal" | "bacaan" | "awal";
+  nomor: number;
+}
+
+/** Gambar sebaris yang diterima: byte-nya diambil lewat rId, posisinya ditandai penanda sisipan. */
+export interface GambarInline {
+  rId: string;
+  /** wp:docPr descr; "" bila kosong. */
+  alt: string;
+  konteks: "soal" | "bacaan";
   nomor: number;
 }
 
@@ -460,15 +554,30 @@ const decodeXml = (s: string) =>
     .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 
+/** Satu <w:drawing>: gambar sebaris yang bisa dipakai, atau jenis penolakannya. */
+function periksaDrawing(d: string, terbungkus: boolean): TemuanObjekDocx["jenis"] | { rId: string; alt: string } {
+  if (/<wp:anchor[\s>]/.test(d)) return "gambar_mengambang";
+  // Bentuk/kotak teks/grup/kanvas/bagan/SmartArt, atau dibungkus mc:AlternateContent (fitur khusus Word).
+  if (terbungkus || /<(?:c:chart\b|dgm:|wps:|wpg:|wpc:)/.test(d) || /drawingml\/2006\/(?:chart|diagram)\b/.test(d)) return "bentuk";
+  if (/svgBlip/.test(d)) return "gambar_svg";
+  const blip = d.match(/<a:blip(?:\s[^>]*)?\/?>/g) ?? [];
+  if (blip.length > 1) return "bentuk";
+  const rId = blip[0]?.match(/\sr:embed="([^"]+)"/)?.[1];
+  if (!rId) return blip[0]?.includes("r:link=") ? "gambar_tautan" : "gambar";
+  return { rId, alt: decodeXml(d.match(/<wp:docPr\b[^>]*\sdescr="([^"]*)"/)?.[1] ?? "").trim() };
+}
+
 /**
- * Pindai word/document.xml: objek persamaan (m:oMath, m:oMathPara) dan gambar
- * (w:drawing, w:pict, w:object) dilaporkan beserta soal/bacaan terdekat
- * (dihitung dari paragraf berawalan #SOAL / #BACAAN di luar tabel). Sel gabungan
- * dan tabel bersarang hanya dilaporkan di bacaan; di tempat lain tabelnya sendiri
- * sudah ditolak pengurai. Tidak ada yang dibuang diam-diam.
+ * Pindai word/document.xml. Persamaan (m:oMath) dan objek yang tidak didukung
+ * dilaporkan beserta soal/bacaan terdekat (dihitung dari paragraf berawalan #SOAL
+ * / #BACAAN di luar tabel). Gambar sebaris yang didukung diganti penanda sisipan
+ * di tempatnya (xml hasil), sehingga urutannya terhadap teks terbawa ke pembaca
+ * dokumen. Sel gabungan dan tabel bersarang hanya dilaporkan di bacaan; di tempat
+ * lain tabelnya sendiri sudah ditolak pengurai. Tidak ada yang dibuang diam-diam.
  */
-export function cariObjekTerlarangDocx(xml: string): TemuanObjekDocx[] {
-  const hasil: TemuanObjekDocx[] = [];
+export function analisisObjekDocx(xml: string): { temuan: TemuanObjekDocx[]; gambar: GambarInline[]; xml: string } {
+  const temuan: TemuanObjekDocx[] = [];
+  const gambar: GambarInline[] = [];
   const sudah = new Set<string>();
   let soal = 0;
   let bacaan = 0;
@@ -476,20 +585,40 @@ export function cariObjekTerlarangDocx(xml: string): TemuanObjekDocx[] {
   let teksParagraf = "";
   let paragrafDihitung = false;
   let dalamTabel = 0;
+  let dalamPembungkus = 0;
+  const nomorKini = () => (konteks === "soal" ? soal : konteks === "bacaan" ? bacaan : 0);
   const lapor = (jenis: TemuanObjekDocx["jenis"], diSel = false) => {
-    const nomor = konteks === "soal" ? soal : konteks === "bacaan" ? bacaan : 0;
+    const nomor = nomorKini();
     const kunci = `${jenis}|${konteks}|${nomor}|${diSel}`;
     if (sudah.has(kunci)) return;
     sudah.add(kunci);
-    hasil.push({ jenis, konteks, nomor, ...(diSel ? { diSel: true as const } : {}) });
+    temuan.push({ jenis, konteks, nomor, ...(diSel ? { diSel: true as const } : {}) });
   };
   // Riwayat pelacakan perubahan menyimpan properti sel LAMA; jangan dihitung.
-  const bersihXml = xml.replace(/<w:tcPrChange[\s>][\s\S]*?<\/w:tcPrChange>/g, "");
+  // Karakter penanda sisipan yang sudah ada di dokumen dibuang supaya tidak tertukar.
+  const sumber = xml.replace(/<w:tcPrChange[\s>][\s\S]*?<\/w:tcPrChange>/g, "").replace(/[\uE000\uE001]/g, "");
   const token =
-    /<w:p[ >\/]|<m:oMathPara[ >\/]|<m:oMath[ >\/]|<w:drawing[ >\/]|<w:pict[ >\/]|<w:object[ >\/]|<w:tbl(?:\s[^>]*)?>|<\/w:tbl>|<w:gridSpan\s[^>]*>|<w:[vh]Merge[ >\/]|<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
-  for (const m of bersihXml.matchAll(token)) {
+    /<w:drawing(?:\s[^>]*)?\/>|<w:drawing(?:\s[^>]*)?>[\s\S]*?<\/w:drawing>|<mc:AlternateContent(?:\s[^>]*)?>|<\/mc:AlternateContent>|<w:p[ >\/]|<m:oMathPara[ >\/]|<m:oMath[ >\/]|<w:pict[ >\/]|<w:object[ >\/]|<w:tbl(?:\s[^>]*)?>|<\/w:tbl>|<w:gridSpan\s[^>]*>|<w:[vh]Merge[ >\/]|<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+  let hasilXml = "";
+  let disalin = 0;
+  for (const m of sumber.matchAll(token)) {
     const t = m[0];
-    if (t === "</w:tbl>") {
+    if (t.startsWith("<w:drawing")) {
+      const periksa = periksaDrawing(t, dalamPembungkus > 0);
+      if (dalamTabel > 0 && typeof periksa !== "string") lapor("gambar", true);
+      else if (typeof periksa === "string") lapor(periksa, dalamTabel > 0);
+      else if (konteks === "awal") lapor("gambar");
+      else if (gambar.length >= BATAS_GAMBAR.perBerkas) lapor("terlalu_banyak");
+      else {
+        hasilXml += `${sumber.slice(disalin, m.index)}<w:t xml:space="preserve">${sisipan(gambar.length)}</w:t>`;
+        disalin = m.index + t.length;
+        gambar.push({ ...periksa, konteks, nomor: nomorKini() });
+      }
+    } else if (t === "</mc:AlternateContent>") {
+      dalamPembungkus = Math.max(0, dalamPembungkus - 1);
+    } else if (t.startsWith("<mc:AlternateContent")) {
+      if (!t.endsWith("/>")) dalamPembungkus += 1;
+    } else if (t === "</w:tbl>") {
       dalamTabel = Math.max(0, dalamTabel - 1);
     } else if (t.startsWith("<w:tbl")) {
       dalamTabel += 1;
@@ -519,22 +648,43 @@ export function cariObjekTerlarangDocx(xml: string): TemuanObjekDocx[] {
       lapor(t.startsWith("<m:") ? "persamaan" : "gambar", dalamTabel > 0);
     }
   }
-  return hasil;
+  return { temuan, gambar, xml: hasilXml + sumber.slice(disalin) };
 }
+
+export const cariObjekTerlarangDocx = (xml: string): TemuanObjekDocx[] => analisisObjekDocx(xml).temuan;
+
+/** "soal ke-2" / "bacaan ke-1" / null (sebelum penanda pertama). */
+export const namaBagianDocx = (konteks: TemuanObjekDocx["konteks"], nomor: number) =>
+  konteks === "awal" ? null : `${konteks} ke-${nomor}`;
 
 /** Pesan penolakan berkas untuk Admin, satu per temuan. */
 export function pesanObjekTerlarang(temuan: TemuanObjekDocx[]): string[] {
   return temuan.map((t) => {
-    const bagian = t.konteks === "soal" ? `soal ke-${t.nomor}` : t.konteks === "bacaan" ? `bacaan ke-${t.nomor}` : null;
-    if (t.jenis === "sel_gabungan") {
-      return `Ada sel gabungan (merge) di tabel ${bagian}. Pisahkan selnya supaya tiap baris punya jumlah sel yang sama, lalu unggah lagi.`;
-    }
-    if (t.jenis === "tabel_bersarang") return `Ada tabel di dalam tabel di ${bagian}. Jadikan tabel biasa lalu unggah lagi.`;
+    const bagian = namaBagianDocx(t.konteks, t.nomor);
     const diSel = t.diSel ? "di sel tabel " : "";
     const letak = bagian ? `${diSel || "di "}${bagian}` : `${diSel}sebelum soal pertama`;
-    return t.jenis === "persamaan"
-      ? `Ada persamaan Word (Equation) ${letak}. Tulis rumus sebagai teks \\( ... \\) lalu unggah lagi.`
-      : `Ada gambar ${letak}. Gambar belum didukung — hapus gambarnya atau tulis ulang sebagai teks.`;
+    switch (t.jenis) {
+      case "sel_gabungan":
+        return `Ada sel gabungan (merge) di tabel ${bagian}. Pisahkan selnya supaya tiap baris punya jumlah sel yang sama, lalu unggah lagi.`;
+      case "tabel_bersarang":
+        return `Ada tabel di dalam tabel di ${bagian}. Jadikan tabel biasa lalu unggah lagi.`;
+      case "persamaan":
+        return `Ada persamaan Word (Equation) ${letak}. Tulis rumus sebagai teks \\( ... \\) lalu unggah lagi.`;
+      case "gambar_mengambang":
+        return `Ada gambar mengambang ${letak}. Ubah ke 'In line with text' lalu unggah lagi.`;
+      case "gambar_svg":
+        return `Ada gambar SVG ${letak}. Tempel ulang sebagai PNG atau JPEG.`;
+      case "gambar_tautan":
+        return `Ada gambar tautan (tidak tertanam) ${letak}. Sisipkan gambarnya langsung ke dokumen.`;
+      case "bentuk":
+        return `Ada bentuk, kotak teks, SmartArt, atau grafik Word ${letak}. Ganti dengan gambar PNG atau JPEG yang 'In line with text'.`;
+      case "terlalu_banyak":
+        return `Berkas memuat lebih dari ${BATAS_GAMBAR.perBerkas} gambar. Pecah berkasnya.`;
+      default:
+        if (t.diSel) return `Ada gambar ${letak}. Gambar di dalam tabel belum didukung; letakkan di luar tabel.`;
+        if (!bagian) return `Ada gambar ${letak}. Letakkan gambar di dalam #BACAAN atau soal.`;
+        return `Ada gambar ${letak} yang tidak bisa dibaca (gambar lama atau objek). Sisipkan ulang sebagai PNG atau JPEG 'In line with text'.`;
+    }
   });
 }
 

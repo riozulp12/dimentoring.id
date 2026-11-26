@@ -300,12 +300,12 @@ describe("validasiStimulus", () => {
     assert.ok(adaError(validasiStimulus(stimulus({ judul_internal: "ab" }), "draf"), "judul_internal", "bentuk"));
   });
 
-  it("blok: 0 = kelengkapan, 21 = bentuk; gambar belum didukung (K6)", () => {
+  it("blok: 0 = kelengkapan, 21 = bentuk; gambar wajib merujuk media_id", () => {
     assert.ok(adaError(validasiStimulus(stimulus({ konten: { v: 1, blok: [] } })), "konten.blok", "kelengkapan"));
     const banyak = Array.from({ length: 21 }, () => ({ jenis: "teks", teks: "a" }));
     assert.ok(adaError(validasiStimulus(stimulus({ konten: { v: 1, blok: banyak } })), "konten.blok", "bentuk"));
     const gambar = { v: 1, blok: [{ jenis: "gambar", path: "x.webp", alt: "Grafik" }] };
-    assert.ok(adaError(validasiStimulus(stimulus({ konten: gambar }), "draf"), "konten.blok.0.jenis", "bentuk"));
+    assert.ok(adaError(validasiStimulus(stimulus({ konten: gambar }), "draf"), "konten.blok.0.media_id", "bentuk"));
   });
 
   it("tabel: kolom 1–8, baris 1–20, jumlah sel per baris = jumlah kolom", () => {

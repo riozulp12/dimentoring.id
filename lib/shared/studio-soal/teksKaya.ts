@@ -24,7 +24,8 @@ export type Segmen =
   | { jenis: "teks"; teks: string; tebal: boolean; miring: boolean }
   | { jenis: "rumus"; tex: string; blok: boolean; tebal: boolean; miring: boolean }
   | { jenis: "baris_baru" }
-  | { jenis: "rumpang"; id: string };
+  | { jenis: "rumpang"; id: string }
+  | { jenis: "gambar"; kode: string };
 
 export interface Paragraf {
   segmen: Segmen[];
@@ -33,12 +34,15 @@ export interface Paragraf {
 export interface OpsiUrai {
   /** Kenali {{id}} sebagai rumpang (redaksi soal isian). */
   rumpang?: boolean;
+  /** Kode gambar soal ini: {{kode}} yang terdaftar menjadi gambar. */
+  gambar?: ReadonlySet<string>;
 }
 
 type Token =
   | { t: "teks"; v: string }
   | { t: "rumus"; tex: string; blok: boolean }
   | { t: "rumpang"; id: string }
+  | { t: "gambar"; kode: string }
   | { t: "penanda"; v: "**" | "*"; bisaBuka: boolean; bisaTutup: boolean }
   | { t: "baris" }
   | { t: "paragraf" };
@@ -102,11 +106,12 @@ function tokenisasi(s: string, opsi: OpsiUrai): Token[] {
       i += panjang;
       continue;
     }
-    if (c === "{" && opsi.rumpang && s[i + 1] === "{") {
+    if (c === "{" && (opsi.rumpang || opsi.gambar) && s[i + 1] === "{") {
       const m = POLA_RUMPANG.exec(s.slice(i));
-      if (m && POLA_ID_BAGIAN.test(m[1])) {
+      const gambar = m !== null && opsi.gambar?.has(m[1]) === true;
+      if (m && (gambar || (opsi.rumpang && POLA_ID_BAGIAN.test(m[1])))) {
         dorongTeks();
-        token.push({ t: "rumpang", id: m[1] });
+        token.push(gambar ? { t: "gambar", kode: m[1] } : { t: "rumpang", id: m[1] });
         i += m[0].length;
         continue;
       }
@@ -175,6 +180,9 @@ function susunParagraf(token: Token[]): Paragraf {
         break;
       case "rumpang":
         segmen.push({ jenis: "rumpang", id: tk.id });
+        break;
+      case "gambar":
+        segmen.push({ jenis: "gambar", kode: tk.kode });
         break;
       case "baris":
         segmen.push({ jenis: "baris_baru" });

@@ -6,6 +6,8 @@ import EditSoalAdmin from "@/components/admin/EditSoalAdmin";
 import { pesanKelas } from "@/components/studio-soal/gaya";
 import { requireAdminAktif } from "@/lib/admin/enrollmentManual";
 import { getDetailSoalAdmin } from "@/lib/admin/bankSoal";
+import { urlGambarSoal } from "@/lib/admin/mediaSoal";
+import { mediaDariKonten } from "@/lib/shared/studio-soal/gambar";
 import { izinSoal } from "@/lib/shared/studio-soal/bankSoal";
 import { isUuid } from "@/lib/shared/studio-soal/formSoal";
 
@@ -23,6 +25,11 @@ export default async function EditSoalPage({ params }: { params: Promise<{ id: s
   const detail = auth.ok ? await getDetailSoalAdmin(id) : "gagal";
   if (detail === null) notFound();
   if (detail !== "gagal" && !izinSoal(detail.soal).edit) redirect(`/bank-soal/${id}`);
+  // Alamat gambar dibuat di server, sesudah guard Admin.
+  const media =
+    detail === "gagal"
+      ? {}
+      : await urlGambarSoal([...mediaDariKonten(detail.soal.konten), ...mediaDariKonten({ blok: detail.bacaan?.blok })]);
 
   return (
     <>
@@ -37,6 +44,7 @@ export default async function EditSoalPage({ params }: { params: Promise<{ id: s
             // Isi ulang form bila versi di server berubah.
             key={`${detail.soal.id}:${detail.soal.updated_at}`}
             id={detail.soal.id}
+            media={media}
             updatedAt={detail.soal.updated_at}
             versi={detail.soal.versi}
             versiBaru={detail.soal.menggantikan_id !== null}

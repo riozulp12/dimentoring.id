@@ -9,6 +9,7 @@ import {
   type FilterBank,
   type SoalBatchBaris,
 } from "@/lib/shared/studio-soal/bankSoal";
+import { penandaGambar } from "@/lib/shared/studio-soal/gambar";
 import { cuplikRedaksi } from "@/lib/shared/studio-soal/studioMentor";
 import { KATEGORI_SUBTES_SNBT, type BlokStimulus, type TipeSoal } from "@/lib/shared/studio-soal/tipe";
 
@@ -180,7 +181,7 @@ export async function getBankSoal(filter: FilterBank): Promise<DaftarBankSoal | 
       status: r.status,
       sumber: r.sumber,
       versi: r.versi,
-      redaksi: cuplikRedaksi(r.redaksi),
+      redaksi: cuplikRedaksi(penandaGambar(r.redaksi).reduce((t, kode) => t.replace(`{{${kode}}}`, "[gambar]"), r.redaksi)),
       batch: r.impor_batch_id ? (namaBatch.get(r.impor_batch_id) ?? "—") : null,
       dibuatPada: r.created_at,
     })),

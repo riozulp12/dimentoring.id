@@ -3,6 +3,8 @@
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { Fragment, useEffect, useMemo, useRef, type ReactNode } from "react";
+import GambarSoal from "@/components/studio-soal/GambarSoal";
+import type { GambarTampil } from "@/lib/shared/studio-soal/gambar";
 import { uraiTeksKaya, type Segmen } from "@/lib/shared/studio-soal/teksKaya";
 import { OPSI_KATEX, cekRumus } from "@/lib/shared/studio-soal/rumus";
 
@@ -36,8 +38,17 @@ function Rumus({ tex, blok }: { tex: string; blok: boolean }) {
   );
 }
 
-function RenderSegmen({ s, rumpang }: { s: Segmen; rumpang?: (id: string) => ReactNode }) {
+function RenderSegmen({
+  s,
+  rumpang,
+  gambar,
+}: {
+  s: Segmen;
+  rumpang?: (id: string) => ReactNode;
+  gambar?: Record<string, GambarTampil>;
+}) {
   if (s.jenis === "baris_baru") return <br />;
+  if (s.jenis === "gambar") return gambar?.[s.kode] ? <GambarSoal gambar={gambar[s.kode]} /> : null;
   if (s.jenis === "rumpang") {
     return rumpang ? (
       <>{rumpang(s.id)}</>
@@ -59,8 +70,11 @@ export default function TeksKaya({
   className = "",
   kosong,
   sebaris = false,
+  gambar,
 }: {
   teks: string;
+  /** Gambar per kode ({{g1}}). Tanpa ini penanda tampil seperti teks biasa. */
+  gambar?: Record<string, GambarTampil>;
   /** Render rumpang {{id}} (redaksi isian). Tanpa ini, {{id}} tampil sebagai teks. */
   rumpang?: (id: string) => ReactNode;
   className?: string;
@@ -69,7 +83,7 @@ export default function TeksKaya({
   /** Render dengan <span> (untuk di dalam <button>/<label>, yang tidak boleh berisi <p>/<div>). */
   sebaris?: boolean;
 }) {
-  const paragraf = uraiTeksKaya(teks, { rumpang: Boolean(rumpang) });
+  const paragraf = uraiTeksKaya(teks, { rumpang: Boolean(rumpang), gambar: gambar ? new Set(Object.keys(gambar)) : undefined });
   const Wadah = sebaris ? "span" : "div";
   const Paragraf = sebaris ? "span" : "p";
   if (paragraf.length === 0) {
@@ -81,7 +95,7 @@ export default function TeksKaya({
         <Paragraf key={i} className="block leading-relaxed">
           {p.segmen.map((s, j) => (
             <Fragment key={j}>
-              <RenderSegmen s={s} rumpang={rumpang} />
+              <RenderSegmen s={s} rumpang={rumpang} gambar={gambar} />
             </Fragment>
           ))}
         </Paragraf>

@@ -2,6 +2,7 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SESSION_COOKIE_NAME, requireAdminAktif } from "@/lib/admin/enrollmentManual";
+import { bersihkanMediaYatim } from "@/lib/admin/mediaSoal";
 import { terjemahkanRpcAdmin } from "@/lib/shared/studio-soal/bankSoal";
 import { inputValidasiSoal, isUuid, parseBodySimpanSoal, rapikanKontenKunci } from "@/lib/shared/studio-soal/formSoal";
 import { cekSoalLengkap } from "@/lib/shared/studio-soal/kelengkapan";
@@ -18,7 +19,8 @@ export const gagal = (status: number, error: string, extra: Record<string, unkno
 
 export const adminDari = (request: NextRequest) => requireAdminAktif(request.cookies.get(SESSION_COOKIE_NAME)?.value);
 
-export async function panggilRpcAdmin(nama: string, args: Record<string, unknown>) {
+/** `bersihkan`: aksi hapus/arsip, sesudah berhasil gambar yang tak terpakai ikut dibuang. */
+export async function panggilRpcAdmin(nama: string, args: Record<string, unknown>, bersihkan = false) {
   const { data, error } = await supabaseServer.rpc(nama, args);
   if (error) {
     console.error(`[admin/bank-soal] ${nama} gagal:`, error);
@@ -32,7 +34,10 @@ export async function panggilRpcAdmin(nama: string, args: Record<string, unknown
     ...(hasil.updated_at ? { updatedAt: hasil.updated_at } : {}),
   };
   if (!t.success) return gagal(t.httpStatus, t.pesan, extra);
-  return NextResponse.json({ success: true, pesan: t.pesan, ...extra });
+  if (!bersihkan) return NextResponse.json({ success: true, pesan: t.pesan, ...extra });
+  const { gagal: sisa } = await bersihkanMediaYatim(String(args.p_admin_id));
+  const catatan = sisa > 0 ? ` ${sisa} berkas gambar belum terhapus (dicoba lagi pada penghapusan berikutnya).` : "";
+  return NextResponse.json({ success: true, pesan: `${t.pesan}${catatan}`, gambarGagalDihapus: sisa, ...extra });
 }
 
 /** DELETE: hapus semua soal DRAF satu batch impor (dan bacaan draf yang jadi kosong). */
@@ -40,7 +45,7 @@ export async function hapusBatchDraf(request: NextRequest, batchId: string) {
   const auth = await adminDari(request);
   if (!auth.ok) return gagal(auth.status, auth.error);
   if (!isUuid(batchId)) return gagal(400, "Batch tidak valid. Muat ulang halaman.");
-  return panggilRpcAdmin("studio_soal_admin_hapus_batch_draf", { p_admin_id: auth.adminId, p_batch_id: batchId });
+  return panggilRpcAdmin("studio_soal_admin_hapus_batch_draf", { p_admin_id: auth.adminId, p_batch_id: batchId }, true);
 }
 
 /** Admin aktif + soal ada + sumber Buatan Sendiri (RPC memeriksa ulang). */
@@ -103,7 +108,7 @@ const RPC_TANPA_ISI = {
 async function jalankanTanpaIsi(request: NextRequest, id: string, aksi: keyof typeof RPC_TANPA_ISI) {
   const siap = await siapkanSoal(request, id);
   if (siap instanceof NextResponse) return siap;
-  return panggilRpcAdmin(RPC_TANPA_ISI[aksi], { p_admin_id: siap.adminId, p_soal_id: id });
+  return panggilRpcAdmin(RPC_TANPA_ISI[aksi], { p_admin_id: siap.adminId, p_soal_id: id }, aksi !== "versi-baru");
 }
 
 export const hapusDrafAdmin = (request: NextRequest, id: string) => jalankanTanpaIsi(request, id, "hapus");
