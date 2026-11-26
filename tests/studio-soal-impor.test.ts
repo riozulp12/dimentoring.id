@@ -31,7 +31,7 @@ const q = (s: string) => `"${s.replace(/"/g, '""')}"`;
 
 /** Satu baris soal PG valid; `ubah` menimpa kolom tertentu. */
 function barisPg(ubah: Partial<Record<(typeof KOLOM_SOAL)[number], string>> = {}): string[] {
-  const dasar: Record<(typeof KOLOM_SOAL)[number], string> = {
+  const dasar: Partial<Record<(typeof KOLOM_SOAL)[number], string>> = {
     subtes: "Penalaran Umum",
     topik: "",
     tipe: "pilihan_ganda",
@@ -51,7 +51,7 @@ function barisPg(ubah: Partial<Record<(typeof KOLOM_SOAL)[number], string>> = {}
     urutan_dalam_bacaan: "",
   };
   const gabung = { ...dasar, ...ubah };
-  return KOLOM_SOAL.map((k) => gabung[k]);
+  return KOLOM_SOAL.map((k) => gabung[k] ?? "");
 }
 
 function csvSoal(baris: string[][], pemisah = ","): string {
@@ -133,11 +133,10 @@ describe("impor — galat per baris", () => {
     assert.equal(h.ringkasan.jumlahGalat, 3);
   });
 
-  it("topik tak dikenal, tipe tak dikenal dan majemuk_kompleks belum didukung", () => {
-    const h = impor(csvSoal([barisPg({ topik: "Tidak Ada" }), barisPg({ tipe: "esai" }), barisPg({ tipe: "majemuk_kompleks" })]));
+  it("topik tak dikenal dan tipe tak dikenal", () => {
+    const h = impor(csvSoal([barisPg({ topik: "Tidak Ada" }), barisPg({ tipe: "esai" })]));
     assert.match(galatDi(h, 2, "topik")[0].pesan, /Tidak Ada/);
     assert.match(galatDi(h, 3, "tipe")[0].pesan, /tidak dikenal/);
-    assert.match(galatDi(h, 4, "tipe")[0].pesan, /belum didukung/);
   });
 
   it("PG: kunci kosong/salah, opsi kosong, pembahasan terlalu pendek, redaksi kosong", () => {
@@ -305,12 +304,12 @@ describe("bisaSimpan — opsi lewati galat", () => {
   });
 });
 
-describe("template CSV v1", () => {
-  it("lolos validasinya sendiri: 2 soal, 1 bacaan, tanpa galat", () => {
+describe("template CSV v1.1", () => {
+  it("lolos validasinya sendiri: 3 soal, 1 bacaan, tanpa galat", () => {
     const t = buatTemplateCsv();
     const h = impor(t.soal, t.bacaan);
     assert.equal(h.galat.length, 0, JSON.stringify(h.galat));
-    assert.equal(h.soal.length, 2);
+    assert.equal(h.soal.length, 3);
     assert.equal(h.stimulus.length, 1);
     assert.equal(h.soal.some((s) => s.stimulus_kode === "b1"), true);
   });

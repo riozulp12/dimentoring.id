@@ -1,10 +1,10 @@
 /**
  * Unggah soal massal Studio Soal ("Buatan Sendiri") — modul MURNI (tanpa server/DB).
  *
- * Masukan: CSV v1 (soal.csv wajib + bacaan.csv opsional, dihubungkan lewat
+ * Masukan: CSV v1.1 (soal.csv wajib + bacaan.csv opsional, dihubungkan lewat
  * kode_bacaan) ATAU baris perantara yang sama bentuknya dengan hasil parseCsv
- * (dipakai jalur DOCX, lihat imporDocx.ts) — validasinya satu: susunImpor(). Hanya soal teks + rumus LaTeX; gambar, majemuk kompleks, XLSX,
- * dan DOCX BELUM didukung. Setiap baris divalidasi dengan validator Studio Soal
+ * (dipakai jalur DOCX, lihat imporDocx.ts) — validasinya satu: susunImpor(). Jenis soal: pilihan_ganda, majemuk_kompleks,
+ * isian. Hanya teks + rumus LaTeX; gambar dan XLSX BELUM didukung. Setiap baris divalidasi dengan validator Studio Soal
  * yang sama dengan form mentor (validasiSoal/validasiStimulus mode "ajukan" +
  * cek rumus KaTeX), karena soal impor langsung diterbitkan Admin tanpa tinjau
  * sejawat. Server WAJIB memanggil susunImpor() ulang; hasil klien tidak dipercaya.
@@ -17,12 +17,17 @@ import { normalisasiTeks, panjangTrim } from "./teks";
 import { BATAS, LABEL_OPSI, TINGKAT_KESULITAN, isSubtesSnbt, type BlokStimulus } from "./tipe";
 import { validasiSoal, validasiStimulus, type ErrorValidasi } from "./validasi";
 
-export const VERSI_TEMPLATE_IMPOR = 1;
+export const VERSI_TEMPLATE_IMPOR = 1.1;
 /** Sumber bawaan bila kolom/label sumber kosong (memenuhi syarat 3–300 karakter stimulus). */
 export const SUMBER_BAWAAN = "Buatan Sendiri";
 export const BATAS_SOAL_IMPOR = 300;
 export const BATAS_TERBIT_IMPOR = 200;
-export const TIPE_IMPOR = ["pilihan_ganda", "isian"] as const;
+export const TIPE_IMPOR = ["pilihan_ganda", "majemuk_kompleks", "isian"] as const;
+/** Label kolom jawaban majemuk bila keduanya dikosongkan. */
+export const LABEL_KOLOM_BAWAAN = ["Benar", "Salah"] as const;
+const KOLOM_LABEL = ["label_kolom_1", "label_kolom_2"] as const;
+const KOLOM_PERNYATAAN = ["pernyataan_1", "pernyataan_2", "pernyataan_3", "pernyataan_4", "pernyataan_5", "pernyataan_6"] as const;
+const POLA_KOLOM_PERNYATAAN = /^pernyataan_\d+$/;
 
 export const KOLOM_SOAL = [
   "subtes",
@@ -42,6 +47,9 @@ export const KOLOM_SOAL = [
   "sumber_rujukan",
   "kode_bacaan",
   "urutan_dalam_bacaan",
+  // v1.1 (majemuk kompleks) — selalu di akhir supaya CSV lama tetap terbaca.
+  ...KOLOM_LABEL,
+  ...KOLOM_PERNYATAAN,
 ] as const;
 export const KOLOM_SOAL_WAJIB = ["subtes", "tipe", "redaksi", "kunci", "pembahasan"] as const;
 export const KOLOM_BACAAN = ["kode_bacaan", "subtes", "teks", "sumber_rujukan"] as const;
@@ -82,7 +90,7 @@ export interface SoalSiap {
   topik_id: string | null;
   stimulus_kode: string | null;
   urutan_dalam_stimulus: number | null;
-  tipe: "pilihan_ganda" | "isian";
+  tipe: (typeof TIPE_IMPOR)[number];
   redaksi: string;
   konten: Record<string, unknown>;
   kunci: Record<string, unknown>;
@@ -177,6 +185,10 @@ function kolomDariField(field: string, tipe: string): string {
   if (field === "" || field === "redaksi") return "redaksi";
   const opsi = field.match(/^konten\.opsi\.(\d)/);
   if (opsi) return `opsi_${"abcde"[Number(opsi[1])] ?? "a"}`;
+  if (tipe === "majemuk_kompleks" && field.startsWith("konten")) {
+    const bagian = field.match(/^konten\.(label_kolom|pernyataan)(?:\.(\d))?/);
+    return `${bagian?.[1] ?? "pernyataan"}_${Number(bagian?.[2] ?? 0) + 1}`;
+  }
   if (field.startsWith("konten.rumpang")) return tipe === "isian" ? "redaksi" : "tipe";
   if (field.startsWith("konten")) return tipe === "isian" ? "redaksi" : "opsi_a";
   if (field.startsWith("kunci")) return "kunci";
@@ -212,6 +224,71 @@ function bulat(teks: string, min: number, maks: number): number | null {
   if (!/^\d{1,6}$/.test(teks)) return null;
   const n = Number(teks);
   return n >= min && n <= maks ? n : null;
+}
+
+// ---------------------------------------------------------------------------
+// Majemuk kompleks
+// ---------------------------------------------------------------------------
+
+/**
+ * Kolom label/pernyataan + kunci "Benar|Salah|Benar" -> konten & kunci bentuk
+ * validator. Hanya memeriksa hal yang tidak terlihat oleh validasiSoal (lubang
+ * nomor, pernyataan ke-7, cocoknya kunci dengan label); sisanya urusan validator.
+ */
+function susunMajemuk(
+  kol: (nama: string) => string,
+  judul: string[],
+  kunciMentah: string,
+  g: (kolom: string, pesan: string) => void,
+  sudahGalat: (kolom: string) => boolean,
+) {
+  for (const k of judul) {
+    if (POLA_KOLOM_PERNYATAAN.test(k) && !(KOLOM_PERNYATAAN as readonly string[]).includes(k) && bersih(kol(k)) !== "") {
+      g(k, `Maksimal ${BATAS.pernyataanMaks} pernyataan (P1 sampai P${BATAS.pernyataanMaks}).`);
+    }
+  }
+  "abcde".split("").forEach((h) => {
+    if (bersih(kol(`opsi_${h}`)) !== "") {
+      g(`opsi_${h}`, "Soal majemuk tidak memakai pilihan A–E; tulis pernyataan sebagai P1., P2., ...");
+    }
+  });
+
+  const labelIsi = KOLOM_LABEL.map((k) => bersih(kol(k)));
+  const label = labelIsi.every((l) => l === "") ? [...LABEL_KOLOM_BAWAAN] : labelIsi;
+  const labelNormal = label.map((l) => normalisasiTeks(l));
+  const labelRusak = KOLOM_LABEL.some(sudahGalat) || labelNormal.includes("") || labelNormal[0] === labelNormal[1];
+
+  const isi = KOLOM_PERNYATAAN.map((k) => bersih(kol(k)));
+  const jumlah = isi.reduce((n, teks, i) => (teks === "" ? n : i + 1), 0);
+  const pernyataan = isi.slice(0, jumlah).map((teks, i) => ({ id: `p${i + 1}`, teks }));
+  pernyataan.forEach((p, i) => {
+    if (p.teks === "") g(KOLOM_PERNYATAAN[i], `Pernyataan ${i + 1} belum ada; nomor harus berurutan P1, P2, ... tanpa lompatan.`);
+  });
+
+  const perBaris: Record<string, 0 | 1> = {};
+  const jawaban = kunciMentah === "" ? [] : kunciMentah.split("|").map((x) => x.trim());
+  // Bila label atau penulisan kunci sudah salah, jangan tumpuk galat turunan.
+  if (!labelRusak && !sudahGalat("kunci") && jumlah > 0) {
+    if (jawaban.length === 0) {
+      g("kunci", "Kunci belum diisi: satu jawaban per pernyataan (Word: P1=Benar, P2=Salah; CSV: Benar|Salah).");
+    } else {
+      pernyataan.forEach((p, i) => {
+        const nilai = jawaban[i] ?? "";
+        const indeks = labelNormal.indexOf(normalisasiTeks(nilai));
+        if (nilai === "") g("kunci", `Kunci pernyataan ${i + 1} belum ada.`);
+        else if (indeks < 0) g("kunci", `Kunci pernyataan ${i + 1} "${nilai}" harus "${label[0]}" atau "${label[1]}".`);
+        else perBaris[p.id] = indeks as 0 | 1;
+      });
+      if (jawaban.length > jumlah) g("kunci", `Kunci lebih banyak daripada pernyataan (${jumlah} pernyataan).`);
+    }
+  }
+
+  return {
+    konten: { v: 1, label_kolom: label, pernyataan },
+    kunci: { v: 1, per_baris: perBaris },
+    /** Galat validator pada kunci hanya turunan bila label rusak. */
+    kunciTurunan: labelRusak || jumlah === 0,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -329,7 +406,7 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
   kolomLengkap = kolomLengkap && KOLOM_SOAL_WAJIB.every((k) => tabel.judul.includes(k));
   if (kolomLengkap) {
     for (const k of tabel.judul) {
-      if (k && !(KOLOM_SOAL as readonly string[]).includes(k) && !KOLOM_GAMBAR.includes(k)) {
+      if (k && !(KOLOM_SOAL as readonly string[]).includes(k) && !KOLOM_GAMBAR.includes(k) && !POLA_KOLOM_PERNYATAAN.test(k)) {
         tambah("soal", 1, k, `Kolom "${k}" tidak dikenal dan diabaikan.`, "peringatan");
       }
     }
@@ -369,12 +446,11 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
       }
 
       const tipe = bersih(kol(sel, "tipe")).toLowerCase();
-      if (!tipe) g("tipe", "Tipe soal belum diisi (pilihan_ganda atau isian).");
-      else if (tipe === "majemuk_kompleks") g("tipe", "Tipe majemuk_kompleks belum didukung lewat unggahan. Buat lewat Studio Soal.");
-      else if (!(TIPE_IMPOR as readonly string[]).includes(tipe)) g("tipe", `Tipe "${tipe}" tidak dikenal (pilihan_ganda atau isian).`);
+      if (!tipe) g("tipe", "Tipe soal belum diisi (pilihan_ganda, majemuk_kompleks, atau isian).");
+      else if (!(TIPE_IMPOR as readonly string[]).includes(tipe)) g("tipe", `Tipe "${tipe}" tidak dikenal (pilihan_ganda, majemuk_kompleks, atau isian).`);
 
       // Gambar: kolom gambar berisi, atau penanda gambar di teks mana pun.
-      const kolomTeks = ["redaksi", "opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e", "pembahasan"];
+      const kolomTeks = ["redaksi", "opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e", "pembahasan", ...KOLOM_LABEL, ...KOLOM_PERNYATAAN];
       if (
         kolomTeks.some((k) => adaGambar(kol(sel, k))) ||
         KOLOM_GAMBAR.some((k) => tabel.judul.includes(k) && bersih(kol(sel, k)) !== "")
@@ -387,8 +463,21 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
       const kunciMentah = bersih(kol(sel, "kunci"));
       let konten: Record<string, unknown> = { v: 1 };
       let kunci: Record<string, unknown> = { v: 1 };
+      let kunciTurunan = false;
+      const sudahGalat = (kolom: string) =>
+        semua.some((x) => x.berkas === "soal" && x.baris === baris && x.kolom === kolom && x.tingkat === "galat");
 
-      if (tipe === "pilihan_ganda") {
+      if (tipe === "pilihan_ganda" || tipe === "isian") {
+        for (const k of tabel.judul) {
+          if ((POLA_KOLOM_PERNYATAAN.test(k) || (KOLOM_LABEL as readonly string[]).includes(k)) && bersih(kol(sel, k)) !== "") {
+            g(k, "Pernyataan (P1., P2., ...) dan label Kolom hanya untuk soal majemuk (Jenis: Majemuk / tipe majemuk_kompleks).");
+          }
+        }
+      }
+
+      if (tipe === "majemuk_kompleks") {
+        ({ konten, kunci, kunciTurunan } = susunMajemuk((nama) => kol(sel, nama), tabel.judul, kunciMentah, g, sudahGalat));
+      } else if (tipe === "pilihan_ganda") {
         konten = { v: 1, opsi: LABEL_OPSI.map((label, i) => ({ label, teks: kol(sel, `opsi_${"abcde"[i]}`) })) };
         const huruf = kunciMentah.toUpperCase();
         if (!kunciMentah) g("kunci", "Kunci belum diisi (huruf A sampai E).");
@@ -475,6 +564,7 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
         const kolomSudahGalat = new Set(
           semua.filter((x) => x.berkas === "soal" && x.baris === baris && x.tingkat === "galat").map((x) => x.kolom),
         );
+        if (kunciTurunan) kolomSudahGalat.add("kunci");
         for (const er of [...validasiSoal(input, "ajukan"), ...validasiRumusSoal(input)]) {
           const kolom = kolomDariField(er.field, tipe);
           if (!kolomSudahGalat.has(kolom)) g(kolom, er.pesan);
@@ -498,18 +588,19 @@ export function susunImpor(masukan: MasukanImpor): HasilImpor {
         subtes: subtes?.nama ?? subtesAsli,
         tipe,
         redaksi: cuplik(redaksiAsli),
-        kunci: tipe === "isian" ? kunciMentah : kunciMentah.toUpperCase(),
+        kunci: tipe === "pilihan_ganda" ? kunciMentah.toUpperCase() : kunciMentah,
         kodeBacaan: kodeAsli,
         status,
       });
 
-      if (!adaGalat && subtes && (tipe === "pilihan_ganda" || tipe === "isian")) {
+      const tipeImpor = TIPE_IMPOR.find((t) => t === tipe);
+      if (!adaGalat && subtes && tipeImpor) {
         soal.push({
           subtes_id: subtes.id,
           topik_id: topikId,
           stimulus_kode: kode || null,
           urutan_dalam_stimulus: kode ? urutan : null,
-          tipe,
+          tipe: tipeImpor,
           redaksi,
           konten,
           kunci,
@@ -584,6 +675,14 @@ const BARIS_SOAL_CONTOH: string[][] = [
     "Paragraf membahas banjir yang sering terjadi di kota sehingga gagasan utamanya adalah pilihan B.",
     "sedang", "1", "90", SUMBER_BAWAAN, "B1", "1",
   ],
+  [
+    "Penalaran Umum", "", "majemuk_kompleks",
+    "Diketahui \\(x = 3\\). Tentukan benar atau salah setiap pernyataan berikut.",
+    "", "", "", "", "", "Benar|Salah|Benar",
+    "Karena \\(x = 3\\), maka \\(x\\) ganjil, bukan genap, dan \\(x^2 = 9\\).",
+    "sedang", "2", "90", SUMBER_BAWAAN, "", "",
+    ...LABEL_KOLOM_BAWAAN, "\\(x\\) adalah bilangan ganjil.", "\\(x\\) adalah bilangan genap.", "\\(x^2 = 9\\).",
+  ],
 ];
 const BARIS_BACAAN_CONTOH: string[][] = [
   [
@@ -593,10 +692,13 @@ const BARIS_BACAAN_CONTOH: string[][] = [
   ],
 ];
 
-/** Template v1: soal.csv + bacaan.csv (BOM UTF-8, siap dibuka di Excel). */
+/** Template v1.1: soal.csv + bacaan.csv (BOM UTF-8, siap dibuka di Excel). */
 export function buatTemplateCsv(): { soal: string; bacaan: string } {
   return {
-    soal: buatCsv([...KOLOM_SOAL], BARIS_SOAL_CONTOH),
+    soal: buatCsv(
+      [...KOLOM_SOAL],
+      BARIS_SOAL_CONTOH.map((b) => KOLOM_SOAL.map((_, i) => b[i] ?? "")),
+    ),
     bacaan: buatCsv([...KOLOM_BACAAN], BARIS_BACAAN_CONTOH),
   };
 }

@@ -4,7 +4,7 @@ import { buatDocx } from "@/lib/admin/docxZip";
 import { buatTemplateCsv } from "@/lib/shared/studio-soal/impor";
 import { isiTemplateDocx } from "@/lib/shared/studio-soal/imporDocx";
 
-/** Unduh template (Admin): GET ?berkas=docx (contoh Word: 1 bacaan bertabel + 2 soal) | soal | bacaan (CSV v1, UTF-8 dengan BOM). */
+/** Unduh template (Admin): GET ?berkas=docx (contoh Word: 1 bacaan bertabel + 3 soal) | soal | bacaan (CSV v1, UTF-8 dengan BOM). */
 export async function GET(request: NextRequest) {
   const auth = await requireAdminAktif(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   if (!auth.ok) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });

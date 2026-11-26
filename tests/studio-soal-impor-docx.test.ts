@@ -221,7 +221,7 @@ describe("DOCX — persamaan Word dan gambar ditolak, bukan dibuang diam-diam", 
 });
 
 describe("DOCX — berkas nyata (ZIP + mammoth)", () => {
-  it("template Word: ZIP valid, bersih dari objek terlarang, lolos validasi, 1 bacaan + 2 soal", async () => {
+  it("template Word: ZIP valid, bersih dari objek terlarang, lolos validasi, 1 bacaan + 3 soal", async () => {
     const buffer = buatDocx(isiTemplateDocx());
     assert.equal(berawalanZip(buffer), true);
     assert.equal(berawalanZip(Buffer.from("%PDF-1.7")), false);
@@ -232,7 +232,7 @@ describe("DOCX — berkas nyata (ZIP + mammoth)", () => {
 
     const h = await dariBerkas(buffer);
     assert.equal(h.galat.length, 0, JSON.stringify(h.galat));
-    assert.equal(h.soal.length, 2);
+    assert.equal(h.soal.length, 3);
     assert.equal(h.stimulus.length, 1);
     assert.equal(h.soal.some((s) => s.stimulus_kode === "b1"), true);
     assert.deepEqual(h.stimulus[0].konten.blok.map((x) => x.jenis), ["teks", "tabel"]);
